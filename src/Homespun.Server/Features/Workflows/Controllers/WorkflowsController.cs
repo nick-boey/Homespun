@@ -41,8 +41,7 @@ public class WorkflowsController(
             ProjectId = request.ProjectId,
             Title = request.Title,
             Description = request.Description,
-            Nodes = request.Nodes,
-            Edges = request.Edges,
+            Steps = request.Steps,
             Trigger = request.Trigger,
             Settings = request.Settings,
             Enabled = request.Enabled
@@ -83,7 +82,7 @@ public class WorkflowsController(
                 Description = w.Description,
                 Enabled = w.Enabled,
                 TriggerType = w.Trigger?.Type,
-                NodeCount = w.Nodes.Count,
+                StepCount = w.Steps.Count,
                 Version = w.Version,
                 UpdatedAt = w.UpdatedAt
             }).ToList(),
@@ -136,8 +135,7 @@ public class WorkflowsController(
         {
             Title = request.Title,
             Description = request.Description,
-            Nodes = request.Nodes,
-            Edges = request.Edges,
+            Steps = request.Steps,
             Trigger = request.Trigger,
             Settings = request.Settings,
             Enabled = request.Enabled

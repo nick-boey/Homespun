@@ -1,7 +1,7 @@
 namespace Homespun.Shared.Models.Workflows;
 
 /// <summary>
-/// Represents a complete workflow definition with nodes, edges, and settings.
+/// Represents a complete workflow definition with sequential steps.
 /// </summary>
 public class WorkflowDefinition
 {
@@ -26,14 +26,9 @@ public class WorkflowDefinition
     public string? Description { get; set; }
 
     /// <summary>
-    /// The nodes that make up this workflow.
+    /// The sequential steps that make up this workflow.
     /// </summary>
-    public List<WorkflowNode> Nodes { get; set; } = [];
-
-    /// <summary>
-    /// The edges connecting nodes in this workflow.
-    /// </summary>
-    public List<WorkflowEdge> Edges { get; set; } = [];
+    public List<WorkflowStep> Steps { get; set; } = [];
 
     /// <summary>
     /// Trigger configuration for this workflow.
@@ -77,32 +72,12 @@ public class WorkflowDefinition
 public class WorkflowSettings
 {
     /// <summary>
-    /// Maximum number of concurrent node executions.
-    /// </summary>
-    public int MaxConcurrentNodes { get; set; } = 5;
-
-    /// <summary>
-    /// Default timeout in seconds for node execution.
+    /// Default timeout in seconds for step execution.
     /// </summary>
     public int DefaultTimeoutSeconds { get; set; } = 3600;
 
     /// <summary>
-    /// Whether to continue execution on node failure.
+    /// Whether to continue execution on step failure.
     /// </summary>
     public bool ContinueOnFailure { get; set; } = false;
-
-    /// <summary>
-    /// Whether to retry failed nodes.
-    /// </summary>
-    public bool RetryOnFailure { get; set; } = false;
-
-    /// <summary>
-    /// Maximum number of retry attempts for failed nodes.
-    /// </summary>
-    public int MaxRetryAttempts { get; set; } = 3;
-
-    /// <summary>
-    /// Delay in seconds between retry attempts.
-    /// </summary>
-    public int RetryDelaySeconds { get; set; } = 60;
 }

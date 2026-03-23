@@ -23,14 +23,9 @@ public class CreateWorkflowParams
     public string? Description { get; set; }
 
     /// <summary>
-    /// Initial nodes for the workflow.
+    /// Initial steps for the workflow.
     /// </summary>
-    public List<WorkflowNode>? Nodes { get; set; }
-
-    /// <summary>
-    /// Initial edges for the workflow.
-    /// </summary>
-    public List<WorkflowEdge>? Edges { get; set; }
+    public List<WorkflowStep>? Steps { get; set; }
 
     /// <summary>
     /// Trigger configuration.
@@ -69,14 +64,9 @@ public class UpdateWorkflowParams
     public string? Description { get; set; }
 
     /// <summary>
-    /// Updated nodes.
+    /// Updated steps.
     /// </summary>
-    public List<WorkflowNode>? Nodes { get; set; }
-
-    /// <summary>
-    /// Updated edges.
-    /// </summary>
-    public List<WorkflowEdge>? Edges { get; set; }
+    public List<WorkflowStep>? Steps { get; set; }
 
     /// <summary>
     /// Updated trigger.
@@ -103,52 +93,30 @@ public interface IWorkflowStorageService : IDisposable
     /// <summary>
     /// Gets a single workflow by ID.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="workflowId">The workflow ID.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The workflow, or null if not found.</returns>
     Task<WorkflowDefinition?> GetWorkflowAsync(string projectPath, string workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Lists all workflows for a project.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>List of workflows.</returns>
     Task<IReadOnlyList<WorkflowDefinition>> ListWorkflowsAsync(string projectPath, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a new workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="createParams">Parameters for creating the workflow.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The created workflow.</returns>
     Task<WorkflowDefinition> CreateWorkflowAsync(string projectPath, CreateWorkflowParams createParams, CancellationToken ct = default);
 
     /// <summary>
     /// Updates an existing workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="workflowId">The workflow ID to update.</param>
-    /// <param name="updateParams">Parameters for updating the workflow.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The updated workflow, or null if not found.</returns>
     Task<WorkflowDefinition?> UpdateWorkflowAsync(string projectPath, string workflowId, UpdateWorkflowParams updateParams, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes a workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="workflowId">The workflow ID to delete.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if deleted, false if not found.</returns>
     Task<bool> DeleteWorkflowAsync(string projectPath, string workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Reloads workflows from disk, clearing the cache.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default);
 }

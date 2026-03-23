@@ -64,11 +64,6 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Starts execution of a workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="workflowId">The workflow ID to execute.</param>
-    /// <param name="triggerContext">Context about how the workflow was triggered.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>Result containing the execution instance or error.</returns>
     Task<StartWorkflowResult> StartWorkflowAsync(
         string projectPath,
         string workflowId,
@@ -78,10 +73,6 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Gets the current state of an execution.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The execution, or null if not found.</returns>
     Task<WorkflowExecution?> GetExecutionAsync(
         string projectPath,
         string executionId,
@@ -90,10 +81,6 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Lists all executions for a workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="workflowId">Optional workflow ID to filter by.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>List of executions.</returns>
     Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(
         string projectPath,
         string? workflowId = null,
@@ -102,10 +89,6 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Pauses execution of a running workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID to pause.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if paused successfully, false if not found or not running.</returns>
     Task<bool> PauseExecutionAsync(
         string projectPath,
         string executionId,
@@ -114,10 +97,6 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Resumes execution of a paused workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID to resume.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if resumed successfully, false if not found or not paused.</returns>
     Task<bool> ResumeExecutionAsync(
         string projectPath,
         string executionId,
@@ -126,42 +105,28 @@ public interface IWorkflowExecutionService
     /// <summary>
     /// Cancels execution of a workflow.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID to cancel.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if cancelled successfully, false if not found or already completed.</returns>
     Task<bool> CancelExecutionAsync(
         string projectPath,
         string executionId,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Called when a node completes execution.
+    /// Called when a step completes execution.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID.</param>
-    /// <param name="nodeId">The node ID that completed.</param>
-    /// <param name="output">Output data from the node.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task OnNodeCompletedAsync(
+    Task OnStepCompletedAsync(
         string projectPath,
         string executionId,
-        string nodeId,
+        string stepId,
         Dictionary<string, object>? output,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Called when a node fails execution.
+    /// Called when a step fails execution.
     /// </summary>
-    /// <param name="projectPath">The path to the project directory.</param>
-    /// <param name="executionId">The execution ID.</param>
-    /// <param name="nodeId">The node ID that failed.</param>
-    /// <param name="errorMessage">Error message describing the failure.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task OnNodeFailedAsync(
+    Task OnStepFailedAsync(
         string projectPath,
         string executionId,
-        string nodeId,
+        string stepId,
         string errorMessage,
         CancellationToken ct = default);
 }

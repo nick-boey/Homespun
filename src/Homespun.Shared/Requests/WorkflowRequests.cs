@@ -23,14 +23,9 @@ public class CreateWorkflowRequest
     public string? Description { get; set; }
 
     /// <summary>
-    /// Initial nodes for the workflow.
+    /// Initial steps for the workflow.
     /// </summary>
-    public List<WorkflowNode>? Nodes { get; set; }
-
-    /// <summary>
-    /// Initial edges for the workflow.
-    /// </summary>
-    public List<WorkflowEdge>? Edges { get; set; }
+    public List<WorkflowStep>? Steps { get; set; }
 
     /// <summary>
     /// Trigger configuration.
@@ -69,14 +64,9 @@ public class UpdateWorkflowRequest
     public string? Description { get; set; }
 
     /// <summary>
-    /// Updated nodes.
+    /// Updated steps.
     /// </summary>
-    public List<WorkflowNode>? Nodes { get; set; }
-
-    /// <summary>
-    /// Updated edges.
-    /// </summary>
-    public List<WorkflowEdge>? Edges { get; set; }
+    public List<WorkflowStep>? Steps { get; set; }
 
     /// <summary>
     /// Updated trigger configuration.
@@ -147,14 +137,14 @@ public class RetryWorkflowExecutionRequest
     public required string ProjectId { get; set; }
 
     /// <summary>
-    /// Whether to retry from the failed node or from the beginning.
+    /// Whether to retry from the failed step or from the beginning.
     /// </summary>
-    public bool FromFailedNode { get; set; } = true;
+    public bool FromFailedStep { get; set; } = true;
 
     /// <summary>
-    /// Specific node ID to retry from (overrides FromFailedNode).
+    /// Specific step ID to retry from (overrides FromFailedStep).
     /// </summary>
-    public string? FromNodeId { get; set; }
+    public string? FromStepId { get; set; }
 }
 
 /// <summary>
@@ -251,9 +241,9 @@ public class WorkflowSummary
     public WorkflowTriggerType? TriggerType { get; set; }
 
     /// <summary>
-    /// Number of nodes in the workflow.
+    /// Number of steps in the workflow.
     /// </summary>
-    public int NodeCount { get; set; }
+    public int StepCount { get; set; }
 
     /// <summary>
     /// Current version.

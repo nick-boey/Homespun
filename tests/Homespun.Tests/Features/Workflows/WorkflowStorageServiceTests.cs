@@ -62,19 +62,19 @@ public class WorkflowStorageServiceTests
     }
 
     [Test]
-    public async Task CreateWorkflowAsync_WithNodes_CreatesWorkflowWithNodes()
+    public async Task CreateWorkflowAsync_WithSteps_CreatesWorkflowWithSteps()
     {
         // Arrange
-        var nodes = new List<WorkflowNode>
+        var steps = new List<WorkflowStep>
         {
-            new() { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
-            new() { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            new() { Id = "step-1", Name = "Agent Step", StepType = WorkflowStepType.Agent },
+            new() { Id = "step-2", Name = "Gate Step", StepType = WorkflowStepType.Gate }
         };
         var createParams = new CreateWorkflowParams
         {
             ProjectId = "project-1",
-            Title = "Workflow with Nodes",
-            Nodes = nodes
+            Title = "Workflow with Steps",
+            Steps = steps
         };
 
         // Act
@@ -83,36 +83,11 @@ public class WorkflowStorageServiceTests
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(result.Nodes, Has.Count.EqualTo(2));
-            Assert.That(result.Nodes[0].Id, Is.EqualTo("start-1"));
-            Assert.That(result.Nodes[1].Id, Is.EqualTo("end-1"));
-        });
-    }
-
-    [Test]
-    public async Task CreateWorkflowAsync_WithEdges_CreatesWorkflowWithEdges()
-    {
-        // Arrange
-        var edges = new List<WorkflowEdge>
-        {
-            new() { Id = "edge-1", Source = "start-1", Target = "end-1" }
-        };
-        var createParams = new CreateWorkflowParams
-        {
-            ProjectId = "project-1",
-            Title = "Workflow with Edges",
-            Edges = edges
-        };
-
-        // Act
-        var result = await _service.CreateWorkflowAsync(_testProjectPath, createParams);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.Edges, Has.Count.EqualTo(1));
-            Assert.That(result.Edges[0].Source, Is.EqualTo("start-1"));
-            Assert.That(result.Edges[0].Target, Is.EqualTo("end-1"));
+            Assert.That(result.Steps, Has.Count.EqualTo(2));
+            Assert.That(result.Steps[0].Id, Is.EqualTo("step-1"));
+            Assert.That(result.Steps[0].StepType, Is.EqualTo(WorkflowStepType.Agent));
+            Assert.That(result.Steps[1].Id, Is.EqualTo("step-2"));
+            Assert.That(result.Steps[1].StepType, Is.EqualTo(WorkflowStepType.Gate));
         });
     }
 
@@ -361,31 +336,31 @@ public class WorkflowStorageServiceTests
     }
 
     [Test]
-    public async Task UpdateWorkflowAsync_ExistingWorkflow_UpdatesNodes()
+    public async Task UpdateWorkflowAsync_ExistingWorkflow_UpdatesSteps()
     {
         // Arrange
         var created = await _service.CreateWorkflowAsync(_testProjectPath, new CreateWorkflowParams
         {
             ProjectId = "project-1",
             Title = "Test Workflow",
-            Nodes = [new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start }]
+            Steps = [new WorkflowStep { Id = "step-1", Name = "Step 1", StepType = WorkflowStepType.Agent }]
         });
 
-        var newNodes = new List<WorkflowNode>
+        var newSteps = new List<WorkflowStep>
         {
-            new() { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
-            new() { Id = "agent-1", Label = "Agent", Type = WorkflowNodeType.Agent },
-            new() { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            new() { Id = "step-1", Name = "Step 1", StepType = WorkflowStepType.Agent },
+            new() { Id = "step-2", Name = "Step 2", StepType = WorkflowStepType.ServerAction },
+            new() { Id = "step-3", Name = "Step 3", StepType = WorkflowStepType.Gate }
         };
 
         // Act
         var updated = await _service.UpdateWorkflowAsync(
             _testProjectPath,
             created.Id,
-            new UpdateWorkflowParams { Nodes = newNodes });
+            new UpdateWorkflowParams { Steps = newSteps });
 
         // Assert
-        Assert.That(updated!.Nodes, Has.Count.EqualTo(3));
+        Assert.That(updated!.Steps, Has.Count.EqualTo(3));
     }
 
     [Test]
@@ -540,6 +515,85 @@ public class WorkflowStorageServiceTests
         await _service.ReloadFromDiskAsync(_testProjectPath);
         var result = await _service.ListWorkflowsAsync(_testProjectPath);
         Assert.That(result, Is.Empty);
+    }
+
+    #endregion
+
+    #region Serialization Round-Trip Tests
+
+    [Test]
+    public async Task SerializationRoundTrip_WorkflowWithSteps_PreservesAllFields()
+    {
+        // Arrange
+        var steps = new List<WorkflowStep>
+        {
+            new()
+            {
+                Id = "step-1",
+                Name = "Agent Step",
+                StepType = WorkflowStepType.Agent,
+                Prompt = "Do something {{input.task}}",
+                SessionMode = Homespun.Shared.Models.Sessions.SessionMode.Plan,
+                OnSuccess = new StepTransition { Type = StepTransitionType.NextStep },
+                OnFailure = new StepTransition { Type = StepTransitionType.GoToStep, TargetStepId = "step-3" },
+                MaxRetries = 2,
+                RetryDelaySeconds = 60,
+                Condition = "input.shouldRun == true"
+            },
+            new()
+            {
+                Id = "step-2",
+                Name = "Server Action",
+                StepType = WorkflowStepType.ServerAction,
+                OnSuccess = new StepTransition { Type = StepTransitionType.NextStep },
+                OnFailure = new StepTransition { Type = StepTransitionType.Exit }
+            },
+            new()
+            {
+                Id = "step-3",
+                Name = "Gate Step",
+                StepType = WorkflowStepType.Gate,
+                OnSuccess = new StepTransition { Type = StepTransitionType.Exit },
+                OnFailure = new StepTransition { Type = StepTransitionType.Retry }
+            }
+        };
+
+        var createParams = new CreateWorkflowParams
+        {
+            ProjectId = "project-1",
+            Title = "Round Trip Test",
+            Description = "Testing serialization",
+            Steps = steps,
+            Settings = new WorkflowSettings { DefaultTimeoutSeconds = 7200, ContinueOnFailure = true }
+        };
+
+        // Act
+        var created = await _service.CreateWorkflowAsync(_testProjectPath, createParams);
+        await _service.ReloadFromDiskAsync(_testProjectPath);
+        var retrieved = await _service.GetWorkflowAsync(_testProjectPath, created.Id);
+
+        // Assert
+        Assert.That(retrieved, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(retrieved!.Steps, Has.Count.EqualTo(3));
+            Assert.That(retrieved.Settings.DefaultTimeoutSeconds, Is.EqualTo(7200));
+            Assert.That(retrieved.Settings.ContinueOnFailure, Is.True);
+
+            var agentStep = retrieved.Steps[0];
+            Assert.That(agentStep.Id, Is.EqualTo("step-1"));
+            Assert.That(agentStep.StepType, Is.EqualTo(WorkflowStepType.Agent));
+            Assert.That(agentStep.Prompt, Is.EqualTo("Do something {{input.task}}"));
+            Assert.That(agentStep.SessionMode, Is.EqualTo(Homespun.Shared.Models.Sessions.SessionMode.Plan));
+            Assert.That(agentStep.OnFailure.Type, Is.EqualTo(StepTransitionType.GoToStep));
+            Assert.That(agentStep.OnFailure.TargetStepId, Is.EqualTo("step-3"));
+            Assert.That(agentStep.MaxRetries, Is.EqualTo(2));
+            Assert.That(agentStep.Condition, Is.EqualTo("input.shouldRun == true"));
+
+            var gateStep = retrieved.Steps[2];
+            Assert.That(gateStep.StepType, Is.EqualTo(WorkflowStepType.Gate));
+            Assert.That(gateStep.OnFailure.Type, Is.EqualTo(StepTransitionType.Retry));
+        });
     }
 
     #endregion

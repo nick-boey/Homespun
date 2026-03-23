@@ -28,33 +28,27 @@ public enum WorkflowExecutionStatus
 }
 
 /// <summary>
-/// Status of a node execution within a workflow.
+/// Status of a step execution within a workflow.
 /// </summary>
-public enum NodeExecutionStatus
+public enum StepExecutionStatus
 {
-    /// <summary>Node is pending execution.</summary>
+    /// <summary>Step is pending execution.</summary>
     Pending,
 
-    /// <summary>Node is queued for execution.</summary>
-    Queued,
-
-    /// <summary>Node is currently executing.</summary>
+    /// <summary>Step is currently executing.</summary>
     Running,
 
-    /// <summary>Node is waiting for input (e.g., gate approval).</summary>
+    /// <summary>Step is waiting for input (e.g., gate approval).</summary>
     WaitingForInput,
 
-    /// <summary>Node completed successfully.</summary>
+    /// <summary>Step completed successfully.</summary>
     Completed,
 
-    /// <summary>Node failed.</summary>
+    /// <summary>Step failed.</summary>
     Failed,
 
-    /// <summary>Node was skipped.</summary>
-    Skipped,
-
-    /// <summary>Node was cancelled.</summary>
-    Cancelled
+    /// <summary>Step was skipped.</summary>
+    Skipped
 }
 
 /// <summary>
@@ -98,9 +92,14 @@ public class WorkflowExecution
     public WorkflowContext Context { get; set; } = new();
 
     /// <summary>
-    /// Execution state for each node.
+    /// Execution state for each step.
     /// </summary>
-    public List<NodeExecution> NodeExecutions { get; set; } = [];
+    public List<StepExecution> StepExecutions { get; set; } = [];
+
+    /// <summary>
+    /// Index of the currently executing step.
+    /// </summary>
+    public int CurrentStepIndex { get; set; }
 
     /// <summary>
     /// When the execution was created/queued.
@@ -155,19 +154,24 @@ public class ExecutionTriggerInfo
 }
 
 /// <summary>
-/// Execution state for a single node within a workflow execution.
+/// Execution state for a single step within a workflow execution.
 /// </summary>
-public class NodeExecution
+public class StepExecution
 {
     /// <summary>
-    /// The node ID from the workflow definition.
+    /// The step ID from the workflow definition.
     /// </summary>
-    public required string NodeId { get; set; }
+    public required string StepId { get; set; }
 
     /// <summary>
-    /// Current status of this node's execution.
+    /// The index of this step in the workflow's step list.
     /// </summary>
-    public NodeExecutionStatus Status { get; set; } = NodeExecutionStatus.Pending;
+    public int StepIndex { get; set; }
+
+    /// <summary>
+    /// Current status of this step's execution.
+    /// </summary>
+    public StepExecutionStatus Status { get; set; } = StepExecutionStatus.Pending;
 
     /// <summary>
     /// Number of retry attempts made.
@@ -175,12 +179,12 @@ public class NodeExecution
     public int RetryCount { get; set; }
 
     /// <summary>
-    /// When execution of this node started.
+    /// When execution of this step started.
     /// </summary>
     public DateTime? StartedAt { get; set; }
 
     /// <summary>
-    /// When execution of this node completed.
+    /// When execution of this step completed.
     /// </summary>
     public DateTime? CompletedAt { get; set; }
 
@@ -190,66 +194,17 @@ public class NodeExecution
     public long? DurationMs { get; set; }
 
     /// <summary>
-    /// Output data from this node's execution.
+    /// Output data from this step's execution.
     /// </summary>
     public Dictionary<string, object>? Output { get; set; }
 
     /// <summary>
-    /// Error message if node failed.
-    /// </summary>
-    public string? ErrorMessage { get; set; }
-
-    /// <summary>
-    /// Logs/messages from node execution.
-    /// </summary>
-    public List<NodeExecutionLog> Logs { get; set; } = [];
-
-    /// <summary>
-    /// Associated session ID (for agent nodes).
+    /// Associated session ID (for agent steps).
     /// </summary>
     public string? SessionId { get; set; }
-}
-
-/// <summary>
-/// Log entry from node execution.
-/// </summary>
-public class NodeExecutionLog
-{
-    /// <summary>
-    /// Timestamp of the log entry.
-    /// </summary>
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Log level.
+    /// Error message if step failed.
     /// </summary>
-    public NodeLogLevel Level { get; set; }
-
-    /// <summary>
-    /// Log message.
-    /// </summary>
-    public required string Message { get; set; }
-
-    /// <summary>
-    /// Additional data associated with the log entry.
-    /// </summary>
-    public Dictionary<string, object>? Data { get; set; }
-}
-
-/// <summary>
-/// Log levels for node execution logs.
-/// </summary>
-public enum NodeLogLevel
-{
-    /// <summary>Debug information.</summary>
-    Debug,
-
-    /// <summary>Informational message.</summary>
-    Info,
-
-    /// <summary>Warning message.</summary>
-    Warning,
-
-    /// <summary>Error message.</summary>
-    Error
+    public string? ErrorMessage { get; set; }
 }
