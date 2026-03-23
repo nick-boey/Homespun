@@ -231,6 +231,7 @@ else
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
     builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
     builder.Services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
+    builder.Services.AddScoped<IBaseBranchResolver, BaseBranchResolver>();
     builder.Services.AddSingleton<IAgentStartBackgroundService, AgentStartBackgroundService>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
