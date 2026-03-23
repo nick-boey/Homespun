@@ -60,4 +60,9 @@ public interface IGitHubService
     /// Merge a pull request using the GitHub API
     /// </summary>
     Task<bool> MergePullRequestAsync(string projectId, int prNumber, string? commitMessage = null);
+
+    /// <summary>
+    /// Gets the PR linked to a Fleece issue, if one exists.
+    /// </summary>
+    Task<Homespun.Shared.Models.PullRequests.PullRequest?> GetPullRequestForIssueAsync(string projectId, string issueId);
 }
