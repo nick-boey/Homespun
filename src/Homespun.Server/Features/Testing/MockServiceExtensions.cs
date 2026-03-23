@@ -9,6 +9,7 @@ using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Search;
 using Homespun.Features.Secrets;
 using Homespun.Features.Testing.Services;
+using Homespun.Features.Workflows.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -58,6 +59,10 @@ public static class MockServiceExtensions
 
         // Register real FleeceService (reads/writes to temp .fleece directories)
         services.AddSingleton<IFleeceService, FleeceService>();
+
+        // Fleece.Core DiffService and its dependency (for any service needing direct diff comparison)
+        services.AddSingleton<global::Fleece.Core.Serialization.IJsonlSerializer, global::Fleece.Core.Serialization.JsonlSerializer>();
+        services.AddSingleton<global::Fleece.Core.Services.Interfaces.IDiffService, global::Fleece.Core.Services.DiffService>();
 
         // Keep MockFleeceService available for backward compatibility if needed
         services.AddSingleton<MockFleeceService>();
@@ -137,8 +142,21 @@ public static class MockServiceExtensions
             return new MessageCacheStore(tempFolder.SessionsPath, logger);
         });
 
-        // Graph service
+        // Graph services
+        services.AddSingleton<IGraphCacheService>(sp =>
+            new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
         services.AddScoped<IGraphService, MockGraphService>();
+
+        // Clone enrichment service
+        services.AddScoped<ICloneEnrichmentService, CloneEnrichmentService>();
+
+        // Issue PR status service
+        services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
+
+        // Workflow services
+        services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
+        services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
+        services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
 
         // JSONL session loader for loading real session data
         services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();
