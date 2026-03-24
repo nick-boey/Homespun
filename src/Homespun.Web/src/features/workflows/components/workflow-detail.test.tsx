@@ -39,6 +39,13 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn().mockResolvedValue({ svg: '<svg data-testid="mock-mermaid-svg"></svg>' }),
+  },
+}))
+
 vi.mock('@/hooks/use-telemetry', () => ({
   useTelemetry: () => ({
     trackEvent: vi.fn(),
@@ -183,7 +190,7 @@ describe('WorkflowDetail', () => {
     expect(screen.getByRole('tab', { name: /executions/i })).toBeInTheDocument()
   })
 
-  it('shows editor placeholder with node and edge counts', async () => {
+  it('shows editor with mermaid chart and node/edge counts', async () => {
     const workflowMock = Workflows.getApiWorkflowsByWorkflowId as Mock
     const executionsMock = Workflows.getApiWorkflowsByWorkflowIdExecutions as Mock
 
@@ -197,11 +204,12 @@ describe('WorkflowDetail', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByTestId('workflow-editor-placeholder')).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-editor')).toBeInTheDocument()
     })
 
     expect(screen.getByText(/3 steps/)).toBeInTheDocument()
     expect(screen.getByText(/Version 3/)).toBeInTheDocument()
+    expect(screen.getByTestId('mermaid-chart')).toBeInTheDocument()
   })
 
   it('shows empty state when no executions', async () => {
