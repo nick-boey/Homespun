@@ -52,6 +52,8 @@ public class QueueCoordinatorTests
 
         _emittedEvents = new List<QueueCoordinatorEvent>();
         _coordinator.OnEvent += e => _emittedEvents.Add(e);
+        _issueRegistry.Clear();
+        _configuredIssueIds.Clear();
     }
 
     private Issue CreateIssue(
@@ -571,6 +573,303 @@ public class QueueCoordinatorTests
         // Verify SignalR broadcasting was called
         _mockNotificationHub.Verify(
             h => h.Clients, Times.AtLeastOnce);
+    }
+
+    #endregion
+
+    #region Nested Series/Non-Leaf Expansion
+
+    /// <summary>
+    /// Registry of issues created during test setup. Used to ensure child lists
+    /// reference the same Issue objects with correct ExecutionMode.
+    /// </summary>
+    private readonly Dictionary<string, Issue> _issueRegistry = new();
+
+    /// <summary>
+    /// Tracks which issue IDs have been explicitly configured with SetupIssue
+    /// (i.e., had their children set up). Prevents parent setup from overriding
+    /// children's GetChildrenAsync configuration.
+    /// </summary>
+    private readonly HashSet<string> _configuredIssueIds = new();
+
+    private Issue GetOrCreateIssue(string id, ExecutionMode mode = ExecutionMode.Series)
+    {
+        if (_issueRegistry.TryGetValue(id, out var existing))
+            return existing;
+        var issue = CreateIssue(id, mode);
+        _issueRegistry[id] = issue;
+        return issue;
+    }
+
+    /// <summary>
+    /// Sets up an issue with children. Call bottom-up (children before parents)
+    /// to ensure child issues have correct ExecutionMode in parent's children list.
+    /// </summary>
+    private void SetupIssue(string id, ExecutionMode mode, params string[] childIds)
+    {
+        var issue = GetOrCreateIssue(id, mode);
+        _configuredIssueIds.Add(id);
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(ProjectPath, id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        var children = childIds.Select(cid => GetOrCreateIssue(cid)).ToList();
+        _mockFleeceService
+            .Setup(f => f.GetChildrenAsync(ProjectPath, id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(children);
+
+        // Default each child as leaf only if not already configured by a prior SetupIssue call
+        foreach (var childId in childIds)
+        {
+            if (_configuredIssueIds.Contains(childId))
+                continue;
+
+            var child = children.First(c => c.Id == childId);
+            _mockFleeceService
+                .Setup(f => f.GetIssueAsync(ProjectPath, childId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(child);
+            _mockFleeceService
+                .Setup(f => f.GetChildrenAsync(ProjectPath, childId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Issue>());
+        }
+    }
+
+    [Test]
+    public async Task NestedSeriesWithinSeries_ContinuationWiredCorrectly()
+    {
+        // root (series) -> child1 (series: gc1, gc2), child2 (leaf)
+        // Expected: queue with [gc1, gc2]. When both complete, child2 runs.
+        SetupIssue("child1", ExecutionMode.Series, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+        // Should have 1 queue with gc1 (current) and gc2 (pending)
+        Assert.That(queues, Has.Count.EqualTo(1));
+        Assert.That(queues[0].CurrentRequest?.IssueId, Is.EqualTo("gc1"));
+        Assert.That(queues[0].PendingRequests.Select(r => r.IssueId), Is.EqualTo(new[] { "gc2" }));
+
+        // Complete gc1 - gc2 should start (still same queue)
+        var queue1 = (TaskQueue)queues[0];
+        queue1.NotifyCompleted("gc1", success: true);
+
+        // gc2 is now current
+        Assert.That(queue1.CurrentRequest?.IssueId, Is.EqualTo("gc2"));
+
+        // Complete gc2 - continuation should fire, creating queue for child2
+        queue1.NotifyCompleted("gc2", success: true);
+
+        // Wait briefly for async continuation
+        await Task.Delay(100);
+
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var child2Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "child2");
+        Assert.That(child2Queue, Is.Not.Null, "child2 should be running after gc1 and gc2 complete");
+    }
+
+    [Test]
+    public async Task NestedSeriesWithinSeries_CompletionSignaled()
+    {
+        // root (series) -> child1 (series: gc1), child2 (leaf)
+        SetupIssue("child1", ExecutionMode.Series, "gc1");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        var queue1 = (TaskQueue)_coordinator.GetActiveQueues(ProjectId)[0];
+        queue1.NotifyCompleted("gc1", success: true);
+
+        await Task.Delay(100);
+
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var child2Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "child2");
+        child2Queue.NotifyCompleted("child2", success: true);
+
+        var status = _coordinator.GetStatus(ProjectId);
+        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Completed));
+    }
+
+    [Test]
+    public async Task NonLeafInMiddleOfSeries_ExpandsCorrectly()
+    {
+        // root (series) -> child1 (leaf), child2 (parallel: gc1, gc2), child3 (leaf)
+        // Expected: queue with [child1]. When child1 completes, child2 expands.
+        // When gc1 and gc2 complete, child3 runs.
+        SetupIssue("child2", ExecutionMode.Parallel, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2", "child3");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+        // Should have 1 queue with child1 only (not child2 as-is)
+        Assert.That(queues, Has.Count.EqualTo(1));
+        Assert.That(queues[0].CurrentRequest?.IssueId, Is.EqualTo("child1"));
+        Assert.That(queues[0].PendingRequests, Is.Empty,
+            "Non-leaf child2 should NOT be enqueued as-is");
+
+        // Complete child1 - should trigger expansion of child2
+        var queue1 = (TaskQueue)queues[0];
+        queue1.NotifyCompleted("child1", success: true);
+
+        await Task.Delay(100);
+
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        // child2 is parallel with gc1, gc2 - should have 2 new queues
+        var gc1Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "gc1");
+        var gc2Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "gc2");
+        Assert.That(gc1Queue, Is.Not.Null, "gc1 should be running");
+        Assert.That(gc2Queue, Is.Not.Null, "gc2 should be running");
+    }
+
+    [Test]
+    public async Task NonLeafInMiddleOfSeries_ContinuationAfterParallelCompletes()
+    {
+        // root (series) -> child1 (leaf), child2 (parallel: gc1, gc2), child3 (leaf)
+        SetupIssue("child2", ExecutionMode.Parallel, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2", "child3");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        // Complete child1
+        var queue1 = (TaskQueue)_coordinator.GetActiveQueues(ProjectId)[0];
+        queue1.NotifyCompleted("child1", success: true);
+        await Task.Delay(100);
+
+        // Complete gc1 and gc2
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var gc1Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc1");
+        var gc2Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc2");
+        gc1Queue.NotifyCompleted("gc1", success: true);
+        gc2Queue.NotifyCompleted("gc2", success: true);
+        await Task.Delay(100);
+
+        // child3 should now be running
+        allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var child3Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "child3");
+        Assert.That(child3Queue, Is.Not.Null, "child3 should run after gc1 and gc2 complete");
+    }
+
+    [Test]
+    public async Task NonLeafInMiddleOfSeriesWithinParallel_ExpandsCorrectly()
+    {
+        // root (parallel) -> childA (series: a1(leaf), a2(parallel: x, y)), childB (leaf)
+        SetupIssue("a2", ExecutionMode.Parallel, "x", "y");
+        SetupIssue("childA", ExecutionMode.Series, "a1", "a2");
+        SetupIssue("root", ExecutionMode.Parallel, "childA", "childB");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        // Initially: queue for a1 (series first), queue for childB
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+        Assert.That(queues, Has.Count.EqualTo(2));
+
+        var a1Queue = queues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "a1");
+        var childBQueue = queues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "childB");
+        Assert.That(a1Queue, Is.Not.Null);
+        Assert.That(childBQueue, Is.Not.Null);
+        Assert.That(a1Queue!.PendingRequests, Is.Empty,
+            "Non-leaf a2 should NOT be enqueued as-is");
+    }
+
+    [Test]
+    public async Task DeepNesting_SeriesParallelSeries_WorksCorrectly()
+    {
+        // root (series) -> child1 (parallel: gc1 (series: ggc1, ggc2), gc2 (leaf)), child2 (leaf)
+        SetupIssue("gc1", ExecutionMode.Series, "ggc1", "ggc2");
+        SetupIssue("child1", ExecutionMode.Parallel, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        // child1 is parallel: gc1 (series with ggc1,ggc2) and gc2 (leaf) run in parallel
+        // child2 is deferred until child1's parallel group completes
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+
+        // Should have 2 queues: one for gc1's series (ggc1 + ggc2), one for gc2
+        Assert.That(queues, Has.Count.EqualTo(2));
+
+        var seriesQueue = queues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "ggc1");
+        var gc2Queue = queues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "gc2");
+        Assert.That(seriesQueue, Is.Not.Null);
+        Assert.That(gc2Queue, Is.Not.Null);
+        Assert.That(seriesQueue!.PendingRequests.Select(r => r.IssueId), Is.EqualTo(new[] { "ggc2" }));
+    }
+
+    [Test]
+    public async Task DeepNesting_AllComplete_SignalsCompletion()
+    {
+        // root (series) -> child1 (parallel: gc1 (series: ggc1, ggc2), gc2), child2
+        SetupIssue("gc1", ExecutionMode.Series, "ggc1", "ggc2");
+        SetupIssue("child1", ExecutionMode.Parallel, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "child1", "child2");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+        var seriesQueue = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "ggc1");
+        var gc2Queue = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "gc2");
+
+        // Complete ggc1 -> ggc2 starts
+        seriesQueue.NotifyCompleted("ggc1", success: true);
+        Assert.That(seriesQueue.CurrentRequest?.IssueId, Is.EqualTo("ggc2"));
+
+        // Complete gc2
+        gc2Queue.NotifyCompleted("gc2", success: true);
+
+        // Complete ggc2 - parallel group should complete, child2 continuation fires
+        seriesQueue.NotifyCompleted("ggc2", success: true);
+        await Task.Delay(100);
+
+        // child2 should now be running
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var child2Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "child2");
+        Assert.That(child2Queue, Is.Not.Null, "child2 should run after child1's parallel group completes");
+
+        // Complete child2
+        ((TaskQueue)child2Queue!).NotifyCompleted("child2", success: true);
+
+        var status = _coordinator.GetStatus(ProjectId);
+        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Completed));
+    }
+
+    [Test]
+    public async Task NonLeafInMiddleOfSeries_MultipleNonLeaves()
+    {
+        // root (series) -> c1(leaf), c2(series: gc1, gc2), c3(leaf)
+        // Verifies that non-leaf c2 in the middle is properly expanded
+        SetupIssue("c2", ExecutionMode.Series, "gc1", "gc2");
+        SetupIssue("root", ExecutionMode.Series, "c1", "c2", "c3");
+
+        await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
+
+        // Initially: 1 queue with c1 only
+        var queues = _coordinator.GetActiveQueues(ProjectId);
+        Assert.That(queues, Has.Count.EqualTo(1));
+        Assert.That(queues[0].CurrentRequest?.IssueId, Is.EqualTo("c1"));
+        Assert.That(queues[0].PendingRequests, Is.Empty);
+
+        // Complete c1 -> continuation fires, expands [c2, c3]
+        // c2 is series with children, so ExpandSeries handles it
+        ((TaskQueue)queues[0]).NotifyCompleted("c1", success: true);
+        await Task.Delay(100);
+
+        // c2 should be expanded: queue with gc1, gc2
+        var allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var gc1Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "gc1");
+        Assert.That(gc1Queue, Is.Not.Null, "gc1 should be running after c1 completes");
+        Assert.That(gc1Queue!.PendingRequests.Select(r => r.IssueId), Is.EqualTo(new[] { "gc2" }));
+
+        // Complete gc1 and gc2
+        ((TaskQueue)gc1Queue).NotifyCompleted("gc1", success: true);
+        ((TaskQueue)gc1Queue).NotifyCompleted("gc2", success: true);
+        await Task.Delay(100);
+
+        // c3 should now run
+        allQueues = _coordinator.GetActiveQueues(ProjectId);
+        var c3Queue = allQueues.FirstOrDefault(q => q.CurrentRequest?.IssueId == "c3");
+        Assert.That(c3Queue, Is.Not.Null, "c3 should run after c2 completes");
     }
 
     #endregion
