@@ -99,6 +99,29 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
     }
 
     /// <summary>
+    /// Deletes all global prompts and recreates them from default definitions.
+    /// Project-scoped prompts are not affected.
+    /// </summary>
+    [HttpPost("restore-defaults")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RestoreDefaults()
+    {
+        await agentPromptService.RestoreDefaultPromptsAsync();
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Deletes all prompts scoped to the given project.
+    /// </summary>
+    [HttpDelete("project/{projectId}/all")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteAllProjectPrompts(string projectId)
+    {
+        await agentPromptService.DeleteAllProjectPromptsAsync(projectId);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Gets all issue agent prompts (IssueAgentModification and IssueAgentSystem).
     /// These are specialized prompts for the Issues Agent workflow.
     /// </summary>

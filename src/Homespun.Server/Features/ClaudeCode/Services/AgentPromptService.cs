@@ -278,6 +278,32 @@ public partial class AgentPromptService : IAgentPromptService
     [GeneratedRegex(@"\{\{(\w+)\}\}", RegexOptions.IgnoreCase)]
     private static partial Regex PlaceholderRegex();
 
+    public async Task RestoreDefaultPromptsAsync()
+    {
+        // Delete all global prompts (ProjectId == null)
+        var globalPrompts = _dataStore.AgentPrompts
+            .Where(p => p.ProjectId == null)
+            .ToList();
+
+        foreach (var prompt in globalPrompts)
+        {
+            await _dataStore.RemoveAgentPromptAsync(prompt.Id);
+        }
+
+        // Re-create defaults from default-prompts.json
+        await EnsureDefaultPromptsAsync();
+    }
+
+    public async Task DeleteAllProjectPromptsAsync(string projectId)
+    {
+        var projectPrompts = _dataStore.GetAgentPromptsByProject(projectId).ToList();
+
+        foreach (var prompt in projectPrompts)
+        {
+            await _dataStore.RemoveAgentPromptAsync(prompt.Id);
+        }
+    }
+
     public async Task EnsureDefaultPromptsAsync()
     {
         var definitions = LoadDefaultPromptDefinitions();

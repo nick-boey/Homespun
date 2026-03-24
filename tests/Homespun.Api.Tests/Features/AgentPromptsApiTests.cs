@@ -260,6 +260,132 @@ public class AgentPromptsApiTests
     }
 
     [Test]
+    public async Task RestoreDefaults_Returns204AndRemovesCustomPrompts()
+    {
+        // Arrange - Restore first to establish baseline
+        await _client.PostAsync("/api/agent-prompts/restore-defaults", null);
+        var baselineResponse = await _client.GetAsync("/api/agent-prompts");
+        var baselinePrompts = await baselineResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var baselineCount = baselinePrompts!.Count;
+
+        // Add a custom global prompt
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "CustomGlobalPrompt",
+            InitialMessage = "Custom message",
+            Mode = SessionMode.Build
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+
+        // Verify custom prompt exists
+        var beforeResponse = await _client.GetAsync("/api/agent-prompts");
+        var beforePrompts = await beforeResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(beforePrompts!.Count, Is.EqualTo(baselineCount + 1));
+
+        // Act
+        var response = await _client.PostAsync("/api/agent-prompts/restore-defaults", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        var afterResponse = await _client.GetAsync("/api/agent-prompts");
+        var afterPrompts = await afterResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterPrompts!.Any(p => p.Name == "CustomGlobalPrompt"), Is.False);
+            Assert.That(afterPrompts!.Count, Is.EqualTo(baselineCount));
+        });
+    }
+
+    [Test]
+    public async Task RestoreDefaults_PreservesProjectPrompts()
+    {
+        // Arrange - Create a project prompt
+        var projectId = "restore-defaults-project-test";
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "ProjectPromptSurvives",
+            InitialMessage = "Should survive restore",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+
+        // Act
+        var response = await _client.PostAsync("/api/agent-prompts/restore-defaults", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        var projectResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
+        var projectPrompts = await projectResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(projectPrompts!.Any(p => p.Name == "ProjectPromptSurvives"), Is.True);
+    }
+
+    [Test]
+    public async Task DeleteAllProjectPrompts_Returns204AndRemovesProjectPrompts()
+    {
+        // Arrange - Create project prompts
+        var projectId = "delete-all-project-test";
+        var createRequest1 = new CreateAgentPromptRequest
+        {
+            Name = "ProjectPrompt1",
+            InitialMessage = "Message 1",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        var createRequest2 = new CreateAgentPromptRequest
+        {
+            Name = "ProjectPrompt2",
+            InitialMessage = "Message 2",
+            Mode = SessionMode.Plan,
+            ProjectId = projectId
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest1, JsonOptions);
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest2, JsonOptions);
+
+        // Verify they exist
+        var beforeResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
+        var beforePrompts = await beforeResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(beforePrompts!.Count(p => p.ProjectId == projectId), Is.GreaterThanOrEqualTo(2));
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/agent-prompts/project/{projectId}/all");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        var afterResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
+        var afterPrompts = await afterResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(afterPrompts!.All(p => p.ProjectId != projectId), Is.True);
+    }
+
+    [Test]
+    public async Task DeleteAllProjectPrompts_PreservesGlobalPrompts()
+    {
+        // Arrange
+        var projectId = "delete-all-preserves-globals-test";
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "ProjectOnlyPrompt",
+            InitialMessage = "Will be deleted",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/agent-prompts/project/{projectId}/all");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        var globalResponse = await _client.GetAsync("/api/agent-prompts");
+        var globalPrompts = await globalResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(globalPrompts!.Any(p => p.Name == "Plan"), Is.True);
+    }
+
+    [Test]
     public async Task GetIssueAgentPromptsForProject_ReturnsIssueAgentPrompts()
     {
         // Arrange

@@ -113,4 +113,15 @@ public interface IAgentPromptService
     /// <param name="promptId">The ID of the project prompt override to remove.</param>
     /// <returns>The global prompt that will now take effect.</returns>
     Task<AgentPrompt> RemoveOverrideAsync(string promptId);
+
+    /// <summary>
+    /// Deletes all global prompts and re-creates defaults from default-prompts.json.
+    /// Project-scoped prompts are not affected.
+    /// </summary>
+    Task RestoreDefaultPromptsAsync();
+
+    /// <summary>
+    /// Deletes all project-scoped prompts for the given project.
+    /// </summary>
+    Task DeleteAllProjectPromptsAsync(string projectId);
 }
