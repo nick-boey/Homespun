@@ -4,6 +4,7 @@ import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { globalPromptsQueryKey } from './use-global-prompts'
 import { issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
+import { issueAgentProjectPromptsQueryKey } from './use-issue-agent-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 import type { PromptChanges } from '../utils/prompt-diff'
 
@@ -82,6 +83,9 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
         })
         queryClient.invalidateQueries({
           queryKey: agentPromptsQueryKey(projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: issueAgentProjectPromptsQueryKey(projectId),
         })
       }
       onSuccess?.()

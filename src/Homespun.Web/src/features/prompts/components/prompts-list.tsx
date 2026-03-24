@@ -348,12 +348,10 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
             <PromptsEmptyState />
           )}
 
-          {/* Issue Agent Prompts section - only shown on global prompts page */}
-          {isGlobal && (
-            <div className="mt-6 border-t pt-6">
-              <IssueAgentPromptsSection />
-            </div>
-          )}
+          {/* Issue Agent Prompts section */}
+          <div className="mt-6 border-t pt-6">
+            <IssueAgentPromptsSection projectId={isGlobal ? undefined : projectId} />
+          </div>
         </TabsContent>
 
         <TabsContent value="code">

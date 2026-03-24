@@ -3,5 +3,8 @@ export { PromptCard, type PromptCardProps } from './prompt-card'
 export { PromptForm, type PromptFormProps } from './prompt-form'
 export { PromptCardSkeleton } from './prompt-card-skeleton'
 export { PromptsEmptyState, type PromptsEmptyStateProps } from './prompts-empty-state'
-export { IssueAgentPromptsSection } from './issue-agent-prompts-section'
+export {
+  IssueAgentPromptsSection,
+  type IssueAgentPromptsSectionProps,
+} from './issue-agent-prompts-section'
 export { PromptsCodeEditor, type PromptsCodeEditorProps } from './prompts-code-editor'

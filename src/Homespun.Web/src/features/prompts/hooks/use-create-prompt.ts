@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts, type CreateAgentPromptRequest, type AgentPrompt } from '@/api'
 import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
+import { issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
+import { issueAgentProjectPromptsQueryKey } from './use-issue-agent-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseCreatePromptOptions {
@@ -38,10 +40,18 @@ export function useCreatePrompt(options: UseCreatePromptOptions) {
         queryClient.invalidateQueries({
           queryKey: agentPromptsQueryKey(options.projectId),
         })
+        // Invalidate issue agent project prompts
+        queryClient.invalidateQueries({
+          queryKey: issueAgentProjectPromptsQueryKey(options.projectId),
+        })
       } else {
         // Invalidate global prompts list
         queryClient.invalidateQueries({
           queryKey: ['global-prompts'],
+        })
+        // Invalidate issue agent prompts
+        queryClient.invalidateQueries({
+          queryKey: issueAgentPromptsQueryKey,
         })
       }
       options.onSuccess?.(data as AgentPrompt)
