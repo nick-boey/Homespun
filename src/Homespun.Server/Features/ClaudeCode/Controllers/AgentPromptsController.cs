@@ -6,7 +6,7 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 [ApiController]
 [Route("api/agent-prompts")]
 [Produces("application/json")]
-public class AgentPromptsController(IAgentPromptService agentPromptService) : ControllerBase
+public class AgentPromptsController(IAgentPromptService agentPromptService, ILogger<AgentPromptsController> logger) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<AgentPrompt>>(StatusCodes.Status200OK)]
@@ -34,6 +34,7 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
     public ActionResult<IReadOnlyList<AgentPrompt>> GetByProject(string projectId)
     {
         var prompts = agentPromptService.GetPromptsForProject(projectId);
+        logger.LogDebug("GetByProject returned {Count} prompts for project {ProjectId}", prompts.Count, projectId);
         return Ok(prompts);
     }
 
@@ -131,6 +132,8 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AgentPrompt>> CreateOverride([FromBody] CreateOverrideRequest request)
     {
+        logger.LogInformation("CreateOverride requested for global prompt {GlobalPromptId} in project {ProjectId}", request.GlobalPromptId, request.ProjectId);
+
         var globalPrompt = agentPromptService.GetPrompt(request.GlobalPromptId);
         if (globalPrompt == null)
         {
@@ -147,6 +150,7 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
             request.ProjectId,
             request.InitialMessage);
 
+        logger.LogInformation("Created override {OverrideId} for global prompt {GlobalPromptName} in project {ProjectId}", overridePrompt.Id, overridePrompt.Name, request.ProjectId);
         return CreatedAtAction(nameof(GetById), new { id = overridePrompt.Id }, overridePrompt);
     }
 
@@ -159,6 +163,8 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AgentPrompt>> RemoveOverride(string id)
     {
+        logger.LogInformation("RemoveOverride requested for prompt {PromptId}", id);
+
         var prompt = agentPromptService.GetPrompt(id);
         if (prompt == null)
         {

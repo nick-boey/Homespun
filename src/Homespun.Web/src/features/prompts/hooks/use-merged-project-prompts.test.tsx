@@ -6,7 +6,7 @@ import { AgentPrompts } from '@/api'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
-    getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    getApiAgentPromptsProjectByProjectId: vi.fn(),
   },
 }))
 
@@ -33,7 +33,7 @@ describe('useMergedProjectPrompts', () => {
       { id: '1', name: 'Project Prompt', initialMessage: 'Hello', mode: 1, projectId: 'proj-1' },
       { id: '2', name: 'Global Prompt', initialMessage: 'Hi', mode: 0, projectId: null },
     ]
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: mockPrompts,
     } as never)
 
@@ -44,7 +44,7 @@ describe('useMergedProjectPrompts', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toEqual(mockPrompts)
-    expect(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).toHaveBeenCalledWith({
+    expect(AgentPrompts.getApiAgentPromptsProjectByProjectId).toHaveBeenCalledWith({
       path: { projectId: 'proj-1' },
     })
   })
@@ -56,11 +56,11 @@ describe('useMergedProjectPrompts', () => {
 
     expect(result.current.isLoading).toBe(false)
     expect(result.current.isFetching).toBe(false)
-    expect(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).not.toHaveBeenCalled()
+    expect(AgentPrompts.getApiAgentPromptsProjectByProjectId).not.toHaveBeenCalled()
   })
 
   it('handles API errors', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       error: { detail: 'Not found' },
     } as never)
 
