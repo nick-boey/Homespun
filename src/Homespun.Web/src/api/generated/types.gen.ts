@@ -25,6 +25,7 @@ export type AgentPrompt = {
   createdAt?: string
   updatedAt?: string
   sessionType?: SessionType
+  category?: PromptCategory
   isOverride?: boolean
 }
 
@@ -212,23 +213,6 @@ export type CloneInfo = {
   readonly folderName?: string | null
 }
 
-export const ComparisonOperator = {
-  EQUALS: 'equals',
-  NOT_EQUALS: 'notEquals',
-  GREATER_THAN: 'greaterThan',
-  LESS_THAN: 'lessThan',
-  GREATER_THAN_OR_EQUALS: 'greaterThanOrEquals',
-  LESS_THAN_OR_EQUALS: 'lessThanOrEquals',
-  CONTAINS: 'contains',
-  STARTS_WITH: 'startsWith',
-  ENDS_WITH: 'endsWith',
-  MATCHES: 'matches',
-  IS_EMPTY: 'isEmpty',
-  IS_NOT_EMPTY: 'isNotEmpty',
-} as const
-
-export type ComparisonOperator = (typeof ComparisonOperator)[keyof typeof ComparisonOperator]
-
 export const ConflictChoice = {
   USE_MAIN: 'useMain',
   USE_AGENT: 'useAgent',
@@ -257,6 +241,7 @@ export type CreateAgentPromptRequest = {
   initialMessage?: string | null
   mode?: SessionMode
   projectId?: string | null
+  category?: PromptCategory
 }
 
 export type CreateBranchSessionRequest = {
@@ -301,6 +286,7 @@ export type CreateIssuesAgentSessionRequest = {
   model?: string | null
   selectedIssueId?: string | null
   userInstructions?: string | null
+  promptId?: string | null
 }
 
 export type CreateIssuesAgentSessionResponse = {
@@ -363,29 +349,11 @@ export type CreateWorkflowRequest = {
   projectId: string | null
   title: string | null
   description?: string | null
-  nodes?: Array<WorkflowNode> | null
-  edges?: Array<WorkflowEdge> | null
+  steps?: Array<WorkflowStep> | null
   trigger?: WorkflowTrigger
   settings?: WorkflowSettings
   enabled?: boolean
 }
-
-export type EdgeCondition = {
-  type?: EdgeConditionType
-  field?: string | null
-  operator?: ComparisonOperator
-  value?: string | null
-  expression?: string | null
-}
-
-export const EdgeConditionType = {
-  FIELD_COMPARISON: 'fieldComparison',
-  CONTAINS: 'contains',
-  EXPRESSION: 'expression',
-  ALWAYS: 'always',
-} as const
-
-export type EdgeConditionType = (typeof EdgeConditionType)[keyof typeof EdgeConditionType]
 
 export type EnrichedCloneInfo = {
   clone: CloneInfo
@@ -745,52 +713,6 @@ export type MoveSeriesSiblingRequest = {
   direction?: MoveDirection
 }
 
-export type NodeExecution = {
-  nodeId: string | null
-  status?: NodeExecutionStatus
-  retryCount?: number
-  startedAt?: string | null
-  completedAt?: string | null
-  durationMs?: number | null
-  output?: {
-    [key: string]: unknown
-  } | null
-  errorMessage?: string | null
-  logs?: Array<NodeExecutionLog> | null
-  sessionId?: string | null
-}
-
-export type NodeExecutionLog = {
-  timestamp?: string
-  level?: NodeLogLevel
-  message: string | null
-  data?: {
-    [key: string]: unknown
-  } | null
-}
-
-export const NodeExecutionStatus = {
-  PENDING: 'pending',
-  QUEUED: 'queued',
-  RUNNING: 'running',
-  WAITING_FOR_INPUT: 'waitingForInput',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  SKIPPED: 'skipped',
-  CANCELLED: 'cancelled',
-} as const
-
-export type NodeExecutionStatus = (typeof NodeExecutionStatus)[keyof typeof NodeExecutionStatus]
-
-export const NodeLogLevel = {
-  DEBUG: 'debug',
-  INFO: 'info',
-  WARNING: 'warning',
-  ERROR: 'error',
-} as const
-
-export type NodeLogLevel = (typeof NodeLogLevel)[keyof typeof NodeLogLevel]
-
 export type NodeOutput = {
   status: string | null
   data?: {
@@ -880,6 +802,10 @@ export type Project = {
   createdAt?: string
   updatedAt?: string
 }
+
+export const PromptCategory = { STANDARD: 'standard', ISSUE_AGENT: 'issueAgent' } as const
+
+export type PromptCategory = (typeof PromptCategory)[keyof typeof PromptCategory]
 
 export type PullRequest = {
   id?: string | null
@@ -1072,6 +998,46 @@ export type SetParentRequest = {
   addToExisting?: boolean
 }
 
+export type StepExecution = {
+  stepId: string | null
+  stepIndex?: number
+  status?: StepExecutionStatus
+  retryCount?: number
+  startedAt?: string | null
+  completedAt?: string | null
+  durationMs?: number | null
+  output?: {
+    [key: string]: unknown
+  } | null
+  sessionId?: string | null
+  errorMessage?: string | null
+}
+
+export const StepExecutionStatus = {
+  PENDING: 'pending',
+  RUNNING: 'running',
+  WAITING_FOR_INPUT: 'waitingForInput',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  SKIPPED: 'skipped',
+} as const
+
+export type StepExecutionStatus = (typeof StepExecutionStatus)[keyof typeof StepExecutionStatus]
+
+export type StepTransition = {
+  type?: StepTransitionType
+  targetStepId?: string | null
+}
+
+export const StepTransitionType = {
+  NEXT_STEP: 'nextStep',
+  EXIT: 'exit',
+  GO_TO_STEP: 'goToStep',
+  RETRY: 'retry',
+} as const
+
+export type StepTransitionType = (typeof StepTransitionType)[keyof typeof StepTransitionType]
+
 export type StoredWorkflowContext = {
   executionId: string | null
   workflowId: string | null
@@ -1157,6 +1123,7 @@ export type UpdateAgentPromptRequest = {
   name: string | null
   initialMessage?: string | null
   mode?: SessionMode
+  category?: PromptCategory
 }
 
 export type UpdateIssueRequest = {
@@ -1195,8 +1162,7 @@ export type UpdateWorkflowRequest = {
   projectId: string | null
   title?: string | null
   description?: string | null
-  nodes?: Array<WorkflowNode> | null
-  edges?: Array<WorkflowEdge> | null
+  steps?: Array<WorkflowStep> | null
   trigger?: WorkflowTrigger
   settings?: WorkflowSettings
   enabled?: boolean | null
@@ -1270,8 +1236,7 @@ export type WorkflowDefinition = {
   projectId: string | null
   title: string | null
   description?: string | null
-  nodes?: Array<WorkflowNode> | null
-  edges?: Array<WorkflowEdge> | null
+  steps?: Array<WorkflowStep> | null
   trigger?: WorkflowTrigger
   settings?: WorkflowSettings
   enabled?: boolean
@@ -1280,26 +1245,6 @@ export type WorkflowDefinition = {
   updatedAt?: string
   createdBy?: string | null
 }
-
-export type WorkflowEdge = {
-  id: string | null
-  source: string | null
-  target: string | null
-  sourceHandle?: string | null
-  targetHandle?: string | null
-  type?: WorkflowEdgeType
-  label?: string | null
-  condition?: EdgeCondition
-  animated?: boolean
-}
-
-export const WorkflowEdgeType = {
-  DEFAULT: 'default',
-  CONDITIONAL: 'conditional',
-  ERROR: 'error',
-} as const
-
-export type WorkflowEdgeType = (typeof WorkflowEdgeType)[keyof typeof WorkflowEdgeType]
 
 export const WorkflowEventType = {
   ISSUE_CREATED: 'issueCreated',
@@ -1326,7 +1271,8 @@ export type WorkflowExecution = {
   status?: WorkflowExecutionStatus
   trigger: ExecutionTriggerInfo
   context?: WorkflowContext
-  nodeExecutions?: Array<NodeExecution> | null
+  stepExecutions?: Array<StepExecution> | null
+  currentStepIndex?: number
   createdAt?: string
   startedAt?: string | null
   completedAt?: string | null
@@ -1359,37 +1305,42 @@ export type WorkflowListResponse = {
   totalCount?: number
 }
 
-export type WorkflowNode = {
-  id: string | null
-  label: string | null
-  type?: WorkflowNodeType
-  positionX?: number
-  positionY?: number
-  config?: unknown
-  description?: string | null
-  disabled?: boolean
-  timeoutSeconds?: number | null
-}
-
-export const WorkflowNodeType = {
-  START: 'start',
-  AGENT: 'agent',
-  GATE: 'gate',
-  ACTION: 'action',
-  TRANSFORM: 'transform',
-  END: 'end',
-} as const
-
-export type WorkflowNodeType = (typeof WorkflowNodeType)[keyof typeof WorkflowNodeType]
-
 export type WorkflowSettings = {
-  maxConcurrentNodes?: number
   defaultTimeoutSeconds?: number
   continueOnFailure?: boolean
-  retryOnFailure?: boolean
-  maxRetryAttempts?: number
-  retryDelaySeconds?: number
 }
+
+export type WorkflowStep = {
+  id: string | null
+  name: string | null
+  stepType?: WorkflowStepType
+  prompt?: string | null
+  promptId?: string | null
+  sessionMode?: SessionMode
+  onSuccess?: StepTransition
+  onFailure?: StepTransition
+  maxRetries?: number
+  retryDelaySeconds?: number
+  condition?: string | null
+  config?: unknown
+}
+
+export type WorkflowStepSignalRequest = {
+  projectId: string | null
+  status: string | null
+  data?: {
+    [key: string]: unknown
+  } | null
+  message?: string | null
+}
+
+export const WorkflowStepType = {
+  AGENT: 'agent',
+  SERVER_ACTION: 'serverAction',
+  GATE: 'gate',
+} as const
+
+export type WorkflowStepType = (typeof WorkflowStepType)[keyof typeof WorkflowStepType]
 
 export type WorkflowSummary = {
   id: string | null
@@ -1397,11 +1348,18 @@ export type WorkflowSummary = {
   description?: string | null
   enabled?: boolean
   triggerType?: WorkflowTriggerType
-  nodeCount?: number
+  stepCount?: number
   version?: number
   updatedAt?: string
   lastExecutionStatus?: WorkflowExecutionStatus
   lastExecutedAt?: string | null
+}
+
+export type WorkflowTemplateSummary = {
+  id: string | null
+  title: string | null
+  description?: string | null
+  stepCount?: number
 }
 
 export type WorkflowTrigger = {
@@ -1699,6 +1657,25 @@ export type GetApiAgentPromptsIssueAgentPromptsResponses = {
 
 export type GetApiAgentPromptsIssueAgentPromptsResponse =
   GetApiAgentPromptsIssueAgentPromptsResponses[keyof GetApiAgentPromptsIssueAgentPromptsResponses]
+
+export type GetApiAgentPromptsIssueAgentAvailableByProjectIdData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/agent-prompts/issue-agent/available/{projectId}'
+}
+
+export type GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses = {
+  /**
+   * OK
+   */
+  200: Array<AgentPrompt>
+}
+
+export type GetApiAgentPromptsIssueAgentAvailableByProjectIdResponse =
+  GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses[keyof GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses]
 
 export type PostApiAgentPromptsCreateOverrideData = {
   body?: CreateOverrideRequest
@@ -4700,3 +4677,82 @@ export type GetApiExecutionsByExecutionIdContextResponses = {
 
 export type GetApiExecutionsByExecutionIdContextResponse =
   GetApiExecutionsByExecutionIdContextResponses[keyof GetApiExecutionsByExecutionIdContextResponses]
+
+export type PostApiExecutionsByExecutionIdStepsByStepIdSignalData = {
+  body?: WorkflowStepSignalRequest
+  path: {
+    executionId: string
+    stepId: string
+  }
+  query?: never
+  url: '/api/executions/{executionId}/steps/{stepId}/signal'
+}
+
+export type PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiExecutionsByExecutionIdStepsByStepIdSignalError =
+  PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors[keyof PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors]
+
+export type PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses = {
+  /**
+   * OK
+   */
+  200: unknown
+}
+
+export type GetApiWorkflowTemplatesData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/workflow-templates'
+}
+
+export type GetApiWorkflowTemplatesResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkflowTemplateSummary>
+}
+
+export type GetApiWorkflowTemplatesResponse =
+  GetApiWorkflowTemplatesResponses[keyof GetApiWorkflowTemplatesResponses]
+
+export type PostApiWorkflowTemplatesByTemplateIdCreateData = {
+  body?: never
+  path: {
+    templateId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/workflow-templates/{templateId}/create'
+}
+
+export type PostApiWorkflowTemplatesByTemplateIdCreateErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiWorkflowTemplatesByTemplateIdCreateError =
+  PostApiWorkflowTemplatesByTemplateIdCreateErrors[keyof PostApiWorkflowTemplatesByTemplateIdCreateErrors]
+
+export type PostApiWorkflowTemplatesByTemplateIdCreateResponses = {
+  /**
+   * Created
+   */
+  201: WorkflowDefinition
+}
+
+export type PostApiWorkflowTemplatesByTemplateIdCreateResponse =
+  PostApiWorkflowTemplatesByTemplateIdCreateResponses[keyof PostApiWorkflowTemplatesByTemplateIdCreateResponses]

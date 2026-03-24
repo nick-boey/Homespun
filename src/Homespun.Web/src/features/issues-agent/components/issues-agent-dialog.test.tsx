@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { IssuesAgentDialog } from './issues-agent-dialog'
-import { Issues, IssuesAgent } from '@/api'
+import { Issues, IssuesAgent, AgentPrompts } from '@/api'
 
 // Mock the router
 const mockNavigate = vi.fn()
@@ -22,8 +22,32 @@ vi.mock('@/api', async (importOriginal) => {
     IssuesAgent: {
       postApiIssuesAgentSession: vi.fn(),
     },
+    AgentPrompts: {
+      getApiAgentPromptsIssueAgentAvailableByProjectId: vi.fn(),
+    },
   }
 })
+
+const mockPrompts = [
+  {
+    id: 'prompt-1',
+    name: 'Default Prompt',
+    mode: 'build',
+    isOverride: false,
+  },
+  {
+    id: 'prompt-2',
+    name: 'Plan Prompt',
+    mode: 'plan',
+    isOverride: false,
+  },
+  {
+    id: 'prompt-3',
+    name: 'Project Override',
+    mode: 'build',
+    isOverride: true,
+  },
+]
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -37,10 +61,17 @@ function createWrapper() {
   }
 }
 
+function mockPromptsResponse(prompts = mockPrompts) {
+  vi.mocked(AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId).mockResolvedValue({
+    data: prompts,
+  } as never)
+}
+
 describe('IssuesAgentDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockPromptsResponse()
   })
 
   it('renders dialog when open', () => {
@@ -107,6 +138,147 @@ describe('IssuesAgentDialog', () => {
     expect(screen.queryByText('Selected Issue')).not.toBeInTheDocument()
   })
 
+  it('renders prompt dropdown with available prompts', async () => {
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
+    // Open the dropdown
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+
+    // Verify "None" option is present
+    expect(
+      screen.getByRole('option', { name: 'None - Start without prompt (Build mode)' })
+    ).toBeInTheDocument()
+
+    // Verify prompts are listed
+    expect(screen.getByRole('option', { name: 'Default Prompt (build)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Plan Prompt (plan)' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('option', { name: 'Project Override (build) (project)' })
+    ).toBeInTheDocument()
+  })
+
+  it('shows "None" option and defaults to first prompt when no selection saved', async () => {
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    // Wait for prompts to load - should default to first prompt
+    await waitFor(() => {
+      const promptSelect = screen.getByRole('combobox', { name: 'Select prompt' })
+      expect(promptSelect).toBeInTheDocument()
+    })
+  })
+
+  it('persists selected prompt to localStorage', async () => {
+    const user = userEvent.setup()
+
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
+    // Open dropdown and select "None"
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(
+      screen.getByRole('option', { name: 'None - Start without prompt (Build mode)' })
+    )
+
+    // Verify persisted
+    expect(localStorage.getItem('issues-agent-prompt')).toBe('__none__')
+  })
+
+  it('passes prompt ID to the create session mutation', async () => {
+    const user = userEvent.setup()
+    const mockResult = {
+      sessionId: 'session-123',
+      branchName: 'issues-agent-123',
+      clonePath: '/tmp/clone',
+    }
+
+    vi.mocked(IssuesAgent.postApiIssuesAgentSession).mockResolvedValue({
+      data: mockResult,
+    } as never)
+
+    render(
+      <IssuesAgentDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="proj-1"
+        selectedIssueId="abc123"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load (defaults to first prompt)
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
+    // Click start (with default prompt selected)
+    await user.click(screen.getByText('Start Agent'))
+
+    await waitFor(() => {
+      expect(IssuesAgent.postApiIssuesAgentSession).toHaveBeenCalledWith({
+        body: {
+          projectId: 'proj-1',
+          model: 'sonnet',
+          selectedIssueId: 'abc123',
+          promptId: 'prompt-1',
+        },
+      })
+    })
+  })
+
+  it('passes null prompt ID when "None" is selected', async () => {
+    const user = userEvent.setup()
+    const mockResult = {
+      sessionId: 'session-123',
+      branchName: 'issues-agent-123',
+      clonePath: '/tmp/clone',
+    }
+
+    // Pre-set "None" in localStorage
+    localStorage.setItem('issues-agent-prompt', '__none__')
+
+    vi.mocked(IssuesAgent.postApiIssuesAgentSession).mockResolvedValue({
+      data: mockResult,
+    } as never)
+
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
+    // Click start (with "None" selected)
+    await user.click(screen.getByText('Start Agent'))
+
+    await waitFor(() => {
+      expect(IssuesAgent.postApiIssuesAgentSession).toHaveBeenCalledWith({
+        body: {
+          projectId: 'proj-1',
+          model: 'sonnet',
+          promptId: null,
+        },
+      })
+    })
+  })
+
   it('calls API with correct params when starting agent', async () => {
     const user = userEvent.setup()
     const mockResult = {
@@ -131,6 +303,11 @@ describe('IssuesAgentDialog', () => {
       { wrapper: createWrapper() }
     )
 
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
     // Enter instructions
     const instructionsInput = screen.getByLabelText('Instructions')
     await user.type(instructionsInput, 'Update the issue status')
@@ -145,6 +322,7 @@ describe('IssuesAgentDialog', () => {
           model: 'sonnet',
           selectedIssueId: 'abc123',
           userInstructions: 'Update the issue status',
+          promptId: 'prompt-1',
         },
       })
     })
@@ -242,5 +420,18 @@ describe('IssuesAgentDialog', () => {
 
     // Instructions should be cleared
     expect(screen.getByLabelText('Instructions')).toHaveValue('')
+  })
+
+  it('defaults to "None" when no prompts are available', async () => {
+    mockPromptsResponse([])
+
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
   })
 })
