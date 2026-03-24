@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Workflows } from '@/api'
-import type { WorkflowExecution } from '@/api/generated/types.gen'
+import type { WorkflowExecution, StepExecution } from '@/api/generated/types.gen'
 
 export const Route = createFileRoute(
   '/projects/$projectId/workflows/$workflowId/executions/$executionId'
@@ -144,20 +144,20 @@ function ExecutionDetailPage() {
         </div>
       )}
 
-      {execution.nodeExecutions && execution.nodeExecutions.length > 0 && (
+      {execution.stepExecutions && execution.stepExecutions.length > 0 && (
         <div>
-          <h3 className="mb-3 text-lg font-medium">Node Executions</h3>
+          <h3 className="mb-3 text-lg font-medium">Step Executions</h3>
           <div className="space-y-2">
-            {execution.nodeExecutions.map((node) => (
+            {execution.stepExecutions.map((step: StepExecution) => (
               <div
-                key={node.nodeId}
+                key={step.stepId}
                 className="border-border flex items-center justify-between rounded-lg border p-3"
               >
                 <div>
-                  <p className="font-medium">{node.nodeId}</p>
+                  <p className="font-medium">{step.stepId}</p>
                 </div>
-                {node.status && (
-                  <Badge variant={getStatusVariant(node.status)}>{node.status}</Badge>
+                {step.status && (
+                  <Badge variant={getStatusVariant(step.status)}>{step.status}</Badge>
                 )}
               </div>
             ))}

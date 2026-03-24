@@ -171,8 +171,7 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
               Workflow editor with Mermaid chart and step configuration will be available here.
             </p>
             <p className="text-muted-foreground mt-2 text-sm">
-              {workflow.nodes?.length ?? 0} nodes &middot; {workflow.edges?.length ?? 0} edges
-              &middot; Version {workflow.version}
+              {workflow.steps?.length ?? 0} steps &middot; Version {workflow.version}
             </p>
           </div>
         </TabsContent>

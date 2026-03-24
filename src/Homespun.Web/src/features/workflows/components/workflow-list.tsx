@@ -160,7 +160,7 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
               <TableCell className="text-muted-foreground max-w-[300px] truncate">
                 {workflow.description || '—'}
               </TableCell>
-              <TableCell>{workflow.nodeCount ?? 0}</TableCell>
+              <TableCell>{workflow.stepCount ?? 0}</TableCell>
               <TableCell>
                 {workflow.lastExecutionStatus ? (
                   <Badge variant={getStatusVariant(workflow.lastExecutionStatus)}>
