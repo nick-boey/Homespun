@@ -80,8 +80,8 @@ public static class MockServiceExtensions
         // Project service
         services.AddScoped<IProjectService, MockProjectService>();
 
-        // Secrets service
-        services.AddScoped<ISecretsService, MockSecretsService>();
+        // Secrets service (real implementation - uses secrets.env files, works with temp folder structure)
+        services.AddScoped<ISecretsService, SecretsService>();
 
         // Container query service
         services.AddScoped<IContainerQueryService, MockContainerQueryService>();
@@ -123,7 +123,7 @@ public static class MockServiceExtensions
         }
 
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
-        services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
+        services.AddSingleton<IAgentPromptService, AgentPromptService>();
 
         // Agent Orchestration services - configure options and HTTP client first
         services.Configure<MiniPromptOptions>(options => { });  // Empty config - uses defaults
