@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Homespun.Features.Workflows.Services;
 
 namespace Homespun.Features.AgentOrchestration.Services;
 
@@ -64,4 +65,24 @@ public record AgentStartRequest
     /// The branch name to use for the agent session.
     /// </summary>
     public required string BranchName { get; init; }
+
+    /// <summary>
+    /// The workflow execution ID, if this agent is being started as part of a workflow.
+    /// </summary>
+    public string? WorkflowExecutionId { get; init; }
+
+    /// <summary>
+    /// The index of the current workflow step being executed.
+    /// </summary>
+    public int? WorkflowStepIndex { get; init; }
+
+    /// <summary>
+    /// The ID of the current workflow step being executed.
+    /// </summary>
+    public string? WorkflowStepId { get; init; }
+
+    /// <summary>
+    /// Whether this request is part of a workflow execution.
+    /// </summary>
+    public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;
 }
