@@ -773,6 +773,11 @@ public sealed class FleeceService : IFleeceService, IDisposable
             .OrderBy(s => s.SortOrder ?? "", StringComparer.Ordinal)
             .ToList();
 
+        _logger.LogDebug(
+            "MoveSeriesSibling: Found {Count} siblings under parent '{ParentId}': {Siblings}",
+            siblings.Count, parentId,
+            string.Join(", ", siblings.Select(s => $"{s.Issue.Id}({s.Issue.Title})={s.SortOrder ?? "null"}")));
+
         // If siblings lack distinct sort orders (all null/empty or all the same default),
         // assign lexical ordering to all siblings preserving the current display order
         var distinctOrders = siblings.Select(s => s.SortOrder ?? "").Distinct().Count();
@@ -794,6 +799,11 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 cache[sib.Issue.Id] = updated;
                 prev = newOrder;
             }
+
+            _logger.LogDebug(
+                "MoveSeriesSibling: Reassigned sort orders for siblings under '{ParentId}': {Siblings}",
+                parentId,
+                string.Join(", ", siblings.Select(s => $"{s.Issue.Id}={cache[s.Issue.Id].ParentIssues.First(p => p.ParentIssue == parentId).SortOrder}")));
 
             // Re-fetch siblings with updated sort orders
             siblings = cache.Values
@@ -833,6 +843,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
         var currentSortOrder = siblings[currentIndex].SortOrder;
         var targetSortOrder = targetSibling.SortOrder;
 
+        _logger.LogDebug(
+            "MoveSeriesSibling: Swapping sort orders - {IssueId}({CurrentOrder}) <-> {TargetId}({TargetOrder})",
+            issueId, currentSortOrder, targetSibling.Issue.Id, targetSortOrder);
+
         // Update the current issue's parent ref with the target's sort order
         var service = GetOrCreateIssueService(projectPath);
 
@@ -855,6 +869,11 @@ public sealed class FleeceService : IFleeceService, IDisposable
         // Update the in-memory cache immediately
         cache[issueId] = updatedCurrent;
         cache[targetSibling.Issue.Id] = updatedTarget;
+
+        _logger.LogDebug(
+            "MoveSeriesSibling: Updated cache - {IssueId} parentRefs=[{IssuePRefs}], {TargetId} parentRefs=[{TargetPRefs}]",
+            issueId, string.Join(", ", updatedCurrent.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}")),
+            targetSibling.Issue.Id, string.Join(", ", updatedTarget.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}")));
 
         // Queue background persistence for both issues
         await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
