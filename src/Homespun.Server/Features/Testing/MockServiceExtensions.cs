@@ -8,6 +8,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Search;
 using Homespun.Features.Secrets;
+using Homespun.Features.Commands;
 using Homespun.Features.Testing.Services;
 using Homespun.Features.Workflows.Services;
 using Microsoft.Extensions.Configuration;
@@ -65,7 +66,7 @@ public static class MockServiceExtensions
         services.AddSingleton<global::Fleece.Core.Services.Interfaces.IDiffService, global::Fleece.Core.Services.DiffService>();
 
         // Core services
-        services.AddSingleton<ICommandRunner, MockCommandRunner>();
+        services.AddSingleton<ICommandRunner, CommandRunner>();
         services.AddSingleton<IGitHubEnvironmentService, MockGitHubEnvironmentService>();
         services.AddSingleton<IGitHubClientWrapper, MockGitHubClientWrapper>();
 
