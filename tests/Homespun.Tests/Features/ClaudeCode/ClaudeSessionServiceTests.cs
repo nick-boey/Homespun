@@ -3356,6 +3356,16 @@ public class ClaudeSessionServiceTurnIdTests
         await Task.CompletedTask;
     }
 
+    private static async IAsyncEnumerable<SdkMessage> CreateDelayedSdkMessageStream(
+        SdkMessage[] immediate, Task<SdkMessage> delayed)
+    {
+        foreach (var msg in immediate)
+        {
+            yield return msg;
+        }
+        yield return await delayed;
+    }
+
     [Test]
     public async Task PostLoopStatusTransition_WhenCurrentTurn_SetsWaitingForInput()
     {
@@ -3497,5 +3507,81 @@ public class ClaudeSessionServiceTurnIdTests
         // the post-loop transition is correctly scoped to the current turn.
         Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
             "plan_pending from the current turn should still be processed normally");
+    }
+
+    [Test]
+    public async Task ApprovePlan_ClearContext_WithSlowFirstStream_StatusIsRunningDuringBuildSession()
+    {
+        // This test reproduces the race condition where the first SendMessageAsync's
+        // post-loop guard erroneously sets WaitingForInput during the second SendMessageAsync.
+        //
+        // Timeline without fix:
+        //   1. First SendMessageAsync: plan_pending → status=WaitingForPlanExecution, stream blocks
+        //   2. ApprovePlanAsync(keepContext:false) → ExecutePlanAsync → new SendMessageAsync
+        //   3. New SendMessageAsync sets status=Running, broadcasts (await yields)
+        //   4. First stream's TCS completes → its post-loop guard sees Running + old turnId → sets WaitingForInput
+        //   5. New SendMessageAsync resumes, but status is WaitingForInput → post-loop guard skips transition
+        //
+        // With the fix, the new turnId is written BEFORE the broadcast await, so step 4
+        // sees a mismatched turnId and correctly skips the transition.
+
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planJson = "{\"plan\":\"# Test Plan\\n\\n1. Step one\"}";
+        var firstStreamTcs = new TaskCompletionSource<SdkMessage>();
+
+        // First message stream: yields plan_pending immediately, then blocks on TCS
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateDelayedSdkMessageStream(
+                [
+                    new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                    new SdkPlanPendingMessage("agent-1", planJson)
+                ],
+                firstStreamTcs.Task));
+
+        // Start first SendMessageAsync - it will yield plan_pending then block
+        var firstSendTask = _service.SendMessageAsync(session.Id, "Plan this feature");
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Precondition: should be WaitingForPlanExecution after plan_pending");
+
+        // Worker approve returns true for the deny/clear path
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, false, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var buildStreamSetup = false;
+
+        // Second stream (build): when ExecutePlanAsync starts a new session, release the first stream's TCS
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(
+                It.Is<AgentStartRequest>(r => r.Prompt!.Contains("proceed with the implementation")),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                if (!buildStreamSetup)
+                {
+                    buildStreamSetup = true;
+                    // Release the first stream - simulates the old worker producing a late result
+                    firstStreamTcs.SetResult(new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null));
+                }
+                return CreateSdkMessageStream(
+                    new SdkSystemMessage("agent-2", null, "session_started", null, null),
+                    new SdkResultMessage("agent-2", null, null, 0, 0, false, 0, 0, null));
+            });
+
+        // Act - Approve with clear context, which triggers ExecutePlanAsync → new SendMessageAsync
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: false);
+
+        // Wait for the first stream to finish its post-loop guard
+        await firstSendTask;
+
+        // Assert - The final status should be WaitingForInput, set by the SECOND (build) turn's
+        // post-loop guard. Without the fix, the first turn's post-loop guard would have set
+        // WaitingForInput early (because turnId_B wasn't written yet), and then the second turn's
+        // guard would skip the transition (status already WaitingForInput, not Running).
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput),
+            "Status should be WaitingForInput from the build turn's post-loop completion");
     }
 }
