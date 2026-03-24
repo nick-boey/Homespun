@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Notifications;
+using Homespun.Features.Workflows.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.AgentOrchestration.Services;
@@ -65,6 +66,7 @@ public class QueueCoordinator : IQueueCoordinator
 {
     private readonly IFleeceService _fleeceService;
     private readonly IAgentStartBackgroundService _agentStartService;
+    private readonly IWorkflowExecutionService? _workflowExecutionService;
     private readonly IHubContext<NotificationHub> _notificationHub;
     private readonly ILogger<QueueCoordinator> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -81,7 +83,7 @@ public class QueueCoordinator : IQueueCoordinator
         IHubContext<NotificationHub> notificationHub,
         ILogger<QueueCoordinator> logger,
         ILoggerFactory loggerFactory)
-        : this(fleeceService, agentStartService, notificationHub, logger, loggerFactory, maxConcurrency: 5)
+        : this(fleeceService, agentStartService, null, notificationHub, logger, loggerFactory, maxConcurrency: 5)
     {
     }
 
@@ -92,13 +94,31 @@ public class QueueCoordinator : IQueueCoordinator
         ILogger<QueueCoordinator> logger,
         ILoggerFactory loggerFactory,
         int maxConcurrency)
+        : this(fleeceService, agentStartService, null, notificationHub, logger, loggerFactory, maxConcurrency)
+    {
+    }
+
+    public QueueCoordinator(
+        IFleeceService fleeceService,
+        IAgentStartBackgroundService agentStartService,
+        IWorkflowExecutionService? workflowExecutionService,
+        IHubContext<NotificationHub> notificationHub,
+        ILogger<QueueCoordinator> logger,
+        ILoggerFactory loggerFactory,
+        int maxConcurrency)
     {
         _fleeceService = fleeceService;
         _agentStartService = agentStartService;
+        _workflowExecutionService = workflowExecutionService;
         _notificationHub = notificationHub;
         _logger = logger;
         _loggerFactory = loggerFactory;
         _maxConcurrency = maxConcurrency;
+
+        if (_workflowExecutionService != null)
+        {
+            _workflowExecutionService.OnExecutionCompleted += HandleWorkflowExecutionCompleted;
+        }
     }
 
     public event Action<QueueCoordinatorEvent>? OnEvent;
@@ -505,7 +525,7 @@ public class QueueCoordinator : IQueueCoordinator
     private TaskQueue CreateQueue(ProjectExecution execution)
     {
         var queueLogger = _loggerFactory.CreateLogger<TaskQueue>();
-        var queue = new TaskQueue(_agentStartService, queueLogger);
+        var queue = new TaskQueue(_agentStartService, _workflowExecutionService, queueLogger);
 
         bool shouldPause;
         lock (_lock)
@@ -651,6 +671,13 @@ public class QueueCoordinator : IQueueCoordinator
 
     private AgentStartRequest CreateRequest(ProjectExecution execution, Issue issue)
     {
+        string? workflowId = null;
+        var issueTypeName = issue.Type.ToString();
+        if (execution.WorkflowMappings.TryGetValue(issueTypeName, out var mappedWorkflowId))
+        {
+            workflowId = mappedWorkflowId;
+        }
+
         return new AgentStartRequest
         {
             IssueId = issue.Id,
@@ -658,8 +685,26 @@ public class QueueCoordinator : IQueueCoordinator
             ProjectLocalPath = execution.ProjectPath,
             ProjectDefaultBranch = execution.DefaultBranch,
             Issue = issue,
-            BranchName = $"task/{issue.Id}"
+            BranchName = $"task/{issue.Id}",
+            WorkflowId = workflowId
         };
+    }
+
+    private void HandleWorkflowExecutionCompleted(WorkflowExecutionCompletedEvent e)
+    {
+        List<ITaskQueue> allQueues;
+
+        lock (_lock)
+        {
+            allQueues = _executions.Values
+                .SelectMany(ex => ex.Queues)
+                .ToList();
+        }
+
+        foreach (var queue in allQueues)
+        {
+            queue.NotifyWorkflowCompleted(e.ExecutionId, e.Success, e.Error);
+        }
     }
 
     private void EmitEvent(

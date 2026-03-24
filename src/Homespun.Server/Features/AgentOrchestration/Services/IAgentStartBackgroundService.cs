@@ -67,6 +67,12 @@ public record AgentStartRequest
     public required string BranchName { get; init; }
 
     /// <summary>
+    /// The workflow ID to start for this issue, when dispatched via workflow mapping.
+    /// Set by QueueCoordinator when the issue's type has a workflow mapping configured.
+    /// </summary>
+    public string? WorkflowId { get; init; }
+
+    /// <summary>
     /// The workflow execution ID, if this agent is being started as part of a workflow.
     /// </summary>
     public string? WorkflowExecutionId { get; init; }

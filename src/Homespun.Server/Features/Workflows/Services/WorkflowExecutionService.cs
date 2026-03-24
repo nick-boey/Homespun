@@ -21,6 +21,9 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     private readonly Dictionary<WorkflowStepType, IStepExecutor> _stepExecutors;
     private readonly IHubContext<WorkflowHub> _hubContext;
 
+    /// <inheritdoc />
+    public event Action<WorkflowExecutionCompletedEvent>? OnExecutionCompleted;
+
     // Cache of executions per project, keyed by project path
     private readonly ConcurrentDictionary<string, ProjectExecutionCache> _projectCaches = new();
 
@@ -1020,6 +1023,13 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         }
 
         await _hubContext.BroadcastWorkflowCompleted(executionId, WorkflowExecutionStatus.Completed, projectId);
+
+        OnExecutionCompleted?.Invoke(new WorkflowExecutionCompletedEvent
+        {
+            ProjectPath = projectPath,
+            ExecutionId = executionId,
+            Success = true
+        });
     }
 
     private async Task FailExecutionAsync(string projectPath, string executionId, string error, CancellationToken ct)
@@ -1057,6 +1067,14 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         }
 
         await _hubContext.BroadcastWorkflowFailed(executionId, error, projectId);
+
+        OnExecutionCompleted?.Invoke(new WorkflowExecutionCompletedEvent
+        {
+            ProjectPath = projectPath,
+            ExecutionId = executionId,
+            Success = false,
+            Error = error
+        });
     }
 
     private SemaphoreSlim GetProjectSemaphore(string projectPath)
