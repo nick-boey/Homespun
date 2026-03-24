@@ -8,12 +8,16 @@ import {
   useWorkflowExecutions,
   useDeleteWorkflow,
   useExecuteWorkflow,
+  useCreateWorkflow,
+  useWorkflowTemplates,
+  useCreateFromTemplate,
 } from './use-workflows'
-import { Workflows } from '@/api'
+import { Workflows, WorkflowTemplate } from '@/api'
 import type {
   WorkflowSummary,
   WorkflowDefinition,
   ExecutionSummary,
+  WorkflowTemplateSummary,
 } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
@@ -23,6 +27,11 @@ vi.mock('@/api', () => ({
     getApiWorkflowsByWorkflowIdExecutions: vi.fn(),
     deleteApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflowsByWorkflowIdExecute: vi.fn(),
+    postApiWorkflows: vi.fn(),
+  },
+  WorkflowTemplate: {
+    getApiWorkflowTemplates: vi.fn(),
+    postApiWorkflowTemplatesByTemplateIdCreate: vi.fn(),
   },
 }))
 
@@ -289,5 +298,139 @@ describe('useExecuteWorkflow', () => {
     })
 
     expect(mock).toHaveBeenCalledWith({ path: { workflowId: 'wf-1' } })
+  })
+})
+
+const mockCreatedWorkflow: WorkflowDefinition = {
+  id: 'wf-new',
+  projectId: 'proj-1',
+  title: 'New Workflow',
+  description: 'A new workflow',
+  steps: [],
+  enabled: true,
+  version: 1,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+}
+
+const mockTemplates: WorkflowTemplateSummary[] = [
+  { id: 'tpl-1', title: 'CI Pipeline', description: 'Basic CI', stepCount: 3 },
+  { id: 'tpl-2', title: 'Deploy', description: 'Deploy to prod', stepCount: 5 },
+]
+
+describe('useCreateWorkflow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('creates a workflow successfully', async () => {
+    const mock = Workflows.postApiWorkflows as Mock
+    mock.mockResolvedValueOnce({ data: mockCreatedWorkflow })
+
+    const { result } = renderHook(() => useCreateWorkflow('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({ title: 'New Workflow', description: 'A new workflow' })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mock).toHaveBeenCalledWith({
+      body: { projectId: 'proj-1', title: 'New Workflow', description: 'A new workflow' },
+    })
+    expect(result.current.data).toEqual(mockCreatedWorkflow)
+  })
+
+  it('handles creation error', async () => {
+    const mock = Workflows.postApiWorkflows as Mock
+    mock.mockResolvedValueOnce({ error: { detail: 'Bad request' } })
+
+    const { result } = renderHook(() => useCreateWorkflow('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({ title: '', description: '' })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+  })
+})
+
+describe('useWorkflowTemplates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetches templates successfully', async () => {
+    const mock = WorkflowTemplate.getApiWorkflowTemplates as Mock
+    mock.mockResolvedValueOnce({ data: mockTemplates })
+
+    const { result } = renderHook(() => useWorkflowTemplates(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    expect(result.current.templates).toEqual(mockTemplates)
+  })
+
+  it('handles fetch error', async () => {
+    const mock = WorkflowTemplate.getApiWorkflowTemplates as Mock
+    mock.mockResolvedValueOnce({ error: { detail: 'Server error' } })
+
+    const { result } = renderHook(() => useWorkflowTemplates(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+  })
+})
+
+describe('useCreateFromTemplate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('creates a workflow from template', async () => {
+    const mock = WorkflowTemplate.postApiWorkflowTemplatesByTemplateIdCreate as Mock
+    mock.mockResolvedValueOnce({ data: mockCreatedWorkflow })
+
+    const { result } = renderHook(() => useCreateFromTemplate('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate('tpl-1')
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mock).toHaveBeenCalledWith({
+      path: { templateId: 'tpl-1' },
+      query: { projectId: 'proj-1' },
+    })
+    expect(result.current.data).toEqual(mockCreatedWorkflow)
+  })
+
+  it('handles creation from template error', async () => {
+    const mock = WorkflowTemplate.postApiWorkflowTemplatesByTemplateIdCreate as Mock
+    mock.mockResolvedValueOnce({ error: { detail: 'Template not found' } })
+
+    const { result } = renderHook(() => useCreateFromTemplate('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate('tpl-missing')
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
   })
 })

@@ -8,5 +8,10 @@ export const Route = createFileRoute('/projects/$projectId/workflows/')({
 function WorkflowsPage() {
   const { projectId } = useParams({ from: '/projects/$projectId/workflows/' })
 
-  return <WorkflowList projectId={projectId} />
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Workflows</h1>
+      <WorkflowList projectId={projectId} />
+    </div>
+  )
 }

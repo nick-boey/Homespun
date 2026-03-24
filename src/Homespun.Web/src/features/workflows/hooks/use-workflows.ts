@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Workflows, type WorkflowDefinition, type UpdateWorkflowRequest } from '@/api'
+import {
+  Workflows,
+  WorkflowTemplate,
+  type WorkflowDefinition,
+  type UpdateWorkflowRequest,
+} from '@/api'
 import { useTelemetry } from '@/hooks/use-telemetry'
 
 export const workflowsQueryKey = (projectId: string) => ['workflows', projectId] as const
@@ -174,6 +179,77 @@ export function useExecuteWorkflow() {
         workflowId,
         error: error.message,
       })
+    },
+  })
+}
+
+export function useCreateWorkflow(projectId: string) {
+  const queryClient = useQueryClient()
+  const telemetry = useTelemetry()
+
+  return useMutation({
+    mutationFn: async ({ title, description }: { title: string; description?: string }) => {
+      const response = await Workflows.postApiWorkflows({
+        body: { projectId, title, description },
+      })
+      if (response.error || !response.data) {
+        throw new Error('Failed to create workflow')
+      }
+      return response.data as WorkflowDefinition
+    },
+    onSuccess: (data) => {
+      telemetry.trackEvent('workflow_created', { workflowId: data.id ?? '' })
+      queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
+    },
+    onError: (error: Error) => {
+      telemetry.trackEvent('workflow_creation_failed', { error: error.message })
+    },
+  })
+}
+
+export const workflowTemplatesQueryKey = ['workflow-templates'] as const
+
+export function useWorkflowTemplates() {
+  const query = useQuery({
+    queryKey: workflowTemplatesQueryKey,
+    queryFn: async () => {
+      const response = await WorkflowTemplate.getApiWorkflowTemplates()
+      if (response.error || !response.data) {
+        throw new Error('Failed to fetch workflow templates')
+      }
+      return response.data
+    },
+  })
+
+  return {
+    templates: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+  }
+}
+
+export function useCreateFromTemplate(projectId: string) {
+  const queryClient = useQueryClient()
+  const telemetry = useTelemetry()
+
+  return useMutation({
+    mutationFn: async (templateId: string) => {
+      const response = await WorkflowTemplate.postApiWorkflowTemplatesByTemplateIdCreate({
+        path: { templateId },
+        query: { projectId },
+      })
+      if (response.error || !response.data) {
+        throw new Error('Failed to create workflow from template')
+      }
+      return response.data as WorkflowDefinition
+    },
+    onSuccess: (data) => {
+      telemetry.trackEvent('workflow_created_from_template', { workflowId: data.id ?? '' })
+      queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
+    },
+    onError: (error: Error) => {
+      telemetry.trackEvent('workflow_template_creation_failed', { error: error.message })
     },
   })
 }
