@@ -37,6 +37,7 @@ function createRenderLine(
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.SERIES,
+    parentIssues: null,
     ...overrides,
   }
 }
@@ -225,6 +226,85 @@ describe('InlineIssueDetailRow', () => {
       })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.queryByTestId('agent-status-indicator')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('execution mode', () => {
+    it('displays series execution mode', () => {
+      const line = createRenderLine({ executionMode: ExecutionMode.SERIES })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('Series')).toBeInTheDocument()
+    })
+
+    it('displays parallel execution mode', () => {
+      const line = createRenderLine({ executionMode: ExecutionMode.PARALLEL })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('Parallel')).toBeInTheDocument()
+    })
+  })
+
+  describe('parent issues', () => {
+    it('displays parent issues with sort order', () => {
+      const line = createRenderLine({
+        parentIssues: [{ parentIssue: 'par123', sortOrder: 'ab' }],
+      })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('par123:ab')).toBeInTheDocument()
+    })
+
+    it('displays multiple parent issues', () => {
+      const line = createRenderLine({
+        parentIssues: [
+          { parentIssue: 'par123', sortOrder: 'ab' },
+          { parentIssue: 'par456', sortOrder: 'cd' },
+        ],
+      })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('par123:ab')).toBeInTheDocument()
+      expect(screen.getByText('par456:cd')).toBeInTheDocument()
+    })
+
+    it('displays parent issue without sort order', () => {
+      const line = createRenderLine({
+        parentIssues: [{ parentIssue: 'par123', sortOrder: null }],
+      })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('par123')).toBeInTheDocument()
+    })
+
+    it('does not show parent issues section when empty', () => {
+      const line = createRenderLine({ parentIssues: [] })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.queryByText('Parents:')).not.toBeInTheDocument()
+    })
+
+    it('does not show parent issues section when null', () => {
+      const line = createRenderLine({ parentIssues: null })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.queryByText('Parents:')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('assigned to', () => {
+    it('displays assigned user', () => {
+      const line = createRenderLine({ assignedTo: 'user@example.com' })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    })
+
+    it('does not show assigned section when null', () => {
+      const line = createRenderLine({ assignedTo: null })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.queryByText('Assigned:')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('description scrolling', () => {
+    it('has scrollable description container', () => {
+      render(<InlineIssueDetailRow {...defaultProps} />)
+      const descriptionContainer = screen.getByTestId('issue-description')
+      expect(descriptionContainer).toHaveClass('overflow-y-auto')
+      expect(descriptionContainer).toHaveClass('max-h-48')
     })
   })
 

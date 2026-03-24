@@ -77,6 +77,7 @@ describe('TaskGraphIssueRow', () => {
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.SERIES,
+    parentIssues: null,
   }
 
   const defaultProps = {

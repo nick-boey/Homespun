@@ -57,6 +57,7 @@ export interface TaskGraphIssueRenderLine {
   hasHiddenParent: boolean
   hiddenParentIsSeriesMode: boolean
   executionMode: ExecutionModeEnum
+  parentIssues: Array<{ parentIssue?: string | null; sortOrder?: string | null }> | null
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -674,6 +675,7 @@ function renderGroup(
       hasHiddenParent,
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
+      parentIssues: node.issue.parentIssues ?? null,
     })
   }
 }
@@ -984,6 +986,7 @@ function renderGroupTreeView(
       hasHiddenParent,
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
+      parentIssues: node.issue.parentIssues ?? null,
     })
   }
 }
