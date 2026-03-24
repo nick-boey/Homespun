@@ -117,24 +117,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         return
       }
 
-      // Move up: K
-      if (!shiftKey && !ctrlKey && !metaKey && key === 'k') {
-        if (canMoveUp && onMoveUp) {
-          event.preventDefault()
-          onMoveUp()
-        }
-        return
-      }
-
-      // Move down: J
-      if (!shiftKey && !ctrlKey && !metaKey && key === 'j') {
-        if (canMoveDown && onMoveDown) {
-          event.preventDefault()
-          onMoveDown()
-        }
-        return
-      }
-
       // Agent launcher: e
       if (!shiftKey && !ctrlKey && !metaKey && key === 'e') {
         event.preventDefault()

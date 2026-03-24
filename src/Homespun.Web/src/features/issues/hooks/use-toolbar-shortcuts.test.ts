@@ -268,6 +268,38 @@ describe('useToolbarShortcuts', () => {
     expect(onFocusFilterAtEnd).not.toHaveBeenCalled()
   })
 
+  it('calls onMoveUp when Ctrl+Shift+ArrowUp is pressed', () => {
+    const onMoveUp = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onMoveUp, canMoveUp: true }))
+
+    dispatchKeyDown('ArrowUp', { ctrlKey: true, shiftKey: true })
+    expect(onMoveUp).toHaveBeenCalled()
+  })
+
+  it('calls onMoveDown when Ctrl+Shift+ArrowDown is pressed', () => {
+    const onMoveDown = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onMoveDown, canMoveDown: true }))
+
+    dispatchKeyDown('ArrowDown', { ctrlKey: true, shiftKey: true })
+    expect(onMoveDown).toHaveBeenCalled()
+  })
+
+  it('does not call onMoveUp when bare k is pressed', () => {
+    const onMoveUp = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onMoveUp, canMoveUp: true }))
+
+    dispatchKeyDown('k')
+    expect(onMoveUp).not.toHaveBeenCalled()
+  })
+
+  it('does not call onMoveDown when bare j is pressed', () => {
+    const onMoveDown = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onMoveDown, canMoveDown: true }))
+
+    dispatchKeyDown('j')
+    expect(onMoveDown).not.toHaveBeenCalled()
+  })
+
   it('falls back to onToggleFilter when filter is active but onFocusFilterAtEnd is not provided', () => {
     const onToggleFilter = vi.fn()
     renderHook(() =>
