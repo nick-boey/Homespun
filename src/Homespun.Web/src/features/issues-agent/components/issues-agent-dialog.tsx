@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Play, ListTodo } from 'lucide-react'
 import {
@@ -24,6 +24,7 @@ import {
   useCreateIssuesAgentSession,
   type CreateIssuesAgentSessionResult,
 } from '../hooks/use-create-issues-agent-session'
+import { useIssueAgentAvailablePrompts } from '../hooks/use-issue-agent-available-prompts'
 
 const MODELS = [
   { value: 'sonnet', label: 'Sonnet' },
@@ -32,6 +33,13 @@ const MODELS = [
 ] as const
 
 const MODEL_STORAGE_KEY = 'issues-agent-model'
+const PROMPT_STORAGE_KEY = 'issues-agent-prompt'
+const NONE_PROMPT_ID = '__none__'
+
+/** Get the initial prompt ID from localStorage or return empty string */
+function getInitialPromptId(): string {
+  return localStorage.getItem(PROMPT_STORAGE_KEY) ?? ''
+}
 
 export interface IssuesAgentDialogProps {
   /** Whether the dialog is open */
@@ -66,10 +74,16 @@ export function IssuesAgentDialog({
   // Fetch selected issue if provided
   const { issue, isLoading: issueLoading } = useIssue(selectedIssueId ?? '', projectId)
 
+  // Fetch available issue agent prompts
+  const { data: prompts, isLoading: promptsLoading } = useIssueAgentAvailablePrompts(projectId)
+
   // Model selection state
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value // Default to Sonnet
   })
+
+  // Prompt selection state
+  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
 
   // User instructions state
   const [userInstructions, setUserInstructions] = useState('')
@@ -90,6 +104,33 @@ export function IssuesAgentDialog({
     localStorage.setItem(MODEL_STORAGE_KEY, selectedModel)
   }, [selectedModel])
 
+  // Persist prompt selection
+  useEffect(() => {
+    if (selectedPromptId) {
+      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptId)
+    }
+  }, [selectedPromptId])
+
+  // Compute effective prompt ID
+  const effectivePromptId = useMemo(() => {
+    // Handle None selection
+    if (selectedPromptId === NONE_PROMPT_ID) {
+      return NONE_PROMPT_ID
+    }
+
+    if (!prompts || prompts.length === 0) {
+      return NONE_PROMPT_ID
+    }
+
+    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+    if (selectedExists) {
+      return selectedPromptId
+    }
+
+    // Default to first prompt
+    return prompts[0].id ?? ''
+  }, [prompts, selectedPromptId])
+
   const handleStart = useCallback(async () => {
     try {
       const result = await createSession.mutateAsync({
@@ -97,6 +138,7 @@ export function IssuesAgentDialog({
         model: selectedModel,
         selectedIssueId: selectedIssueId ?? undefined,
         userInstructions: userInstructions.trim() || undefined,
+        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
       })
 
       onSessionCreated?.(result)
@@ -113,6 +155,7 @@ export function IssuesAgentDialog({
     selectedModel,
     selectedIssueId,
     userInstructions,
+    effectivePromptId,
     onSessionCreated,
     navigate,
     handleOpenChange,
@@ -160,6 +203,41 @@ export function IssuesAgentDialog({
               )}
             </div>
           )}
+
+          {/* Prompt selector */}
+          <div className="space-y-2">
+            <Label htmlFor="prompt-select" className="text-sm font-medium">
+              Prompt
+            </Label>
+            {promptsLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader variant="circular" size="sm" />
+                <span className="text-muted-foreground text-sm">Loading prompts...</span>
+              </div>
+            ) : (
+              <Select
+                value={effectivePromptId}
+                onValueChange={setSelectedPromptId}
+                disabled={createSession.isPending}
+              >
+                <SelectTrigger id="prompt-select" aria-label="Select prompt">
+                  <SelectValue placeholder="Select prompt" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_PROMPT_ID}>
+                    None - Start without prompt (Build mode)
+                  </SelectItem>
+                  {prompts?.map((prompt) => (
+                    <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+                      {prompt.name}
+                      {prompt.mode ? ` (${prompt.mode})` : ''}
+                      {prompt.isOverride ? ' (project)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
 
           {/* Instructions textarea */}
           <div className="space-y-2">

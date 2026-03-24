@@ -53,14 +53,10 @@ const mockWorkflow: WorkflowDefinition = {
   projectId: 'proj-1',
   title: 'Build Pipeline',
   description: 'Runs CI build for the project',
-  nodes: [
-    { id: 'n1', label: 'Start', type: 'start' },
-    { id: 'n2', label: 'Build', type: 'agent' },
-    { id: 'n3', label: 'End', type: 'end' },
-  ],
-  edges: [
-    { id: 'e1', source: 'n1', target: 'n2' },
-    { id: 'e2', source: 'n2', target: 'n3' },
+  steps: [
+    { id: 'n1', name: 'Init', stepType: 'serverAction' },
+    { id: 'n2', name: 'Build', stepType: 'agent' },
+    { id: 'n3', name: 'Approve', stepType: 'gate' },
   ],
   enabled: true,
   version: 3,
@@ -204,8 +200,7 @@ describe('WorkflowDetail', () => {
       expect(screen.getByTestId('workflow-editor-placeholder')).toBeInTheDocument()
     })
 
-    expect(screen.getByText(/3 nodes/)).toBeInTheDocument()
-    expect(screen.getByText(/2 edges/)).toBeInTheDocument()
+    expect(screen.getByText(/3 steps/)).toBeInTheDocument()
     expect(screen.getByText(/Version 3/)).toBeInTheDocument()
   })
 

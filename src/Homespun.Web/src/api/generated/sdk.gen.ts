@@ -47,6 +47,8 @@ import type {
   GetApiAgentPromptsByIdErrors,
   GetApiAgentPromptsByIdResponses,
   GetApiAgentPromptsData,
+  GetApiAgentPromptsIssueAgentAvailableByProjectIdData,
+  GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
   GetApiAgentPromptsIssueAgentPromptsData,
   GetApiAgentPromptsIssueAgentPromptsResponses,
   GetApiAgentPromptsProjectByProjectIdData,
@@ -195,6 +197,8 @@ import type {
   GetApiWorkflowsByWorkflowIdExecutionsErrors,
   GetApiWorkflowsByWorkflowIdExecutionsResponses,
   GetApiWorkflowsByWorkflowIdResponses,
+  GetApiWorkflowTemplatesData,
+  GetApiWorkflowTemplatesResponses,
   PostApiAgentPromptsCreateOverrideData,
   PostApiAgentPromptsCreateOverrideErrors,
   PostApiAgentPromptsCreateOverrideResponses,
@@ -220,6 +224,9 @@ import type {
   PostApiExecutionsByExecutionIdCancelData,
   PostApiExecutionsByExecutionIdCancelErrors,
   PostApiExecutionsByExecutionIdCancelResponses,
+  PostApiExecutionsByExecutionIdStepsByStepIdSignalData,
+  PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
+  PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
   PostApiFleeceSyncByProjectIdPullData,
   PostApiFleeceSyncByProjectIdPullErrors,
   PostApiFleeceSyncByProjectIdPullResponses,
@@ -309,6 +316,9 @@ import type {
   PostApiWorkflowsData,
   PostApiWorkflowsErrors,
   PostApiWorkflowsResponses,
+  PostApiWorkflowTemplatesByTemplateIdCreateData,
+  PostApiWorkflowTemplatesByTemplateIdCreateErrors,
+  PostApiWorkflowTemplatesByTemplateIdCreateResponses,
   PutApiAgentPromptsByIdData,
   PutApiAgentPromptsByIdErrors,
   PutApiAgentPromptsByIdResponses,
@@ -447,6 +457,16 @@ export class AgentPrompts {
       unknown,
       ThrowOnError
     >({ url: '/api/agent-prompts/issue-agent-prompts', ...options })
+  }
+
+  public static getApiAgentPromptsIssueAgentAvailableByProjectId<
+    ThrowOnError extends boolean = false,
+  >(options: Options<GetApiAgentPromptsIssueAgentAvailableByProjectIdData, ThrowOnError>) {
+    return (options.client ?? client).get<
+      GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
+      unknown,
+      ThrowOnError
+    >({ url: '/api/agent-prompts/issue-agent/available/{projectId}', ...options })
   }
 
   public static postApiAgentPromptsCreateOverride<ThrowOnError extends boolean = false>(
@@ -1779,5 +1799,42 @@ export class Workflows {
       GetApiExecutionsByExecutionIdContextErrors,
       ThrowOnError
     >({ url: '/api/executions/{executionId}/context', ...options })
+  }
+
+  public static postApiExecutionsByExecutionIdStepsByStepIdSignal<
+    ThrowOnError extends boolean = false,
+  >(options: Options<PostApiExecutionsByExecutionIdStepsByStepIdSignalData, ThrowOnError>) {
+    return (options.client ?? client).post<
+      PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
+      PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
+      ThrowOnError
+    >({
+      url: '/api/executions/{executionId}/steps/{stepId}/signal',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+}
+
+export class WorkflowTemplate {
+  public static getApiWorkflowTemplates<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiWorkflowTemplatesData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).get<GetApiWorkflowTemplatesResponses, unknown, ThrowOnError>(
+      { url: '/api/workflow-templates', ...options }
+    )
+  }
+
+  public static postApiWorkflowTemplatesByTemplateIdCreate<ThrowOnError extends boolean = false>(
+    options: Options<PostApiWorkflowTemplatesByTemplateIdCreateData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiWorkflowTemplatesByTemplateIdCreateResponses,
+      PostApiWorkflowTemplatesByTemplateIdCreateErrors,
+      ThrowOnError
+    >({ url: '/api/workflow-templates/{templateId}/create', ...options })
   }
 }
