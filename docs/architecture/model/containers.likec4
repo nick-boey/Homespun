@@ -55,4 +55,9 @@ model {
   grafana -> loki 'Queries logs'
   developer -> web 'Browser'
 
+  // ACA-mode relationships (target state)
+  web -> entra_id 'MSAL authentication'
+  server -> entra_id 'Token validation'
+  server -> azure_files 'Reads/writes data (ACA mode)'
+
 }

@@ -1,0 +1,25 @@
+model {
+
+  entra_id = external 'Microsoft Entra ID' {
+    description 'OIDC identity provider for authentication'
+  }
+
+  azure_container_registry = external 'Azure Container Registry' {
+    description 'Private container image registry'
+  }
+
+  azure_files = external 'Azure Files' {
+    description 'SMB/NFS file share for persistent storage'
+  }
+
+  log_analytics = external 'Log Analytics Workspace' {
+    description 'Azure Monitor log aggregation and querying'
+  }
+
+  // System-level relationships to Azure services
+  homespun -> entra_id 'OIDC authentication'
+  homespun -> azure_files 'Persistent data storage'
+  homespun -> azure_container_registry 'Pulls container images'
+  homespun -> log_analytics 'Sends logs'
+
+}

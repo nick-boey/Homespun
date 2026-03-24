@@ -1,0 +1,36 @@
+model {
+
+  extend homespun.server {
+
+    aca_execution = component 'AcaAgentExecutionService' {
+      description 'Agent execution via Azure Container Apps revision-based scaling'
+    }
+
+    oidc_middleware = component 'OIDC Middleware' {
+      description 'Microsoft.Identity.Web authentication middleware'
+    }
+
+    execution_factory = component 'Execution Service Factory' {
+      description 'Selects Docker or ACA agent execution based on AgentExecution__Mode config'
+    }
+
+    msal_auth = component 'MSAL Auth Provider' {
+      description 'MSAL React authentication provider for frontend OIDC flows'
+    }
+
+    azure_files_storage = component 'Azure Files Storage' {
+      description 'Azure Files-backed storage service replacing local volume mounts'
+    }
+
+  }
+
+  // ACA component relationships
+  execution_factory -> aca_execution 'ACA mode (AgentExecution__Mode=ACA)'
+  execution_factory -> homespun.server.agent_orchestration 'Provides execution service'
+  aca_execution -> azure_container_registry 'Pulls worker images'
+  aca_execution -> azure_files 'Mounts file shares'
+  oidc_middleware -> entra_id 'Validates OIDC tokens'
+  msal_auth -> entra_id 'Acquires tokens'
+  azure_files_storage -> azure_files 'Reads/writes persistent data'
+
+}

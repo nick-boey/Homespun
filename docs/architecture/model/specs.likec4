@@ -63,4 +63,9 @@ specification {
   deploymentNode orchestrator
   deploymentNode stack
 
+  // ACA deployment node types
+  deploymentNode cloudPlatform
+  deploymentNode cloudService
+  deploymentNode containerApp
+
 }
