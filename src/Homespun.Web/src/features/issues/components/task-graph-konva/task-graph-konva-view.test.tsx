@@ -175,7 +175,8 @@ describe('TaskGraphKonvaView', () => {
       renderComponent({ selectedIssueId: 'issue-1' })
 
       const rows = screen.getAllByTestId('konva-html-row')
-      expect(rows[0].className).toContain('bg-muted')
+      expect(rows[0].className).toContain('ring-1')
+      expect(rows[0].className).toContain('ring-primary')
     })
   })
 

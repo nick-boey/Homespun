@@ -109,18 +109,27 @@ describe('KonvaHtmlRow', () => {
     expect(screen.getByText('Progress')).toBeInTheDocument()
   })
 
-  it('applies selected styling when isSelected is true', () => {
+  it('applies selected styling with ring border when isSelected is true', () => {
     renderRow({ isSelected: true })
     const row = screen.getByTestId('konva-html-row')
-    expect(row.className).toContain('bg-muted')
+    expect(row.className).toContain('ring-1')
+    expect(row.className).toContain('ring-primary')
+    // Should not use background fill that obscures content below
+    expect(row.className).not.toContain('bg-muted')
   })
 
   it('does not apply selected styling when isSelected is false', () => {
     renderRow({ isSelected: false })
     const row = screen.getByTestId('konva-html-row')
-    // Not selected means no bg-muted (exact class) but may have hover:bg-muted/50
-    expect(row.className).not.toContain(' bg-muted ')
-    // The row without selection has hover:bg-muted/50 which is fine
+    expect(row.className).not.toContain('ring-primary')
+  })
+
+  it('applies hover ring styling instead of background fill', () => {
+    renderRow()
+    const row = screen.getByTestId('konva-html-row')
+    expect(row.className).toContain('hover:ring-1')
+    expect(row.className).toContain('hover:ring-border')
+    expect(row.className).not.toContain('hover:bg-muted/50')
   })
 
   it('calls onClick when row is clicked', () => {
