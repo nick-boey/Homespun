@@ -19,6 +19,7 @@ interface MiniPromptResponse {
   error?: string;
   costUsd?: number;
   durationMs?: number;
+  resolvedModel?: string;
 }
 
 /**
@@ -43,6 +44,7 @@ export function createMiniPromptRoute() {
 
     const model = body.model || 'haiku';
     info(`POST /mini-prompt - model=${model}, promptLength=${body.prompt.length}`);
+    info(`POST /mini-prompt - prompt: ${body.prompt.length > 500 ? body.prompt.slice(0, 500) + '...' : body.prompt}`);
 
     try {
       // Create a single-message async generator for the prompt
@@ -75,9 +77,12 @@ export function createMiniPromptRoute() {
       // Collect the response
       let responseText = '';
       let totalCostUsd = 0;
+      let resolvedModel: string | undefined;
 
       for await (const event of q) {
-        if (event.type === 'assistant') {
+        if (event.type === 'system' && (event as any).subtype === 'init') {
+          resolvedModel = (event as any).model;
+        } else if (event.type === 'assistant') {
           // Extract text from assistant message content
           const content = event.message?.content;
           if (Array.isArray(content)) {
@@ -96,7 +101,7 @@ export function createMiniPromptRoute() {
       }
 
       const durationMs = Date.now() - startTime;
-      info(`Mini-prompt completed in ${durationMs}ms, cost: $${totalCostUsd.toFixed(6)}`);
+      info(`Mini-prompt completed in ${durationMs}ms, cost: $${totalCostUsd.toFixed(6)}, requestedModel=${model}, resolvedModel=${resolvedModel ?? 'unknown'}`);
 
       return c.json<MiniPromptResponse>({
         success: responseText.length > 0,
@@ -104,6 +109,7 @@ export function createMiniPromptRoute() {
         error: responseText.length === 0 ? 'Empty response from AI' : undefined,
         costUsd: totalCostUsd > 0 ? totalCostUsd : undefined,
         durationMs,
+        resolvedModel,
       });
     } catch (err) {
       const durationMs = Date.now() - startTime;
