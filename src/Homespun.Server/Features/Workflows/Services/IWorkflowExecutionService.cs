@@ -55,12 +55,42 @@ public class TriggerContext
 }
 
 /// <summary>
+/// Event data for workflow execution completion.
+/// </summary>
+public record WorkflowExecutionCompletedEvent
+{
+    /// <summary>
+    /// The project path where the workflow was executed.
+    /// </summary>
+    public required string ProjectPath { get; init; }
+
+    /// <summary>
+    /// The workflow execution ID.
+    /// </summary>
+    public required string ExecutionId { get; init; }
+
+    /// <summary>
+    /// Whether the workflow completed successfully.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Error message if the workflow failed.
+    /// </summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>
 /// Service for executing workflows.
 /// Handles the full lifecycle of workflow execution including starting, pausing,
 /// resuming, and cancelling executions.
 /// </summary>
 public interface IWorkflowExecutionService
 {
+    /// <summary>
+    /// Event raised when a workflow execution completes (successfully or with failure).
+    /// </summary>
+    event Action<WorkflowExecutionCompletedEvent>? OnExecutionCompleted;
     /// <summary>
     /// Starts execution of a workflow.
     /// </summary>

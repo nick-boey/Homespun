@@ -1,23 +1,37 @@
+using Homespun.Features.Workflows.Services;
+using Homespun.Shared.Models.Workflows;
+
 namespace Homespun.Features.AgentOrchestration.Services;
 
 /// <summary>
 /// A sequential execution pipeline that processes issues one at a time
-/// by delegating to AgentStartBackgroundService.
+/// by delegating to AgentStartBackgroundService or WorkflowExecutionService.
 /// </summary>
 public class TaskQueue : ITaskQueue
 {
     private readonly IAgentStartBackgroundService _agentStartService;
+    private readonly IWorkflowExecutionService? _workflowExecutionService;
     private readonly ILogger<TaskQueue> _logger;
     private readonly List<AgentStartRequest> _pendingRequests = new();
     private readonly List<TaskQueueHistoryEntry> _history = new();
+    private readonly Dictionary<string, string> _workflowExecutionToIssue = new();
     private readonly object _lock = new();
 
     private bool _paused;
     private DateTimeOffset? _currentStartedAt;
 
     public TaskQueue(IAgentStartBackgroundService agentStartService, ILogger<TaskQueue> logger)
+        : this(agentStartService, null, logger)
+    {
+    }
+
+    public TaskQueue(
+        IAgentStartBackgroundService agentStartService,
+        IWorkflowExecutionService? workflowExecutionService,
+        ILogger<TaskQueue> logger)
     {
         _agentStartService = agentStartService;
+        _workflowExecutionService = workflowExecutionService;
         _logger = logger;
         Id = Guid.NewGuid().ToString("N")[..12];
     }
@@ -60,7 +74,7 @@ public class TaskQueue : ITaskQueue
 
         // Start processing outside the lock
         EmitEvent(TaskQueueEventType.IssueStarted, request.IssueId);
-        await _agentStartService.QueueAgentStartAsync(request);
+        await StartRequestAsync(request);
     }
 
     public bool Dequeue(string issueId)
@@ -110,7 +124,7 @@ public class TaskQueue : ITaskQueue
         if (nextRequest != null)
         {
             EmitEvent(TaskQueueEventType.IssueStarted, nextRequest.IssueId);
-            await _agentStartService.QueueAgentStartAsync(nextRequest);
+            await StartRequestAsync(nextRequest);
         }
     }
 
@@ -177,8 +191,22 @@ public class TaskQueue : ITaskQueue
         if (nextRequest != null)
         {
             EmitEvent(TaskQueueEventType.IssueStarted, nextRequest.IssueId);
-            _ = _agentStartService.QueueAgentStartAsync(nextRequest);
+            _ = StartRequestAsync(nextRequest);
         }
+    }
+
+    public void NotifyWorkflowCompleted(string executionId, bool success, string? error = null)
+    {
+        string? issueId;
+        lock (_lock)
+        {
+            if (!_workflowExecutionToIssue.TryGetValue(executionId, out issueId))
+                return;
+
+            _workflowExecutionToIssue.Remove(executionId);
+        }
+
+        NotifyCompleted(issueId, success, error);
     }
 
     public void NotifyBlocked(string issueId, string reason)
@@ -212,7 +240,58 @@ public class TaskQueue : ITaskQueue
         }
 
         EmitEvent(TaskQueueEventType.IssueStarted, currentRequest.IssueId);
-        await _agentStartService.QueueAgentStartAsync(currentRequest);
+        await StartRequestAsync(currentRequest);
+    }
+
+    private async Task StartRequestAsync(AgentStartRequest request)
+    {
+        if (request.WorkflowId != null && _workflowExecutionService != null)
+        {
+            var triggerContext = new TriggerContext
+            {
+                TriggerType = WorkflowTriggerType.Manual,
+                TriggeredBy = "QueueCoordinator",
+                Input = new Dictionary<string, object>
+                {
+                    ["issueId"] = request.IssueId,
+                    ["issueTitle"] = request.Issue.Title,
+                    ["branchName"] = request.BranchName,
+                    ["projectId"] = request.ProjectId,
+                    ["projectPath"] = request.ProjectLocalPath,
+                    ["defaultBranch"] = request.ProjectDefaultBranch
+                }
+            };
+
+            var result = await _workflowExecutionService.StartWorkflowAsync(
+                request.ProjectLocalPath,
+                request.WorkflowId,
+                triggerContext);
+
+            if (result.Success && result.Execution != null)
+            {
+                lock (_lock)
+                {
+                    _workflowExecutionToIssue[result.Execution.Id] = request.IssueId;
+                }
+
+                _logger.LogInformation(
+                    "Started workflow {WorkflowId} execution {ExecutionId} for issue {IssueId}",
+                    request.WorkflowId, result.Execution.Id, request.IssueId);
+            }
+            else
+            {
+                _logger.LogError(
+                    "Failed to start workflow {WorkflowId} for issue {IssueId}: {Error}",
+                    request.WorkflowId, request.IssueId, result.Error);
+
+                // Treat workflow start failure as issue failure
+                NotifyCompleted(request.IssueId, success: false, error: result.Error);
+            }
+        }
+        else
+        {
+            await _agentStartService.QueueAgentStartAsync(request);
+        }
     }
 
     private void TransitionState(TaskQueueState newState)
