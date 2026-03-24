@@ -64,9 +64,6 @@ public static class MockServiceExtensions
         services.AddSingleton<global::Fleece.Core.Serialization.IJsonlSerializer, global::Fleece.Core.Serialization.JsonlSerializer>();
         services.AddSingleton<global::Fleece.Core.Services.Interfaces.IDiffService, global::Fleece.Core.Services.DiffService>();
 
-        // Keep MockFleeceService available for backward compatibility if needed
-        services.AddSingleton<MockFleeceService>();
-
         // Core services
         services.AddSingleton<ICommandRunner, MockCommandRunner>();
         services.AddSingleton<IGitHubEnvironmentService, MockGitHubEnvironmentService>();
@@ -74,7 +71,7 @@ public static class MockServiceExtensions
 
         // GitHub services
         services.AddScoped<IGitHubService, MockGitHubService>();
-        services.AddScoped<IIssuePrLinkingService, MockIssuePrLinkingService>();
+        services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
         services.AddScoped<IPRStatusResolver, MockPRStatusResolver>();
 
         // Project service
@@ -88,7 +85,7 @@ public static class MockServiceExtensions
 
         // Fleece services
         // Transition service depends on IFleeceService (now using real FleeceService)
-        services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
+        services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         // IIssueHistoryService already registered above with FleeceService
