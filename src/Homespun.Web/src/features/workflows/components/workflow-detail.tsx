@@ -1,8 +1,7 @@
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
 import { useWorkflow, useWorkflowExecutions } from '../hooks/use-workflows'
-import { WorkflowMermaidChart } from './workflow-mermaid-chart'
+import { WorkflowEditor } from './workflow-editor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -95,7 +94,6 @@ function ExecutionRow({
 }
 
 export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const { workflow, isLoading, isError, refetch } = useWorkflow(workflowId)
   const {
     executions,
@@ -166,20 +164,14 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
         </TabsList>
 
         <TabsContent value="editor" className="mt-4">
-          <div className="space-y-4" data-testid="workflow-editor">
-            <div className="flex items-center justify-between">
-              <p className="text-muted-foreground text-sm">
-                {workflow.steps?.length ?? 0} steps &middot; Version {workflow.version}
-              </p>
-              {selectedStepId && (
-                <Badge variant="outline" data-testid="selected-step-badge">
-                  Selected: {selectedStepId}
-                </Badge>
-              )}
-            </div>
-            <WorkflowMermaidChart
-              steps={workflow.steps ?? []}
-              onStepClick={setSelectedStepId}
+          <div data-testid="workflow-editor">
+            <p className="text-muted-foreground mb-4 text-sm">
+              {workflow.steps?.length ?? 0} steps &middot; Version {workflow.version}
+            </p>
+            <WorkflowEditor
+              workflowId={workflowId}
+              projectId={projectId}
+              initialSteps={workflow.steps ?? []}
             />
           </div>
         </TabsContent>

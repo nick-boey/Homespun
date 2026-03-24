@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Workflows, type WorkflowDefinition } from '@/api'
+import { Workflows, type WorkflowDefinition, type UpdateWorkflowRequest } from '@/api'
 import { useTelemetry } from '@/hooks/use-telemetry'
 
 export const workflowsQueryKey = (projectId: string) => ['workflows', projectId] as const
@@ -105,6 +105,41 @@ export function useDeleteWorkflow(projectId: string) {
     },
     onError: (error: Error, workflowId) => {
       telemetry.trackEvent('workflow_deletion_failed', {
+        workflowId,
+        error: error.message,
+      })
+    },
+  })
+}
+
+export function useUpdateWorkflow(projectId: string) {
+  const queryClient = useQueryClient()
+  const telemetry = useTelemetry()
+
+  return useMutation({
+    mutationFn: async ({
+      workflowId,
+      request,
+    }: {
+      workflowId: string
+      request: UpdateWorkflowRequest
+    }) => {
+      const response = await Workflows.putApiWorkflowsByWorkflowId({
+        path: { workflowId },
+        body: request,
+      })
+      if (response.error) {
+        throw new Error('Failed to update workflow')
+      }
+      return response.data as WorkflowDefinition
+    },
+    onSuccess: (_data, { workflowId }) => {
+      telemetry.trackEvent('workflow_updated', { workflowId })
+      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId) })
+      queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
+    },
+    onError: (error: Error, { workflowId }) => {
+      telemetry.trackEvent('workflow_update_failed', {
         workflowId,
         error: error.message,
       })

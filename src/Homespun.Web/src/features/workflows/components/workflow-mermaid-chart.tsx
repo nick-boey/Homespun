@@ -82,10 +82,7 @@ export function WorkflowMermaidChart({
 
   if (steps.length === 0) {
     return (
-      <div
-        className="border-border rounded-lg border p-8 text-center"
-        data-testid="mermaid-empty"
-      >
+      <div className="border-border rounded-lg border p-8 text-center" data-testid="mermaid-empty">
         <p className="text-muted-foreground">No workflow steps to display.</p>
       </div>
     )

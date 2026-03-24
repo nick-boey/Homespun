@@ -1,3 +1,5 @@
 export { WorkflowList } from './workflow-list'
 export { WorkflowDetail } from './workflow-detail'
 export { WorkflowMermaidChart } from './workflow-mermaid-chart'
+export { WorkflowEditor } from './workflow-editor'
+export { StepSettingsCard } from './step-settings-card'
