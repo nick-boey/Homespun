@@ -9,6 +9,8 @@ import type {
   DeleteApiAgentPromptsByIdOverrideErrors,
   DeleteApiAgentPromptsByIdOverrideResponses,
   DeleteApiAgentPromptsByIdResponses,
+  DeleteApiAgentPromptsProjectByProjectIdAllData,
+  DeleteApiAgentPromptsProjectByProjectIdAllResponses,
   DeleteApiClonesBulkData,
   DeleteApiClonesBulkErrors,
   DeleteApiClonesBulkResponses,
@@ -146,6 +148,9 @@ import type {
   GetApiProjectsByProjectIdPullRequestsOpenErrors,
   GetApiProjectsByProjectIdPullRequestsOpenResponses,
   GetApiProjectsByProjectIdPullRequestsResponses,
+  GetApiProjectsByProjectIdQueueStatusData,
+  GetApiProjectsByProjectIdQueueStatusErrors,
+  GetApiProjectsByProjectIdQueueStatusResponses,
   GetApiProjectsByProjectIdSearchFilesData,
   GetApiProjectsByProjectIdSearchFilesErrors,
   GetApiProjectsByProjectIdSearchFilesResponses,
@@ -206,6 +211,8 @@ import type {
   PostApiAgentPromptsEnsureDefaultsData,
   PostApiAgentPromptsEnsureDefaultsResponses,
   PostApiAgentPromptsResponses,
+  PostApiAgentPromptsRestoreDefaultsData,
+  PostApiAgentPromptsRestoreDefaultsResponses,
   PostApiClientTelemetryData,
   PostApiClientTelemetryErrors,
   PostApiClientTelemetryResponses,
@@ -280,6 +287,12 @@ import type {
   PostApiProjectsByProjectIdIssuesHistoryUndoData,
   PostApiProjectsByProjectIdIssuesHistoryUndoErrors,
   PostApiProjectsByProjectIdIssuesHistoryUndoResponses,
+  PostApiProjectsByProjectIdQueueCancelData,
+  PostApiProjectsByProjectIdQueueCancelErrors,
+  PostApiProjectsByProjectIdQueueCancelResponses,
+  PostApiProjectsByProjectIdQueueStartData,
+  PostApiProjectsByProjectIdQueueStartErrors,
+  PostApiProjectsByProjectIdQueueStartResponses,
   PostApiProjectsByProjectIdSecretsData,
   PostApiProjectsByProjectIdSecretsErrors,
   PostApiProjectsByProjectIdSecretsResponses,
@@ -447,6 +460,26 @@ export class AgentPrompts {
       unknown,
       ThrowOnError
     >({ url: '/api/agent-prompts/ensure-defaults', ...options })
+  }
+
+  public static postApiAgentPromptsRestoreDefaults<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiAgentPromptsRestoreDefaultsData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiAgentPromptsRestoreDefaultsResponses,
+      unknown,
+      ThrowOnError
+    >({ url: '/api/agent-prompts/restore-defaults', ...options })
+  }
+
+  public static deleteApiAgentPromptsProjectByProjectIdAll<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsProjectByProjectIdAllData, ThrowOnError>
+  ) {
+    return (options.client ?? client).delete<
+      DeleteApiAgentPromptsProjectByProjectIdAllResponses,
+      unknown,
+      ThrowOnError
+    >({ url: '/api/agent-prompts/project/{projectId}/all', ...options })
   }
 
   public static getApiAgentPromptsIssueAgentPrompts<ThrowOnError extends boolean = false>(
@@ -1360,6 +1393,45 @@ export class PullRequests {
       GetApiProjectsByProjectIdPullRequestsMergedByPrNumberErrors,
       ThrowOnError
     >({ url: '/api/projects/{projectId}/pull-requests/merged/{prNumber}', ...options })
+  }
+}
+
+export class Queue {
+  public static postApiProjectsByProjectIdQueueStart<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdQueueStartData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdQueueStartResponses,
+      PostApiProjectsByProjectIdQueueStartErrors,
+      ThrowOnError
+    >({
+      url: '/api/projects/{projectId}/queue/start',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static getApiProjectsByProjectIdQueueStatus<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdQueueStatusData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdQueueStatusResponses,
+      GetApiProjectsByProjectIdQueueStatusErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/queue/status', ...options })
+  }
+
+  public static postApiProjectsByProjectIdQueueCancel<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdQueueCancelData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdQueueCancelResponses,
+      PostApiProjectsByProjectIdQueueCancelErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/queue/cancel', ...options })
   }
 }
 

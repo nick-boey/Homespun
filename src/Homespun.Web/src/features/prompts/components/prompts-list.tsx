@@ -1,8 +1,18 @@
 import { useState, useMemo } from 'react'
-import { Plus, RefreshCw, MessageSquare } from 'lucide-react'
+import { Plus, RefreshCw, MessageSquare, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useMergedProjectPrompts } from '../hooks/use-merged-project-prompts'
 import { useGlobalPrompts } from '../hooks/use-global-prompts'
 import { useIssueAgentPrompts } from '../hooks/use-issue-agent-prompts'
@@ -12,6 +22,8 @@ import { useDeletePrompt } from '../hooks/use-delete-prompt'
 import { useApplyPromptChanges } from '../hooks/use-apply-prompt-changes'
 import { useCreateOverride } from '../hooks/use-create-override'
 import { useRemoveOverride } from '../hooks/use-remove-override'
+import { useRestoreDefaultPrompts } from '../hooks/use-restore-default-prompts'
+import { useDeleteAllProjectPrompts } from '../hooks/use-delete-all-project-prompts'
 import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
@@ -35,6 +47,7 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
   const [removingOverrideId, setRemovingOverrideId] = useState<string | null>(null)
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false)
 
   const globalPromptsQuery = useGlobalPrompts()
   const mergedProjectPromptsQuery = useMergedProjectPrompts(projectId || '')
@@ -115,6 +128,19 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     },
   })
 
+  const restoreDefaults = useRestoreDefaultPrompts({
+    onSuccess: () => {
+      setShowRestoreDialog(false)
+    },
+  })
+
+  const deleteAllProjectPrompts = useDeleteAllProjectPrompts({
+    projectId: projectId || '',
+    onSuccess: () => {
+      setShowRestoreDialog(false)
+    },
+  })
+
   // Helper to determine if a prompt is a global prompt (not project-scoped and not already an override)
   const isGlobalPrompt = (prompt: AgentPrompt | null): boolean => {
     if (!prompt) return false
@@ -190,6 +216,10 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
           </h2>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              {isGlobal ? 'Restore Defaults' : 'Clear Project Prompts'}
+            </Button>
+            <Button variant="outline" size="sm" disabled>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
@@ -264,6 +294,15 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
           )}
         </h2>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRestoreDialog(true)}
+            disabled={restoreDefaults.isPending || deleteAllProjectPrompts.isPending}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            {isGlobal ? 'Restore Defaults' : 'Clear Project Prompts'}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             Refresh
@@ -367,6 +406,35 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
           />
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {isGlobal ? 'Restore Default Prompts' : 'Clear Project Prompts'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {isGlobal
+                ? 'This will delete all global prompts and restore defaults. Project prompts are not affected.'
+                : 'This will delete all project prompts. The project will revert to inherited global prompts.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (isGlobal) {
+                  restoreDefaults.mutate()
+                } else if (projectId) {
+                  deleteAllProjectPrompts.mutate()
+                }
+              }}
+            >
+              {isGlobal ? 'Restore Defaults' : 'Clear Prompts'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -1074,4 +1074,97 @@ public class AgentPromptServiceTests
             Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
         });
     }
+
+    [Test]
+    public async Task RestoreDefaultPromptsAsync_DeletesCustomGlobalPromptsAndRecreatesDefaults()
+    {
+        // Arrange - ensure defaults exist, then add a custom global prompt
+        await _service.EnsureDefaultPromptsAsync();
+        await _service.CreatePromptAsync("Custom Global Prompt", "Custom message", SessionMode.Build);
+        var beforeCount = _dataStore.AgentPrompts.Count;
+        Assert.That(_dataStore.AgentPrompts.Any(p => p.Name == "Custom Global Prompt"), Is.True);
+
+        // Act
+        await _service.RestoreDefaultPromptsAsync();
+
+        // Assert - custom prompt should be gone, only defaults remain
+        Assert.Multiple(() =>
+        {
+            Assert.That(_dataStore.AgentPrompts.Any(p => p.Name == "Custom Global Prompt"), Is.False);
+            // All default prompts should exist (13 total)
+            Assert.That(_dataStore.AgentPrompts, Has.Count.EqualTo(13));
+            Assert.That(_dataStore.AgentPrompts.Any(p => p.Name == "Plan"), Is.True);
+            Assert.That(_dataStore.AgentPrompts.Any(p => p.Name == "Build"), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task RestoreDefaultPromptsAsync_PreservesProjectPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        await _service.CreatePromptAsync("Project Prompt", "Project message", SessionMode.Build, "project-123");
+
+        // Act
+        await _service.RestoreDefaultPromptsAsync();
+
+        // Assert - project prompt should still exist
+        var projectPrompts = _dataStore.GetAgentPromptsByProject("project-123");
+        Assert.That(projectPrompts, Has.Count.EqualTo(1));
+        Assert.That(projectPrompts[0].Name, Is.EqualTo("Project Prompt"));
+    }
+
+    [Test]
+    public async Task RestoreDefaultPromptsAsync_ResetsModifiedDefaultPrompts()
+    {
+        // Arrange - ensure defaults, then modify a default prompt
+        await _service.EnsureDefaultPromptsAsync();
+        var planPrompt = _dataStore.AgentPrompts.First(p => p.Name == "Plan");
+        var originalMessage = planPrompt.InitialMessage;
+        await _service.UpdatePromptAsync(planPrompt.Id, "Plan", "Modified message", SessionMode.Plan);
+
+        // Act
+        await _service.RestoreDefaultPromptsAsync();
+
+        // Assert - Plan prompt should be recreated with original message
+        var restoredPlan = _dataStore.AgentPrompts.First(p => p.Name == "Plan");
+        Assert.That(restoredPlan.InitialMessage, Is.Not.EqualTo("Modified message"));
+    }
+
+    [Test]
+    public async Task DeleteAllProjectPromptsAsync_DeletesOnlyProjectPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var projectId = "test-project";
+        await _service.CreatePromptAsync("Prompt A", "Message A", SessionMode.Build, projectId);
+        await _service.CreatePromptAsync("Prompt B", "Message B", SessionMode.Plan, projectId);
+        var globalCountBefore = _dataStore.AgentPrompts.Count(p => p.ProjectId == null);
+
+        // Act
+        await _service.DeleteAllProjectPromptsAsync(projectId);
+
+        // Assert
+        var projectPrompts = _dataStore.GetAgentPromptsByProject(projectId);
+        var globalCountAfter = _dataStore.AgentPrompts.Count(p => p.ProjectId == null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(projectPrompts, Has.Count.EqualTo(0));
+            Assert.That(globalCountAfter, Is.EqualTo(globalCountBefore));
+        });
+    }
+
+    [Test]
+    public async Task DeleteAllProjectPromptsAsync_NoOpWhenNoProjectPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var countBefore = _dataStore.AgentPrompts.Count;
+
+        // Act
+        await _service.DeleteAllProjectPromptsAsync("nonexistent-project");
+
+        // Assert
+        Assert.That(_dataStore.AgentPrompts, Has.Count.EqualTo(countBefore));
+    }
 }

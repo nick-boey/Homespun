@@ -18,6 +18,8 @@ vi.mock('@/api', async (importOriginal) => {
       putApiAgentPromptsById: vi.fn(),
       deleteApiAgentPromptsById: vi.fn(),
       postApiAgentPromptsCreateOverride: vi.fn(),
+      postApiAgentPromptsRestoreDefaults: vi.fn(),
+      deleteApiAgentPromptsProjectByProjectIdAll: vi.fn(),
     },
   }
 })
@@ -479,5 +481,84 @@ describe('PromptsList', () => {
 
     expect(screen.queryByText('Project Prompts')).not.toBeInTheDocument()
     expect(screen.queryByText('Inherited Global Prompts')).not.toBeInTheDocument()
+  })
+
+  it('shows Restore Defaults button on global page', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
+      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: null }],
+    } as never)
+
+    render(<PromptsList isGlobal />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Restore Defaults')).toBeInTheDocument()
+    })
+  })
+
+  it('shows Clear Project Prompts button on project page', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Clear Project Prompts')).toBeInTheDocument()
+    })
+  })
+
+  it('shows confirmation dialog when Restore Defaults is clicked', async () => {
+    const user = userEvent.setup()
+    vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
+      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: null }],
+    } as never)
+
+    render(<PromptsList isGlobal />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Restore Defaults')).toBeEnabled()
+    })
+
+    await user.click(screen.getByText('Restore Defaults'))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This will delete all global prompts and restore defaults. Project prompts are not affected.'
+        )
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('shows confirmation dialog when Clear Project Prompts is clicked', async () => {
+    const user = userEvent.setup()
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Clear Project Prompts')).toBeEnabled()
+    })
+
+    await user.click(screen.getByText('Clear Project Prompts'))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This will delete all project prompts. The project will revert to inherited global prompts.'
+        )
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('shows disabled restore button in loading state on global page', () => {
+    vi.mocked(AgentPrompts.getApiAgentPrompts).mockReturnValue(new Promise(() => {}) as never)
+
+    render(<PromptsList isGlobal />, { wrapper: createWrapper() })
+
+    const restoreButton = screen.getByText('Restore Defaults')
+    expect(restoreButton.closest('button')).toBeDisabled()
   })
 })

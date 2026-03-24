@@ -874,6 +874,39 @@ export type QuestionOption = {
   description: string | null
 }
 
+export type QueueDetail = {
+  id: string | null
+  state: string | null
+  currentIssueId?: string | null
+  pendingCount?: number
+  history?: Array<QueueHistoryEntry> | null
+}
+
+export type QueueHistoryEntry = {
+  issueId: string | null
+  success?: boolean
+  error?: string | null
+  startedAt?: string
+  completedAt?: string
+}
+
+export type QueueProgress = {
+  totalIssues?: number
+  completed?: number
+  failed?: number
+  remaining?: number
+}
+
+export type QueueStatusResponse = {
+  projectId: string | null
+  status: string | null
+  rootIssueId?: string | null
+  maxConcurrency?: number
+  runningQueueCount?: number
+  queues?: Array<QueueDetail> | null
+  progress?: QueueProgress
+}
+
 export type RemovedPrInfo = {
   pullRequestId: string | null
   beadsIssueId?: string | null
@@ -996,6 +1029,13 @@ export type SetParentRequest = {
   projectId: string | null
   parentIssueId: string | null
   addToExisting?: boolean
+}
+
+export type StartQueueRequest = {
+  issueId: string | null
+  workflowMappings?: {
+    [key: string]: string
+  } | null
 }
 
 export type StepExecution = {
@@ -1640,6 +1680,42 @@ export type PostApiAgentPromptsEnsureDefaultsResponses = {
 
 export type PostApiAgentPromptsEnsureDefaultsResponse =
   PostApiAgentPromptsEnsureDefaultsResponses[keyof PostApiAgentPromptsEnsureDefaultsResponses]
+
+export type PostApiAgentPromptsRestoreDefaultsData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/agent-prompts/restore-defaults'
+}
+
+export type PostApiAgentPromptsRestoreDefaultsResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type PostApiAgentPromptsRestoreDefaultsResponse =
+  PostApiAgentPromptsRestoreDefaultsResponses[keyof PostApiAgentPromptsRestoreDefaultsResponses]
+
+export type DeleteApiAgentPromptsProjectByProjectIdAllData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/agent-prompts/project/{projectId}/all'
+}
+
+export type DeleteApiAgentPromptsProjectByProjectIdAllResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type DeleteApiAgentPromptsProjectByProjectIdAllResponse =
+  DeleteApiAgentPromptsProjectByProjectIdAllResponses[keyof DeleteApiAgentPromptsProjectByProjectIdAllResponses]
 
 export type GetApiAgentPromptsIssueAgentPromptsData = {
   body?: never
@@ -3739,6 +3815,97 @@ export type GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses = {
 
 export type GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponse =
   GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses[keyof GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses]
+
+export type PostApiProjectsByProjectIdQueueStartData = {
+  body?: StartQueueRequest
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/queue/start'
+}
+
+export type PostApiProjectsByProjectIdQueueStartErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiProjectsByProjectIdQueueStartError =
+  PostApiProjectsByProjectIdQueueStartErrors[keyof PostApiProjectsByProjectIdQueueStartErrors]
+
+export type PostApiProjectsByProjectIdQueueStartResponses = {
+  /**
+   * OK
+   */
+  200: QueueStatusResponse
+}
+
+export type PostApiProjectsByProjectIdQueueStartResponse =
+  PostApiProjectsByProjectIdQueueStartResponses[keyof PostApiProjectsByProjectIdQueueStartResponses]
+
+export type GetApiProjectsByProjectIdQueueStatusData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/queue/status'
+}
+
+export type GetApiProjectsByProjectIdQueueStatusErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdQueueStatusError =
+  GetApiProjectsByProjectIdQueueStatusErrors[keyof GetApiProjectsByProjectIdQueueStatusErrors]
+
+export type GetApiProjectsByProjectIdQueueStatusResponses = {
+  /**
+   * OK
+   */
+  200: QueueStatusResponse
+}
+
+export type GetApiProjectsByProjectIdQueueStatusResponse =
+  GetApiProjectsByProjectIdQueueStatusResponses[keyof GetApiProjectsByProjectIdQueueStatusResponses]
+
+export type PostApiProjectsByProjectIdQueueCancelData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/queue/cancel'
+}
+
+export type PostApiProjectsByProjectIdQueueCancelErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiProjectsByProjectIdQueueCancelError =
+  PostApiProjectsByProjectIdQueueCancelErrors[keyof PostApiProjectsByProjectIdQueueCancelErrors]
+
+export type PostApiProjectsByProjectIdQueueCancelResponses = {
+  /**
+   * OK
+   */
+  200: QueueStatusResponse
+}
+
+export type PostApiProjectsByProjectIdQueueCancelResponse =
+  PostApiProjectsByProjectIdQueueCancelResponses[keyof PostApiProjectsByProjectIdQueueCancelResponses]
 
 export type GetApiProjectsByProjectIdSecretsData = {
   body?: never
