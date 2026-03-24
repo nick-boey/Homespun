@@ -5,7 +5,7 @@
 import { memo, useCallback, useState, useMemo } from 'react'
 import { Copy, Pencil, Play, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { IssueStatus } from '@/api'
+import { IssueStatus, ExecutionMode } from '@/api'
 import { ISSUE_STATUS_LABELS, ISSUE_STATUS_COLORS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/ui/markdown'
@@ -198,8 +198,38 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         </div>
       )}
 
+      {/* Execution mode */}
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Execution Mode:</span>
+        <span className="text-xs font-medium" data-testid="execution-mode">
+          {line.executionMode === ExecutionMode.PARALLEL ? 'Parallel' : 'Series'}
+        </span>
+      </div>
+
+      {/* Parent issues */}
+      {line.parentIssues && line.parentIssues.length > 0 && (
+        <div className="mb-3 flex items-center gap-2" data-testid="parent-issues">
+          <span className="text-muted-foreground text-xs">Parents:</span>
+          <div className="flex flex-wrap gap-1">
+            {line.parentIssues.map((p, i) => (
+              <code key={i} className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                {p.sortOrder ? `${p.parentIssue}:${p.sortOrder}` : p.parentIssue}
+              </code>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Assigned to */}
+      {line.assignedTo && (
+        <div className="mb-3 flex items-center gap-2" data-testid="assigned-to">
+          <span className="text-muted-foreground text-xs">Assigned:</span>
+          <span className="text-xs">{line.assignedTo}</span>
+        </div>
+      )}
+
       {/* Description */}
-      <div className="mb-4">
+      <div className="mb-4 max-h-48 overflow-y-auto" data-testid="issue-description">
         {line.description ? (
           <Markdown className="text-foreground prose-sm max-w-none">{line.description}</Markdown>
         ) : (

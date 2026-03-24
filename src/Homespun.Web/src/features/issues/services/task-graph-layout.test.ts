@@ -68,6 +68,7 @@ describe('computeLayout', () => {
         hasHiddenParent: false,
         hiddenParentIsSeriesMode: false,
         executionMode: ExecutionMode.SERIES,
+        parentIssues: null,
       }
       expect(isIssueRenderLine(line)).toBe(true)
       expect(isPrRenderLine(line)).toBe(false)
@@ -302,6 +303,27 @@ describe('computeLayout', () => {
       expect(childLine.lane).toBe(0)
       expect(childLine.parentLane).toBe(1)
       expect(childLine.isSeriesChild).toBe(false)
+    })
+
+    it('populates parentIssues on render lines', () => {
+      const parentIssues = [{ parentIssue: 'parent', sortOrder: 'ab' }]
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
+      const child = createIssue({ id: 'child', parentIssues })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+      expect(childLine.parentIssues).toEqual(parentIssues)
     })
 
     it('renders series children with correct flags', () => {

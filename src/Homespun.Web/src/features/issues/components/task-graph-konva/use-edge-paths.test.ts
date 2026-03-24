@@ -39,6 +39,7 @@ function createIssueLine(
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.PARALLEL,
+    parentIssues: null,
     ...overrides,
   }
 }

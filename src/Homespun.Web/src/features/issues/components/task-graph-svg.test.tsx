@@ -39,6 +39,7 @@ describe('TaskGraphNodeSvg', () => {
     agentStatus: null,
     assignedTo: null,
     executionMode: ExecutionMode.SERIES,
+    parentIssues: null,
     ...overrides,
   })
 
