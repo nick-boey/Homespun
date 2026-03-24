@@ -18,3 +18,149 @@ public record GenerateBranchIdResponse(
     string? BranchId,
     string? Error,
     bool WasAiGenerated);
+
+/// <summary>
+/// Request to start queue execution on a root issue.
+/// </summary>
+public class StartQueueRequest
+{
+    /// <summary>
+    /// The root issue ID to start execution from.
+    /// </summary>
+    public required string IssueId { get; set; }
+
+    /// <summary>
+    /// Per-issue-type workflow mapping: which workflow to run for each issue type.
+    /// Keys are issue types (e.g. "task", "bug"), values are workflow IDs.
+    /// </summary>
+    public Dictionary<string, string>? WorkflowMappings { get; set; }
+}
+
+/// <summary>
+/// Response for queue status with per-queue breakdown and overall progress.
+/// </summary>
+public class QueueStatusResponse
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Overall coordinator status.
+    /// </summary>
+    public required string Status { get; set; }
+
+    /// <summary>
+    /// The root issue being executed.
+    /// </summary>
+    public string? RootIssueId { get; set; }
+
+    /// <summary>
+    /// Maximum concurrent queues allowed.
+    /// </summary>
+    public int MaxConcurrency { get; set; }
+
+    /// <summary>
+    /// Number of currently running queues.
+    /// </summary>
+    public int RunningQueueCount { get; set; }
+
+    /// <summary>
+    /// Per-queue breakdown.
+    /// </summary>
+    public List<QueueDetail> Queues { get; set; } = [];
+
+    /// <summary>
+    /// Overall progress across all queues.
+    /// </summary>
+    public QueueProgress Progress { get; set; } = new();
+}
+
+/// <summary>
+/// Detail for a single task queue.
+/// </summary>
+public class QueueDetail
+{
+    /// <summary>
+    /// Queue identifier.
+    /// </summary>
+    public required string Id { get; set; }
+
+    /// <summary>
+    /// Current queue state.
+    /// </summary>
+    public required string State { get; set; }
+
+    /// <summary>
+    /// Issue ID currently being processed, if any.
+    /// </summary>
+    public string? CurrentIssueId { get; set; }
+
+    /// <summary>
+    /// Number of pending issues in this queue.
+    /// </summary>
+    public int PendingCount { get; set; }
+
+    /// <summary>
+    /// History of completed issue executions.
+    /// </summary>
+    public List<QueueHistoryEntry> History { get; set; } = [];
+}
+
+/// <summary>
+/// A completed issue execution record.
+/// </summary>
+public class QueueHistoryEntry
+{
+    /// <summary>
+    /// The issue ID.
+    /// </summary>
+    public required string IssueId { get; set; }
+
+    /// <summary>
+    /// Whether the execution succeeded.
+    /// </summary>
+    public bool Success { get; set; }
+
+    /// <summary>
+    /// Error message if failed.
+    /// </summary>
+    public string? Error { get; set; }
+
+    /// <summary>
+    /// When the execution started.
+    /// </summary>
+    public DateTimeOffset StartedAt { get; set; }
+
+    /// <summary>
+    /// When the execution completed.
+    /// </summary>
+    public DateTimeOffset CompletedAt { get; set; }
+}
+
+/// <summary>
+/// Overall progress across all queues.
+/// </summary>
+public class QueueProgress
+{
+    /// <summary>
+    /// Total number of issues across all queues.
+    /// </summary>
+    public int TotalIssues { get; set; }
+
+    /// <summary>
+    /// Number of completed issues.
+    /// </summary>
+    public int Completed { get; set; }
+
+    /// <summary>
+    /// Number of failed issues.
+    /// </summary>
+    public int Failed { get; set; }
+
+    /// <summary>
+    /// Number of remaining issues (pending + currently running).
+    /// </summary>
+    public int Remaining { get; set; }
+}
