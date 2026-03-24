@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Play, Trash2, Pencil, MoreHorizontal } from 'lucide-react'
+import { Play, Trash2, Pencil, MoreHorizontal, Plus } from 'lucide-react'
 import { useWorkflows, useDeleteWorkflow, useExecuteWorkflow } from '../hooks/use-workflows'
+import { CreateWorkflowDialog } from './create-workflow-dialog'
 import { ErrorFallback } from '@/components/error-boundary'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -68,6 +69,7 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
   const executeWorkflow = useExecuteWorkflow()
   const [deleteTarget, setDeleteTarget] = useState<WorkflowSummary | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const handleDelete = () => {
     if (deleteTarget?.id) {
@@ -115,20 +117,37 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
 
   if (workflows.length === 0) {
     return (
-      <div
-        className="border-border rounded-lg border p-8 text-center"
-        data-testid="workflow-list-empty"
-      >
-        <h3 className="text-lg font-medium">No workflows yet</h3>
-        <p className="text-muted-foreground mt-1">
-          Create a workflow to automate tasks for this project.
-        </p>
-      </div>
+      <>
+        <div
+          className="border-border rounded-lg border p-8 text-center"
+          data-testid="workflow-list-empty"
+        >
+          <h3 className="text-lg font-medium">No workflows yet</h3>
+          <p className="text-muted-foreground mt-1">
+            Create a workflow to automate tasks for this project.
+          </p>
+          <Button className="mt-4" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Workflow
+          </Button>
+        </div>
+        <CreateWorkflowDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          projectId={projectId}
+        />
+      </>
     )
   }
 
   return (
     <>
+      <div className="mb-4 flex justify-end">
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Workflow
+        </Button>
+      </div>
       <Table data-testid="workflow-list-table">
         <TableHeader>
           <TableRow>
@@ -225,6 +244,12 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CreateWorkflowDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        projectId={projectId}
+      />
     </>
   )
 }

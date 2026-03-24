@@ -12,6 +12,11 @@ vi.mock('@/api', () => ({
     getApiProjectsByProjectIdWorkflows: vi.fn(),
     deleteApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflowsByWorkflowIdExecute: vi.fn(),
+    postApiWorkflows: vi.fn(),
+  },
+  WorkflowTemplate: {
+    getApiWorkflowTemplates: vi.fn().mockResolvedValue({ data: [] }),
+    postApiWorkflowTemplatesByTemplateIdCreate: vi.fn(),
   },
 }))
 
@@ -219,5 +224,35 @@ describe('WorkflowList', () => {
 
     const link = screen.getByText('Build Pipeline').closest('a')
     expect(link).toHaveAttribute('href', '/projects/proj-1/workflows/wf-1')
+  })
+
+  it('shows create workflow button in table view', async () => {
+    const mock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    mock.mockResolvedValueOnce({
+      data: { workflows: mockWorkflows, totalCount: 2 },
+    })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Pipeline')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /create workflow/i })).toBeInTheDocument()
+  })
+
+  it('shows create workflow button in empty state', async () => {
+    const mock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    mock.mockResolvedValueOnce({
+      data: { workflows: [], totalCount: 0 },
+    })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workflow-list-empty')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /create workflow/i })).toBeInTheDocument()
   })
 })
