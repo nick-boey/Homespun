@@ -69,8 +69,8 @@ public class MiniPromptService : IMiniPromptService
 
         try
         {
-            _logger.LogDebug("Executing mini-prompt via sidecar with model {Model}: {PromptPreview}",
-                model, prompt.Length > 50 ? prompt[..50] + "..." : prompt);
+            _logger.LogInformation("Executing mini-prompt via sidecar with model {Model}: {PromptPreview}",
+                model, prompt.Length > 100 ? prompt[..100] + "..." : prompt);
 
             var requestBody = new SidecarMiniPromptRequest
             {
@@ -109,15 +109,16 @@ public class MiniPromptService : IMiniPromptService
                     DurationMs: durationMs);
             }
 
-            _logger.LogDebug("Mini-prompt via sidecar completed in {DurationMs}ms, cost: ${CostUsd}",
-                result.DurationMs ?? durationMs, result.CostUsd?.ToString("F6") ?? "N/A");
+            _logger.LogInformation("Mini-prompt via sidecar completed in {DurationMs}ms, cost: ${CostUsd}, resolvedModel: {ResolvedModel}",
+                result.DurationMs ?? durationMs, result.CostUsd?.ToString("F6") ?? "N/A", result.ResolvedModel ?? "unknown");
 
             return new MiniPromptResult(
                 Success: result.Success,
                 Response: result.Response,
                 Error: result.Error,
                 CostUsd: result.CostUsd,
-                DurationMs: result.DurationMs ?? durationMs);
+                DurationMs: result.DurationMs ?? durationMs,
+                ResolvedModel: result.ResolvedModel);
         }
         catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -171,5 +172,6 @@ public class MiniPromptService : IMiniPromptService
         public string? Error { get; init; }
         public decimal? CostUsd { get; init; }
         public int? DurationMs { get; init; }
+        public string? ResolvedModel { get; init; }
     }
 }

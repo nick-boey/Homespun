@@ -116,7 +116,8 @@ public class MiniPromptServiceSidecarTests
             success = true,
             response = "test-branch-id",
             costUsd = 0.0001,
-            durationMs = 150
+            durationMs = 150,
+            resolvedModel = "claude-haiku-4-5-20251001"
         };
 
         SetupHttpResponse(HttpStatusCode.OK, JsonSerializer.Serialize(responseBody));
@@ -134,6 +135,35 @@ public class MiniPromptServiceSidecarTests
             Assert.That(result.Error, Is.Null);
             Assert.That(result.CostUsd, Is.EqualTo(0.0001m));
             Assert.That(result.DurationMs, Is.EqualTo(150));
+            Assert.That(result.ResolvedModel, Is.EqualTo("claude-haiku-4-5-20251001"));
+        });
+    }
+
+    [Test]
+    public async Task ExecuteAsync_SidecarReturnsSuccessWithoutResolvedModel_ReturnsNullResolvedModel()
+    {
+        // Arrange - response without resolvedModel field (backward compat)
+        var responseBody = new
+        {
+            success = true,
+            response = "test-branch-id",
+            costUsd = 0.0001,
+            durationMs = 150
+        };
+
+        SetupHttpResponse(HttpStatusCode.OK, JsonSerializer.Serialize(responseBody));
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.ExecuteAsync("Generate a branch ID");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Response, Is.EqualTo("test-branch-id"));
+            Assert.That(result.ResolvedModel, Is.Null);
         });
     }
 

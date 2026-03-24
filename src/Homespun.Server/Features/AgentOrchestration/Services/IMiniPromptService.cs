@@ -13,7 +13,8 @@ public record MiniPromptResult(
     string? Response,
     string? Error,
     decimal? CostUsd,
-    int? DurationMs);
+    int? DurationMs,
+    string? ResolvedModel = null);
 
 /// <summary>
 /// Service for executing lightweight AI prompts without tools.

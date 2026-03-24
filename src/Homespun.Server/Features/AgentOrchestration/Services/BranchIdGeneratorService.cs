@@ -62,7 +62,7 @@ public partial class BranchIdGeneratorService : IBranchIdGeneratorService
                 var branchId = SanitizeAndValidateAIResponse(result.Response);
                 if (branchId != null)
                 {
-                    _logger.LogDebug("AI generated branch ID '{BranchId}' for title '{Title}'", branchId, title);
+                    _logger.LogInformation("AI generated branch ID '{BranchId}' for title '{Title}', resolvedModel: {ResolvedModel}", branchId, title, result.ResolvedModel ?? "unknown");
                     return new BranchIdResult(
                         Success: true,
                         BranchId: branchId,
