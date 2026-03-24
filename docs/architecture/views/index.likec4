@@ -1,0 +1,46 @@
+views {
+
+  view systemContext of homespun {
+    title 'Homespun - System Context'
+    description 'Top-level view showing Homespun and its external dependencies'
+
+    include
+      *,
+      developer,
+      github,
+      claude_api,
+      docker_engine
+  }
+
+  view containerDiagram of homespun {
+    title 'Homespun - Container Diagram'
+    description 'Docker Compose services, data stores, and external integrations'
+
+    include
+      *,
+      developer,
+      github,
+      claude_api,
+      docker_engine
+  }
+
+  view serverComponents of homespun.server {
+    title 'Homespun Server - Components'
+    description 'ASP.NET Server feature slices and their interactions'
+
+    include
+      *,
+      homespun.web,
+      homespun.worker,
+      homespun.data_volume,
+      homespun.fleece_store
+  }
+
+  deployment view deploymentView {
+    title 'Homespun - Deployment (Azure VM)'
+    description 'Azure VM deployment topology with Docker Compose'
+
+    include production.**
+  }
+
+}

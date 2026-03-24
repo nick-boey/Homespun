@@ -1,0 +1,59 @@
+model {
+
+  extend homespun.server {
+
+    agent_orchestration = component 'AgentOrchestration' {
+      description 'Agent lifecycle management and execution'
+    }
+
+    claude_code = component 'ClaudeCode' {
+      description 'Claude Code SDK session management (Plan + Build modes)'
+    }
+
+    commands = component 'Commands' {
+      description 'Shell command execution abstraction'
+    }
+
+    fleece = component 'Fleece' {
+      description 'Fleece issue tracking integration'
+    }
+
+    git = component 'Git' {
+      description 'Git clone creation, management, and rebase operations'
+    }
+
+    github_feature = component 'GitHub' {
+      description 'GitHub PR synchronization and API operations'
+    }
+
+    projects = component 'Projects' {
+      description 'Project CRUD operations'
+    }
+
+    pull_requests = component 'PullRequests' {
+      description 'PR workflow, feature management, and data entities'
+    }
+
+    signalr_hubs = component 'SignalR Hubs' {
+      description 'ClaudeCodeHub, NotificationHub, WorkflowHub'
+    }
+
+    notifications = component 'Notifications' {
+      description 'Toast notifications via SignalR'
+    }
+
+  }
+
+  // Server component relationships
+  agent_orchestration -> claude_code 'Manages agent sessions'
+  claude_code -> homespun.worker 'Delegates lightweight tasks'
+  claude_code -> signalr_hubs 'Streams session output'
+  git -> commands 'Executes git CLI'
+  github_feature -> git 'Clones and syncs repos'
+  pull_requests -> github_feature 'Syncs PR data'
+  signalr_hubs -> homespun.web 'Real-time updates'
+  notifications -> signalr_hubs 'Sends toast notifications'
+  projects -> homespun.data_volume 'Persists project data'
+  fleece -> homespun.fleece_store 'Persists issue data'
+
+}

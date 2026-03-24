@@ -1,0 +1,30 @@
+deployment {
+
+  environment production 'Production' {
+
+    vm azure_vm 'Azure VM' {
+      description 'Ubuntu VM hosting Docker Compose stack'
+
+      orchestrator docker_compose 'Docker Compose' {
+        description 'Container orchestration on the VM'
+
+        instanceOf homespun.server
+        instanceOf homespun.web
+        instanceOf homespun.worker
+
+        stack plg 'PLG Stack (optional profile)' {
+          description 'Logging and observability services'
+
+          instanceOf homespun.loki
+          instanceOf homespun.promtail
+          instanceOf homespun.grafana
+        }
+      }
+
+      instanceOf homespun.data_volume
+      instanceOf homespun.fleece_store
+    }
+
+  }
+
+}

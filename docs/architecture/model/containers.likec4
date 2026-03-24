@@ -1,0 +1,58 @@
+model {
+
+  extend homespun {
+
+    server = container 'ASP.NET Server' {
+      description 'Backend API, SignalR hubs, agent orchestration (port 8080)'
+      technology 'ASP.NET / C#'
+    }
+
+    web = container 'React Frontend' {
+      description 'Vite-based React SPA (port 3001)'
+      technology 'React / TypeScript / Vite'
+    }
+
+    worker = container 'TypeScript Worker' {
+      description 'Sidecar for mini prompts and lightweight AI tasks'
+      technology 'Hono / Claude Agent SDK'
+    }
+
+    loki = container 'Loki' {
+      description 'Log aggregation service'
+      technology 'Grafana Loki'
+    }
+
+    promtail = container 'Promtail' {
+      description 'Log collector agent'
+      technology 'Grafana Promtail'
+    }
+
+    grafana = container 'Grafana' {
+      description 'Observability dashboards'
+      technology 'Grafana'
+    }
+
+    data_volume = database '/data Volume' {
+      description 'JSON/JSONL project and feature data'
+    }
+
+    fleece_store = database '.fleece/ Store' {
+      description 'Fleece issue tracking JSONL files'
+    }
+
+  }
+
+  // Container relationships
+  web -> server 'REST API + SignalR'
+  server -> worker 'HTTP requests'
+  server -> docker_engine 'Spawns agent containers (DooD)'
+  server -> github 'Octokit REST API'
+  server -> claude_api 'Claude Code sessions'
+  server -> data_volume 'Reads/writes project data'
+  server -> fleece_store 'Reads/writes issue data'
+  worker -> claude_api 'Anthropic SDK calls'
+  promtail -> loki 'Pushes logs'
+  grafana -> loki 'Queries logs'
+  developer -> web 'Browser'
+
+}
