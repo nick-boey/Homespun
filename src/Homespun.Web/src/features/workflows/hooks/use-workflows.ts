@@ -117,6 +117,35 @@ export function useDeleteWorkflow(projectId: string) {
   })
 }
 
+export function useToggleWorkflowEnabled(projectId: string) {
+  const queryClient = useQueryClient()
+  const telemetry = useTelemetry()
+
+  return useMutation({
+    mutationFn: async ({ workflowId, enabled }: { workflowId: string; enabled: boolean }) => {
+      const response = await Workflows.putApiWorkflowsByWorkflowId({
+        path: { workflowId },
+        body: { projectId, enabled },
+      })
+      if (response.error) {
+        throw new Error('Failed to toggle workflow')
+      }
+      return response.data as WorkflowDefinition
+    },
+    onSuccess: (_data, { workflowId }) => {
+      telemetry.trackEvent('workflow_toggled', { workflowId })
+      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId) })
+      queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
+    },
+    onError: (error: Error, { workflowId }) => {
+      telemetry.trackEvent('workflow_toggle_failed', {
+        workflowId,
+        error: error.message,
+      })
+    },
+  })
+}
+
 export function useUpdateWorkflow(projectId: string) {
   const queryClient = useQueryClient()
   const telemetry = useTelemetry()

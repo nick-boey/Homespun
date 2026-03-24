@@ -12,6 +12,7 @@ vi.mock('@/api', () => ({
     getApiProjectsByProjectIdWorkflows: vi.fn(),
     deleteApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflowsByWorkflowIdExecute: vi.fn(),
+    putApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflows: vi.fn(),
   },
   WorkflowTemplate: {
@@ -254,5 +255,103 @@ describe('WorkflowList', () => {
     })
 
     expect(screen.getByRole('button', { name: /create workflow/i })).toBeInTheDocument()
+  })
+
+  it('shows Disable option in dropdown for enabled workflow', async () => {
+    const user = userEvent.setup()
+    const mock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    mock.mockResolvedValueOnce({
+      data: { workflows: mockWorkflows, totalCount: 2 },
+    })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Pipeline')).toBeInTheDocument()
+    })
+
+    // Open dropdown for the first (enabled) workflow
+    const actionButtons = screen.getAllByRole('button', { name: /workflow actions/i })
+    await user.click(actionButtons[0])
+
+    expect(screen.getByText('Disable')).toBeInTheDocument()
+  })
+
+  it('shows Enable option in dropdown for disabled workflow', async () => {
+    const user = userEvent.setup()
+    const mock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    mock.mockResolvedValueOnce({
+      data: { workflows: mockWorkflows, totalCount: 2 },
+    })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Deploy Pipeline')).toBeInTheDocument()
+    })
+
+    // Open dropdown for the second (disabled) workflow
+    const actionButtons = screen.getAllByRole('button', { name: /workflow actions/i })
+    await user.click(actionButtons[1])
+
+    expect(screen.getByText('Enable')).toBeInTheDocument()
+  })
+
+  it('calls toggle mutation when clicking Disable', async () => {
+    const user = userEvent.setup()
+    const listMock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    const updateMock = Workflows.putApiWorkflowsByWorkflowId as Mock
+
+    listMock.mockResolvedValue({
+      data: { workflows: mockWorkflows, totalCount: 2 },
+    })
+    updateMock.mockResolvedValueOnce({ data: { ...mockWorkflows[0], enabled: false } })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Pipeline')).toBeInTheDocument()
+    })
+
+    // Open dropdown for the first (enabled) workflow and click Disable
+    const actionButtons = screen.getAllByRole('button', { name: /workflow actions/i })
+    await user.click(actionButtons[0])
+    await user.click(screen.getByText('Disable'))
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({
+        path: { workflowId: 'wf-1' },
+        body: { projectId: 'proj-1', enabled: false },
+      })
+    })
+  })
+
+  it('calls toggle mutation when clicking Enable', async () => {
+    const user = userEvent.setup()
+    const listMock = Workflows.getApiProjectsByProjectIdWorkflows as Mock
+    const updateMock = Workflows.putApiWorkflowsByWorkflowId as Mock
+
+    listMock.mockResolvedValue({
+      data: { workflows: mockWorkflows, totalCount: 2 },
+    })
+    updateMock.mockResolvedValueOnce({ data: { ...mockWorkflows[1], enabled: true } })
+
+    render(<WorkflowList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Deploy Pipeline')).toBeInTheDocument()
+    })
+
+    // Open dropdown for the second (disabled) workflow and click Enable
+    const actionButtons = screen.getAllByRole('button', { name: /workflow actions/i })
+    await user.click(actionButtons[1])
+    await user.click(screen.getByText('Enable'))
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({
+        path: { workflowId: 'wf-2' },
+        body: { projectId: 'proj-1', enabled: true },
+      })
+    })
   })
 })
