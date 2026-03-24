@@ -2,6 +2,8 @@
  * Tests for use-edge-paths hook.
  *
  * Tests edge path computation from task graph render lines.
+ * The algorithm computes edges based on actual node positions (X, Y)
+ * rather than row-by-row flags.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -9,6 +11,7 @@ import { computeEdgePaths } from './use-edge-paths'
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../../services'
 import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { TaskGraphMarkerType } from '../../services'
+import { ROW_HEIGHT, NODE_RADIUS, getLaneCenterX, getRowCenterY } from '../task-graph-svg'
 
 /** Helper to create a minimal issue render line */
 function createIssueLine(
@@ -82,99 +85,192 @@ describe('computeEdgePaths', () => {
       const result = computeEdgePaths(lines)
       expect(result).toEqual([])
     })
-  })
 
-  describe('parallel mode edges', () => {
-    it('generates horizontal then vertical path for parallel child', () => {
+    it('returns no edge when parent is not in render lines', () => {
       const lines = [
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 1,
+          parentIssues: [{ parentIssue: 'missing-parent', sortOrder: 'V' }],
           isSeriesChild: false,
-          isFirstChild: true,
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('parallel mode edges (child right -> parent top)', () => {
+    it('generates L-shaped path for parallel child to parent', () => {
+      // child-1 at row 0, lane 0; parent-1 at row 1, lane 1
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
         createIssueLine({ issueId: 'parent-1', lane: 1 }),
       ]
       const result = computeEdgePaths(lines)
 
       expect(result.length).toBe(1)
-      expect(result[0].fromIssueId).toBe('child-1')
-      expect(result[0].toIssueId).toBe('parent-1')
-      expect(result[0].isSeriesEdge).toBe(false)
-      // Points should form an L-shape (horizontal then vertical)
-      expect(result[0].points.length).toBeGreaterThan(0)
+      const edge = result[0]
+      expect(edge.fromIssueId).toBe('child-1')
+      expect(edge.toIssueId).toBe('parent-1')
+      expect(edge.isSeriesEdge).toBe(false)
+
+      // Parallel: exit child right, enter parent top
+      const childCx = getLaneCenterX(0)
+      const childCy = 0 * ROW_HEIGHT + getRowCenterY()
+      const parentCx = getLaneCenterX(1)
+      const parentCy = 1 * ROW_HEIGHT + getRowCenterY()
+
+      // Start: child right edge
+      expect(edge.points[0]).toBe(childCx + NODE_RADIUS + 2)
+      expect(edge.points[1]).toBe(childCy)
+      // Middle: horizontal to parent's x
+      expect(edge.points[2]).toBe(parentCx)
+      expect(edge.points[3]).toBe(childCy)
+      // End: parent top
+      expect(edge.points[4]).toBe(parentCx)
+      expect(edge.points[5]).toBe(parentCy - NODE_RADIUS - 2)
     })
 
-    it('generates connecting edge between parallel siblings', () => {
+    it('generates independent edges for multiple parallel children', () => {
       const lines = [
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 2,
           isSeriesChild: false,
-          isFirstChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
         createIssueLine({
           issueId: 'child-2',
           lane: 1,
-          parentLane: 2,
           isSeriesChild: false,
-          isFirstChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'VV' }],
         }),
         createIssueLine({ issueId: 'parent-1', lane: 2 }),
       ]
       const result = computeEdgePaths(lines)
 
-      // Should have edges for both children connecting to parent
-      expect(result.length).toBeGreaterThanOrEqual(2)
+      // Each child gets its own edge to parent
+      expect(result.length).toBe(2)
+      expect(result[0].fromIssueId).toBe('child-1')
+      expect(result[0].toIssueId).toBe('parent-1')
+      expect(result[1].fromIssueId).toBe('child-2')
+      expect(result[1].toIssueId).toBe('parent-1')
     })
   })
 
-  describe('series mode edges', () => {
-    it('generates vertical path for series child (top line)', () => {
+  describe('series mode edges (child bottom -> parent left)', () => {
+    it('generates vertical path for series child in same lane', () => {
+      // child at row 1, parent at row 0, both in lane 0
       const lines = [
-        createIssueLine({
-          issueId: 'child-1',
-          lane: 0,
-          parentLane: 0,
-          isSeriesChild: true,
-          drawTopLine: true,
-        }),
         createIssueLine({
           issueId: 'parent-1',
           lane: 0,
-          drawBottomLine: true,
+          executionMode: ExecutionMode.SERIES,
+        }),
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
       ]
       const result = computeEdgePaths(lines)
 
-      // Series connections are handled by top/bottom lines
       const seriesEdges = result.filter((e) => e.isSeriesEdge)
-      expect(seriesEdges.length).toBeGreaterThanOrEqual(0)
+      expect(seriesEdges.length).toBe(1)
+
+      const edge = seriesEdges[0]
+      expect(edge.fromIssueId).toBe('child-1')
+      expect(edge.toIssueId).toBe('parent-1')
+
+      // Series same lane: vertical from child bottom to parent bottom (enters at left = same as bottom for same lane)
+      const cx = getLaneCenterX(0)
+      const childCy = 1 * ROW_HEIGHT + getRowCenterY()
+      const parentCy = 0 * ROW_HEIGHT + getRowCenterY()
+
+      // Vertical line from child top to parent bottom
+      expect(edge.points[0]).toBe(cx)
+      expect(edge.points[1]).toBe(parentCy + NODE_RADIUS + 2)
+      expect(edge.points[2]).toBe(cx)
+      expect(edge.points[3]).toBe(childCy - NODE_RADIUS - 2)
     })
 
-    it('generates L-shaped connector for series parent receiving children', () => {
+    it('generates L-shaped path for series child in different lane', () => {
+      // parent at row 0, lane 1; child at row 1, lane 0
       const lines = [
         createIssueLine({
           issueId: 'parent-1',
           lane: 1,
-          seriesConnectorFromLane: 0,
+          executionMode: ExecutionMode.SERIES,
         }),
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 1,
           isSeriesChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
       ]
       const result = computeEdgePaths(lines)
 
-      // Should have an L-shaped connector
-      const connectorEdge = result.find((e) => e.fromIssueId === 'parent-1')
-      if (connectorEdge) {
-        expect(connectorEdge.points.length).toBeGreaterThan(0)
-      }
+      expect(result.length).toBe(1)
+      const edge = result[0]
+      expect(edge.fromIssueId).toBe('child-1')
+      expect(edge.toIssueId).toBe('parent-1')
+      expect(edge.isSeriesEdge).toBe(true)
+
+      // Series different lane: exit child bottom, go down, horizontal to parent left
+      const childCx = getLaneCenterX(0)
+      const childCy = 1 * ROW_HEIGHT + getRowCenterY()
+      const parentCx = getLaneCenterX(1)
+      const parentCy = 0 * ROW_HEIGHT + getRowCenterY()
+
+      // Start: child bottom
+      expect(edge.points[0]).toBe(childCx)
+      expect(edge.points[1]).toBe(childCy - NODE_RADIUS - 2)
+      // Middle: vertical up to parent row
+      expect(edge.points[2]).toBe(childCx)
+      expect(edge.points[3]).toBe(parentCy)
+      // End: horizontal to parent left
+      expect(edge.points[4]).toBe(parentCx - NODE_RADIUS - 2)
+      expect(edge.points[5]).toBe(parentCy)
+    })
+
+    it('generates edges for multi-level series chain', () => {
+      // grandparent -> parent -> child, all series, same lane
+      const lines = [
+        createIssueLine({
+          issueId: 'grandparent',
+          lane: 0,
+          executionMode: ExecutionMode.SERIES,
+        }),
+        createIssueLine({
+          issueId: 'parent-1',
+          lane: 0,
+          isSeriesChild: true,
+          executionMode: ExecutionMode.SERIES,
+          parentIssues: [{ parentIssue: 'grandparent', sortOrder: 'V' }],
+        }),
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+
+      // Two edges: parent->grandparent, child->parent
+      expect(result.length).toBe(2)
+      expect(result[0].fromIssueId).toBe('parent-1')
+      expect(result[0].toIssueId).toBe('grandparent')
+      expect(result[1].fromIssueId).toBe('child-1')
+      expect(result[1].toIssueId).toBe('parent-1')
     })
   })
 
@@ -191,7 +287,6 @@ describe('computeEdgePaths', () => {
       ]
       const result = computeEdgePaths(lines)
 
-      // Should have a lane 0 connector edge
       const lane0Edge = result.find((e) => e.isLane0Connector)
       expect(lane0Edge).toBeDefined()
     })
@@ -207,9 +302,25 @@ describe('computeEdgePaths', () => {
       ]
       const result = computeEdgePaths(lines)
 
-      // Should have a pass-through edge
       const passThrough = result.find((e) => e.isLane0PassThrough)
       expect(passThrough).toBeDefined()
+    })
+
+    it('generates vertical + horizontal for non-last lane 0 connector', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'issue-1',
+          lane: 1,
+          drawLane0Connector: true,
+          isLastLane0Connector: false,
+          lane0Color: '#3b82f6',
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+
+      const lane0Edges = result.filter((e) => e.isLane0Connector)
+      // Non-last connector generates 2 edges: vertical + horizontal
+      expect(lane0Edges.length).toBe(2)
     })
   })
 
@@ -219,42 +330,39 @@ describe('computeEdgePaths', () => {
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 1,
           isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
         createIssueLine({ issueId: 'parent-1', lane: 1 }),
       ]
       const result = computeEdgePaths(lines)
 
-      if (result.length > 0) {
-        const edge = result[0]
-        expect(edge).toHaveProperty('id')
-        expect(edge).toHaveProperty('fromIssueId')
-        expect(edge).toHaveProperty('toIssueId')
-        expect(edge).toHaveProperty('points')
-        expect(edge).toHaveProperty('color')
-        expect(edge).toHaveProperty('isSeriesEdge')
-        expect(Array.isArray(edge.points)).toBe(true)
-      }
+      expect(result.length).toBeGreaterThan(0)
+      const edge = result[0]
+      expect(edge).toHaveProperty('id')
+      expect(edge).toHaveProperty('fromIssueId')
+      expect(edge).toHaveProperty('toIssueId')
+      expect(edge).toHaveProperty('points')
+      expect(edge).toHaveProperty('color')
+      expect(edge).toHaveProperty('isSeriesEdge')
+      expect(Array.isArray(edge.points)).toBe(true)
     })
 
-    it('assigns correct colors based on issue type', () => {
+    it('assigns correct colors based on child issue type', () => {
       const lines = [
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 1,
           isSeriesChild: false,
           issueType: IssueType.BUG,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
         createIssueLine({ issueId: 'parent-1', lane: 1 }),
       ]
       const result = computeEdgePaths(lines)
 
-      if (result.length > 0) {
-        expect(result[0].color).toBeDefined()
-        expect(result[0].color.startsWith('#')).toBe(true)
-      }
+      expect(result.length).toBeGreaterThan(0)
+      expect(result[0].color).toBe('#ef4444') // BUG color
     })
   })
 
@@ -264,14 +372,14 @@ describe('computeEdgePaths', () => {
         createIssueLine({
           issueId: 'child-1',
           lane: 0,
-          parentLane: 2,
           isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
         }),
         createIssueLine({
           issueId: 'child-2',
           lane: 1,
-          parentLane: 2,
           isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'VV' }],
         }),
         createIssueLine({ issueId: 'parent-1', lane: 2 }),
       ]
