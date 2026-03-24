@@ -2,6 +2,10 @@ export { useProjectPrompts, projectPromptsQueryKey } from './use-project-prompts
 export { useMergedProjectPrompts, mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 export { useGlobalPrompts, globalPromptsQueryKey } from './use-global-prompts'
 export { useIssueAgentPrompts, issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
+export {
+  useIssueAgentProjectPrompts,
+  issueAgentProjectPromptsQueryKey,
+} from './use-issue-agent-project-prompts'
 export { useCreatePrompt } from './use-create-prompt'
 export { useUpdatePrompt } from './use-update-prompt'
 export { useDeletePrompt } from './use-delete-prompt'

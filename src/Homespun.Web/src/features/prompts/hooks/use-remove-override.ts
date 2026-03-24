@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts, type AgentPrompt } from '@/api'
 import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
+import { issueAgentProjectPromptsQueryKey } from './use-issue-agent-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseRemoveOverrideOptions {
@@ -40,6 +41,10 @@ export function useRemoveOverride(options: UseRemoveOverrideOptions) {
       // Invalidate global prompts as well since the available list may have changed
       queryClient.invalidateQueries({
         queryKey: ['global-prompts'],
+      })
+      // Invalidate issue agent project prompts
+      queryClient.invalidateQueries({
+        queryKey: issueAgentProjectPromptsQueryKey(options.projectId),
       })
       options.onSuccess?.(data as AgentPrompt)
     },
