@@ -36,7 +36,7 @@ function createWrapper() {
 
 describe('PromptsList', () => {
   it('renders loading state', () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockReturnValue(
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockReturnValue(
       new Promise(() => {}) as never
     )
 
@@ -49,7 +49,7 @@ describe('PromptsList', () => {
   })
 
   it('renders empty state when no prompts', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -61,7 +61,7 @@ describe('PromptsList', () => {
   })
 
   it('renders list of prompts', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: '1',
@@ -90,7 +90,7 @@ describe('PromptsList', () => {
 
   it('shows create form when New Prompt is clicked', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -107,7 +107,7 @@ describe('PromptsList', () => {
   })
 
   it('shows count when prompts exist', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         { id: '1', name: 'First', mode: SessionMode.BUILD, projectId: 'proj-1' },
         { id: '2', name: 'Second', mode: SessionMode.PLAN, projectId: 'proj-1' },
@@ -123,7 +123,7 @@ describe('PromptsList', () => {
   })
 
   it('renders Cards and Code tabs', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -136,7 +136,7 @@ describe('PromptsList', () => {
   })
 
   it('defaults to Cards view', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [{ id: '1', name: 'Test Prompt', mode: SessionMode.BUILD, projectId: 'proj-1' }],
     } as never)
 
@@ -154,7 +154,7 @@ describe('PromptsList', () => {
 
   it('switches to Code view on tab click', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: '1',
@@ -185,7 +185,7 @@ describe('PromptsList', () => {
 
   it('Code view shows Apply and Revert buttons', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -209,7 +209,7 @@ describe('PromptsList', () => {
     const user = userEvent.setup()
 
     // A global prompt has no projectId and isOverride is false
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'global-build',
@@ -245,7 +245,7 @@ describe('PromptsList', () => {
   it('hides delete option for global prompts on project page', async () => {
     const user = userEvent.setup()
 
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'global-build',
@@ -276,7 +276,7 @@ describe('PromptsList', () => {
   it('shows delete option for project prompts on project page', async () => {
     const user = userEvent.setup()
 
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-build',
@@ -335,7 +335,7 @@ describe('PromptsList', () => {
     const user = userEvent.setup()
 
     // A project prompt has projectId set
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-build',
@@ -369,7 +369,7 @@ describe('PromptsList', () => {
   })
 
   it('shows section headers for project and inherited global prompts', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-1-prompt',
@@ -412,7 +412,7 @@ describe('PromptsList', () => {
   })
 
   it('hides Project Prompts header when only global prompts exist', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'global-prompt',
@@ -435,7 +435,7 @@ describe('PromptsList', () => {
   })
 
   it('hides Inherited Global Prompts header when only project prompts exist', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-prompt',

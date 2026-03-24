@@ -13,7 +13,7 @@ export function useMergedProjectPrompts(projectId: string) {
   return useQuery({
     queryKey: mergedProjectPromptsQueryKey(projectId),
     queryFn: async (): Promise<AgentPrompt[]> => {
-      const response = await AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId({
+      const response = await AgentPrompts.getApiAgentPromptsProjectByProjectId({
         path: { projectId },
       })
       if (response.error) {
