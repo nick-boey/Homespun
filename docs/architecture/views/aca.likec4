@@ -1,0 +1,46 @@
+views {
+
+  view acaContainerDiagram of homespun {
+    title 'Homespun - Container Diagram (ACA Target State)'
+    description 'Container diagram showing Azure Container Apps services and Azure integrations'
+
+    include
+      *,
+      developer,
+      github,
+      claude_api,
+      entra_id,
+      azure_files,
+      azure_container_registry
+  }
+
+  view acaServerComponents of homespun.server {
+    title 'Homespun Server - Components (ACA Target State)'
+    description 'Server components including ACA-specific execution, authentication, and storage'
+
+    include
+      *,
+      homespun.web,
+      homespun.worker,
+      homespun.data_volume,
+      homespun.fleece_store,
+      entra_id,
+      azure_files,
+      azure_container_registry
+  }
+
+  deployment view acaDeploymentView {
+    title 'Homespun - Deployment (Azure Container Apps)'
+    description 'ACA deployment topology with managed Azure services'
+
+    include production_aca.**
+  }
+
+  deployment view deploymentComparisonView {
+    title 'Homespun - Deployment Comparison (VM vs ACA)'
+    description 'Side-by-side comparison of Azure VM and ACA deployment topologies'
+
+    include production.**, production_aca.**
+  }
+
+}

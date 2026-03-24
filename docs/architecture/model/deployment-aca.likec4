@@ -1,0 +1,51 @@
+deployment {
+
+  environment production_aca 'Production (ACA)' {
+
+    cloudPlatform azure_subscription 'Azure Subscription' {
+      description 'Azure subscription hosting all ACA resources'
+
+      cloudService entra_tenant 'Microsoft Entra ID Tenant' {
+        description 'OIDC identity provider'
+        instanceOf entra_id
+      }
+
+      cloudService acr 'Azure Container Registry' {
+        description 'Private container image registry'
+        instanceOf azure_container_registry
+      }
+
+      cloudService aca_environment 'ACA Environment' {
+        description 'Shared Azure Container Apps environment'
+
+        containerApp server_app 'Server Container App' {
+          description 'ASP.NET backend running as a container app'
+          instanceOf homespun.server
+        }
+
+        containerApp worker_app 'Worker Container App' {
+          description 'TypeScript worker with revision-based scaling'
+          instanceOf homespun.worker
+        }
+      }
+
+      cloudService static_web_app 'Static Web Apps' {
+        description 'Managed hosting for React SPA'
+        instanceOf homespun.web
+      }
+
+      cloudService azure_files_share 'Azure Files Share' {
+        description 'SMB file share for persistent data and issue tracking'
+        instanceOf homespun.data_volume
+        instanceOf homespun.fleece_store
+      }
+
+      cloudService log_analytics_workspace 'Log Analytics Workspace' {
+        description 'Centralized log aggregation and querying'
+        instanceOf log_analytics
+      }
+    }
+
+  }
+
+}
