@@ -558,3 +558,7 @@ terraform.rc
 
 # Docker Compose environment files
 .env.compose
+
+# LikeC4 build output
+docs/architecture/dist/
+docs/architecture/images/

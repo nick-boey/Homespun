@@ -1,0 +1,28 @@
+model {
+
+  developer = actor 'Developer' {
+    description 'Developer using the Homespun web UI'
+  }
+
+  github = external 'GitHub API' {
+    description 'GitHub REST and GraphQL APIs'
+  }
+
+  claude_api = external 'Claude / Anthropic API' {
+    description 'Claude Code CLI and Anthropic API'
+  }
+
+  docker_engine = external 'Docker Engine' {
+    description 'Docker Engine via socket (DooD pattern)'
+  }
+
+  homespun = system 'Homespun' {
+    description 'Development feature management and AI agent orchestration platform'
+  }
+
+  developer -> homespun 'Uses web UI'
+  homespun -> github 'Syncs PRs, creates branches'
+  homespun -> claude_api 'Runs AI agents'
+  homespun -> docker_engine 'Spawns worker containers'
+
+}

@@ -1,5 +1,11 @@
 {
+  "scripts": {
+    "likec4:dev": "likec4 serve -w docs/architecture",
+    "likec4:build": "likec4 build -o docs/architecture/dist docs/architecture",
+    "likec4:export": "likec4 export png -o docs/architecture/images docs/architecture"
+  },
   "devDependencies": {
-    "jest-canvas-mock": "^2.5.2"
+    "jest-canvas-mock": "^2.5.2",
+    "likec4": "^1.53.0"
   }
 }

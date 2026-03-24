@@ -1,0 +1,66 @@
+specification {
+
+  element actor {
+    style {
+      shape person
+      color green
+    }
+  }
+
+  element system {
+    style {
+      color indigo
+    }
+  }
+
+  element container {
+    style {
+      color blue
+    }
+  }
+
+  element component {
+    style {
+      color sky
+    }
+  }
+
+  element database {
+    style {
+      shape storage
+      color slate
+    }
+  }
+
+  element external {
+    style {
+      color gray
+    }
+  }
+
+  element queue {
+    style {
+      shape queue
+      color amber
+    }
+  }
+
+  relationship async {
+    line dashed
+  }
+
+  relationship sync {
+    line solid
+  }
+
+  relationship signalr {
+    line dotted
+    color green
+  }
+
+  deploymentNode environment
+  deploymentNode vm
+  deploymentNode orchestrator
+  deploymentNode stack
+
+}
