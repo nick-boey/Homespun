@@ -816,7 +816,7 @@ public class MockFleeceService : IFleeceService
         // Graph methods are now part of IIssueService in Fleece.Core v1.4.0
         var mockIssueService = new MockIssueServiceAdapter(includedIssues);
 
-        return mockIssueService.BuildTaskGraphLayoutAsync(false, null, ct);
+        return mockIssueService.BuildTaskGraphLayoutAsync(cancellationToken: ct);
     }
 
     private string GenerateIssueId(IssueType type)
@@ -872,9 +872,8 @@ internal class MockIssueServiceAdapter : IIssueService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
-        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
-        => _innerService.FilterAsync(status, type, priority, assignedTo, tags, linkedPr, includeTerminal, keyedTags, cancellationToken);
+        => _innerService.FilterAsync(status, type, priority, assignedTo, tags, linkedPr, includeTerminal, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> SearchAsync(string searchTerm, CancellationToken cancellationToken = default)
         => _innerService.SearchAsync(searchTerm, cancellationToken);
@@ -923,17 +922,17 @@ internal class MockIssueServiceAdapter : IIssueService
     public Task<IssueGraph> BuildGraphAsync(CancellationToken cancellationToken = default)
         => _innerService.BuildGraphAsync(cancellationToken);
 
-    public Task<IssueGraph> QueryGraphAsync(GraphQuery query, CancellationToken cancellationToken = default)
-        => _innerService.QueryGraphAsync(query, cancellationToken);
+    public Task<IssueGraph> QueryGraphAsync(GraphQuery query, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
+        => _innerService.QueryGraphAsync(query, sortConfig, cancellationToken);
 
-    public Task<IReadOnlyList<Issue>> GetNextIssuesAsync(string? parentId = null, CancellationToken cancellationToken = default)
-        => _innerService.GetNextIssuesAsync(parentId, cancellationToken);
+    public Task<IReadOnlyList<Issue>> GetNextIssuesAsync(string? parentId = null, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
+        => _innerService.GetNextIssuesAsync(parentId, sortConfig, cancellationToken);
 
-    public Task<TaskGraph> BuildTaskGraphLayoutAsync(bool showCompleted = false, string? parentId = null, CancellationToken cancellationToken = default)
-        => _innerService.BuildTaskGraphLayoutAsync(showCompleted, parentId, cancellationToken);
+    public Task<TaskGraph> BuildTaskGraphLayoutAsync(InactiveVisibility inactiveVisibility = InactiveVisibility.Hide, string? assignedTo = null, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
+        => _innerService.BuildTaskGraphLayoutAsync(inactiveVisibility, assignedTo, sortConfig, cancellationToken);
 
-    public Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(IReadOnlySet<string> issueIds, CancellationToken cancellationToken = default)
-        => _innerService.BuildFilteredTaskGraphLayoutAsync(issueIds, cancellationToken);
+    public Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(IReadOnlySet<string> issueIds, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
+        => _innerService.BuildFilteredTaskGraphLayoutAsync(issueIds, sortConfig, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(string issueId, bool ancestors = true, bool descendants = true, CancellationToken cancellationToken = default)
         => _innerService.GetIssueHierarchyAsync(issueId, ancestors, descendants, cancellationToken);

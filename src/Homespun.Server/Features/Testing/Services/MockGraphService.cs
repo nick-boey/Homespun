@@ -155,7 +155,7 @@ public class MockGraphService : IGraphService
 
         // Use Fleece.Core's IssueGraphService for correct ordering (v1.4.0 consolidation)
         var mockIssueService = new MockIssueServiceAdapter(openIssues);
-        return await mockIssueService.BuildTaskGraphLayoutAsync();
+        return await mockIssueService.BuildTaskGraphLayoutAsync(cancellationToken: default);
     }
 
     public async Task<string?> BuildTaskGraphTextAsync(string projectId)

@@ -1012,7 +1012,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             _gitConfigService,
             _tagService);
 
-        var taskGraph = await issueService.BuildTaskGraphLayoutAsync(false, null, ct);
+        var taskGraph = await issueService.BuildTaskGraphLayoutAsync(cancellationToken: ct);
 
         _logger.LogDebug(
             "Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",

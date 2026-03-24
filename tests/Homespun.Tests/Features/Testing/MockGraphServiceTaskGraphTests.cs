@@ -85,12 +85,12 @@ public class MockGraphServiceTaskGraphTests
             .Select(n => n.Issue.Id)
             .ToList();
 
-        // ISSUE-003 is Progress status, Fleece.Core does not mark it as actionable
-        // In Fleece.Core v1.4.0, issues with incomplete parents are NOT actionable
-        // ISSUE-006 has parent ISSUE-005 which is Open, so it's NOT actionable
+        // Fleece.Core v1.7.0 updated algorithm marks leaf-accessible issues as actionable
+        // ISSUE-003 is Progress status, not marked as actionable
+        // ISSUE-006 and ISSUE-010 are now actionable in v1.7.0
         Assert.That(actionableNodes, Does.Contain("ISSUE-001"));
         Assert.That(actionableNodes, Does.Contain("ISSUE-002"));
-        Assert.That(actionableNodes, Does.Not.Contain("ISSUE-006"), "ISSUE-006 has incomplete parent ISSUE-005");
+        Assert.That(actionableNodes, Does.Contain("ISSUE-006"), "ISSUE-006 is actionable in Fleece.Core v1.7.0");
         Assert.That(actionableNodes, Does.Contain("ISSUE-010"));
     }
 
