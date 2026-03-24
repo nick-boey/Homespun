@@ -1,6 +1,7 @@
 // Components
 export { WorkflowList } from './components/workflow-list'
 export { WorkflowDetail } from './components/workflow-detail'
+export { WorkflowMermaidChart } from './components/workflow-mermaid-chart'
 
 // Hooks
 export {
