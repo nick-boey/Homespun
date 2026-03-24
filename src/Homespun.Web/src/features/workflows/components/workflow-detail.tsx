@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useWorkflow, useWorkflowExecutions, useUpdateWorkflow } from '../hooks/use-workflows'
 import { WorkflowEditor } from './workflow-editor'
 import { WorkflowTriggerCard } from './workflow-trigger-card'
+import { WorkflowSettingsCard } from './workflow-settings-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { ExecutionSummary } from '@/api/generated/types.gen'
+import type { ExecutionSummary, UpdateWorkflowRequest } from '@/api/generated/types.gen'
 
 interface WorkflowDetailProps {
   projectId: string
@@ -96,12 +97,19 @@ function ExecutionRow({
 
 export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
   const { workflow, isLoading, isError, refetch } = useWorkflow(workflowId)
-  const updateWorkflow = useUpdateWorkflow(projectId)
+  const updateMutation = useUpdateWorkflow(projectId)
   const {
     executions,
     isLoading: executionsLoading,
     refetch: refetchExecutions,
   } = useWorkflowExecutions(workflowId, projectId)
+
+  function handleSettingsSave(updates: Partial<UpdateWorkflowRequest>) {
+    updateMutation.mutate({
+      workflowId,
+      request: { projectId, ...updates },
+    })
+  }
 
   if (isLoading) {
     return (
@@ -159,6 +167,13 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
         )}
       </div>
 
+      <WorkflowSettingsCard
+        workflow={workflow}
+        projectId={projectId}
+        onSave={handleSettingsSave}
+        isSaving={updateMutation.isPending}
+      />
+
       <Tabs defaultValue="editor">
         <TabsList>
           <TabsTrigger value="editor">Editor</TabsTrigger>
@@ -183,7 +198,7 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
           <WorkflowTriggerCard
             trigger={workflow.trigger}
             onChange={(trigger) =>
-              updateWorkflow.mutate({
+              updateMutation.mutate({
                 workflowId,
                 request: { projectId, trigger },
               })
