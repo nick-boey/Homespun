@@ -126,8 +126,8 @@ export const KonvaHtmlRow = memo(function KonvaHtmlRow({
       data-issue-id={line.issueId}
       className={cn(
         'group flex cursor-pointer items-center gap-2 transition-colors',
-        'hover:bg-muted/50',
-        isSelected && 'bg-muted',
+        'hover:ring-border hover:ring-1',
+        isSelected && 'ring-primary ring-1',
         hasSearchMatch && 'ring-2 ring-yellow-400',
         isMoveSource && 'ring-primary opacity-70 ring-2',
         isMoveOperationActive && !isMoveSource && 'hover:ring-primary hover:ring-2'
