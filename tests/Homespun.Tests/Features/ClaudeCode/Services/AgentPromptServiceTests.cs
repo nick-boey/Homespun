@@ -868,7 +868,7 @@ public class AgentPromptServiceTests
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(definitions, Has.Count.EqualTo(11));
+            Assert.That(definitions, Has.Count.EqualTo(13));
             Assert.That(definitions.Any(d => d.Name == "Plan" && d.Mode == "plan"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "Build" && d.Mode == "build"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "Rebase"), Is.True);
@@ -880,6 +880,8 @@ public class AgentPromptServiceTests
             Assert.That(definitions.Any(d => d.Name == "Review PR comments"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "IssueAgentSystem" && d.SessionType == "issueAgentSystem"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "IssueAgentModification" && d.SessionType == "issueAgentModification"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Verify" && d.Category == "IssueAgent" && d.Mode == "build"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Expand feature" && d.Category == "IssueAgent" && d.Mode == "plan"), Is.True);
         });
     }
 
@@ -889,11 +891,11 @@ public class AgentPromptServiceTests
         // Act
         await _service.EnsureDefaultPromptsAsync();
 
-        // Assert - verify all 11 prompts were created
+        // Assert - verify all 13 prompts were created
         var allPrompts = _dataStore.AgentPrompts;
         Assert.Multiple(() =>
         {
-            Assert.That(allPrompts, Has.Count.EqualTo(11));
+            Assert.That(allPrompts, Has.Count.EqualTo(13));
             Assert.That(allPrompts.Any(p => p.Name == "Rebase, Test and Merge" && p.Mode == SessionMode.Build), Is.True);
             Assert.That(allPrompts.Any(p => p.Name == "Create a PR" && p.Mode == SessionMode.Build), Is.True);
             Assert.That(allPrompts.Any(p => p.Name == "Fix tests" && p.Mode == SessionMode.Build), Is.True);
@@ -988,13 +990,15 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetIssueAgentUserPrompts();
 
-        // Assert - should include only IssueModify (IssueAgent category, no SessionType)
+        // Assert - should include IssueModify, Verify, and Expand feature (IssueAgent category, no SessionType)
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(1));
-            Assert.That(prompts[0].Name, Is.EqualTo("IssueModify"));
-            Assert.That(prompts[0].Category, Is.EqualTo(PromptCategory.IssueAgent));
-            Assert.That(prompts[0].SessionType, Is.Null);
+            Assert.That(prompts, Has.Count.EqualTo(3));
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Verify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Expand feature"), Is.True);
+            Assert.That(prompts.All(p => p.Category == PromptCategory.IssueAgent), Is.True);
+            Assert.That(prompts.All(p => p.SessionType == null), Is.True);
         });
     }
 
@@ -1020,14 +1024,16 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetIssueAgentPromptsForProject(projectId);
 
-        // Assert - should include the project override, not the global
+        // Assert - should include the project override plus non-overridden global prompts
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(1));
+            Assert.That(prompts, Has.Count.EqualTo(3));
             var issueModify = prompts.First(p => p.Name == "IssueModify");
             Assert.That(issueModify.ProjectId, Is.EqualTo(projectId));
             Assert.That(issueModify.IsOverride, Is.True);
             Assert.That(issueModify.InitialMessage, Is.EqualTo("Custom project issue modify message"));
+            Assert.That(prompts.Any(p => p.Name == "Verify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Expand feature"), Is.True);
         });
     }
 
@@ -1040,13 +1046,15 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetIssueAgentPromptsForProject("test-project");
 
-        // Assert - should include the global IssueModify prompt
+        // Assert - should include the global IssueAgent prompts
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(1));
-            Assert.That(prompts[0].Name, Is.EqualTo("IssueModify"));
-            Assert.That(prompts[0].ProjectId, Is.Null);
-            Assert.That(prompts[0].IsOverride, Is.False);
+            Assert.That(prompts, Has.Count.EqualTo(3));
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Verify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Expand feature"), Is.True);
+            Assert.That(prompts.All(p => p.ProjectId == null), Is.True);
+            Assert.That(prompts.All(p => p.IsOverride == false), Is.True);
         });
     }
 

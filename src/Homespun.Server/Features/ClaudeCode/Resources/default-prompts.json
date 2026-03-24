@@ -56,5 +56,17 @@
     "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nUser request: {{userPrompt}}",
     "mode": "build",
     "sessionType": "issueAgentModification"
+  },
+  {
+    "name": "Verify",
+    "initialMessage": "Verify that all of the work described in this task and in the child tasks are complete. If they are, mark this issue as complete. If not, add additional child issues to this one to complete the remaining work.",
+    "mode": "build",
+    "category": "IssueAgent"
+  },
+  {
+    "name": "Expand feature",
+    "initialMessage": "Review the issue description and the descriptions of it's sub-issues (if it has any). Put together a plan to expand this issue into a full implementation plan in sub-issues (as required). Ask any clarifying questions you may have before finalising the plan. Alter this issue's description to make it a specification of the completed feature.",
+    "mode": "plan",
+    "category": "IssueAgent"
   }
 ]
