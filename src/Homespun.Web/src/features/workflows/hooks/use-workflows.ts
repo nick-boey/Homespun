@@ -9,7 +9,8 @@ import { useTelemetry } from '@/hooks/use-telemetry'
 
 export const workflowsQueryKey = (projectId: string) => ['workflows', projectId] as const
 
-export const workflowQueryKey = (workflowId: string) => ['workflow', workflowId] as const
+export const workflowQueryKey = (workflowId: string, projectId: string) =>
+  ['workflow', workflowId, projectId] as const
 
 export const workflowExecutionsQueryKey = (workflowId: string) =>
   ['workflow-executions', workflowId] as const
@@ -40,19 +41,20 @@ export function useWorkflows(projectId: string) {
   }
 }
 
-export function useWorkflow(workflowId: string) {
+export function useWorkflow(workflowId: string, projectId: string) {
   const query = useQuery({
-    queryKey: workflowQueryKey(workflowId),
+    queryKey: workflowQueryKey(workflowId, projectId),
     queryFn: async () => {
       const response = await Workflows.getApiWorkflowsByWorkflowId({
         path: { workflowId },
+        query: { projectId },
       })
       if (response.error || !response.data) {
         throw new Error('Workflow not found')
       }
       return response.data
     },
-    enabled: !!workflowId,
+    enabled: !!workflowId && !!projectId,
   })
 
   return {
@@ -134,7 +136,7 @@ export function useToggleWorkflowEnabled(projectId: string) {
     },
     onSuccess: (_data, { workflowId }) => {
       telemetry.trackEvent('workflow_toggled', { workflowId })
-      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId) })
+      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId, projectId) })
       queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
     },
     onError: (error: Error, { workflowId }) => {
@@ -169,7 +171,7 @@ export function useUpdateWorkflow(projectId: string) {
     },
     onSuccess: (_data, { workflowId }) => {
       telemetry.trackEvent('workflow_updated', { workflowId })
-      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId) })
+      queryClient.invalidateQueries({ queryKey: workflowQueryKey(workflowId, projectId) })
       queryClient.invalidateQueries({ queryKey: workflowsQueryKey(projectId) })
     },
     onError: (error: Error, { workflowId }) => {
