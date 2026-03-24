@@ -20,6 +20,7 @@ import { Route as ProjectsNewRouteImport } from './routes/projects.new'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as SessionsSessionIdIssueDiffRouteImport } from './routes/sessions.$sessionId.issue-diff'
+import { Route as ProjectsProjectIdWorkflowsRouteImport } from './routes/projects.$projectId.workflows'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdSecretsRouteImport } from './routes/projects.$projectId.secrets'
 import { Route as ProjectsProjectIdPullRequestsRouteImport } from './routes/projects.$projectId.pull-requests'
@@ -27,8 +28,11 @@ import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.
 import { Route as ProjectsProjectIdIssuesRouteImport } from './routes/projects.$projectId.issues'
 import { Route as ProjectsProjectIdClonesRouteImport } from './routes/projects.$projectId.clones'
 import { Route as ProjectsProjectIdBranchesRouteImport } from './routes/projects.$projectId.branches'
+import { Route as ProjectsProjectIdWorkflowsIndexRouteImport } from './routes/projects.$projectId.workflows.index'
 import { Route as ProjectsProjectIdIssuesIndexRouteImport } from './routes/projects.$projectId.issues.index'
+import { Route as ProjectsProjectIdWorkflowsWorkflowIdRouteImport } from './routes/projects.$projectId.workflows.$workflowId'
 import { Route as ProjectsProjectIdIssuesIssueIdEditRouteImport } from './routes/projects.$projectId.issues.$issueId.edit'
+import { Route as ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRouteImport } from './routes/projects.$projectId.workflows.$workflowId.executions.$executionId'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -86,6 +90,12 @@ const SessionsSessionIdIssueDiffRoute =
     path: '/issue-diff',
     getParentRoute: () => SessionsSessionIdRoute,
   } as any)
+const ProjectsProjectIdWorkflowsRoute =
+  ProjectsProjectIdWorkflowsRouteImport.update({
+    id: '/workflows',
+    path: '/workflows',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -126,17 +136,35 @@ const ProjectsProjectIdBranchesRoute =
     path: '/branches',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdWorkflowsIndexRoute =
+  ProjectsProjectIdWorkflowsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProjectsProjectIdWorkflowsRoute,
+  } as any)
 const ProjectsProjectIdIssuesIndexRoute =
   ProjectsProjectIdIssuesIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => ProjectsProjectIdIssuesRoute,
   } as any)
+const ProjectsProjectIdWorkflowsWorkflowIdRoute =
+  ProjectsProjectIdWorkflowsWorkflowIdRouteImport.update({
+    id: '/$workflowId',
+    path: '/$workflowId',
+    getParentRoute: () => ProjectsProjectIdWorkflowsRoute,
+  } as any)
 const ProjectsProjectIdIssuesIssueIdEditRoute =
   ProjectsProjectIdIssuesIssueIdEditRouteImport.update({
     id: '/$issueId/edit',
     path: '/$issueId/edit',
     getParentRoute: () => ProjectsProjectIdIssuesRoute,
+  } as any)
+const ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute =
+  ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRouteImport.update({
+    id: '/executions/$executionId',
+    path: '/executions/$executionId',
+    getParentRoute: () => ProjectsProjectIdWorkflowsWorkflowIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -156,10 +184,14 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/projects/$projectId/workflows': typeof ProjectsProjectIdWorkflowsRouteWithChildren
   '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/workflows/$workflowId': typeof ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren
   '/projects/$projectId/issues/': typeof ProjectsProjectIdIssuesIndexRoute
+  '/projects/$projectId/workflows/': typeof ProjectsProjectIdWorkflowsIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
+  '/projects/$projectId/workflows/$workflowId/executions/$executionId': typeof ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -177,8 +209,11 @@ export interface FileRoutesByTo {
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/workflows/$workflowId': typeof ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesIndexRoute
+  '/projects/$projectId/workflows': typeof ProjectsProjectIdWorkflowsIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
+  '/projects/$projectId/workflows/$workflowId/executions/$executionId': typeof ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -198,10 +233,14 @@ export interface FileRoutesById {
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/projects/$projectId/workflows': typeof ProjectsProjectIdWorkflowsRouteWithChildren
   '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
+  '/projects/$projectId/workflows/$workflowId': typeof ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren
   '/projects/$projectId/issues/': typeof ProjectsProjectIdIssuesIndexRoute
+  '/projects/$projectId/workflows/': typeof ProjectsProjectIdWorkflowsIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
+  '/projects/$projectId/workflows/$workflowId/executions/$executionId': typeof ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -222,10 +261,14 @@ export interface FileRouteTypes {
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/workflows'
     | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId/'
+    | '/projects/$projectId/workflows/$workflowId'
     | '/projects/$projectId/issues/'
+    | '/projects/$projectId/workflows/'
     | '/projects/$projectId/issues/$issueId/edit'
+    | '/projects/$projectId/workflows/$workflowId/executions/$executionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,8 +286,11 @@ export interface FileRouteTypes {
     | '/projects/$projectId/settings'
     | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId'
+    | '/projects/$projectId/workflows/$workflowId'
     | '/projects/$projectId/issues'
+    | '/projects/$projectId/workflows'
     | '/projects/$projectId/issues/$issueId/edit'
+    | '/projects/$projectId/workflows/$workflowId/executions/$executionId'
   id:
     | '__root__'
     | '/'
@@ -263,10 +309,14 @@ export interface FileRouteTypes {
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
+    | '/projects/$projectId/workflows'
     | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId/'
+    | '/projects/$projectId/workflows/$workflowId'
     | '/projects/$projectId/issues/'
+    | '/projects/$projectId/workflows/'
     | '/projects/$projectId/issues/$issueId/edit'
+    | '/projects/$projectId/workflows/$workflowId/executions/$executionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -358,6 +408,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SessionsSessionIdIssueDiffRouteImport
       parentRoute: typeof SessionsSessionIdRoute
     }
+    '/projects/$projectId/workflows': {
+      id: '/projects/$projectId/workflows'
+      path: '/workflows'
+      fullPath: '/projects/$projectId/workflows'
+      preLoaderRoute: typeof ProjectsProjectIdWorkflowsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
       path: '/settings'
@@ -407,6 +464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdBranchesRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/workflows/': {
+      id: '/projects/$projectId/workflows/'
+      path: '/'
+      fullPath: '/projects/$projectId/workflows/'
+      preLoaderRoute: typeof ProjectsProjectIdWorkflowsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdWorkflowsRoute
+    }
     '/projects/$projectId/issues/': {
       id: '/projects/$projectId/issues/'
       path: '/'
@@ -414,12 +478,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIssuesIndexRouteImport
       parentRoute: typeof ProjectsProjectIdIssuesRoute
     }
+    '/projects/$projectId/workflows/$workflowId': {
+      id: '/projects/$projectId/workflows/$workflowId'
+      path: '/$workflowId'
+      fullPath: '/projects/$projectId/workflows/$workflowId'
+      preLoaderRoute: typeof ProjectsProjectIdWorkflowsWorkflowIdRouteImport
+      parentRoute: typeof ProjectsProjectIdWorkflowsRoute
+    }
     '/projects/$projectId/issues/$issueId/edit': {
       id: '/projects/$projectId/issues/$issueId/edit'
       path: '/$issueId/edit'
       fullPath: '/projects/$projectId/issues/$issueId/edit'
       preLoaderRoute: typeof ProjectsProjectIdIssuesIssueIdEditRouteImport
       parentRoute: typeof ProjectsProjectIdIssuesRoute
+    }
+    '/projects/$projectId/workflows/$workflowId/executions/$executionId': {
+      id: '/projects/$projectId/workflows/$workflowId/executions/$executionId'
+      path: '/executions/$executionId'
+      fullPath: '/projects/$projectId/workflows/$workflowId/executions/$executionId'
+      preLoaderRoute: typeof ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRouteImport
+      parentRoute: typeof ProjectsProjectIdWorkflowsWorkflowIdRoute
     }
   }
 }
@@ -466,6 +544,38 @@ const ProjectsProjectIdIssuesRouteWithChildren =
     ProjectsProjectIdIssuesRouteChildren,
   )
 
+interface ProjectsProjectIdWorkflowsWorkflowIdRouteChildren {
+  ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute: typeof ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute
+}
+
+const ProjectsProjectIdWorkflowsWorkflowIdRouteChildren: ProjectsProjectIdWorkflowsWorkflowIdRouteChildren =
+  {
+    ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute:
+      ProjectsProjectIdWorkflowsWorkflowIdExecutionsExecutionIdRoute,
+  }
+
+const ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren =
+  ProjectsProjectIdWorkflowsWorkflowIdRoute._addFileChildren(
+    ProjectsProjectIdWorkflowsWorkflowIdRouteChildren,
+  )
+
+interface ProjectsProjectIdWorkflowsRouteChildren {
+  ProjectsProjectIdWorkflowsWorkflowIdRoute: typeof ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren
+  ProjectsProjectIdWorkflowsIndexRoute: typeof ProjectsProjectIdWorkflowsIndexRoute
+}
+
+const ProjectsProjectIdWorkflowsRouteChildren: ProjectsProjectIdWorkflowsRouteChildren =
+  {
+    ProjectsProjectIdWorkflowsWorkflowIdRoute:
+      ProjectsProjectIdWorkflowsWorkflowIdRouteWithChildren,
+    ProjectsProjectIdWorkflowsIndexRoute: ProjectsProjectIdWorkflowsIndexRoute,
+  }
+
+const ProjectsProjectIdWorkflowsRouteWithChildren =
+  ProjectsProjectIdWorkflowsRoute._addFileChildren(
+    ProjectsProjectIdWorkflowsRouteChildren,
+  )
+
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdBranchesRoute: typeof ProjectsProjectIdBranchesRoute
   ProjectsProjectIdClonesRoute: typeof ProjectsProjectIdClonesRoute
@@ -474,6 +584,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdPullRequestsRoute: typeof ProjectsProjectIdPullRequestsRoute
   ProjectsProjectIdSecretsRoute: typeof ProjectsProjectIdSecretsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
+  ProjectsProjectIdWorkflowsRoute: typeof ProjectsProjectIdWorkflowsRouteWithChildren
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
 }
 
@@ -485,6 +596,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdPullRequestsRoute: ProjectsProjectIdPullRequestsRoute,
   ProjectsProjectIdSecretsRoute: ProjectsProjectIdSecretsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
+  ProjectsProjectIdWorkflowsRoute: ProjectsProjectIdWorkflowsRouteWithChildren,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
 }
 

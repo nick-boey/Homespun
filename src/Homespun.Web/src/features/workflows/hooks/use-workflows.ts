@@ -129,7 +129,7 @@ export function useExecuteWorkflow() {
     onSuccess: (data, workflowId) => {
       telemetry.trackEvent('workflow_executed', {
         workflowId,
-        executionId: data.executionId,
+        executionId: data.executionId ?? '',
       })
       queryClient.invalidateQueries({ queryKey: workflowExecutionsQueryKey(workflowId) })
       queryClient.invalidateQueries({ queryKey: workflowsQueryKey('') })
