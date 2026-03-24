@@ -9,6 +9,7 @@ import {
   useDeleteWorkflow,
   useExecuteWorkflow,
   useCreateWorkflow,
+  useToggleWorkflowEnabled,
   useWorkflowTemplates,
   useCreateFromTemplate,
 } from './use-workflows'
@@ -27,6 +28,7 @@ vi.mock('@/api', () => ({
     getApiWorkflowsByWorkflowIdExecutions: vi.fn(),
     deleteApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflowsByWorkflowIdExecute: vi.fn(),
+    putApiWorkflowsByWorkflowId: vi.fn(),
     postApiWorkflows: vi.fn(),
   },
   WorkflowTemplate: {
@@ -317,6 +319,67 @@ const mockTemplates: WorkflowTemplateSummary[] = [
   { id: 'tpl-1', title: 'CI Pipeline', description: 'Basic CI', stepCount: 3 },
   { id: 'tpl-2', title: 'Deploy', description: 'Deploy to prod', stepCount: 5 },
 ]
+
+describe('useToggleWorkflowEnabled', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('calls update API with enabled: true to enable a workflow', async () => {
+    const mock = Workflows.putApiWorkflowsByWorkflowId as Mock
+    mock.mockResolvedValueOnce({ data: { ...mockWorkflowDefinition, enabled: true } })
+
+    const { result } = renderHook(() => useToggleWorkflowEnabled('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({ workflowId: 'wf-1', enabled: true })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mock).toHaveBeenCalledWith({
+      path: { workflowId: 'wf-1' },
+      body: { projectId: 'proj-1', enabled: true },
+    })
+  })
+
+  it('calls update API with enabled: false to disable a workflow', async () => {
+    const mock = Workflows.putApiWorkflowsByWorkflowId as Mock
+    mock.mockResolvedValueOnce({ data: { ...mockWorkflowDefinition, enabled: false } })
+
+    const { result } = renderHook(() => useToggleWorkflowEnabled('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({ workflowId: 'wf-1', enabled: false })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mock).toHaveBeenCalledWith({
+      path: { workflowId: 'wf-1' },
+      body: { projectId: 'proj-1', enabled: false },
+    })
+  })
+
+  it('handles toggle error', async () => {
+    const mock = Workflows.putApiWorkflowsByWorkflowId as Mock
+    mock.mockResolvedValueOnce({ error: { detail: 'Server error' } })
+
+    const { result } = renderHook(() => useToggleWorkflowEnabled('proj-1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({ workflowId: 'wf-1', enabled: true })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+  })
+})
 
 describe('useCreateWorkflow', () => {
   beforeEach(() => {

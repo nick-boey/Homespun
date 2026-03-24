@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Play, Trash2, Pencil, MoreHorizontal, Plus } from 'lucide-react'
-import { useWorkflows, useDeleteWorkflow, useExecuteWorkflow } from '../hooks/use-workflows'
+import { Play, Trash2, Pencil, MoreHorizontal, Plus, Power } from 'lucide-react'
+import {
+  useWorkflows,
+  useDeleteWorkflow,
+  useExecuteWorkflow,
+  useToggleWorkflowEnabled,
+} from '../hooks/use-workflows'
 import { CreateWorkflowDialog } from './create-workflow-dialog'
 import { ErrorFallback } from '@/components/error-boundary'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +72,7 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
   const { workflows, isLoading, isError, error, refetch, isFetching } = useWorkflows(projectId)
   const deleteWorkflow = useDeleteWorkflow(projectId)
   const executeWorkflow = useExecuteWorkflow()
+  const toggleWorkflow = useToggleWorkflowEnabled(projectId)
   const [deleteTarget, setDeleteTarget] = useState<WorkflowSummary | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -203,6 +209,17 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
                     <DropdownMenuItem onClick={() => handleExecute(workflow.id!)}>
                       <Play className="mr-2 h-4 w-4" />
                       Run
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        toggleWorkflow.mutate({
+                          workflowId: workflow.id!,
+                          enabled: !workflow.enabled,
+                        })
+                      }
+                    >
+                      <Power className="mr-2 h-4 w-4" />
+                      {workflow.enabled ? 'Disable' : 'Enable'}
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link

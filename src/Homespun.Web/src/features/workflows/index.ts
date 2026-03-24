@@ -16,6 +16,7 @@ export {
   useWorkflow,
   useWorkflowExecutions,
   useDeleteWorkflow,
+  useToggleWorkflowEnabled,
   useUpdateWorkflow,
   useExecuteWorkflow,
   useCreateWorkflow,
