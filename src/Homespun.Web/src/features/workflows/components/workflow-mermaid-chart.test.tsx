@@ -13,9 +13,7 @@ vi.mock('mermaid', () => ({
   },
 }))
 
-function makeStep(
-  overrides: Partial<WorkflowStep> & { id: string; name: string }
-): WorkflowStep {
+function makeStep(overrides: Partial<WorkflowStep> & { id: string; name: string }): WorkflowStep {
   return { stepType: 'serverAction', ...overrides }
 }
 

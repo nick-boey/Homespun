@@ -1,8 +1,4 @@
-import type {
-  WorkflowStep,
-  StepExecution,
-  StepExecutionStatus,
-} from '@/api/generated/types.gen'
+import type { WorkflowStep, StepExecution, StepExecutionStatus } from '@/api/generated/types.gen'
 
 export interface MermaidGenerationOptions {
   steps: WorkflowStep[]

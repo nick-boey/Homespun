@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { generateMermaidSyntax } from './generate-mermaid'
 import type { WorkflowStep, StepExecution } from '@/api/generated/types.gen'
 
-function makeStep(
-  overrides: Partial<WorkflowStep> & { id: string; name: string }
-): WorkflowStep {
+function makeStep(overrides: Partial<WorkflowStep> & { id: string; name: string }): WorkflowStep {
   return { stepType: 'serverAction', ...overrides }
 }
 
