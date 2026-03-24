@@ -901,5 +901,375 @@ public class FleeceServiceTests
             Is.Not.EqualTo(updatedChild2!.ParentIssues[0].SortOrder));
     }
 
+    #region Complex Hierarchy MoveSeriesSiblingAsync Tests
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_ThreeSiblings_MovesMiddleCorrectly()
+    {
+        // Arrange - parent with A(0), B(1), C(2)
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+
+        // Act - move B up -> B, A, C
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var c = await _service.GetIssueAsync(_tempDir, childC.Id);
+
+        var orderA = a!.ParentIssues[0].SortOrder;
+        var orderB = b!.ParentIssues[0].SortOrder;
+        var orderC = c!.ParentIssues[0].SortOrder;
+
+        Assert.That(string.Compare(orderB, orderA, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected B ({orderB}) < A ({orderA})");
+        Assert.That(string.Compare(orderA, orderC, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected A ({orderA}) < C ({orderC})");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Down_ThreeSiblings_MovesMiddleCorrectly()
+    {
+        // Arrange - parent with A(0), B(1), C(2)
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+
+        // Act - move B down -> A, C, B
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Down);
+
+        // Assert
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var c = await _service.GetIssueAsync(_tempDir, childC.Id);
+
+        var orderA = a!.ParentIssues[0].SortOrder;
+        var orderB = b!.ParentIssues[0].SortOrder;
+        var orderC = c!.ParentIssues[0].SortOrder;
+
+        Assert.That(string.Compare(orderA, orderC, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected A ({orderA}) < C ({orderC})");
+        Assert.That(string.Compare(orderC, orderB, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected C ({orderC}) < B ({orderB})");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_FiveSiblings_MoveFromMiddleUpTwice()
+    {
+        // Arrange - 5 children: A(0), B(1), C(2), D(3), E(4)
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var children = new List<Issue>();
+        for (var i = 0; i < 5; i++)
+        {
+            var child = await _service.CreateIssueAsync(_tempDir, $"Child {(char)('A' + i)}", IssueType.Task);
+            await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: i.ToString());
+            children.Add(child);
+        }
+
+        // Act - move C (index 2) up twice -> C, A, B, D, E
+        await _service.MoveSeriesSiblingAsync(_tempDir, children[2].Id, MoveDirection.Up);
+        await _service.MoveSeriesSiblingAsync(_tempDir, children[2].Id, MoveDirection.Up);
+
+        // Assert - C should be first
+        var orders = new List<(string Id, string? Order)>();
+        foreach (var c in children)
+        {
+            var updated = await _service.GetIssueAsync(_tempDir, c.Id);
+            orders.Add((c.Id, updated!.ParentIssues[0].SortOrder));
+        }
+
+        var sorted = orders.OrderBy(o => o.Order ?? "", StringComparer.Ordinal).ToList();
+        Assert.That(sorted[0].Id, Is.EqualTo(children[2].Id), "C should be first after moving up twice");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_DeeplyNested_WorksAtAnyDepth()
+    {
+        // Arrange - Grandparent -> Parent -> A, B
+        var grandparent = await _service.CreateIssueAsync(_tempDir, "Grandparent", IssueType.Feature);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Task);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+
+        // Act - move B up under parent
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+
+        var orderA = a!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+        var orderB = b!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+
+        Assert.That(string.Compare(orderB, orderA, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected B ({orderB}) < A ({orderA}) after move up");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_GreatGrandchild_WorksAtAnyDepth()
+    {
+        // Arrange - Root -> GP -> Parent -> A, B
+        var root = await _service.CreateIssueAsync(_tempDir, "Root", IssueType.Feature);
+        var gp = await _service.CreateIssueAsync(_tempDir, "Grandparent", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Task);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, gp.Id, root.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+
+        // Act
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+
+        var orderA = a!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+        var orderB = b!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+
+        Assert.That(string.Compare(orderB, orderA, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected B ({orderB}) < A ({orderA}) at great-grandchild depth");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_SwapTargetHasMultipleParents_PreservesOtherRefs()
+    {
+        // Arrange - A has single parent P1, B has parents P1 + P2
+        var p1 = await _service.CreateIssueAsync(_tempDir, "Parent 1", IssueType.Feature);
+        var p2 = await _service.CreateIssueAsync(_tempDir, "Parent 2", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, p1.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, p1.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childB.Id, p2.Id, sortOrder: "5");
+
+        // Record B's sort order under P2 before the move
+        var bBefore = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var p2OrderBefore = bBefore!.ParentIssues.First(p => p.ParentIssue == p2.Id).SortOrder;
+
+        // Act - move A down (swaps with B). A has single parent so this is valid.
+        await _service.MoveSeriesSiblingAsync(_tempDir, childA.Id, MoveDirection.Down);
+
+        // Assert - B's P2 ref should be unchanged
+        var bAfter = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var p2OrderAfter = bAfter!.ParentIssues.First(p => p.ParentIssue == p2.Id).SortOrder;
+
+        Assert.That(p2OrderAfter, Is.EqualTo(p2OrderBefore),
+            "B's sort order under P2 should be unchanged after swapping under P1");
+
+        // Also verify the swap happened under P1
+        var aAfter = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var aP1Order = aAfter!.ParentIssues.First(p => p.ParentIssue == p1.Id).SortOrder;
+        var bP1Order = bAfter!.ParentIssues.First(p => p.ParentIssue == p1.Id).SortOrder;
+
+        Assert.That(string.Compare(bP1Order, aP1Order, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected B ({bP1Order}) < A ({aP1Order}) under P1 after move down");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_SiblingWithChildren_OnlyChangesSelectedIssue()
+    {
+        // Arrange - Parent -> A (has child X, Y), B
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var grandX = await _service.CreateIssueAsync(_tempDir, "Grandchild X", IssueType.Task);
+        var grandY = await _service.CreateIssueAsync(_tempDir, "Grandchild Y", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, grandX.Id, childA.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, grandY.Id, childA.Id, sortOrder: "1");
+
+        // Record grandchildren state before move
+        var xBefore = await _service.GetIssueAsync(_tempDir, grandX.Id);
+        var yBefore = await _service.GetIssueAsync(_tempDir, grandY.Id);
+
+        // Act - move B up
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert - grandchildren X and Y should be completely unchanged
+        var xAfter = await _service.GetIssueAsync(_tempDir, grandX.Id);
+        var yAfter = await _service.GetIssueAsync(_tempDir, grandY.Id);
+
+        Assert.That(xAfter!.ParentIssues[0].ParentIssue, Is.EqualTo(xBefore!.ParentIssues[0].ParentIssue));
+        Assert.That(xAfter.ParentIssues[0].SortOrder, Is.EqualTo(xBefore.ParentIssues[0].SortOrder));
+        Assert.That(yAfter!.ParentIssues[0].ParentIssue, Is.EqualTo(yBefore!.ParentIssues[0].ParentIssue));
+        Assert.That(yAfter.ParentIssues[0].SortOrder, Is.EqualTo(yBefore.ParentIssues[0].SortOrder));
+
+        // Verify the swap happened
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        Assert.That(string.Compare(b!.ParentIssues[0].SortOrder, a!.ParentIssues[0].SortOrder, StringComparison.Ordinal),
+            Is.LessThan(0));
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Down_BothSiblingsHaveChildren_OnlySwapsSortOrders()
+    {
+        // Arrange - Parent -> A (has children), B (has children)
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var grandA1 = await _service.CreateIssueAsync(_tempDir, "Grand A1", IssueType.Task);
+        var grandA2 = await _service.CreateIssueAsync(_tempDir, "Grand A2", IssueType.Task);
+        var grandB1 = await _service.CreateIssueAsync(_tempDir, "Grand B1", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, grandA1.Id, childA.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, grandA2.Id, childA.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, grandB1.Id, childB.Id, sortOrder: "0");
+
+        // Record all grandchildren state before move
+        var ga1Before = await _service.GetIssueAsync(_tempDir, grandA1.Id);
+        var ga2Before = await _service.GetIssueAsync(_tempDir, grandA2.Id);
+        var gb1Before = await _service.GetIssueAsync(_tempDir, grandB1.Id);
+
+        // Act - move A down
+        await _service.MoveSeriesSiblingAsync(_tempDir, childA.Id, MoveDirection.Down);
+
+        // Assert - all grandchildren unchanged
+        var ga1After = await _service.GetIssueAsync(_tempDir, grandA1.Id);
+        var ga2After = await _service.GetIssueAsync(_tempDir, grandA2.Id);
+        var gb1After = await _service.GetIssueAsync(_tempDir, grandB1.Id);
+
+        Assert.That(ga1After!.ParentIssues[0].SortOrder, Is.EqualTo(ga1Before!.ParentIssues[0].SortOrder));
+        Assert.That(ga2After!.ParentIssues[0].SortOrder, Is.EqualTo(ga2Before!.ParentIssues[0].SortOrder));
+        Assert.That(gb1After!.ParentIssues[0].SortOrder, Is.EqualTo(gb1Before!.ParentIssues[0].SortOrder));
+
+        // Verify swap happened
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        Assert.That(string.Compare(a!.ParentIssues[0].SortOrder, b!.ParentIssues[0].SortOrder, StringComparison.Ordinal),
+            Is.GreaterThan(0), "A should now sort after B");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_DeeplyNestedWithChildren_OnlyChangesMovedIssue()
+    {
+        // Arrange - GP -> Parent -> A (has child tree), B (has child tree)
+        var gp = await _service.CreateIssueAsync(_tempDir, "Grandparent", IssueType.Feature);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Task);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var subA = await _service.CreateIssueAsync(_tempDir, "Sub A", IssueType.Task);
+        var subB = await _service.CreateIssueAsync(_tempDir, "Sub B", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, subA.Id, childA.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, subB.Id, childB.Id, sortOrder: "0");
+
+        var subABefore = await _service.GetIssueAsync(_tempDir, subA.Id);
+        var subBBefore = await _service.GetIssueAsync(_tempDir, subB.Id);
+
+        // Act - move B up
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert - subtrees unchanged
+        var subAAfter = await _service.GetIssueAsync(_tempDir, subA.Id);
+        var subBAfter = await _service.GetIssueAsync(_tempDir, subB.Id);
+
+        Assert.That(subAAfter!.ParentIssues[0].ParentIssue, Is.EqualTo(subABefore!.ParentIssues[0].ParentIssue));
+        Assert.That(subAAfter.ParentIssues[0].SortOrder, Is.EqualTo(subABefore.ParentIssues[0].SortOrder));
+        Assert.That(subBAfter!.ParentIssues[0].ParentIssue, Is.EqualTo(subBBefore!.ParentIssues[0].ParentIssue));
+        Assert.That(subBAfter.ParentIssues[0].SortOrder, Is.EqualTo(subBBefore.ParentIssues[0].SortOrder));
+
+        // Verify swap
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var orderA = a!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+        var orderB = b!.ParentIssues.First(p => p.ParentIssue == parent.Id).SortOrder;
+        Assert.That(string.Compare(orderB, orderA, StringComparison.Ordinal), Is.LessThan(0));
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_MultipleConsecutiveMoves_Up()
+    {
+        // Arrange - A, B, C
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+
+        // Act - move C up twice -> C, A, B
+        await _service.MoveSeriesSiblingAsync(_tempDir, childC.Id, MoveDirection.Up);
+        await _service.MoveSeriesSiblingAsync(_tempDir, childC.Id, MoveDirection.Up);
+
+        // Assert - order should be C, A, B
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var c = await _service.GetIssueAsync(_tempDir, childC.Id);
+
+        var orderA = a!.ParentIssues[0].SortOrder;
+        var orderB = b!.ParentIssues[0].SortOrder;
+        var orderC = c!.ParentIssues[0].SortOrder;
+
+        Assert.That(string.Compare(orderC, orderA, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected C ({orderC}) < A ({orderA})");
+        Assert.That(string.Compare(orderA, orderB, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected A ({orderA}) < B ({orderB})");
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_MoveDownThenUp_RoundTrip()
+    {
+        // Arrange - A, B, C
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
+        var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
+        var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+
+        // Act - move B down then up -> should return to original order A, B, C
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Down);
+        await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
+
+        // Assert - order should be A, B, C again
+        var a = await _service.GetIssueAsync(_tempDir, childA.Id);
+        var b = await _service.GetIssueAsync(_tempDir, childB.Id);
+        var c = await _service.GetIssueAsync(_tempDir, childC.Id);
+
+        var orderA = a!.ParentIssues[0].SortOrder;
+        var orderB = b!.ParentIssues[0].SortOrder;
+        var orderC = c!.ParentIssues[0].SortOrder;
+
+        Assert.That(string.Compare(orderA, orderB, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected A ({orderA}) < B ({orderB})");
+        Assert.That(string.Compare(orderB, orderC, StringComparison.Ordinal), Is.LessThan(0),
+            $"Expected B ({orderB}) < C ({orderC})");
+    }
+
+    #endregion
+
     #endregion
 }
