@@ -67,6 +67,9 @@ public class MockDataSeederService : IHostedService
             await SeedAgentPromptsAsync();
             await SeedSessionsAsync(cancellationToken);
 
+            // Initialize git repos in all project folders after all files are seeded
+            InitializeGitRepositories();
+
             _logger.LogInformation("Mock data seeding completed successfully");
         }
         catch (Exception ex)
@@ -148,6 +151,22 @@ public class MockDataSeederService : IHostedService
     {
         // Cleanup is handled by TempDataFolderService.Dispose()
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Initializes git repositories in all project directories under the temp folder.
+    /// Must be called after all files are seeded so the initial commit includes everything.
+    /// </summary>
+    private void InitializeGitRepositories()
+    {
+        var projectsDir = Path.Combine(_tempFolderService.RootPath, "projects");
+        if (!Directory.Exists(projectsDir))
+            return;
+
+        foreach (var projectDir in Directory.GetDirectories(projectsDir))
+        {
+            _fleeceIssueSeeder.InitializeGitRepository(projectDir);
+        }
     }
 
     /// <summary>
