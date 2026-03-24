@@ -25,6 +25,10 @@ import {
   type CreateIssuesAgentSessionResult,
 } from '../hooks/use-create-issues-agent-session'
 import { useIssueAgentAvailablePrompts } from '../hooks/use-issue-agent-available-prompts'
+import {
+  renderPromptTemplate,
+  type PromptContext,
+} from '@/features/sessions/utils/render-prompt-template'
 
 const MODELS = [
   { value: 'sonnet', label: 'Sonnet' },
@@ -36,9 +40,9 @@ const MODEL_STORAGE_KEY = 'issues-agent-model'
 const PROMPT_STORAGE_KEY = 'issues-agent-prompt'
 const NONE_PROMPT_ID = '__none__'
 
-/** Get the initial prompt ID from localStorage or return empty string */
+/** Get the initial prompt ID from localStorage or return "None" */
 function getInitialPromptId(): string {
-  return localStorage.getItem(PROMPT_STORAGE_KEY) ?? ''
+  return localStorage.getItem(PROMPT_STORAGE_KEY) ?? NONE_PROMPT_ID
 }
 
 export interface IssuesAgentDialogProps {
@@ -111,6 +115,36 @@ export function IssuesAgentDialog({
     }
   }, [selectedPromptId])
 
+  // Handle prompt selection — hydrate textarea with rendered template
+  const handlePromptChange = useCallback(
+    (promptId: string) => {
+      setSelectedPromptId(promptId)
+
+      if (promptId === NONE_PROMPT_ID) {
+        setUserInstructions('')
+        return
+      }
+
+      if (!prompts) return
+
+      const prompt = prompts.find((p) => p.id === promptId)
+      if (!prompt?.initialMessage) return
+
+      const issueContext: PromptContext = {
+        title: issue?.title ?? '',
+        id: issue?.id ?? '',
+        description: issue?.description ?? '',
+        branch: '',
+        type: issue?.type ?? '',
+        selectedIssueId: selectedIssueId ?? undefined,
+      }
+
+      const rendered = renderPromptTemplate(prompt.initialMessage, issueContext)
+      setUserInstructions(rendered)
+    },
+    [prompts, issue, selectedIssueId]
+  )
+
   // Compute effective prompt ID
   const effectivePromptId = useMemo(() => {
     // Handle None selection
@@ -127,8 +161,8 @@ export function IssuesAgentDialog({
       return selectedPromptId
     }
 
-    // Default to first prompt
-    return prompts[0].id ?? ''
+    // Default to None
+    return NONE_PROMPT_ID
   }, [prompts, selectedPromptId])
 
   const handleStart = useCallback(async () => {
@@ -217,7 +251,7 @@ export function IssuesAgentDialog({
             ) : (
               <Select
                 value={effectivePromptId}
-                onValueChange={setSelectedPromptId}
+                onValueChange={handlePromptChange}
                 disabled={createSession.isPending}
               >
                 <SelectTrigger id="prompt-select" aria-label="Select prompt">

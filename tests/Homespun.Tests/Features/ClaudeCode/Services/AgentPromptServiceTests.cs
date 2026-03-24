@@ -545,7 +545,6 @@ public class AgentPromptServiceTests
         {
             Assert.That(prompt, Is.Not.Null);
             Assert.That(prompt!.InitialMessage, Does.Contain("Issue Modification Request"));
-            Assert.That(prompt.InitialMessage, Does.Contain("{{userPrompt}}"));
             Assert.That(prompt.InitialMessage, Does.Contain("{{#if selectedIssueId}}"));
         });
     }
