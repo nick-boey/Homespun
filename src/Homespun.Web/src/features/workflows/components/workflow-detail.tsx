@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
-import { useWorkflow, useWorkflowExecutions } from '../hooks/use-workflows'
+import { useWorkflow, useWorkflowExecutions, useUpdateWorkflow } from '../hooks/use-workflows'
 import { WorkflowEditor } from './workflow-editor'
+import { WorkflowTriggerCard } from './workflow-trigger-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -95,6 +96,7 @@ function ExecutionRow({
 
 export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
   const { workflow, isLoading, isError, refetch } = useWorkflow(workflowId)
+  const updateWorkflow = useUpdateWorkflow(projectId)
   const {
     executions,
     isLoading: executionsLoading,
@@ -160,6 +162,7 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
       <Tabs defaultValue="editor">
         <TabsList>
           <TabsTrigger value="editor">Editor</TabsTrigger>
+          <TabsTrigger value="trigger">Trigger</TabsTrigger>
           <TabsTrigger value="executions">Executions</TabsTrigger>
         </TabsList>
 
@@ -174,6 +177,18 @@ export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
               initialSteps={workflow.steps ?? []}
             />
           </div>
+        </TabsContent>
+
+        <TabsContent value="trigger" className="mt-4">
+          <WorkflowTriggerCard
+            trigger={workflow.trigger}
+            onChange={(trigger) =>
+              updateWorkflow.mutate({
+                workflowId,
+                request: { projectId, trigger },
+              })
+            }
+          />
         </TabsContent>
 
         <TabsContent value="executions" className="mt-4">
