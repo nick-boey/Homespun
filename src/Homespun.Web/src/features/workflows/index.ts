@@ -9,6 +9,7 @@ export { WorkflowMermaidChart } from './components/workflow-mermaid-chart'
 export { WorkflowEditor } from './components/workflow-editor'
 export { StepSettingsCard } from './components/step-settings-card'
 export { WorkflowTriggerCard } from './components/workflow-trigger-card'
+export { WorkflowSettingsCard } from './components/workflow-settings-card'
 export { WorkflowExecutionView } from './components/workflow-execution-view'
 
 // Hooks

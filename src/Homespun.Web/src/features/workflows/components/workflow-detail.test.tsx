@@ -10,6 +10,7 @@ vi.mock('@/api', () => ({
   Workflows: {
     getApiWorkflowsByWorkflowId: vi.fn(),
     getApiWorkflowsByWorkflowIdExecutions: vi.fn(),
+    putApiWorkflowsByWorkflowId: vi.fn(),
   },
 }))
 
@@ -167,7 +168,7 @@ describe('WorkflowDetail', () => {
     expect(screen.getByTestId('workflow-description')).toHaveTextContent(
       'Runs CI build for the project'
     )
-    expect(screen.getByText('Enabled')).toBeInTheDocument()
+    expect(screen.getAllByText('Enabled').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays editor and executions tabs', async () => {
@@ -263,6 +264,29 @@ describe('WorkflowDetail', () => {
 
     expect(screen.getByText('exec-abc')).toBeInTheDocument()
     expect(screen.getByText('exec-def')).toBeInTheDocument()
+  })
+
+  it('renders workflow settings card', async () => {
+    const workflowMock = Workflows.getApiWorkflowsByWorkflowId as Mock
+    const executionsMock = Workflows.getApiWorkflowsByWorkflowIdExecutions as Mock
+
+    workflowMock.mockResolvedValueOnce({ data: mockWorkflow })
+    executionsMock.mockResolvedValueOnce({
+      data: { executions: [], totalCount: 0 },
+    })
+
+    render(<WorkflowDetail projectId="proj-1" workflowId="wf-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-title-input')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('settings-title-input')).toHaveValue('Build Pipeline')
+    expect(screen.getByTestId('settings-description-input')).toHaveValue(
+      'Runs CI build for the project'
+    )
   })
 
   it('shows disabled badge for disabled workflow', async () => {
