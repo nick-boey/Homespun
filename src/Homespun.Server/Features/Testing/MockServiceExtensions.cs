@@ -135,6 +135,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
         services.AddScoped<IBaseBranchResolver, BaseBranchResolver>();
         services.AddSingleton<IAgentStartBackgroundService, MockAgentStartBackgroundService>();
+        services.AddSingleton<IQueueCoordinator, QueueCoordinator>();
 
         // Message cache store - use temp folder's sessions directory
         services.AddSingleton<IMessageCacheStore>(sp =>

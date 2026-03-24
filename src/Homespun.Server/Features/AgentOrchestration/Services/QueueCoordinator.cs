@@ -15,6 +15,7 @@ internal class ProjectExecution
     public required string ProjectPath { get; init; }
     public required string DefaultBranch { get; init; }
     public QueueCoordinatorStatus Status { get; set; } = QueueCoordinatorStatus.Running;
+    public Dictionary<string, string> WorkflowMappings { get; init; } = new();
     public List<ITaskQueue> Queues { get; } = new();
 
     /// <summary>
@@ -102,7 +103,12 @@ public class QueueCoordinator : IQueueCoordinator
 
     public event Action<QueueCoordinatorEvent>? OnEvent;
 
-    public async Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default)
+    public Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default)
+    {
+        return StartExecution(projectId, issueId, projectPath, defaultBranch, new Dictionary<string, string>(), ct);
+    }
+
+    public async Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, Dictionary<string, string> workflowMappings, CancellationToken ct = default)
     {
         var issue = await _fleeceService.GetIssueAsync(projectPath, issueId, ct);
         if (issue == null)
@@ -113,7 +119,8 @@ public class QueueCoordinator : IQueueCoordinator
             ProjectId = projectId,
             RootIssueId = issueId,
             ProjectPath = projectPath,
-            DefaultBranch = defaultBranch
+            DefaultBranch = defaultBranch,
+            WorkflowMappings = workflowMappings
         };
 
         lock (_lock)
