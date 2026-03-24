@@ -48,6 +48,12 @@ internal class SeriesContinuation
 {
     public required string GroupId { get; init; }
     public required List<Issue> RemainingChildren { get; init; }
+
+    /// <summary>
+    /// When set, newly created queues from this continuation should be
+    /// added to the parent parallel group for proper completion tracking.
+    /// </summary>
+    public ParallelGroup? ParentParallelGroup { get; init; }
 }
 
 /// <summary>
@@ -304,9 +310,28 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // This child has children - we need to handle expansion when this is reached
-                    // For now, enqueue it as-is (the coordinator can expand later)
-                    await queue.EnqueueAsync(CreateRequest(execution, child), ct);
+                    // Non-leaf child - stop enqueueing, set up continuation
+                    var contGroupId = Guid.NewGuid().ToString("N")[..12];
+                    lock (_lock)
+                    {
+                        execution.SeriesContinuations.Add(new SeriesContinuation
+                        {
+                            GroupId = contGroupId,
+                            RemainingChildren = children.Skip(i).ToList(),
+                            ParentParallelGroup = parentGroup
+                        });
+                        var bridgeGroup = new ParallelGroup
+                        {
+                            ParentIssueId = firstChild.Id,
+                            ContinuationGroupId = contGroupId
+                        };
+                        bridgeGroup.QueueIds.Add(queue.Id);
+                        execution.ParallelGroups.Add(bridgeGroup);
+                    }
+                    // Remove queue from parent group - it will be re-tracked
+                    // via continuation when expansion completes
+                    parentGroup?.QueueIds.Remove(queue.Id);
+                    return;
                 }
             }
         }
@@ -409,9 +434,21 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // Nested series - recurse
+                    // Nested series - recurse, then wire up continuation
+                    var queueCountBefore = execution.Queues.Count;
                     await ExpandSeries(execution, firstChildChildren, ct);
-                    // TODO: wire up continuation
+                    // Wrap newly created queues in a parallel group linked to continuation
+                    lock (_lock)
+                    {
+                        var innerGroup = new ParallelGroup
+                        {
+                            ParentIssueId = firstChild.Id,
+                            ContinuationGroupId = groupId
+                        };
+                        for (var qi = queueCountBefore; qi < execution.Queues.Count; qi++)
+                            innerGroup.QueueIds.Add(execution.Queues[qi].Id);
+                        execution.ParallelGroups.Add(innerGroup);
+                    }
                 }
             }
             else
@@ -435,8 +472,24 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // This child has children - enqueue as-is for now
-                    await queue.EnqueueAsync(CreateRequest(execution, child), ct);
+                    // Non-leaf child - stop enqueueing, set up continuation
+                    var contGroupId = Guid.NewGuid().ToString("N")[..12];
+                    lock (_lock)
+                    {
+                        execution.SeriesContinuations.Add(new SeriesContinuation
+                        {
+                            GroupId = contGroupId,
+                            RemainingChildren = children.Skip(i).ToList()
+                        });
+                        var bridgeGroup = new ParallelGroup
+                        {
+                            ParentIssueId = firstChild.Id,
+                            ContinuationGroupId = contGroupId
+                        };
+                        bridgeGroup.QueueIds.Add(queue.Id);
+                        execution.ParallelGroups.Add(bridgeGroup);
+                    }
+                    return;
                 }
             }
         }
@@ -485,7 +538,8 @@ public class QueueCoordinator : IQueueCoordinator
 
         EmitEvent(execution.ProjectId, QueueCoordinatorEventType.QueueCompleted, queueId: queue.Id);
 
-        // Check parallel groups
+        // Check parallel groups - process ALL groups this queue belongs to
+        List<SeriesContinuation>? continuationsToFire = null;
         lock (_lock)
         {
             foreach (var group in execution.ParallelGroups)
@@ -495,17 +549,24 @@ public class QueueCoordinator : IQueueCoordinator
                     group.CompletedQueueIds.Add(queue.Id);
                     if (group.IsComplete && group.ContinuationGroupId != null)
                     {
-                        // Find and execute the continuation
                         var continuation = execution.SeriesContinuations
                             .FirstOrDefault(c => c.GroupId == group.ContinuationGroupId);
                         if (continuation != null)
                         {
                             execution.SeriesContinuations.Remove(continuation);
-                            _ = ExpandSeries(execution, continuation.RemainingChildren, CancellationToken.None);
-                            return;
+                            continuationsToFire ??= new List<SeriesContinuation>();
+                            continuationsToFire.Add(continuation);
                         }
                     }
                 }
+            }
+        }
+
+        if (continuationsToFire != null)
+        {
+            foreach (var continuation in continuationsToFire)
+            {
+                _ = FireContinuationAsync(execution, continuation);
             }
         }
 
@@ -514,6 +575,30 @@ public class QueueCoordinator : IQueueCoordinator
 
         // Check if all queues are idle/completed
         CheckAllComplete(execution);
+    }
+
+    private async Task FireContinuationAsync(ProjectExecution execution, SeriesContinuation continuation)
+    {
+        int queueCountBefore;
+        lock (_lock)
+        {
+            queueCountBefore = execution.Queues.Count;
+        }
+
+        await ExpandSeries(execution, continuation.RemainingChildren, CancellationToken.None);
+
+        // If this continuation was spawned from within a parallel group,
+        // add newly created queues to the parent group for proper tracking
+        if (continuation.ParentParallelGroup != null)
+        {
+            lock (_lock)
+            {
+                for (var i = queueCountBefore; i < execution.Queues.Count; i++)
+                {
+                    continuation.ParentParallelGroup.QueueIds.Add(execution.Queues[i].Id);
+                }
+            }
+        }
     }
 
     private void ResumeWaitingQueues(ProjectExecution execution)
