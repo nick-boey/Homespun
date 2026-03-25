@@ -780,7 +780,6 @@ export const TaskGraphKonvaView = memo(
                 line={line}
                 rowIndex={rowIndex}
                 onClick={() => handleRowClick(line.issueId)}
-                isSelected={selectedIssueId === line.issueId}
                 backgroundColor={backgroundColor}
               />
             ))}

@@ -49,8 +49,6 @@ interface KonvaIssueNodeProps {
   rowIndex: number
   /** Click handler */
   onClick?: () => void
-  /** Whether this node is selected */
-  isSelected?: boolean
   /** Background color for no-description nodes (to occlude edges underneath) */
   backgroundColor?: string
 }
@@ -62,7 +60,6 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
   line,
   rowIndex,
   onClick,
-  isSelected = false,
   backgroundColor = '#09090b',
 }: KonvaIssueNodeProps) {
   const cx = getLaneCenterX(line.lane)
@@ -75,19 +72,6 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
       {/* Agent status ring */}
       {line.agentStatus?.isActive && line.agentStatus.status && (
         <KonvaAgentStatusRing cx={cx} cy={cy} status={line.agentStatus.status} />
-      )}
-
-      {/* Selection ring */}
-      {isSelected && (
-        <Circle
-          x={cx}
-          y={cy}
-          radius={NODE_RADIUS + 6}
-          fill="transparent"
-          stroke="#3b82f6"
-          strokeWidth={2}
-          opacity={0.6}
-        />
       )}
 
       {/* Node circle */}
