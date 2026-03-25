@@ -745,7 +745,6 @@ export const TaskGraphKonvaView = memo(
           'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted',
           className
         )}
-        style={{ height: viewportSize.height }}
         onKeyDown={handleKeyDown}
         onWheel={handleWheel}
       >
