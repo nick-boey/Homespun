@@ -18,6 +18,7 @@ namespace Homespun.Features.Fleece.Services;
 public sealed class FleeceService : IFleeceService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IIssueService> _issueServices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, IDependencyService> _dependencyServices = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, Issue>> _issueCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly IJsonlSerializer _serializer;
@@ -52,6 +53,16 @@ public sealed class FleeceService : IFleeceService, IDisposable
             var schemaValidator = new SchemaValidator();
             var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
             return new IssueService(storageService, _idGenerator, _gitConfigService, _tagService);
+        });
+    }
+
+    private IDependencyService GetOrCreateDependencyService(string projectPath)
+    {
+        return _dependencyServices.GetOrAdd(projectPath, _ =>
+        {
+            var issueService = GetOrCreateIssueService(projectPath);
+            var validationService = new ValidationService(issueService);
+            return new DependencyService(issueService, validationService);
         });
     }
 
@@ -90,8 +101,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
     {
         _logger.LogDebug("Reloading issues from disk for project: {ProjectPath}", projectPath);
 
-        // Remove the cached IssueService so a fresh one reads current disk state
+        // Remove the cached services so fresh ones read current disk state
         _issueServices.TryRemove(projectPath, out _);
+        _dependencyServices.TryRemove(projectPath, out _);
 
         // Clear the cache initialized flag and existing cache
         _cacheInitialized.TryRemove(projectPath, out _);
@@ -1005,7 +1017,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         // 1. In an open status (Open, Progress, Review)
         // 2. OR in the additionalIssueIds set (regardless of status)
         var includedIssues = cache.Values
-            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
+            .Where(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
                         || additionalIds.Contains(i.Id))
             .ToList();
 
@@ -1018,8 +1030,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
         _logger.LogDebug(
             "Building task graph with {TotalCount} issues ({OpenCount} open, {AdditionalCount} additional) for project: {ProjectPath}",
             includedIssues.Count,
-            includedIssues.Count(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review),
-            includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
+            includedIssues.Count(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review),
+            includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
             projectPath);
 
         // Create a temporary IssueService with only the included issues
@@ -1049,6 +1061,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         // Clear all caches
         _issueServices.Clear();
+        _dependencyServices.Clear();
         _issueCache.Clear();
         _cacheInitialized.Clear();
     }
