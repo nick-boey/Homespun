@@ -8,8 +8,6 @@ beforeEach(() => {
     notifications: [],
     unreadCount: 0,
     preferences: {
-      showToasts: true,
-      autoDismissDuration: 5000,
       soundEnabled: false,
     },
   })
@@ -310,18 +308,6 @@ describe('NotificationStore', () => {
   })
 
   describe('preferences', () => {
-    it('updates showToasts preference', () => {
-      useNotificationStore.getState().setPreference('showToasts', false)
-
-      expect(useNotificationStore.getState().preferences.showToasts).toBe(false)
-    })
-
-    it('updates autoDismissDuration preference', () => {
-      useNotificationStore.getState().setPreference('autoDismissDuration', 10000)
-
-      expect(useNotificationStore.getState().preferences.autoDismissDuration).toBe(10000)
-    })
-
     it('updates soundEnabled preference', () => {
       useNotificationStore.getState().setPreference('soundEnabled', true)
 

@@ -149,35 +149,24 @@ public class IssuesAgentController(
         // Set session type to IssueAgentModification
         session.SessionType = SessionType.IssueAgentModification;
 
-        // If user instructions are provided, render the selected prompt and send as initial message
+        // If user instructions are provided, send them verbatim as initial message
+        // (template rendering now happens on the frontend)
         if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
-            var promptContext = new PromptContext
+            logger.LogInformation("Sending initial message to Issues Agent session {SessionId}", session.Id);
+
+            var messageMode = sessionMode;
+            _ = Task.Run(async () =>
             {
-                SelectedIssueId = request.SelectedIssueId,
-                UserPrompt = request.UserInstructions
-            };
-
-            var renderedPrompt = agentPromptService.RenderTemplate(selectedPrompt?.InitialMessage, promptContext);
-
-            if (!string.IsNullOrWhiteSpace(renderedPrompt))
-            {
-                logger.LogInformation("Sending initial message to Issues Agent session {SessionId}", session.Id);
-
-                // Send the initial message asynchronously (fire and forget)
-                var messageMode = sessionMode;
-                _ = Task.Run(async () =>
+                try
                 {
-                    try
-                    {
-                        await sessionService.SendMessageAsync(session.Id, renderedPrompt, messageMode);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
-                    }
-                });
-            }
+                    await sessionService.SendMessageAsync(session.Id, request.UserInstructions, messageMode);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
+                }
+            });
         }
 
         return Created(
