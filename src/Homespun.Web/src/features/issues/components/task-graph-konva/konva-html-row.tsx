@@ -68,6 +68,8 @@ export interface KonvaHtmlRowProps {
   isMoveOperationActive?: boolean
   /** Whether to show actions */
   showActions?: boolean
+  /** Called when clicking a multi-parent badge to navigate to the first instance */
+  onSelectFirstInstance?: (issueId: string) => void
 }
 
 /**
@@ -91,6 +93,7 @@ export const KonvaHtmlRow = memo(function KonvaHtmlRow({
   isMoveSource = false,
   isMoveOperationActive = false,
   showActions = true,
+  onSelectFirstInstance,
 }: KonvaHtmlRowProps) {
   const typeColor = getTypeColor(line.issueType)
   const hasSearchMatch = searchQuery && line.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -212,6 +215,24 @@ export const KonvaHtmlRow = memo(function KonvaHtmlRow({
           )
         }
       />
+
+      {/* Multi-parent badge */}
+      {line.multiParentTotal != null && line.multiParentIndex != null && (
+        <button
+          type="button"
+          className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-700 transition-colors hover:bg-orange-500/30 dark:text-orange-400"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (line.multiParentIndex !== 0) {
+              onSelectFirstInstance?.(line.issueId)
+            }
+          }}
+          title={`Instance ${line.multiParentIndex + 1} of ${line.multiParentTotal}. Click to go to the first instance.`}
+          data-testid="multi-parent-badge"
+        >
+          ({line.multiParentIndex + 1}/{line.multiParentTotal})
+        </button>
+      )}
 
       {/* Issue ID */}
       <span className="text-muted-foreground shrink-0 font-mono text-xs">

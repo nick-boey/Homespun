@@ -29,6 +29,7 @@ import {
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
+  getRenderKey,
   computeInheritedParentInfo,
   applyFilter,
   TaskGraphMarkerType,
@@ -214,11 +215,6 @@ export const TaskGraphView = memo(
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
 
-    // Issue IDs for keyboard navigation
-    const issueIds = useMemo(() => {
-      return issueRenderLines.map((line) => line.issueId)
-    }, [issueRenderLines])
-
     // Search match count
     const searchMatchCount = useMemo(() => {
       if (!searchQuery) return 0
@@ -228,11 +224,11 @@ export const TaskGraphView = memo(
       ).length
     }, [renderLines, searchQuery])
 
-    // Get selected issue index
+    // Get selected issue index (find first render line matching the selected issue ID)
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
-      return issueIds.indexOf(selectedIssueId)
-    }, [selectedIssueId, issueIds])
+      return issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
+    }, [selectedIssueId, issueRenderLines])
 
     // Get selected render line
     const selectedRenderLine = useMemo(() => {
@@ -276,6 +272,19 @@ export const TaskGraphView = memo(
         return next
       })
     }, [])
+
+    // Handle navigating to first instance of a multi-parent issue
+    const handleSelectFirstInstance = useCallback(
+      (issueId: string) => {
+        onSelectIssue?.(issueId)
+        const firstLine = issueRenderLines.find((l) => l.issueId === issueId)
+        if (firstLine) {
+          const key = getRenderKey(firstLine)
+          rowRefs.current.get(key)?.scrollIntoView({ block: 'nearest' })
+        }
+      },
+      [onSelectIssue, issueRenderLines]
+    )
 
     // Handle row click
     const handleRowClick = useCallback(
@@ -583,17 +592,17 @@ export const TaskGraphView = memo(
         }
 
         // If nothing selected, select first issue on any nav key
-        if (!selectedIssueId && issueIds.length > 0) {
+        if (!selectedIssueId && issueRenderLines.length > 0) {
           if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
             event.preventDefault()
-            onSelectIssue?.(issueIds[0])
+            onSelectIssue?.(issueRenderLines[0].issueId)
             return
           }
         }
 
         if (!selectedIssueId) return
 
-        const currentIndex = issueIds.indexOf(selectedIssueId)
+        const currentIndex = issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
         if (currentIndex === -1) return
 
         switch (event.key) {
@@ -601,10 +610,10 @@ export const TaskGraphView = memo(
           case 'ArrowDown':
           case 'j': {
             event.preventDefault()
-            const nextIndex = Math.min(currentIndex + 1, issueIds.length - 1)
-            const nextId = issueIds[nextIndex]
-            onSelectIssue?.(nextId)
-            rowRefs.current.get(nextId)?.scrollIntoView({ block: 'nearest' })
+            const nextIndex = Math.min(currentIndex + 1, issueRenderLines.length - 1)
+            const nextLine = issueRenderLines[nextIndex]
+            onSelectIssue?.(nextLine.issueId)
+            rowRefs.current.get(getRenderKey(nextLine))?.scrollIntoView({ block: 'nearest' })
             break
           }
 
@@ -612,9 +621,9 @@ export const TaskGraphView = memo(
           case 'k': {
             event.preventDefault()
             const prevIndex = Math.max(currentIndex - 1, 0)
-            const prevId = issueIds[prevIndex]
-            onSelectIssue?.(prevId)
-            rowRefs.current.get(prevId)?.scrollIntoView({ block: 'nearest' })
+            const prevLine = issueRenderLines[prevIndex]
+            onSelectIssue?.(prevLine.issueId)
+            rowRefs.current.get(getRenderKey(prevLine))?.scrollIntoView({ block: 'nearest' })
             break
           }
 
@@ -630,7 +639,7 @@ export const TaskGraphView = memo(
               )
               if (parentLine) {
                 onSelectIssue?.(parentLine.issueId)
-                rowRefs.current.get(parentLine.issueId)?.scrollIntoView({ block: 'nearest' })
+                rowRefs.current.get(getRenderKey(parentLine))?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -647,7 +656,7 @@ export const TaskGraphView = memo(
               )
               if (childLine) {
                 onSelectIssue?.(childLine.issueId)
-                rowRefs.current.get(childLine.issueId)?.scrollIntoView({ block: 'nearest' })
+                rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -657,10 +666,10 @@ export const TaskGraphView = memo(
           case 'g': {
             if (!event.shiftKey) {
               event.preventDefault()
-              const firstId = issueIds[0]
-              if (firstId) {
-                onSelectIssue?.(firstId)
-                rowRefs.current.get(firstId)?.scrollIntoView({ block: 'nearest' })
+              const firstLine = issueRenderLines[0]
+              if (firstLine) {
+                onSelectIssue?.(firstLine.issueId)
+                rowRefs.current.get(getRenderKey(firstLine))?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -668,10 +677,10 @@ export const TaskGraphView = memo(
 
           case 'G': {
             event.preventDefault()
-            const lastId = issueIds[issueIds.length - 1]
-            if (lastId) {
-              onSelectIssue?.(lastId)
-              rowRefs.current.get(lastId)?.scrollIntoView({ block: 'nearest' })
+            const lastLine = issueRenderLines[issueRenderLines.length - 1]
+            if (lastLine) {
+              onSelectIssue?.(lastLine.issueId)
+              rowRefs.current.get(getRenderKey(lastLine))?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
@@ -741,7 +750,6 @@ export const TaskGraphView = memo(
       [
         editMode,
         selectedIssueId,
-        issueIds,
         issueRenderLines,
         onSelectIssue,
         onEditIssue,
@@ -929,8 +937,10 @@ export const TaskGraphView = memo(
               !pendingNewIssue?.isAbove &&
               pendingNewIssue?.referenceIssueId === line.issueId
 
+            const renderKey = getRenderKey(line)
+
             return (
-              <div key={line.issueId}>
+              <div key={renderKey}>
                 {/* Insert inline editor ABOVE if creating above this issue */}
                 {shouldInsertAbove && renderInlineEditor(line.lane)}
 
@@ -1019,9 +1029,9 @@ export const TaskGraphView = memo(
                   <TaskGraphIssueRow
                     ref={(el) => {
                       if (el) {
-                        rowRefs.current.set(line.issueId, el)
+                        rowRefs.current.set(renderKey, el)
                       } else {
-                        rowRefs.current.delete(line.issueId)
+                        rowRefs.current.delete(renderKey)
                       }
                     }}
                     line={line}
@@ -1038,6 +1048,7 @@ export const TaskGraphView = memo(
                     onTypeChange={handleTypeChange}
                     onStatusChange={handleStatusChange}
                     onExecutionModeChange={handleExecutionModeChange}
+                    onSelectFirstInstance={handleSelectFirstInstance}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                     aria-rowindex={index + 1}

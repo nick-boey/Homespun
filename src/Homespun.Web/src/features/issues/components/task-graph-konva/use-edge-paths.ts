@@ -154,7 +154,7 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
       const yBottom = (rowIndex + 1) * ROW_HEIGHT
 
       edges.push({
-        id: `lane0-passthrough-${line.issueId}`,
+        id: `lane0-passthrough-${line.issueId}-${rowIndex}`,
         fromIssueId: line.issueId,
         toIssueId: line.issueId,
         points: [lane0X, yTop, lane0X, yBottom],
@@ -176,7 +176,7 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
         const arcEndX = lane0X + NODE_RADIUS
 
         edges.push({
-          id: `lane0-connector-${line.issueId}`,
+          id: `lane0-connector-${line.issueId}-${rowIndex}`,
           fromIssueId: line.issueId,
           toIssueId: line.issueId,
           points: [
@@ -199,7 +199,7 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
         const yBottom = (rowIndex + 1) * ROW_HEIGHT
 
         edges.push({
-          id: `lane0-vertical-${line.issueId}`,
+          id: `lane0-vertical-${line.issueId}-${rowIndex}`,
           fromIssueId: line.issueId,
           toIssueId: line.issueId,
           points: [lane0X, yTop, lane0X, yBottom],
@@ -210,7 +210,7 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
         })
 
         edges.push({
-          id: `lane0-horizontal-${line.issueId}`,
+          id: `lane0-horizontal-${line.issueId}-${rowIndex}`,
           fromIssueId: line.issueId,
           toIssueId: line.issueId,
           points: [lane0X, rowY, cx - NODE_RADIUS - 2, rowY],

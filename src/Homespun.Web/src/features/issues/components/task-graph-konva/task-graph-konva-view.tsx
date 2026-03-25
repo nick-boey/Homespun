@@ -27,6 +27,7 @@ import { IssuesEmptyState } from '../issues-empty-state'
 import {
   computeLayout,
   isIssueRenderLine,
+  getRenderKey,
   computeInheritedParentInfo,
   applyFilter,
   TaskGraphMarkerType,
@@ -191,16 +192,11 @@ export const TaskGraphKonvaView = memo(
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
 
-    // Issue IDs for keyboard navigation
-    const issueIds = useMemo(() => {
-      return issueRenderLines.map((line) => line.issueId)
-    }, [issueRenderLines])
-
-    // Get selected issue index
+    // Get selected issue index (find first render line matching the selected issue ID)
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
-      return issueIds.indexOf(selectedIssueId)
-    }, [selectedIssueId, issueIds])
+      return issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
+    }, [selectedIssueId, issueRenderLines])
 
     // Get selected render line
     const selectedRenderLine = useMemo(() => {
@@ -277,6 +273,18 @@ export const TaskGraphKonvaView = memo(
         return next
       })
     }, [])
+
+    // Handle navigating to first instance of a multi-parent issue
+    const handleSelectFirstInstance = useCallback(
+      (issueId: string) => {
+        onSelectIssue?.(issueId)
+        const firstIndex = issueRenderLines.findIndex((l) => l.issueId === issueId)
+        if (firstIndex >= 0) {
+          scrollToRow(firstIndex, ROW_HEIGHT)
+        }
+      },
+      [onSelectIssue, issueRenderLines, scrollToRow]
+    )
 
     // Handle row click
     const handleRowClick = useCallback(
@@ -483,26 +491,26 @@ export const TaskGraphKonvaView = memo(
           return
         }
 
-        if (!selectedIssueId && issueIds.length > 0) {
+        if (!selectedIssueId && issueRenderLines.length > 0) {
           if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
             event.preventDefault()
-            onSelectIssue?.(issueIds[0])
+            onSelectIssue?.(issueRenderLines[0].issueId)
             return
           }
         }
 
         if (!selectedIssueId) return
 
-        const currentIndex = issueIds.indexOf(selectedIssueId)
+        const currentIndex = issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
         if (currentIndex === -1) return
 
         switch (event.key) {
           case 'ArrowDown':
           case 'j': {
             event.preventDefault()
-            const nextIndex = Math.min(currentIndex + 1, issueIds.length - 1)
-            const nextId = issueIds[nextIndex]
-            onSelectIssue?.(nextId)
+            const nextIndex = Math.min(currentIndex + 1, issueRenderLines.length - 1)
+            const nextLine = issueRenderLines[nextIndex]
+            onSelectIssue?.(nextLine.issueId)
             scrollToRow(nextIndex, ROW_HEIGHT)
             break
           }
@@ -511,8 +519,8 @@ export const TaskGraphKonvaView = memo(
           case 'k': {
             event.preventDefault()
             const prevIndex = Math.max(currentIndex - 1, 0)
-            const prevId = issueIds[prevIndex]
-            onSelectIssue?.(prevId)
+            const prevLine = issueRenderLines[prevIndex]
+            onSelectIssue?.(prevLine.issueId)
             scrollToRow(prevIndex, ROW_HEIGHT)
             break
           }
@@ -527,7 +535,7 @@ export const TaskGraphKonvaView = memo(
               )
               if (parentLine) {
                 onSelectIssue?.(parentLine.issueId)
-                const parentIndex = issueIds.indexOf(parentLine.issueId)
+                const parentIndex = issueRenderLines.indexOf(parentLine)
                 if (parentIndex >= 0) scrollToRow(parentIndex, ROW_HEIGHT)
               }
             }
@@ -544,7 +552,7 @@ export const TaskGraphKonvaView = memo(
               )
               if (childLine) {
                 onSelectIssue?.(childLine.issueId)
-                const childIndex = issueIds.indexOf(childLine.issueId)
+                const childIndex = issueRenderLines.indexOf(childLine)
                 if (childIndex >= 0) scrollToRow(childIndex, ROW_HEIGHT)
               }
             }
@@ -554,9 +562,9 @@ export const TaskGraphKonvaView = memo(
           case 'g': {
             if (!event.shiftKey) {
               event.preventDefault()
-              const firstId = issueIds[0]
-              if (firstId) {
-                onSelectIssue?.(firstId)
+              const firstLine = issueRenderLines[0]
+              if (firstLine) {
+                onSelectIssue?.(firstLine.issueId)
                 scrollToRow(0, ROW_HEIGHT)
               }
             }
@@ -565,10 +573,10 @@ export const TaskGraphKonvaView = memo(
 
           case 'G': {
             event.preventDefault()
-            const lastId = issueIds[issueIds.length - 1]
-            if (lastId) {
-              onSelectIssue?.(lastId)
-              scrollToRow(issueIds.length - 1, ROW_HEIGHT)
+            const lastLine = issueRenderLines[issueRenderLines.length - 1]
+            if (lastLine) {
+              onSelectIssue?.(lastLine.issueId)
+              scrollToRow(issueRenderLines.length - 1, ROW_HEIGHT)
             }
             break
           }
@@ -632,7 +640,6 @@ export const TaskGraphKonvaView = memo(
       [
         editMode,
         selectedIssueId,
-        issueIds,
         issueRenderLines,
         onSelectIssue,
         onEditIssue,
@@ -721,7 +728,7 @@ export const TaskGraphKonvaView = memo(
           <Layer>
             {issueRenderLines.map((line, rowIndex) => (
               <KonvaIssueNode
-                key={`node-${line.issueId}`}
+                key={`node-${getRenderKey(line)}`}
                 line={line}
                 rowIndex={rowIndex}
                 onClick={() => handleRowClick(line.issueId)}
@@ -739,6 +746,7 @@ export const TaskGraphKonvaView = memo(
           }}
         >
           {issueRenderLines.map((line, rowIndex) => {
+            const renderKey = getRenderKey(line)
             const isSelected = selectedIssueId === line.issueId
             const isExpanded = expandedIds.has(line.issueId)
             const isEditing =
@@ -756,7 +764,7 @@ export const TaskGraphKonvaView = memo(
 
             return (
               <div
-                key={line.issueId}
+                key={renderKey}
                 style={{
                   position: 'absolute',
                   top: rowIndex * ROW_HEIGHT,
@@ -836,6 +844,7 @@ export const TaskGraphKonvaView = memo(
                     onTypeChange={handleTypeChange}
                     onStatusChange={handleStatusChange}
                     onExecutionModeChange={handleExecutionModeChange}
+                    onSelectFirstInstance={handleSelectFirstInstance}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                   />
