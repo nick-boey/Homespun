@@ -89,31 +89,60 @@ public class MockAgentExecutionService : IAgentExecutionService
 
         _sessions[sessionId] = session;
 
-        // Yield synthetic session_started message
+        // Always yield session_started first
         yield return new SdkSystemMessage(sessionId, null, "session_started", request.Model, null);
 
         // Simulate brief processing delay
         await Task.Delay(100, cancellationToken);
 
-        // Yield a synthetic assistant response
-        var responseContent = new List<SdkContentBlock>
-        {
-            new SdkTextBlock("[Mock] Session started successfully.")
-        };
-        var apiMessage = new SdkApiMessage("assistant", responseContent);
-        yield return new SdkAssistantMessage(sessionId, Guid.NewGuid().ToString(), apiMessage, null);
+        // Parse keywords from the initial prompt to produce rich responses
+        var keywords = ParseKeywords(request.Prompt);
 
-        // Yield synthetic result
-        yield return new SdkResultMessage(
-            SessionId: sessionId,
-            Uuid: Guid.NewGuid().ToString(),
-            Subtype: "success",
-            DurationMs: 100,
-            DurationApiMs: 50,
-            IsError: false,
-            NumTurns: 1,
-            TotalCostUsd: 0m,
-            Result: null);
+        if (keywords.Count == 0)
+        {
+            // No keywords - simple default response
+            var responseContent = new List<SdkContentBlock>
+            {
+                new SdkTextBlock("[Mock] Session started successfully.")
+            };
+            var apiMessage = new SdkApiMessage("assistant", responseContent);
+            yield return new SdkAssistantMessage(sessionId, Guid.NewGuid().ToString(), apiMessage, null);
+
+            yield return new SdkResultMessage(
+                SessionId: sessionId,
+                Uuid: Guid.NewGuid().ToString(),
+                Subtype: "success",
+                DurationMs: 100,
+                DurationApiMs: 50,
+                IsError: false,
+                NumTurns: 1,
+                TotalCostUsd: 0m,
+                Result: null);
+        }
+        else
+        {
+            // Keywords found - use channel-based response to support question/plan continuations
+            var channel = Channel.CreateUnbounded<SdkMessage>();
+            session.MessageChannel = channel;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await EmitResponseSequence(session, keywords, channel.Writer, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[Mock] Error in start response sequence for session {SessionId}", session.SessionId);
+                    channel.Writer.TryComplete(ex);
+                }
+            }, cancellationToken);
+
+            await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return msg;
+            }
+        }
     }
 
     /// <inheritdoc />
