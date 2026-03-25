@@ -8,6 +8,7 @@ import { Stage, Layer } from 'react-konva'
 import {
   KonvaIssueNode,
   KonvaEdge,
+  KonvaDiagonalEdge,
   KonvaHiddenParentIndicator,
   KonvaAgentStatusRing,
 } from './konva-nodes'
@@ -155,6 +156,32 @@ describe('KonvaEdge', () => {
         </KonvaWrapper>
       )
     ).not.toThrow()
+  })
+})
+
+describe('KonvaDiagonalEdge', () => {
+  it('renders without crashing', () => {
+    expect(() =>
+      render(
+        <KonvaWrapper>
+          <KonvaDiagonalEdge id="diag-1" points={[50, 50, 30, 30]} color="#3b82f6" />
+        </KonvaWrapper>
+      )
+    ).not.toThrow()
+  })
+
+  it('renders with different colors', () => {
+    const colors = ['#3b82f6', '#ef4444', '#22c55e']
+
+    colors.forEach((color) => {
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaDiagonalEdge id={`diag-${color}`} points={[0, 0, 20, 20]} color={color} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
   })
 })
 

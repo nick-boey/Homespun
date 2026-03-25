@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { computeEdgePaths } from './use-edge-paths'
+import { computeEdgePaths, computeDiagonalEdges } from './use-edge-paths'
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../../services'
 import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { TaskGraphMarkerType } from '../../services'
@@ -255,6 +255,132 @@ describe('computeEdgePaths', () => {
         expect(result[0].color).toBeDefined()
         expect(result[0].color.startsWith('#')).toBe(true)
       }
+    })
+  })
+
+  describe('diagonal edges for multi-parent issues', () => {
+    it('returns empty array when no issues have multiple parents', () => {
+      const lines = [createIssueLine({ issueId: 'issue-1', lane: 0, parentIssues: null })]
+      const result = computeDiagonalEdges(lines)
+      expect(result).toEqual([])
+    })
+
+    it('returns empty array when issue has only one parent', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'a' }],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 1 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+      expect(result).toEqual([])
+    })
+
+    it('generates diagonal edge for secondary parent', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 1,
+          parentIssues: [
+            { parentIssue: 'parent-1', sortOrder: 'a' },
+            { parentIssue: 'parent-2', sortOrder: 'b' },
+          ],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 2 }),
+        createIssueLine({ issueId: 'parent-2', lane: 0 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+
+      expect(result.length).toBe(1)
+      expect(result[0].fromIssueId).toBe('child-1')
+      expect(result[0].toIssueId).toBe('parent-2')
+      expect(result[0].isDiagonal).toBe(true)
+      expect(result[0].points.length).toBe(4) // [x1, y1, x2, y2]
+    })
+
+    it('generates diagonal edges for all secondary parents', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 1,
+          parentIssues: [
+            { parentIssue: 'parent-1', sortOrder: 'a' },
+            { parentIssue: 'parent-2', sortOrder: 'b' },
+            { parentIssue: 'parent-3', sortOrder: 'c' },
+          ],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 2 }),
+        createIssueLine({ issueId: 'parent-2', lane: 0 }),
+        createIssueLine({ issueId: 'parent-3', lane: 3 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+
+      expect(result.length).toBe(2)
+      const toIds = result.map((e) => e.toIssueId).sort()
+      expect(toIds).toEqual(['parent-2', 'parent-3'])
+    })
+
+    it('diagonal points toward secondary parent direction', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 1,
+          parentIssues: [
+            { parentIssue: 'parent-1', sortOrder: 'a' },
+            { parentIssue: 'parent-2', sortOrder: 'b' },
+          ],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 2 }),
+        createIssueLine({ issueId: 'parent-2', lane: 0 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+
+      expect(result.length).toBe(1)
+      const edge = result[0]
+      // parent-2 is at row 2, lane 0 — above and to the left of child at row 0, lane 1
+      // The diagonal should point toward it (end x < start x since parent is left)
+      const [startX, , endX] = edge.points
+      expect(endX).toBeLessThan(startX)
+    })
+
+    it('skips secondary parents not found in render lines', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 1,
+          parentIssues: [
+            { parentIssue: 'parent-1', sortOrder: 'a' },
+            { parentIssue: 'missing-parent', sortOrder: 'b' },
+          ],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 2 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+      expect(result).toEqual([])
+    })
+
+    it('has unique IDs for each diagonal edge', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 1,
+          parentIssues: [
+            { parentIssue: 'parent-1', sortOrder: 'a' },
+            { parentIssue: 'parent-2', sortOrder: 'b' },
+            { parentIssue: 'parent-3', sortOrder: 'c' },
+          ],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 2 }),
+        createIssueLine({ issueId: 'parent-2', lane: 0 }),
+        createIssueLine({ issueId: 'parent-3', lane: 3 }),
+      ]
+      const result = computeDiagonalEdges(lines)
+
+      const ids = result.map((e) => e.id)
+      const uniqueIds = new Set(ids)
+      expect(uniqueIds.size).toBe(ids.length)
     })
   })
 

@@ -234,6 +234,37 @@ export const KonvaAgentStatusRing = memo(function KonvaAgentStatusRing({
   )
 })
 
+interface KonvaDiagonalEdgeProps {
+  /** Unique ID for the edge */
+  id: string
+  /** Points array [x1, y1, x2, y2] */
+  points: number[]
+  /** Edge color */
+  color: string
+}
+
+/**
+ * Konva line component for rendering a diagonal secondary-parent edge.
+ * Rendered as a dashed line with fading opacity.
+ */
+export const KonvaDiagonalEdge = memo(function KonvaDiagonalEdge({
+  id,
+  points,
+  color,
+}: KonvaDiagonalEdgeProps) {
+  return (
+    <Line
+      key={id}
+      points={points}
+      stroke={color}
+      strokeWidth={LINE_STROKE_WIDTH}
+      dash={[4, 4]}
+      opacity={0.3}
+      lineCap="round"
+    />
+  )
+})
+
 /**
  * Constants re-exported for use by other components.
  */

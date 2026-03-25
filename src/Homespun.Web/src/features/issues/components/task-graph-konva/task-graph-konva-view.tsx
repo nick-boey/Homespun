@@ -43,10 +43,17 @@ import {
 } from '../../types'
 import { InlineIssueEditor } from '../inline-issue-editor'
 import { InlineIssueDetailRow } from '../inline-issue-detail-row'
-import { KonvaIssueNode, KonvaEdge, LANE_WIDTH, ROW_HEIGHT, getTypeColor } from './konva-nodes'
+import {
+  KonvaIssueNode,
+  KonvaEdge,
+  KonvaDiagonalEdge,
+  LANE_WIDTH,
+  ROW_HEIGHT,
+  getTypeColor,
+} from './konva-nodes'
 import { KonvaHtmlRow } from './konva-html-row'
 import { useCamera } from './use-camera'
-import { useEdgePaths } from './use-edge-paths'
+import { useEdgePaths, useDiagonalEdges } from './use-edge-paths'
 
 export interface TaskGraphKonvaViewProps {
   projectId: string
@@ -220,6 +227,7 @@ export const TaskGraphKonvaView = memo(
 
     // Compute edge paths
     const edgePaths = useEdgePaths(renderLines)
+    const diagonalEdges = useDiagonalEdges(renderLines)
 
     // Measure container on resize
     useEffect(() => {
@@ -713,6 +721,14 @@ export const TaskGraphKonvaView = memo(
           <Layer>
             {edgePaths.map((edge) => (
               <KonvaEdge key={edge.id} id={edge.id} points={edge.points} color={edge.color} />
+            ))}
+            {diagonalEdges.map((edge) => (
+              <KonvaDiagonalEdge
+                key={edge.id}
+                id={edge.id}
+                points={edge.points}
+                color={edge.color}
+              />
             ))}
           </Layer>
 
