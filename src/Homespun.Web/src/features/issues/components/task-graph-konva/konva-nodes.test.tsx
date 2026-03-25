@@ -86,18 +86,18 @@ describe('KonvaIssueNode', () => {
     })
   })
 
-  it('renders outline-only circle when no description', () => {
+  it('renders no-description node with solid background fill', () => {
     const line = createIssueLine({
       issueId: 'test-1',
       lane: 0,
       hasDescription: false,
     })
 
-    // Should not throw - outline style applied internally
+    // Should render with background fill to occlude edges underneath
     expect(() =>
       render(
         <KonvaWrapper>
-          <KonvaIssueNode line={line} rowIndex={0} />
+          <KonvaIssueNode line={line} rowIndex={0} backgroundColor="#09090b" />
         </KonvaWrapper>
       )
     ).not.toThrow()

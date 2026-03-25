@@ -111,6 +111,17 @@ export const TaskGraphKonvaView = memo(
       height: DEFAULT_VIEWPORT_HEIGHT,
     })
 
+    // Background color for Konva nodes (read from computed CSS)
+    const [backgroundColor, setBackgroundColor] = useState('#09090b')
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+      const bg = getComputedStyle(container).backgroundColor
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        setBackgroundColor(bg)
+      }
+    }, [])
+
     // Expanded rows state
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
@@ -725,6 +736,7 @@ export const TaskGraphKonvaView = memo(
                 rowIndex={rowIndex}
                 onClick={() => handleRowClick(line.issueId)}
                 isSelected={selectedIssueId === line.issueId}
+                backgroundColor={backgroundColor}
               />
             ))}
           </Layer>

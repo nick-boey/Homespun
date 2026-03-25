@@ -51,6 +51,8 @@ interface KonvaIssueNodeProps {
   onClick?: () => void
   /** Whether this node is selected */
   isSelected?: boolean
+  /** Background color for no-description nodes (to occlude edges underneath) */
+  backgroundColor?: string
 }
 
 /**
@@ -61,6 +63,7 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
   rowIndex,
   onClick,
   isSelected = false,
+  backgroundColor = '#09090b',
 }: KonvaIssueNodeProps) {
   const cx = getLaneCenterX(line.lane)
   const cy = rowIndex * ROW_HEIGHT + getRowCenterY()
@@ -88,14 +91,23 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
       )}
 
       {/* Node circle */}
-      <Circle
-        x={cx}
-        y={cy}
-        radius={NODE_RADIUS}
-        fill={isOutlineOnly ? 'transparent' : nodeColor}
-        stroke={isOutlineOnly ? nodeColor : undefined}
-        strokeWidth={isOutlineOnly ? 2 : 0}
-      />
+      {isOutlineOnly ? (
+        <>
+          {/* Background fill to occlude edges passing underneath */}
+          <Circle x={cx} y={cy} radius={NODE_RADIUS + 1} fill={backgroundColor} />
+          {/* Stroke ring */}
+          <Circle
+            x={cx}
+            y={cy}
+            radius={NODE_RADIUS}
+            fill={backgroundColor}
+            stroke={nodeColor}
+            strokeWidth={2}
+          />
+        </>
+      ) : (
+        <Circle x={cx} y={cy} radius={NODE_RADIUS} fill={nodeColor} />
+      )}
 
       {/* Hidden parent indicator */}
       {line.hasHiddenParent && (
