@@ -93,9 +93,9 @@ public static class MockServiceExtensions
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         // IIssueHistoryService already registered above with FleeceService
         services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
-        services.AddScoped<IFleeceChangeDetectionService, MockFleeceChangeDetectionService>();
-        services.AddScoped<IFleeceConflictDetectionService, MockFleeceConflictDetectionService>();
-        services.AddScoped<IFleeceChangeApplicationService, MockFleeceChangeApplicationService>();
+        services.AddScoped<IFleeceChangeDetectionService, FleeceChangeDetectionService>();
+        services.AddScoped<IFleeceConflictDetectionService, FleeceConflictDetectionService>();
+        services.AddScoped<IFleeceChangeApplicationService, FleeceChangeApplicationService>();
         services.AddScoped<IFleecePostMergeService, FleecePostMergeService>();
 
         // Git services
