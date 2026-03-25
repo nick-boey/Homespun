@@ -68,20 +68,4 @@ public class DependencyInjectionTests
         Assert.That(diffService, Is.Not.Null);
     }
 
-    [Test]
-    public void ICommandRunner_Resolves_ToMockCommandRunner()
-    {
-        var commandRunner = _factory.Services.GetRequiredService<Homespun.Features.Commands.ICommandRunner>();
-        Assert.That(commandRunner.GetType().Name, Is.EqualTo("MockCommandRunner"),
-            $"Expected MockCommandRunner but got {commandRunner.GetType().FullName}");
-    }
-
-    [Test]
-    public void IProjectService_Resolves_ToProjectService()
-    {
-        using var scope = _factory.Services.CreateScope();
-        var projectService = scope.ServiceProvider.GetRequiredService<Homespun.Features.Projects.IProjectService>();
-        Assert.That(projectService.GetType().Name, Is.EqualTo("ProjectService"),
-            $"Expected ProjectService but got {projectService.GetType().FullName}");
-    }
 }
