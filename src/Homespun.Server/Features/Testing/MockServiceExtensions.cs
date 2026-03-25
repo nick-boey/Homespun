@@ -5,6 +5,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Search;
 using Homespun.Features.Secrets;
@@ -145,10 +146,13 @@ public static class MockServiceExtensions
             return new MessageCacheStore(tempFolder.SessionsPath, logger);
         });
 
+        // Pull request workflow service (needed by GraphService)
+        services.AddScoped<PullRequestWorkflowService>();
+
         // Graph services
         services.AddSingleton<IGraphCacheService>(sp =>
             new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
-        services.AddScoped<IGraphService, MockGraphService>();
+        services.AddScoped<IGraphService, GraphService>();
 
         // Clone enrichment service
         services.AddScoped<ICloneEnrichmentService, CloneEnrichmentService>();
