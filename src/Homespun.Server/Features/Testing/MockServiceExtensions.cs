@@ -75,8 +75,25 @@ public static class MockServiceExtensions
         services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
         services.AddScoped<IPRStatusResolver, MockPRStatusResolver>();
 
-        // Project service
-        services.AddScoped<IProjectService, MockProjectService>();
+        // Project service - use real ProjectService with temp folder path
+        services.AddScoped<IProjectService>(sp =>
+        {
+            var dataStore = sp.GetRequiredService<IDataStore>();
+            var gitHubService = sp.GetRequiredService<IGitHubService>();
+            var commandRunner = sp.GetRequiredService<ICommandRunner>();
+            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
+            var logger = sp.GetRequiredService<ILogger<ProjectService>>();
+
+            var projectsPath = Path.Combine(tempFolder.RootPath, "projects");
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["HOMESPUN_BASE_PATH"] = projectsPath
+                })
+                .Build();
+
+            return new ProjectService(dataStore, gitHubService, commandRunner, config, logger);
+        });
 
         // Secrets service (real implementation - uses secrets.env files, works with temp folder structure)
         services.AddScoped<ISecretsService, SecretsService>();
