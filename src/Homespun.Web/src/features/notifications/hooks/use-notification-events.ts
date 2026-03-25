@@ -1,8 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { toast } from 'sonner'
+import { useEffect, useCallback } from 'react'
 import { useNotificationHub } from '@/providers/signalr-provider'
 import { useNotificationStore } from '../stores/notification-store'
-import type { NotificationDto, IssueChangeType, NotificationType } from '@/types/signalr'
+import type { NotificationDto, IssueChangeType } from '@/types/signalr'
 
 interface UseNotificationEventsOptions {
   /** Project ID to join notifications group for */
@@ -10,9 +9,9 @@ interface UseNotificationEventsOptions {
 }
 
 /**
- * Hook that connects SignalR notification events to the notification store and toasts.
+ * Hook that connects SignalR notification events to the notification store.
  * Handles:
- * - NotificationAdded events -> adds to store and shows toast
+ * - NotificationAdded events -> adds to store
  * - NotificationDismissed events -> removes from store
  * - IssuesChanged events -> creates local notifications for issue changes
  */
@@ -23,44 +22,19 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const setNotifications = useNotificationStore((state) => state.setNotifications)
-  const preferences = useNotificationStore((state) => state.preferences)
-
-  // Use ref to access current preferences without re-registering handlers
-  const preferencesRef = useRef(preferences)
-  useEffect(() => {
-    preferencesRef.current = preferences
-  }, [preferences])
-
-  // Show toast for notification based on type
-  const showToast = useCallback((notification: NotificationDto) => {
-    const { showToasts, autoDismissDuration } = preferencesRef.current
-    if (!showToasts) return
-
-    const toastOptions = {
-      id: notification.id,
-      description: notification.message,
-      duration: autoDismissDuration,
-      dismissible: notification.isDismissible,
-    }
-
-    const toastFn = getToastFunction(notification.type)
-    toastFn(notification.title, toastOptions)
-  }, [])
 
   // Handle NotificationAdded event
   const handleNotificationAdded = useCallback(
     (notification: NotificationDto) => {
       addNotification(notification)
-      showToast(notification)
     },
-    [addNotification, showToast]
+    [addNotification]
   )
 
   // Handle NotificationDismissed event
   const handleNotificationDismissed = useCallback(
     (notificationId: string) => {
       dismissNotification(notificationId)
-      toast.dismiss(notificationId)
     },
     [dismissNotification]
   )
@@ -80,12 +54,11 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
       }
 
       addNotification(notification)
-      showToast(notification)
     },
-    [addNotification, showToast]
+    [addNotification]
   )
 
-  // Handle AgentStarting event - show info toast
+  // Handle AgentStarting event
   const handleAgentStarting = useCallback(
     (issueId: string, agentProjectId: string, branchName: string) => {
       const notification: NotificationDto = {
@@ -100,12 +73,11 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
       }
 
       addNotification(notification)
-      showToast(notification)
     },
-    [addNotification, showToast]
+    [addNotification]
   )
 
-  // Handle AgentStartFailed event - show error toast
+  // Handle AgentStartFailed event
   const handleAgentStartFailed = useCallback(
     (issueId: string, agentProjectId: string, error: string) => {
       const notification: NotificationDto = {
@@ -120,9 +92,8 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
       }
 
       addNotification(notification)
-      showToast(notification)
     },
-    [addNotification, showToast]
+    [addNotification]
   )
 
   // Register/unregister event handlers
@@ -185,18 +156,6 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
       },
       [methods, dismissNotification]
     ),
-  }
-}
-
-function getToastFunction(type: NotificationType) {
-  switch (type) {
-    case 'warning':
-      return toast.warning
-    case 'actionRequired':
-      return toast.error
-    case 'info':
-    default:
-      return toast.info
   }
 }
 

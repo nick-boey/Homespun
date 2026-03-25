@@ -27,18 +27,6 @@ vi.mock('@/providers/signalr-provider', () => ({
   }),
 }))
 
-// Mock sonner toast
-vi.mock('sonner', () => ({
-  toast: {
-    info: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn(),
-    dismiss: vi.fn(),
-  },
-}))
-
-import { toast } from 'sonner'
-
 describe('useNotificationEvents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -46,8 +34,6 @@ describe('useNotificationEvents', () => {
       notifications: [],
       unreadCount: 0,
       preferences: {
-        showToasts: true,
-        autoDismissDuration: 5000,
         soundEnabled: false,
       },
     })
@@ -111,70 +97,6 @@ describe('useNotificationEvents', () => {
       const state = useNotificationStore.getState()
       expect(state.notifications).toHaveLength(1)
       expect(state.notifications[0].id).toBe('new-notification')
-    })
-  })
-
-  it('shows toast when notification is added and showToasts is enabled', async () => {
-    let notificationAddedHandler: (notification: NotificationDto) => void = () => {}
-
-    mockConnection.on.mockImplementation((event: string, handler: unknown) => {
-      if (event === 'NotificationAdded') {
-        notificationAddedHandler = handler as (notification: NotificationDto) => void
-      }
-    })
-
-    renderHook(() => useNotificationEvents())
-
-    const notification: NotificationDto = {
-      id: 'toast-test',
-      type: 'info',
-      title: 'Toast Test',
-      message: 'This should show a toast',
-      createdAt: new Date().toISOString(),
-      isDismissible: true,
-    }
-
-    notificationAddedHandler(notification)
-
-    await waitFor(() => {
-      expect(toast.info).toHaveBeenCalled()
-    })
-  })
-
-  it('does not show toast when showToasts is disabled', async () => {
-    useNotificationStore.setState({
-      notifications: [],
-      unreadCount: 0,
-      preferences: {
-        showToasts: false,
-        autoDismissDuration: 5000,
-        soundEnabled: false,
-      },
-    })
-
-    let notificationAddedHandler: (notification: NotificationDto) => void = () => {}
-
-    mockConnection.on.mockImplementation((event: string, handler: unknown) => {
-      if (event === 'NotificationAdded') {
-        notificationAddedHandler = handler as (notification: NotificationDto) => void
-      }
-    })
-
-    renderHook(() => useNotificationEvents())
-
-    const notification: NotificationDto = {
-      id: 'no-toast',
-      type: 'info',
-      title: 'No Toast',
-      message: 'This should not show a toast',
-      createdAt: new Date().toISOString(),
-      isDismissible: true,
-    }
-
-    notificationAddedHandler(notification)
-
-    await waitFor(() => {
-      expect(toast.info).not.toHaveBeenCalled()
     })
   })
 
