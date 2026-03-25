@@ -47,6 +47,8 @@ interface KonvaIssueNodeProps {
   line: TaskGraphIssueRenderLine
   /** Row index for vertical positioning */
   rowIndex: number
+  /** Optional Y position override (from row Y offset computation) */
+  rowY?: number
   /** Click handler */
   onClick?: () => void
   /** Whether this node is selected */
@@ -61,12 +63,13 @@ interface KonvaIssueNodeProps {
 export const KonvaIssueNode = memo(function KonvaIssueNode({
   line,
   rowIndex,
+  rowY,
   onClick,
   isSelected = false,
   backgroundColor = '#09090b',
 }: KonvaIssueNodeProps) {
   const cx = getLaneCenterX(line.lane)
-  const cy = rowIndex * ROW_HEIGHT + getRowCenterY()
+  const cy = (rowY ?? rowIndex * ROW_HEIGHT) + getRowCenterY()
   const nodeColor = getTypeColor(line.issueType)
   const isOutlineOnly = !line.hasDescription
 

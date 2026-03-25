@@ -270,4 +270,89 @@ describe('TaskGraphKonvaView', () => {
       expect(onSelectIssue).toHaveBeenCalledWith('issue-3')
     })
   })
+
+  describe('expanded row shifting', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+      { id: 'issue-3', title: 'Third Issue', lane: 0, row: 2 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('shifts rows below expanded issue down when space is pressed', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const rows = screen.getAllByTestId('konva-html-row')
+      // Before expansion: row 0 at top=0, row 1 at top=40, row 2 at top=80
+      const row1Parent = rows[0].parentElement!
+      const row2Parent = rows[1].parentElement!
+      const row3Parent = rows[2].parentElement!
+
+      expect(row1Parent.style.top).toBe('0px')
+      expect(row2Parent.style.top).toBe('40px')
+      expect(row3Parent.style.top).toBe('80px')
+
+      // Press space to expand issue-1
+      const container = screen.getByTestId('task-graph-konva')
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // After expansion: row 0 still at 0, row 1 shifted to 240 (40+200), row 2 at 280
+      const updatedRows = screen.getAllByTestId('konva-html-row')
+      const updatedRow1Parent = updatedRows[0].parentElement!
+      const updatedRow2Parent = updatedRows[1].parentElement!
+      const updatedRow3Parent = updatedRows[2].parentElement!
+
+      expect(updatedRow1Parent.style.top).toBe('0px')
+      expect(updatedRow2Parent.style.top).toBe('240px')
+      expect(updatedRow3Parent.style.top).toBe('280px')
+    })
+
+    it('shifts rows back up when expanded issue is collapsed', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Expand
+      fireEvent.keyDown(container, { key: ' ' })
+      // Collapse
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // After collapse: rows should be back to original positions
+      const rows = screen.getAllByTestId('konva-html-row')
+      expect(rows[0].parentElement!.style.top).toBe('0px')
+      expect(rows[1].parentElement!.style.top).toBe('40px')
+      expect(rows[2].parentElement!.style.top).toBe('80px')
+    })
+
+    it('handles multiple expanded issues with cumulative shifting', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Expand issue-1 (space)
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // Double-click issue-2 to expand it too
+      const rows = screen.getAllByTestId('konva-html-row')
+      fireEvent.doubleClick(rows[1])
+
+      // After both expanded:
+      // row 0 at 0, row 1 at 240 (40+200), row 2 at 480 (240+40+200)
+      const updatedRows = screen.getAllByTestId('konva-html-row')
+      expect(updatedRows[0].parentElement!.style.top).toBe('0px')
+      expect(updatedRows[1].parentElement!.style.top).toBe('240px')
+      expect(updatedRows[2].parentElement!.style.top).toBe('480px')
+    })
+  })
 })
