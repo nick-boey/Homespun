@@ -32,7 +32,12 @@ public class IssuesAgentApiTests
         // Create a project to use in tests
         var createProjectRequest = new { Name = "IssuesAgentTest", DefaultBranch = "main" };
         var projectResponse = await _client.PostAsJsonAsync("/api/projects", createProjectRequest, JsonOptions);
-        projectResponse.EnsureSuccessStatusCode();
+        if (!projectResponse.IsSuccessStatusCode)
+        {
+            var errorBody = await projectResponse.Content.ReadAsStringAsync();
+            throw new HttpRequestException(
+                $"POST /api/projects returned {projectResponse.StatusCode}: {errorBody}");
+        }
         var project = await projectResponse.Content.ReadFromJsonAsync<Project>(JsonOptions);
         _projectId = project!.Id;
     }
