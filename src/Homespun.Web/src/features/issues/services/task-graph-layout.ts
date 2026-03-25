@@ -58,6 +58,8 @@ export interface TaskGraphIssueRenderLine {
   hiddenParentIsSeriesMode: boolean
   executionMode: ExecutionModeEnum
   parentIssues: Array<{ parentIssue?: string | null; sortOrder?: string | null }> | null
+  multiParentIndex: number | null
+  multiParentTotal: number | null
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -105,6 +107,13 @@ export function isLoadMoreRenderLine(
   line: TaskGraphRenderLine
 ): line is TaskGraphLoadMoreRenderLine {
   return line.type === 'loadMore'
+}
+
+/**
+ * Returns a unique key for a render line, accounting for multi-parent duplicates.
+ */
+export function getRenderKey(line: TaskGraphIssueRenderLine): string {
+  return line.multiParentIndex != null ? `${line.issueId}:${line.multiParentIndex}` : line.issueId
 }
 
 /**
@@ -279,6 +288,28 @@ export function computeLayout(
             result[i] = { ...line, drawLane0PassThrough: true }
           }
         }
+      }
+    }
+  }
+
+  // Post-process: assign multiParentIndex/multiParentTotal for issues appearing more than once
+  const mpCounts = new Map<string, number>()
+  for (const line of result) {
+    if (isIssueRenderLine(line)) {
+      const id = line.issueId.toLowerCase()
+      mpCounts.set(id, (mpCounts.get(id) ?? 0) + 1)
+    }
+  }
+  const mpIdx = new Map<string, number>()
+  for (let i = 0; i < result.length; i++) {
+    const line = result[i]
+    if (isIssueRenderLine(line)) {
+      const id = line.issueId.toLowerCase()
+      const total = mpCounts.get(id) ?? 1
+      if (total > 1) {
+        const idx = mpIdx.get(id) ?? 0
+        mpIdx.set(id, idx + 1)
+        result[i] = { ...line, multiParentIndex: idx, multiParentTotal: total }
       }
     }
   }
@@ -676,6 +707,8 @@ function renderGroup(
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
       parentIssues: node.issue.parentIssues ?? null,
+      multiParentIndex: null,
+      multiParentTotal: null,
     })
   }
 }
@@ -987,6 +1020,8 @@ function renderGroupTreeView(
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
       parentIssues: node.issue.parentIssues ?? null,
+      multiParentIndex: null,
+      multiParentTotal: null,
     })
   }
 }

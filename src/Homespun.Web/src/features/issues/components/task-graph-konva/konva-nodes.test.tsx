@@ -54,6 +54,8 @@ function createIssueLine(
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.PARALLEL,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
     ...overrides,
   }
 }
@@ -117,6 +119,76 @@ describe('KonvaIssueNode', () => {
         </KonvaWrapper>
       )
     ).not.toThrow()
+  })
+
+  describe('multi-parent indicator', () => {
+    it('renders without crashing when multiParentIndex is null', () => {
+      const line = createIssueLine({
+        issueId: 'test-1',
+        lane: 0,
+        multiParentIndex: null,
+        multiParentTotal: null,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for first multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 0,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for middle multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 1,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for last multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 2,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
   })
 })
 

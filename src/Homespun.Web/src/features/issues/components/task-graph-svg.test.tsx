@@ -40,6 +40,8 @@ describe('TaskGraphNodeSvg', () => {
     assignedTo: null,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
     ...overrides,
   })
 
@@ -343,6 +345,44 @@ describe('TaskGraphNodeSvg', () => {
         return d.includes('M 12 0 L 12 12') || d.includes('M 12 28 L 12 40')
       })
       expect(seriesLinePaths).toHaveLength(0)
+    })
+  })
+
+  describe('multi-parent indicator', () => {
+    it('renders no diagonal when multiParentIndex is null', () => {
+      const line = createMockLine()
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const lines = container.querySelectorAll('line')
+      // No multi-parent diagonal lines when index is null
+      expect(lines).toHaveLength(0)
+    })
+
+    it('renders down-right diagonal for first multi-parent instance', () => {
+      const line = createMockLine({ multiParentIndex: 0, multiParentTotal: 3 })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const lines = container.querySelectorAll('line')
+      // First instance (index 0): should have down-right diagonal segment(s)
+      expect(lines.length).toBeGreaterThan(0)
+    })
+
+    it('renders up-left diagonal for last multi-parent instance', () => {
+      const line = createMockLine({ multiParentIndex: 2, multiParentTotal: 3 })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const lines = container.querySelectorAll('line')
+      // Last instance (index 2 of 3): should have up-left diagonal segment(s)
+      expect(lines.length).toBeGreaterThan(0)
+    })
+
+    it('renders both diagonals for middle instance', () => {
+      const line = createMockLine({ multiParentIndex: 1, multiParentTotal: 3 })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const lines = container.querySelectorAll('line')
+      // Middle instance (index 1 of 3): should have both diagonal sets
+      expect(lines.length).toBeGreaterThan(0)
     })
   })
 

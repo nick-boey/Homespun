@@ -106,6 +106,17 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
           isSeriesMode={line.hiddenParentIsSeriesMode}
         />
       )}
+
+      {/* Multi-parent diagonal indicator */}
+      {line.multiParentIndex != null && line.multiParentTotal != null && (
+        <KonvaMultiParentIndicator
+          cx={cx}
+          cy={cy}
+          nodeColor={nodeColor}
+          multiParentIndex={line.multiParentIndex}
+          multiParentTotal={line.multiParentTotal}
+        />
+      )}
     </Group>
   )
 })
@@ -199,6 +210,75 @@ export const KonvaHiddenParentIndicator = memo(function KonvaHiddenParentIndicat
       </Group>
     )
   }
+})
+
+interface KonvaMultiParentIndicatorProps {
+  cx: number
+  cy: number
+  nodeColor: string
+  multiParentIndex: number
+  multiParentTotal: number
+}
+
+/**
+ * Renders diagonal lines indicating multi-parent issue instances.
+ * First instance: diagonal down-right. Last instance: diagonal up-left. Middle: both.
+ * Uses stepped opacity segments for a fade effect.
+ */
+export const KonvaMultiParentIndicator = memo(function KonvaMultiParentIndicator({
+  cx,
+  cy,
+  nodeColor,
+  multiParentIndex,
+  multiParentTotal,
+}: KonvaMultiParentIndicatorProps) {
+  const lineLength = ROW_HEIGHT / 2
+  const segmentCount = 3
+  const segmentLength = lineLength / segmentCount
+  const isFirst = multiParentIndex === 0
+  const isLast = multiParentIndex === multiParentTotal - 1
+
+  const showDownRight = !isLast
+  const showUpLeft = !isFirst
+
+  return (
+    <Group>
+      {showDownRight &&
+        [0, 1, 2].map((i) => {
+          const opacity = 0.5 - (i * 0.5) / segmentCount
+          const x1 = cx + NODE_RADIUS + 2 + i * segmentLength * 0.7
+          const y1 = cy + NODE_RADIUS + 2 + i * segmentLength * 0.7
+          const x2 = cx + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+          const y2 = cy + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+          return (
+            <Line
+              key={`mp-dr-${i}`}
+              points={[x1, y1, x2, y2]}
+              stroke={nodeColor}
+              strokeWidth={1.5}
+              opacity={opacity}
+            />
+          )
+        })}
+      {showUpLeft &&
+        [0, 1, 2].map((i) => {
+          const opacity = 0.5 - (i * 0.5) / segmentCount
+          const x1 = cx - NODE_RADIUS - 2 - i * segmentLength * 0.7
+          const y1 = cy - NODE_RADIUS - 2 - i * segmentLength * 0.7
+          const x2 = cx - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+          const y2 = cy - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+          return (
+            <Line
+              key={`mp-ul-${i}`}
+              points={[x1, y1, x2, y2]}
+              stroke={nodeColor}
+              strokeWidth={1.5}
+              opacity={opacity}
+            />
+          )
+        })}
+    </Group>
+  )
 })
 
 interface KonvaAgentStatusRingProps {
