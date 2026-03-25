@@ -518,4 +518,104 @@ describe('computeEdgePaths', () => {
       expect(uniqueIds.size).toBe(ids.length)
     })
   })
+
+  describe('row Y offsets', () => {
+    it('uses rowYPositions when provided to offset series edge Y coordinates', () => {
+      // parent at row 0, child at row 1, same lane — series edge
+      const lines = [
+        createIssueLine({
+          issueId: 'parent-1',
+          lane: 0,
+          executionMode: ExecutionMode.SERIES,
+        }),
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
+        }),
+      ]
+
+      const cy = getRowCenterY()
+
+      // Without offsets: parent at y=cy, child at y=ROW_HEIGHT+cy
+      const withoutOffsets = computeEdgePaths(lines)
+      // With offsets: parent at y=cy, child shifted down by 200 (expanded panel)
+      const rowYPositions = [0, 240] // 0, ROW_HEIGHT(40) + 200 expansion
+      const withOffsets = computeEdgePaths(lines, rowYPositions)
+
+      expect(withoutOffsets.length).toBe(1)
+      expect(withOffsets.length).toBe(1)
+
+      // Without offsets: series vertical from parent bottom to child top
+      // parent center = 0 + cy = 20, child center = 40 + cy = 60
+      const edgeWithout = withoutOffsets[0]
+      expect(edgeWithout.points[1]).toBe(cy + NODE_RADIUS + 2) // parent bottom
+
+      // With offsets: child is at y=240
+      // parent center = 0 + cy = 20, child center = 240 + cy = 260
+      const edgeWith = withOffsets[0]
+      expect(edgeWith.points[3]).toBe(240 + cy - NODE_RADIUS - 2) // child top
+    })
+
+    it('shifts parallel edge Y coordinates using rowYPositions', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 1 }),
+      ]
+
+      const cy = getRowCenterY()
+      const rowYPositions = [100, 300] // Both rows shifted
+      const result = computeEdgePaths(lines, rowYPositions)
+
+      expect(result.length).toBe(1)
+      const edge = result[0]
+      // Child at row 0 with offset 100: center Y = 100 + cy
+      expect(edge.points[1]).toBe(100 + cy) // child Y
+      // Parent at row 1 with offset 300: center Y = 300 + cy
+      expect(edge.points[5]).toBe(300 + cy - NODE_RADIUS - 2) // parent top
+    })
+
+    it('falls back to rowIndex * ROW_HEIGHT when rowYPositions is undefined', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: false,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
+        }),
+        createIssueLine({ issueId: 'parent-1', lane: 1 }),
+      ]
+
+      const withUndefined = computeEdgePaths(lines, undefined)
+      const withoutParam = computeEdgePaths(lines)
+
+      expect(withUndefined).toEqual(withoutParam)
+    })
+
+    it('applies offsets to lane 0 pass-through edges', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'issue-1',
+          lane: 2,
+          drawLane0PassThrough: true,
+          lane0Color: '#3b82f6',
+        }),
+      ]
+
+      const rowYPositions = [150]
+      const result = computeEdgePaths(lines, rowYPositions)
+
+      const passThrough = result.find((e) => e.isLane0PassThrough)
+      expect(passThrough).toBeDefined()
+      // Y top should be at offset 150, Y bottom at 150 + ROW_HEIGHT = 190
+      expect(passThrough!.points[1]).toBe(150)
+      expect(passThrough!.points[3]).toBe(190)
+    })
+  })
 })

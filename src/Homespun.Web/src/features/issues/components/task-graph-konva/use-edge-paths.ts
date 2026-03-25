@@ -49,9 +49,13 @@ export interface EdgePath {
  * 3. Preserve lane 0 connector edges for merged PRs
  *
  * @param renderLines - Array of render lines from computeLayout
+ * @param rowYPositions - Optional array mapping row index to Y position (for expanded row offsets)
  * @returns Array of edge paths for Konva rendering
  */
-export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[] {
+export function computeEdgePaths(
+  renderLines: TaskGraphRenderLine[],
+  rowYPositions?: number[]
+): EdgePath[] {
   const edges: EdgePath[] = []
 
   // Filter to issue render lines only
@@ -61,10 +65,23 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
   const positionMap = new Map<string, { x: number; y: number; lane: number; rowIndex: number }>()
   const cy = getRowCenterY()
 
+  /** Get the Y position for a given row index */
+  const getRowY = (index: number): number => {
+    return rowYPositions ? rowYPositions[index] : index * ROW_HEIGHT
+  }
+
+  /** Get the Y position for the next row (bottom of current row) */
+  const getNextRowY = (index: number): number => {
+    if (rowYPositions && index + 1 < rowYPositions.length) {
+      return rowYPositions[index + 1]
+    }
+    return getRowY(index) + ROW_HEIGHT
+  }
+
   issueLines.forEach((line, rowIndex) => {
     positionMap.set(line.issueId, {
       x: getLaneCenterX(line.lane),
-      y: rowIndex * ROW_HEIGHT + cy,
+      y: getRowY(rowIndex) + cy,
       lane: line.lane,
       rowIndex,
     })
@@ -146,12 +163,13 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
   // Phase 3: Lane 0 connectors (preserved for PR connections)
   issueLines.forEach((line, rowIndex) => {
     const cx = getLaneCenterX(line.lane)
+    const rowY_top = getRowY(rowIndex)
 
     // Lane 0 pass-through line (full vertical at lane 0)
     if (line.drawLane0PassThrough) {
       const lane0X = getLaneCenterX(0)
-      const yTop = rowIndex * ROW_HEIGHT
-      const yBottom = (rowIndex + 1) * ROW_HEIGHT
+      const yTop = rowY_top
+      const yBottom = getNextRowY(rowIndex)
 
       edges.push({
         id: `lane0-passthrough-${line.issueId}-${rowIndex}`,
@@ -168,11 +186,11 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
     // Lane 0 connector (horizontal from lane 0 to node)
     if (line.drawLane0Connector) {
       const lane0X = getLaneCenterX(0)
-      const rowY = rowIndex * ROW_HEIGHT + cy
+      const rowCenterY = rowY_top + cy
       const effectiveLane0Color = line.lane0Color ?? '#6b7280'
 
       if (line.isLastLane0Connector) {
-        const junctionY = rowY - NODE_RADIUS
+        const junctionY = rowCenterY - NODE_RADIUS
         const arcEndX = lane0X + NODE_RADIUS
 
         edges.push({
@@ -181,13 +199,13 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
           toIssueId: line.issueId,
           points: [
             lane0X,
-            rowIndex * ROW_HEIGHT,
+            rowY_top,
             lane0X,
             junctionY,
             arcEndX,
-            rowY,
+            rowCenterY,
             cx - NODE_RADIUS - 2,
-            rowY,
+            rowCenterY,
           ],
           color: effectiveLane0Color,
           isSeriesEdge: false,
@@ -195,14 +213,13 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
           rowIndex,
         })
       } else {
-        const yTop = rowIndex * ROW_HEIGHT
-        const yBottom = (rowIndex + 1) * ROW_HEIGHT
+        const yBottom = getNextRowY(rowIndex)
 
         edges.push({
           id: `lane0-vertical-${line.issueId}-${rowIndex}`,
           fromIssueId: line.issueId,
           toIssueId: line.issueId,
-          points: [lane0X, yTop, lane0X, yBottom],
+          points: [lane0X, rowY_top, lane0X, yBottom],
           color: effectiveLane0Color,
           isSeriesEdge: true,
           isLane0Connector: true,
@@ -213,7 +230,7 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
           id: `lane0-horizontal-${line.issueId}-${rowIndex}`,
           fromIssueId: line.issueId,
           toIssueId: line.issueId,
-          points: [lane0X, rowY, cx - NODE_RADIUS - 2, rowY],
+          points: [lane0X, rowCenterY, cx - NODE_RADIUS - 2, rowCenterY],
           color: effectiveLane0Color,
           isSeriesEdge: false,
           isLane0Connector: true,
@@ -311,8 +328,11 @@ export function computeDiagonalEdges(renderLines: TaskGraphRenderLine[]): Diagon
 /**
  * Hook version of computeEdgePaths for use in React components.
  */
-export function useEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[] {
-  return useMemo(() => computeEdgePaths(renderLines), [renderLines])
+export function useEdgePaths(
+  renderLines: TaskGraphRenderLine[],
+  rowYPositions?: number[]
+): EdgePath[] {
+  return useMemo(() => computeEdgePaths(renderLines, rowYPositions), [renderLines, rowYPositions])
 }
 
 /**

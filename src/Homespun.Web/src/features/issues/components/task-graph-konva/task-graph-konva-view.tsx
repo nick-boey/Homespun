@@ -83,6 +83,9 @@ export interface TaskGraphKonvaViewRef {
 
 const DEFAULT_VIEWPORT_HEIGHT = 600
 
+/** Estimated height for expanded detail panels */
+export const DETAIL_PANEL_HEIGHT = 200
+
 /**
  * Main TaskGraphKonvaView component.
  *
@@ -210,6 +213,20 @@ export const TaskGraphKonvaView = memo(
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
 
+    // Compute cumulative Y positions for each row, accounting for expanded detail panels
+    const rowYPositions = useMemo(() => {
+      const positions: number[] = []
+      let y = 0
+      for (let i = 0; i < issueRenderLines.length; i++) {
+        positions.push(y)
+        y += ROW_HEIGHT
+        if (expandedIds.has(issueRenderLines[i].issueId)) {
+          y += DETAIL_PANEL_HEIGHT
+        }
+      }
+      return positions
+    }, [issueRenderLines, expandedIds])
+
     // Get selected issue index (find first render line matching the selected issue ID)
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
@@ -226,9 +243,10 @@ export const TaskGraphKonvaView = memo(
     const contentSize = useMemo(() => {
       const svgWidth = LANE_WIDTH * maxLanes + LANE_WIDTH / 2
       const contentWidth = svgWidth + 800 // SVG + content area
-      const contentHeight = renderLines.length * ROW_HEIGHT
+      const lastRowY = rowYPositions.length > 0 ? rowYPositions[rowYPositions.length - 1] : 0
+      const contentHeight = lastRowY + ROW_HEIGHT
       return { width: contentWidth, height: contentHeight }
-    }, [maxLanes, renderLines.length])
+    }, [maxLanes, rowYPositions])
 
     // Camera state
     const { camera, scrollToRow, handleDragEnd, handleWheel, touchHandlers } = useCamera(
@@ -237,7 +255,7 @@ export const TaskGraphKonvaView = memo(
     )
 
     // Compute edge paths
-    const edgePaths = useEdgePaths(renderLines)
+    const edgePaths = useEdgePaths(renderLines, rowYPositions)
     const diagonalEdges = useDiagonalEdges(renderLines)
 
     // Attach non-passive touch event listeners for mobile panning.
@@ -779,6 +797,7 @@ export const TaskGraphKonvaView = memo(
                 key={`node-${getRenderKey(line)}`}
                 line={line}
                 rowIndex={rowIndex}
+                rowY={rowYPositions[rowIndex]}
                 onClick={() => handleRowClick(line.issueId)}
                 backgroundColor={backgroundColor}
               />
@@ -815,7 +834,7 @@ export const TaskGraphKonvaView = memo(
                 key={renderKey}
                 style={{
                   position: 'absolute',
-                  top: rowIndex * ROW_HEIGHT,
+                  top: rowYPositions[rowIndex] ?? rowIndex * ROW_HEIGHT,
                   left: 0,
                   width: contentSize.width,
                   pointerEvents: 'auto',
