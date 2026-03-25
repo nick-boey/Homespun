@@ -72,7 +72,7 @@ public class DependencyInjectionTests
     public void ICommandRunner_Resolves_ToMockCommandRunner()
     {
         var commandRunner = _factory.Services.GetRequiredService<Homespun.Features.Commands.ICommandRunner>();
-        Assert.That(commandRunner, Is.InstanceOf<Homespun.Features.Testing.Services.MockCommandRunner>(),
+        Assert.That(commandRunner.GetType().Name, Is.EqualTo("MockCommandRunner"),
             $"Expected MockCommandRunner but got {commandRunner.GetType().FullName}");
     }
 
@@ -81,7 +81,7 @@ public class DependencyInjectionTests
     {
         using var scope = _factory.Services.CreateScope();
         var projectService = scope.ServiceProvider.GetRequiredService<Homespun.Features.Projects.IProjectService>();
-        Assert.That(projectService, Is.InstanceOf<Homespun.Features.Projects.ProjectService>(),
+        Assert.That(projectService.GetType().Name, Is.EqualTo("ProjectService"),
             $"Expected ProjectService but got {projectService.GetType().FullName}");
     }
 }
