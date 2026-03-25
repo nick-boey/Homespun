@@ -148,7 +148,7 @@ public class MockGraphService : IGraphService
 
         // Filter to open issues (matching real FleeceService.GetTaskGraphAsync behavior)
         var openIssues = allIssues
-            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            .Where(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
             .ToList();
 
         if (openIssues.Count == 0) return null;
