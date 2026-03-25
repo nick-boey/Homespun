@@ -41,6 +41,56 @@ export interface EdgePath {
 }
 
 /**
+ * Generates points for a quarter-circle arc at a 90-degree corner.
+ *
+ * @param cornerX - X coordinate where the two straight lines would meet
+ * @param cornerY - Y coordinate where the two straight lines would meet
+ * @param direction - Turn direction: 'down-right', 'right-down', or 'up-right'
+ * @param radius - Arc radius
+ * @param numPoints - Number of segments for the arc (default 8)
+ * @returns Flat array of [x, y, x, y, ...] points along the arc
+ */
+export function generateCornerArc(
+  cornerX: number,
+  cornerY: number,
+  direction: 'down-right' | 'right-down' | 'up-right',
+  radius: number,
+  numPoints: number = 8
+): number[] {
+  const points: number[] = []
+  let cx: number, cy: number, startAngle: number, endAngle: number
+
+  if (direction === 'down-right') {
+    // Going ↓ then →. Center at (cornerX + r, cornerY - r). Sweep π → π/2.
+    cx = cornerX + radius
+    cy = cornerY - radius
+    startAngle = Math.PI
+    endAngle = Math.PI / 2
+  } else if (direction === 'right-down') {
+    // Going → then ↓. Center at (cornerX - r, cornerY + r). Sweep -π/2 → 0.
+    cx = cornerX - radius
+    cy = cornerY + radius
+    startAngle = -Math.PI / 2
+    endAngle = 0
+  } else {
+    // up-right: Going ↑ then →. Center at (cornerX + r, cornerY + r). Sweep π → 3π/2.
+    cx = cornerX + radius
+    cy = cornerY + radius
+    startAngle = Math.PI
+    endAngle = (3 * Math.PI) / 2
+  }
+
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints
+    const angle = startAngle + (endAngle - startAngle) * t
+    points.push(cx + radius * Math.cos(angle))
+    points.push(cy + radius * Math.sin(angle))
+  }
+
+  return points
+}
+
+/**
  * Computes edge paths from render lines using node-position-based rendering.
  *
  * Three-phase algorithm:
@@ -118,9 +168,17 @@ export function computeEdgePaths(
             rowIndex,
           })
         } else {
-          // Different lane: L-shape - vertical from child toward parent row, horizontal to parent left
+          // Different lane: L-shape with curved arc at corner
           const verticalY =
             childPos.y > parentPos.y ? childPos.y - NODE_RADIUS - 2 : childPos.y + NODE_RADIUS + 2
+          const horizontalSpace = parentPos.x - NODE_RADIUS - 2 - childPos.x
+          const verticalSpace = Math.abs(parentPos.y - verticalY)
+          const arcRadius = Math.min(ROW_HEIGHT / 2, horizontalSpace, verticalSpace)
+          const direction = childPos.y > parentPos.y ? 'up-right' : 'down-right'
+          const arcCornerY = parentPos.y
+          const arcBeforeY =
+            direction === 'up-right' ? arcCornerY + arcRadius : arcCornerY - arcRadius
+          const arcPoints = generateCornerArc(childPos.x, arcCornerY, direction, arcRadius)
           edges.push({
             id: `series-${line.issueId}-${parentRef.parentIssue}`,
             fromIssueId: line.issueId,
@@ -129,7 +187,8 @@ export function computeEdgePaths(
               childPos.x,
               verticalY,
               childPos.x,
-              parentPos.y,
+              arcBeforeY,
+              ...arcPoints,
               parentPos.x - NODE_RADIUS - 2,
               parentPos.y,
             ],
@@ -139,7 +198,11 @@ export function computeEdgePaths(
           })
         }
       } else {
-        // Parallel: exit child right, enter parent top
+        // Parallel: exit child right, curved arc at corner, enter parent top
+        const horizontalSpace = parentPos.x - (childPos.x + NODE_RADIUS + 2)
+        const verticalSpace = parentPos.y - NODE_RADIUS - 2 - childPos.y
+        const arcRadius = Math.min(ROW_HEIGHT / 2, horizontalSpace, verticalSpace)
+        const arcPoints = generateCornerArc(parentPos.x, childPos.y, 'right-down', arcRadius)
         edges.push({
           id: `parallel-${line.issueId}-${parentRef.parentIssue}`,
           fromIssueId: line.issueId,
@@ -147,8 +210,9 @@ export function computeEdgePaths(
           points: [
             childPos.x + NODE_RADIUS + 2,
             childPos.y,
-            parentPos.x,
+            parentPos.x - arcRadius,
             childPos.y,
+            ...arcPoints,
             parentPos.x,
             parentPos.y - NODE_RADIUS - 2,
           ],
@@ -190,8 +254,10 @@ export function computeEdgePaths(
       const effectiveLane0Color = line.lane0Color ?? '#6b7280'
 
       if (line.isLastLane0Connector) {
-        const junctionY = rowCenterY - NODE_RADIUS
-        const arcEndX = lane0X + NODE_RADIUS
+        const horizontalSpace = cx - NODE_RADIUS - 2 - lane0X
+        const verticalSpace = rowCenterY - rowY_top
+        const arcRadius = Math.min(ROW_HEIGHT / 2, horizontalSpace, verticalSpace)
+        const arcPoints = generateCornerArc(lane0X, rowCenterY, 'down-right', arcRadius)
 
         edges.push({
           id: `lane0-connector-${line.issueId}-${rowIndex}`,
@@ -201,9 +267,8 @@ export function computeEdgePaths(
             lane0X,
             rowY_top,
             lane0X,
-            junctionY,
-            arcEndX,
-            rowCenterY,
+            rowCenterY - arcRadius,
+            ...arcPoints,
             cx - NODE_RADIUS - 2,
             rowCenterY,
           ],

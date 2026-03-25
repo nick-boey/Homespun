@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { computeEdgePaths, computeDiagonalEdges } from './use-edge-paths'
+import { computeEdgePaths, computeDiagonalEdges, generateCornerArc } from './use-edge-paths'
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../../services'
 import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { TaskGraphMarkerType } from '../../services'
@@ -122,7 +122,7 @@ describe('computeEdgePaths', () => {
       expect(edge.toIssueId).toBe('parent-1')
       expect(edge.isSeriesEdge).toBe(false)
 
-      // Parallel: exit child right, enter parent top
+      // Parallel: exit child right, arc at corner, enter parent top
       const childCx = getLaneCenterX(0)
       const childCy = 0 * ROW_HEIGHT + getRowCenterY()
       const parentCx = getLaneCenterX(1)
@@ -131,12 +131,13 @@ describe('computeEdgePaths', () => {
       // Start: child right edge
       expect(edge.points[0]).toBe(childCx + NODE_RADIUS + 2)
       expect(edge.points[1]).toBe(childCy)
-      // Middle: horizontal to parent's x
-      expect(edge.points[2]).toBe(parentCx)
-      expect(edge.points[3]).toBe(childCy)
       // End: parent top
-      expect(edge.points[4]).toBe(parentCx)
-      expect(edge.points[5]).toBe(parentCy - NODE_RADIUS - 2)
+      const lastX = edge.points[edge.points.length - 2]
+      const lastY = edge.points[edge.points.length - 1]
+      expect(lastX).toBe(parentCx)
+      expect(lastY).toBe(parentCy - NODE_RADIUS - 2)
+      // Should have arc points (more than 6 coordinates)
+      expect(edge.points.length).toBeGreaterThan(6)
     })
 
     it('generates independent edges for multiple parallel children', () => {
@@ -226,7 +227,7 @@ describe('computeEdgePaths', () => {
       expect(edge.toIssueId).toBe('parent-1')
       expect(edge.isSeriesEdge).toBe(true)
 
-      // Series different lane: exit child bottom, go down, horizontal to parent left
+      // Series different lane: exit child bottom, arc at corner, horizontal to parent left
       const childCx = getLaneCenterX(0)
       const childCy = 1 * ROW_HEIGHT + getRowCenterY()
       const parentCx = getLaneCenterX(1)
@@ -235,12 +236,13 @@ describe('computeEdgePaths', () => {
       // Start: child bottom
       expect(edge.points[0]).toBe(childCx)
       expect(edge.points[1]).toBe(childCy - NODE_RADIUS - 2)
-      // Middle: vertical up to parent row
-      expect(edge.points[2]).toBe(childCx)
-      expect(edge.points[3]).toBe(parentCy)
       // End: horizontal to parent left
-      expect(edge.points[4]).toBe(parentCx - NODE_RADIUS - 2)
-      expect(edge.points[5]).toBe(parentCy)
+      const lastX = edge.points[edge.points.length - 2]
+      const lastY = edge.points[edge.points.length - 1]
+      expect(lastX).toBe(parentCx - NODE_RADIUS - 2)
+      expect(lastY).toBe(parentCy)
+      // Should have arc points (more than 6 coordinates)
+      expect(edge.points.length).toBeGreaterThan(6)
     })
 
     it('generates edges for multi-level series chain', () => {
@@ -578,7 +580,8 @@ describe('computeEdgePaths', () => {
       // Child at row 0 with offset 100: center Y = 100 + cy
       expect(edge.points[1]).toBe(100 + cy) // child Y
       // Parent at row 1 with offset 300: center Y = 300 + cy
-      expect(edge.points[5]).toBe(300 + cy - NODE_RADIUS - 2) // parent top
+      const lastY = edge.points[edge.points.length - 1]
+      expect(lastY).toBe(300 + cy - NODE_RADIUS - 2) // parent top
     })
 
     it('falls back to rowIndex * ROW_HEIGHT when rowYPositions is undefined', () => {
@@ -616,6 +619,86 @@ describe('computeEdgePaths', () => {
       // Y top should be at offset 150, Y bottom at 150 + ROW_HEIGHT = 190
       expect(passThrough!.points[1]).toBe(150)
       expect(passThrough!.points[3]).toBe(190)
+    })
+  })
+
+  describe('generateCornerArc', () => {
+    it('generates correct number of points', () => {
+      const points = generateCornerArc(0, 100, 'down-right', 20, 8)
+      // 9 points (0..8) × 2 coordinates = 18
+      expect(points.length).toBe(18)
+    })
+
+    it('down-right arc starts at top and ends at right of corner', () => {
+      const points = generateCornerArc(50, 100, 'down-right', 20, 8)
+      expect(points[0]).toBeCloseTo(50)
+      expect(points[1]).toBeCloseTo(80) // cornerY - radius
+      expect(points[points.length - 2]).toBeCloseTo(70) // cornerX + radius
+      expect(points[points.length - 1]).toBeCloseTo(100)
+    })
+
+    it('right-down arc starts at left and ends at bottom of corner', () => {
+      const points = generateCornerArc(100, 50, 'right-down', 20, 8)
+      expect(points[0]).toBeCloseTo(80) // cornerX - radius
+      expect(points[1]).toBeCloseTo(50)
+      expect(points[points.length - 2]).toBeCloseTo(100)
+      expect(points[points.length - 1]).toBeCloseTo(70) // cornerY + radius
+    })
+
+    it('up-right arc starts at bottom and ends at right of corner', () => {
+      const points = generateCornerArc(50, 100, 'up-right', 20, 8)
+      expect(points[0]).toBeCloseTo(50)
+      expect(points[1]).toBeCloseTo(120) // cornerY + radius
+      expect(points[points.length - 2]).toBeCloseTo(70) // cornerX + radius
+      expect(points[points.length - 1]).toBeCloseTo(100)
+    })
+
+    it('arc points stay within bounding box', () => {
+      const points = generateCornerArc(50, 100, 'down-right', 20, 16)
+      for (let i = 0; i < points.length; i += 2) {
+        expect(points[i]).toBeGreaterThanOrEqual(50 - 0.01)
+        expect(points[i]).toBeLessThanOrEqual(70.01)
+        expect(points[i + 1]).toBeGreaterThanOrEqual(80 - 0.01)
+        expect(points[i + 1]).toBeLessThanOrEqual(100.01)
+      }
+    })
+  })
+
+  describe('curved edge paths', () => {
+    it('lane 0 last connector has arc points', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'issue-1',
+          lane: 1,
+          drawLane0Connector: true,
+          isLastLane0Connector: true,
+          lane0Color: '#3b82f6',
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+      const lane0Edge = result.find((e) => e.isLane0Connector)
+      expect(lane0Edge).toBeDefined()
+      // Old implementation had 8 coordinates (4 points), new one has more due to arc
+      expect(lane0Edge!.points.length).toBeGreaterThan(8)
+    })
+
+    it('series connector in different lane has arc points', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'parent-1',
+          lane: 1,
+          executionMode: ExecutionMode.SERIES,
+        }),
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          parentIssues: [{ parentIssue: 'parent-1', sortOrder: 'V' }],
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+      expect(result.length).toBe(1)
+      expect(result[0].points.length).toBeGreaterThan(6)
     })
   })
 })
