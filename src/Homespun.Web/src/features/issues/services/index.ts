@@ -6,6 +6,7 @@ export {
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
+  getRenderKey,
   type TaskGraphRenderLine,
   type TaskGraphIssueRenderLine,
   type TaskGraphPrRenderLine,

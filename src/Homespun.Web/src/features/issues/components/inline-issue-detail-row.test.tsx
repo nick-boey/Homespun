@@ -38,6 +38,8 @@ function createRenderLine(
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
     ...overrides,
   }
 }

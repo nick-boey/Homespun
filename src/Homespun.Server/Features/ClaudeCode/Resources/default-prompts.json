@@ -36,7 +36,7 @@
   },
   {
     "name": "IssueModify",
-    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\nIMPORTANT CONSTRAINTS:\n- You may ONLY use the Fleece CLI tool to make modifications\n- Do NOT write any files in the repository\n- Do NOT make any code changes\n- Focus solely on issue modifications using fleece commands\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nAvailable fleece commands:\n- fleece list --oneline - List all issues\n- fleece show <id> --json - Show issue details\n- fleece edit <id> -t <title> -s <status> -d <description> - Edit issue\n- fleece create -t <title> -s <status> -y <type> - Create new issue\n- fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy\n- fleece list --tree - View issue hierarchy\n- fleece list --next - View task graph\n\nUser request: {{userPrompt}}",
+    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\nIMPORTANT CONSTRAINTS:\n- You may ONLY use the Fleece CLI tool to make modifications\n- Do NOT write any files in the repository\n- Do NOT make any code changes\n- Focus solely on issue modifications using fleece commands\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nAvailable fleece commands:\n- fleece list --oneline - List all issues\n- fleece show <id> --json - Show issue details\n- fleece edit <id> -t <title> -s <status> -d <description> - Edit issue\n- fleece create -t <title> -s <status> -y <type> - Create new issue\n- fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy\n- fleece list --tree - View issue hierarchy\n- fleece list --next - View task graph",
     "mode": "build",
     "category": "IssueAgent"
   },
@@ -53,7 +53,7 @@
   },
   {
     "name": "IssueAgentModification",
-    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nUser request: {{userPrompt}}",
+    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}",
     "mode": "build",
     "sessionType": "issueAgentModification"
   },

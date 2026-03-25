@@ -67,6 +67,9 @@ public class MockDataSeederService : IHostedService
             await SeedAgentPromptsAsync();
             await SeedSessionsAsync(cancellationToken);
 
+            // Initialize git repos in all project folders after all files are seeded
+            InitializeGitRepositories();
+
             _logger.LogInformation("Mock data seeding completed successfully");
         }
         catch (Exception ex)
@@ -151,6 +154,22 @@ public class MockDataSeederService : IHostedService
     }
 
     /// <summary>
+    /// Initializes git repositories in all project directories under the temp folder.
+    /// Must be called after all files are seeded so the initial commit includes everything.
+    /// </summary>
+    private void InitializeGitRepositories()
+    {
+        var projectsDir = Path.Combine(_tempFolderService.RootPath, "projects");
+        if (!Directory.Exists(projectsDir))
+            return;
+
+        foreach (var projectDir in Directory.GetDirectories(projectsDir))
+        {
+            _fleeceIssueSeeder.InitializeGitRepository(projectDir);
+        }
+    }
+
+    /// <summary>
     /// Gets the local path for a mock project using the temp folder service.
     /// Creates the project directory with minimal structure if it doesn't exist.
     /// </summary>
@@ -175,7 +194,9 @@ public class MockDataSeederService : IHostedService
 
     private async Task SeedProjectsAsync()
     {
-        // Demo Project 1: Main demo project
+        var now = DateTime.UtcNow;
+
+        // Demo Project 1: Main demo project (most recently updated - appears first)
         var demoProject = new Project
         {
             Id = "demo-project",
@@ -184,12 +205,13 @@ public class MockDataSeederService : IHostedService
             GitHubOwner = "demo-org",
             GitHubRepo = "demo-project",
             DefaultBranch = "main",
-            DefaultModel = "sonnet"
+            DefaultModel = "sonnet",
+            UpdatedAt = now
         };
         await _dataStore.AddProjectAsync(demoProject);
         _logger.LogDebug("Seeded demo project: {ProjectName} at {Path}", demoProject.Name, demoProject.LocalPath);
 
-        // Demo Project 2: A sample app
+        // Demo Project 2: A sample app (older - appears second)
         var sampleApp = new Project
         {
             Id = "sample-app",
@@ -198,7 +220,8 @@ public class MockDataSeederService : IHostedService
             GitHubOwner = "demo-org",
             GitHubRepo = "sample-app",
             DefaultBranch = "main",
-            DefaultModel = "sonnet"
+            DefaultModel = "sonnet",
+            UpdatedAt = now.AddDays(-1)
         };
         await _dataStore.AddProjectAsync(sampleApp);
         _logger.LogDebug("Seeded sample app project: {ProjectName} at {Path}", sampleApp.Name, sampleApp.LocalPath);

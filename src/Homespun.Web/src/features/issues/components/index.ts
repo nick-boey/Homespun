@@ -28,3 +28,4 @@ export { IssueRowSkeleton, type IssueRowSkeletonProps } from './issue-row-skelet
 export { DetailPanelSkeleton, type DetailPanelSkeletonProps } from './detail-panel-skeleton'
 export { PrStatusIndicator } from './pr-status-indicator'
 export { FilterHelpPopover, type FilterHelpPopoverProps } from './filter-help-popover'
+export { IssuesEmptyState, type IssuesEmptyStateProps } from './issues-empty-state'
