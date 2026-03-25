@@ -22,6 +22,7 @@ import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
 import { ErrorFallback } from '@/components/error-boundary'
 import { IssueRowSkeleton } from './issue-row-skeleton'
+import { IssuesEmptyState } from './issues-empty-state'
 import {
   computeLayout,
   isIssueRenderLine,
@@ -136,7 +137,7 @@ export const TaskGraphView = memo(
     const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
     // Create issue mutation
-    const { createIssue } = useCreateIssue({
+    const { createIssue, isCreating } = useCreateIssue({
       projectId,
       onSuccess: () => {
         // Reset edit mode after successful creation
@@ -886,11 +887,11 @@ export const TaskGraphView = memo(
     // Render empty state
     if (renderLines.length === 0) {
       return (
-        <div className={cn('border-border rounded-lg border p-8 text-center', className)}>
-          <p className="text-muted-foreground">
-            No issues found. Create your first issue to get started.
-          </p>
-        </div>
+        <IssuesEmptyState
+          onCreateIssue={() => createIssue({ title: 'New issue' })}
+          isCreating={isCreating}
+          className={className}
+        />
       )
     }
 

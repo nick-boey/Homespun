@@ -130,7 +130,8 @@ describe('TaskGraphKonvaView', () => {
       })
 
       renderComponent()
-      expect(screen.getByText(/no issues found/i)).toBeInTheDocument()
+      expect(screen.getByText('No issues are currently open')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Create an issue' })).toBeInTheDocument()
     })
   })
 
