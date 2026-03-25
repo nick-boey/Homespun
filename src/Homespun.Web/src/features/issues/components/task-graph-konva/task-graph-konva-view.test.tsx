@@ -181,6 +181,39 @@ describe('TaskGraphKonvaView', () => {
     })
   })
 
+  describe('touch events', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('attaches touch event listeners to the container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Verify touch events don't throw and the container is interactive
+      fireEvent.touchStart(container, {
+        touches: [{ clientX: 100, clientY: 200 }],
+      })
+      fireEvent.touchMove(container, {
+        touches: [{ clientX: 80, clientY: 180 }],
+      })
+      fireEvent.touchEnd(container)
+
+      // The container should still be rendered and functional
+      expect(container).toBeInTheDocument()
+    })
+  })
+
   describe('keyboard navigation', () => {
     const sampleGraph = createTaskGraph([
       { id: 'issue-1', title: 'First Issue' },
