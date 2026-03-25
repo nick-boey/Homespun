@@ -175,7 +175,9 @@ public class MockDataSeederService : IHostedService
 
     private async Task SeedProjectsAsync()
     {
-        // Demo Project 1: Main demo project
+        var now = DateTime.UtcNow;
+
+        // Demo Project 1: Main demo project (most recently updated - appears first)
         var demoProject = new Project
         {
             Id = "demo-project",
@@ -184,12 +186,13 @@ public class MockDataSeederService : IHostedService
             GitHubOwner = "demo-org",
             GitHubRepo = "demo-project",
             DefaultBranch = "main",
-            DefaultModel = "sonnet"
+            DefaultModel = "sonnet",
+            UpdatedAt = now
         };
         await _dataStore.AddProjectAsync(demoProject);
         _logger.LogDebug("Seeded demo project: {ProjectName} at {Path}", demoProject.Name, demoProject.LocalPath);
 
-        // Demo Project 2: A sample app
+        // Demo Project 2: A sample app (older - appears second)
         var sampleApp = new Project
         {
             Id = "sample-app",
@@ -198,7 +201,8 @@ public class MockDataSeederService : IHostedService
             GitHubOwner = "demo-org",
             GitHubRepo = "sample-app",
             DefaultBranch = "main",
-            DefaultModel = "sonnet"
+            DefaultModel = "sonnet",
+            UpdatedAt = now.AddDays(-1)
         };
         await _dataStore.AddProjectAsync(sampleApp);
         _logger.LogDebug("Seeded sample app project: {ProjectName} at {Path}", sampleApp.Name, sampleApp.LocalPath);
