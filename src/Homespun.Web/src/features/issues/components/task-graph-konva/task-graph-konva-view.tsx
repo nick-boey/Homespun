@@ -216,10 +216,32 @@ export const TaskGraphKonvaView = memo(
     }, [maxLanes, renderLines.length])
 
     // Camera state
-    const { camera, scrollToRow, handleDragEnd, handleWheel } = useCamera(contentSize, viewportSize)
+    const { camera, scrollToRow, handleDragEnd, handleWheel, touchHandlers } = useCamera(
+      contentSize,
+      viewportSize
+    )
 
     // Compute edge paths
     const edgePaths = useEdgePaths(renderLines)
+
+    // Attach non-passive touch event listeners for mobile panning.
+    // Must use addEventListener (not React onTouchMove) to set { passive: false }
+    // which is required for preventDefault() to stop page scrolling.
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+
+      const { handleTouchStart, handleTouchMove, handleTouchEnd } = touchHandlers
+      container.addEventListener('touchstart', handleTouchStart, { passive: true })
+      container.addEventListener('touchmove', handleTouchMove, { passive: false })
+      container.addEventListener('touchend', handleTouchEnd)
+
+      return () => {
+        container.removeEventListener('touchstart', handleTouchStart)
+        container.removeEventListener('touchmove', handleTouchMove)
+        container.removeEventListener('touchend', handleTouchEnd)
+      }
+    }, [touchHandlers])
 
     // Measure container on resize
     useEffect(() => {

@@ -4,7 +4,7 @@
  * Handles panning, scrolling, and viewport bounds for the task graph canvas.
  */
 
-import { useCallback, useState, useMemo } from 'react'
+import { useCallback, useState, useMemo, useRef } from 'react'
 import type Konva from 'konva'
 
 /**
@@ -172,6 +172,48 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
     [panBy]
   )
 
+  // Touch panning state
+  const touchRef = useRef<{ lastX: number; lastY: number } | null>(null)
+
+  /**
+   * Handler for touchstart — records initial touch position for panning.
+   * Only tracks single-finger touches (multi-touch is ignored for panning).
+   */
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchRef.current = { lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
+    }
+  }, [])
+
+  /**
+   * Handler for touchmove — pans the camera by the touch delta.
+   * Calls preventDefault to stop the page from scrolling.
+   */
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (e.touches.length === 1 && touchRef.current) {
+        e.preventDefault()
+        const dx = touchRef.current.lastX - e.touches[0].clientX
+        const dy = touchRef.current.lastY - e.touches[0].clientY
+        touchRef.current = { lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
+        panBy(dx, dy)
+      }
+    },
+    [panBy]
+  )
+
+  /**
+   * Handler for touchend — clears touch tracking state.
+   */
+  const handleTouchEnd = useCallback(() => {
+    touchRef.current = null
+  }, [])
+
+  const touchHandlers: TouchHandlers = useMemo(
+    () => ({ handleTouchStart, handleTouchMove, handleTouchEnd }),
+    [handleTouchStart, handleTouchMove, handleTouchEnd]
+  )
+
   return {
     camera,
     panTo,
@@ -180,5 +222,15 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
     reset,
     handleDragEnd,
     handleWheel,
+    touchHandlers,
   }
+}
+
+/**
+ * Touch event handlers returned by useCamera for attaching to the container element.
+ */
+export interface TouchHandlers {
+  handleTouchStart: (e: TouchEvent) => void
+  handleTouchMove: (e: TouchEvent) => void
+  handleTouchEnd: () => void
 }
