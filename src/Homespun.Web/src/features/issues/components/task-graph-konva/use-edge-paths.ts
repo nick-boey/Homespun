@@ -227,8 +227,97 @@ export function computeEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[]
 }
 
 /**
+ * Represents a diagonal edge indicating a secondary parent relationship.
+ */
+export interface DiagonalEdgePath {
+  /** Unique identifier for the edge */
+  id: string
+  /** Source issue ID (the child) */
+  fromIssueId: string
+  /** Target issue ID (the secondary parent) */
+  toIssueId: string
+  /** Points array [x1, y1, x2, y2] */
+  points: number[]
+  /** Color of the edge */
+  color: string
+  /** Always true for diagonal edges */
+  isDiagonal: true
+}
+
+/** Length of the diagonal indicator line */
+const DIAGONAL_LINE_LENGTH = 20
+
+/**
+ * Computes diagonal edge paths for issues with multiple parents.
+ * Only secondary parents (index > 0) get diagonal edges.
+ * The diagonal points from the child node toward the secondary parent's position.
+ */
+export function computeDiagonalEdges(renderLines: TaskGraphRenderLine[]): DiagonalEdgePath[] {
+  const edges: DiagonalEdgePath[] = []
+  const issueLines = renderLines.filter(isIssueRenderLine)
+
+  // Build issue ID to (rowIndex, lane) map
+  const issuePositionMap = new Map<string, { rowIndex: number; lane: number }>()
+  issueLines.forEach((line, index) => {
+    issuePositionMap.set(line.issueId, { rowIndex: index, lane: line.lane })
+  })
+
+  const cy = getRowCenterY()
+
+  issueLines.forEach((line, rowIndex) => {
+    if (!line.parentIssues || line.parentIssues.length <= 1) return
+
+    const childCx = getLaneCenterX(line.lane)
+    const childCy = rowIndex * ROW_HEIGHT + cy
+    const nodeColor = getTypeColor(line.issueType)
+
+    // Skip the first parent (primary) — only process secondary parents
+    for (let i = 1; i < line.parentIssues.length; i++) {
+      const parentRef = line.parentIssues[i]
+      const parentId = parentRef.parentIssue
+      if (!parentId) continue
+
+      const parentPos = issuePositionMap.get(parentId)
+      if (!parentPos) continue
+
+      // Compute direction vector toward secondary parent
+      const parentCx = getLaneCenterX(parentPos.lane)
+      const parentCy = parentPos.rowIndex * ROW_HEIGHT + cy
+
+      const dx = parentCx - childCx
+      const dy = parentCy - childCy
+      const dist = Math.sqrt(dx * dx + dy * dy)
+
+      if (dist === 0) continue
+
+      // Normalize and scale to line length
+      const endX = childCx + (dx / dist) * DIAGONAL_LINE_LENGTH
+      const endY = childCy + (dy / dist) * DIAGONAL_LINE_LENGTH
+
+      edges.push({
+        id: `diagonal-${line.issueId}-${parentId}`,
+        fromIssueId: line.issueId,
+        toIssueId: parentId,
+        points: [childCx, childCy, endX, endY],
+        color: nodeColor,
+        isDiagonal: true,
+      })
+    }
+  })
+
+  return edges
+}
+
+/**
  * Hook version of computeEdgePaths for use in React components.
  */
 export function useEdgePaths(renderLines: TaskGraphRenderLine[]): EdgePath[] {
   return useMemo(() => computeEdgePaths(renderLines), [renderLines])
+}
+
+/**
+ * Hook for computing diagonal edge paths for multi-parent issues.
+ */
+export function useDiagonalEdges(renderLines: TaskGraphRenderLine[]): DiagonalEdgePath[] {
+  return useMemo(() => computeDiagonalEdges(renderLines), [renderLines])
 }
