@@ -701,4 +701,73 @@ describe('computeEdgePaths', () => {
       expect(result[0].points.length).toBeGreaterThan(6)
     })
   })
+
+  describe('hidden parent sibling edges', () => {
+    it('generates top and bottom lines for series siblings with hidden parent', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          drawBottomLine: true,
+          hasHiddenParent: false, // suppressed because drawBottomLine=true
+          hiddenParentIsSeriesMode: true,
+        }),
+        createIssueLine({
+          issueId: 'child-2',
+          lane: 0,
+          isSeriesChild: true,
+          drawTopLine: true,
+          hasHiddenParent: true,
+          hiddenParentIsSeriesMode: true,
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+
+      // Should have bottom line for child-1 and top line for child-2
+      const bottomLine = result.find((e) => e.id === 'bottom-line-child-1')
+      const topLine = result.find((e) => e.id === 'top-line-child-2')
+
+      expect(bottomLine).toBeDefined()
+      expect(topLine).toBeDefined()
+      expect(bottomLine!.isSeriesEdge).toBe(true)
+      expect(topLine!.isSeriesEdge).toBe(true)
+    })
+
+    it('generates continuous vertical lines for 3 series siblings with hidden parent', () => {
+      const lines = [
+        createIssueLine({
+          issueId: 'child-1',
+          lane: 0,
+          isSeriesChild: true,
+          drawBottomLine: true,
+          hasHiddenParent: false,
+          hiddenParentIsSeriesMode: true,
+        }),
+        createIssueLine({
+          issueId: 'child-2',
+          lane: 0,
+          isSeriesChild: true,
+          drawTopLine: true,
+          drawBottomLine: true,
+          hasHiddenParent: false,
+          hiddenParentIsSeriesMode: true,
+        }),
+        createIssueLine({
+          issueId: 'child-3',
+          lane: 0,
+          isSeriesChild: true,
+          drawTopLine: true,
+          hasHiddenParent: true,
+          hiddenParentIsSeriesMode: true,
+        }),
+      ]
+      const result = computeEdgePaths(lines)
+
+      expect(result.find((e) => e.id === 'bottom-line-child-1')).toBeDefined()
+      expect(result.find((e) => e.id === 'top-line-child-2')).toBeDefined()
+      expect(result.find((e) => e.id === 'bottom-line-child-2')).toBeDefined()
+      expect(result.find((e) => e.id === 'top-line-child-3')).toBeDefined()
+    })
+  })
 })

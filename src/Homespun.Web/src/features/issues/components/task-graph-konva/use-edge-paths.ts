@@ -224,7 +224,42 @@ export function computeEdgePaths(
     }
   })
 
-  // Phase 3: Lane 0 connectors (preserved for PR connections)
+  // Phase 3: Series sibling connections (drawTopLine/drawBottomLine)
+  // These handle vertical lines between series siblings, including when the parent is hidden
+  issueLines.forEach((line, rowIndex) => {
+    const cx = getLaneCenterX(line.lane)
+    const rowY_top = getRowY(rowIndex)
+    const nodeColor = getTypeColor(line.issueType)
+
+    if (line.drawTopLine) {
+      const nodeTopY = rowY_top + cy - NODE_RADIUS - 2
+      edges.push({
+        id: `top-line-${line.issueId}`,
+        fromIssueId: line.issueId,
+        toIssueId: line.issueId,
+        points: [cx, rowY_top, cx, nodeTopY],
+        color: nodeColor,
+        isSeriesEdge: true,
+        rowIndex,
+      })
+    }
+
+    if (line.drawBottomLine) {
+      const nodeBottomY = rowY_top + cy + NODE_RADIUS + 2
+      const yBottom = getNextRowY(rowIndex)
+      edges.push({
+        id: `bottom-line-${line.issueId}`,
+        fromIssueId: line.issueId,
+        toIssueId: line.issueId,
+        points: [cx, nodeBottomY, cx, yBottom],
+        color: nodeColor,
+        isSeriesEdge: true,
+        rowIndex,
+      })
+    }
+  })
+
+  // Phase 4: Lane 0 connectors (preserved for PR connections)
   issueLines.forEach((line, rowIndex) => {
     const cx = getLaneCenterX(line.lane)
     const rowY_top = getRowY(rowIndex)
