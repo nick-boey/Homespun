@@ -218,7 +218,10 @@ test.describe.serial('Save and Run Agent', () => {
     await clearIssueFilter(page)
 
     // Find Add rate limiting task (ISSUE-012) which isn't modified by other tests
-    const issueRow = page.locator('[role="row"]').filter({ hasText: 'Add rate limiting to v2 API' }).first()
+    const issueRow = page
+      .locator('[role="row"]')
+      .filter({ hasText: 'Add rate limiting to v2 API' })
+      .first()
     await expect(issueRow).toBeVisible()
 
     // Click the Edit button within this row
