@@ -408,6 +408,151 @@ describe('computeLayout', () => {
       expect(childLine.hasHiddenParent).toBe(true)
       expect(childLine.hiddenParentIsSeriesMode).toBe(false) // Parent is parallel
     })
+
+    it('sets drawTopLine/drawBottomLine for 2 series siblings when parent is hidden', () => {
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.SERIES })
+      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
+      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child1, 0, 1), createNode(child2, 0, 2)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      // maxDepth = 0 filters out parent at lane 1
+      const result = computeLayout(taskGraph, 0)
+
+      const child1Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
+      ) as TaskGraphIssueRenderLine
+      const child2Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
+      ) as TaskGraphIssueRenderLine
+
+      expect(child1Line).toBeDefined()
+      expect(child2Line).toBeDefined()
+
+      // child1 should draw bottom line to connect to child2
+      expect(child1Line.drawBottomLine).toBe(true)
+      // child2 should draw top line to connect from child1
+      expect(child2Line.drawTopLine).toBe(true)
+      // Hidden parent indicator: child1 has drawBottomLine so indicator is suppressed
+      // Only the last sibling (child2) shows the hidden parent indicator
+      expect(child1Line.hasHiddenParent).toBe(false)
+      expect(child2Line.hasHiddenParent).toBe(true)
+      expect(child2Line.hiddenParentIsSeriesMode).toBe(true)
+    })
+
+    it('sets continuous vertical lines for 3 series siblings when parent is hidden', () => {
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.SERIES })
+      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
+      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
+      const child3 = createIssue({ id: 'child3', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(parent, 1, 0),
+          createNode(child1, 0, 1),
+          createNode(child2, 0, 2),
+          createNode(child3, 0, 3),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 0)
+
+      const child1Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
+      ) as TaskGraphIssueRenderLine
+      const child2Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
+      ) as TaskGraphIssueRenderLine
+      const child3Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child3'
+      ) as TaskGraphIssueRenderLine
+
+      // child1: bottom line (connects to child2), no top line (first sibling)
+      expect(child1Line.drawBottomLine).toBe(true)
+      expect(child1Line.drawTopLine).toBe(false)
+
+      // child2: both top and bottom lines (middle sibling)
+      expect(child2Line.drawTopLine).toBe(true)
+      expect(child2Line.drawBottomLine).toBe(true)
+
+      // child3: top line (connects from child2), no bottom line (last sibling)
+      expect(child3Line.drawTopLine).toBe(true)
+      expect(child3Line.drawBottomLine).toBe(false)
+    })
+
+    it('sets drawTopLine for non-adjacent series siblings with hidden parent', () => {
+      // Grandparent → parent (SERIES, hidden) → child1, child2
+      // Grandparent → cousin (visible, between child1 and child2 in row order)
+      const grandparent = createIssue({
+        id: 'grandparent',
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const parent = createIssue({
+        id: 'parent',
+        executionMode: ExecutionMode.SERIES,
+        parentIssues: [{ parentIssue: 'grandparent' }],
+      })
+      const child1 = createIssue({
+        id: 'child1',
+        parentIssues: [{ parentIssue: 'parent' }],
+      })
+      const cousin = createIssue({
+        id: 'cousin',
+        parentIssues: [{ parentIssue: 'grandparent' }],
+      })
+      const child2 = createIssue({
+        id: 'child2',
+        parentIssues: [{ parentIssue: 'parent' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(grandparent, 2, 0),
+          createNode(parent, 1, 1),
+          createNode(child1, 0, 2),
+          createNode(cousin, 0, 3),
+          createNode(child2, 0, 4),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      // maxDepth = 0: only lane 0 visible (child1, cousin, child2)
+      // parent at lane 1 and grandparent at lane 2 are hidden
+      const result = computeLayout(taskGraph, 0)
+
+      const child1Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
+      ) as TaskGraphIssueRenderLine
+      const cousinLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'cousin'
+      ) as TaskGraphIssueRenderLine
+      const child2Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
+      ) as TaskGraphIssueRenderLine
+
+      expect(child1Line).toBeDefined()
+      expect(cousinLine).toBeDefined()
+      expect(child2Line).toBeDefined()
+
+      // child1 should have drawBottomLine (connects toward child2)
+      expect(child1Line.drawBottomLine).toBe(true)
+
+      // child2 should have drawTopLine even though cousin is between them
+      expect(child2Line.drawTopLine).toBe(true)
+    })
   })
 
   describe('connected components', () => {

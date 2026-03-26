@@ -566,16 +566,23 @@ function renderGroup(
         }
 
         // Check for series siblings with same hidden parent (when visible parent is filtered out)
+        // Scan backwards through all previous nodes (not just i-1) because non-sibling nodes
+        // may appear between siblings in the render line array
         if (!drawTopLine) {
           const currentHiddenParent = hiddenParentByNode.get(nodeId)
           if (currentHiddenParent?.issue?.executionMode === ExecutionMode.SERIES) {
-            const prevHiddenParent = hiddenParentByNode.get(prevNodeId)
-            if (
-              prevHiddenParent?.issue?.id &&
-              currentHiddenParent?.issue?.id &&
-              prevHiddenParent.issue.id.toLowerCase() === currentHiddenParent.issue.id.toLowerCase()
-            ) {
-              drawTopLine = true
+            for (let k = i - 1; k >= 0; k--) {
+              const prevSiblingId = group[k].issue?.id?.toLowerCase() ?? ''
+              const prevHiddenParent = hiddenParentByNode.get(prevSiblingId)
+              if (
+                prevHiddenParent?.issue?.id &&
+                currentHiddenParent?.issue?.id &&
+                prevHiddenParent.issue.id.toLowerCase() ===
+                  currentHiddenParent.issue.id.toLowerCase()
+              ) {
+                drawTopLine = true
+                break
+              }
             }
           }
         }
