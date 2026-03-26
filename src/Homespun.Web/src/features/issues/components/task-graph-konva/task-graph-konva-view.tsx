@@ -23,9 +23,11 @@ import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
 import { ErrorFallback } from '@/components/error-boundary'
 import { IssueRowSkeleton } from '../issue-row-skeleton'
+import { IssuesEmptyState } from '../issues-empty-state'
 import {
   computeLayout,
   isIssueRenderLine,
+  getRenderKey,
   computeInheritedParentInfo,
   applyFilter,
   TaskGraphMarkerType,
@@ -43,10 +45,19 @@ import {
 } from '../../types'
 import { InlineIssueEditor } from '../inline-issue-editor'
 import { InlineIssueDetailRow } from '../inline-issue-detail-row'
-import { KonvaIssueNode, KonvaEdge, LANE_WIDTH, ROW_HEIGHT, getTypeColor } from './konva-nodes'
+import {
+  KonvaIssueNode,
+  KonvaVirtualNode,
+  KonvaEdge,
+  KonvaDiagonalEdge,
+  LANE_WIDTH,
+  ROW_HEIGHT,
+  getTypeColor,
+} from './konva-nodes'
 import { KonvaHtmlRow } from './konva-html-row'
 import { useCamera } from './use-camera'
-import { useEdgePaths } from './use-edge-paths'
+import { useEdgePaths, useDiagonalEdges } from './use-edge-paths'
+import { computeVirtualNodeData, getDisplayRowIndex } from './compute-virtual-node'
 
 export interface TaskGraphKonvaViewProps {
   projectId: string
@@ -73,6 +84,9 @@ export interface TaskGraphKonvaViewRef {
 }
 
 const DEFAULT_VIEWPORT_HEIGHT = 600
+
+/** Estimated height for expanded detail panels */
+export const DETAIL_PANEL_HEIGHT = 200
 
 /**
  * Main TaskGraphKonvaView component.
@@ -111,6 +125,17 @@ export const TaskGraphKonvaView = memo(
       height: DEFAULT_VIEWPORT_HEIGHT,
     })
 
+    // Background color for Konva nodes (read from computed CSS)
+    const [backgroundColor, setBackgroundColor] = useState('#09090b')
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+      const bg = getComputedStyle(container).backgroundColor
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        setBackgroundColor(bg)
+      }
+    }, [])
+
     // Expanded rows state
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
@@ -120,7 +145,7 @@ export const TaskGraphKonvaView = memo(
     const [pendingEdit, setPendingEdit] = useState<InlineEditState | null>(null)
 
     // Create/Update issue mutations
-    const { createIssue } = useCreateIssue({
+    const { createIssue, isCreating } = useCreateIssue({
       projectId,
       onSuccess: () => {
         setEditMode(KeyboardEditMode.Viewing)
@@ -190,16 +215,25 @@ export const TaskGraphKonvaView = memo(
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
 
-    // Issue IDs for keyboard navigation
-    const issueIds = useMemo(() => {
-      return issueRenderLines.map((line) => line.issueId)
-    }, [issueRenderLines])
+    // Compute cumulative Y positions for each row, accounting for expanded detail panels
+    const rowYPositions = useMemo(() => {
+      const positions: number[] = []
+      let y = 0
+      for (let i = 0; i < issueRenderLines.length; i++) {
+        positions.push(y)
+        y += ROW_HEIGHT
+        if (expandedIds.has(issueRenderLines[i].issueId)) {
+          y += DETAIL_PANEL_HEIGHT
+        }
+      }
+      return positions
+    }, [issueRenderLines, expandedIds])
 
-    // Get selected issue index
+    // Get selected issue index (find first render line matching the selected issue ID)
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
-      return issueIds.indexOf(selectedIssueId)
-    }, [selectedIssueId, issueIds])
+      return issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
+    }, [selectedIssueId, issueRenderLines])
 
     // Get selected render line
     const selectedRenderLine = useMemo(() => {
@@ -207,19 +241,53 @@ export const TaskGraphKonvaView = memo(
       return issueRenderLines[selectedIndex] ?? null
     }, [selectedIndex, issueRenderLines])
 
-    // Content size for camera
+    // Compute virtual node data for pending new issue
+    const virtualNodeData = useMemo(
+      () => computeVirtualNodeData(pendingNewIssue, editMode, issueRenderLines),
+      [pendingNewIssue, editMode, issueRenderLines]
+    )
+
+    // Insertion row index (null when not creating)
+    const insertionRowIndex = virtualNodeData?.insertionRowIndex ?? null
+
+    // Content size for camera (extra row when creating a new issue)
     const contentSize = useMemo(() => {
       const svgWidth = LANE_WIDTH * maxLanes + LANE_WIDTH / 2
       const contentWidth = svgWidth + 800 // SVG + content area
-      const contentHeight = renderLines.length * ROW_HEIGHT
+      const lastRowY = rowYPositions.length > 0 ? rowYPositions[rowYPositions.length - 1] : 0
+      const extraHeight = insertionRowIndex !== null ? ROW_HEIGHT : 0
+      const contentHeight = lastRowY + ROW_HEIGHT + extraHeight
       return { width: contentWidth, height: contentHeight }
-    }, [maxLanes, renderLines.length])
+    }, [maxLanes, rowYPositions, insertionRowIndex])
 
     // Camera state
-    const { camera, scrollToRow, handleDragEnd, handleWheel } = useCamera(contentSize, viewportSize)
+    const { camera, scrollToRow, handleDragEnd, handleWheel, touchHandlers } = useCamera(
+      contentSize,
+      viewportSize
+    )
 
     // Compute edge paths
-    const edgePaths = useEdgePaths(renderLines)
+    const edgePaths = useEdgePaths(renderLines, rowYPositions)
+    const diagonalEdges = useDiagonalEdges(renderLines)
+
+    // Attach non-passive touch event listeners for mobile panning.
+    // Must use addEventListener (not React onTouchMove) to set { passive: false }
+    // which is required for preventDefault() to stop page scrolling.
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+
+      const { handleTouchStart, handleTouchMove, handleTouchEnd } = touchHandlers
+      container.addEventListener('touchstart', handleTouchStart, { passive: true })
+      container.addEventListener('touchmove', handleTouchMove, { passive: false })
+      container.addEventListener('touchend', handleTouchEnd)
+
+      return () => {
+        container.removeEventListener('touchstart', handleTouchStart)
+        container.removeEventListener('touchmove', handleTouchMove)
+        container.removeEventListener('touchend', handleTouchEnd)
+      }
+    }, [touchHandlers])
 
     // Measure container on resize
     useEffect(() => {
@@ -276,6 +344,18 @@ export const TaskGraphKonvaView = memo(
         return next
       })
     }, [])
+
+    // Handle navigating to first instance of a multi-parent issue
+    const handleSelectFirstInstance = useCallback(
+      (issueId: string) => {
+        onSelectIssue?.(issueId)
+        const firstIndex = issueRenderLines.findIndex((l) => l.issueId === issueId)
+        if (firstIndex >= 0) {
+          scrollToRow(firstIndex, ROW_HEIGHT)
+        }
+      },
+      [onSelectIssue, issueRenderLines, scrollToRow]
+    )
 
     // Handle row click
     const handleRowClick = useCallback(
@@ -482,26 +562,26 @@ export const TaskGraphKonvaView = memo(
           return
         }
 
-        if (!selectedIssueId && issueIds.length > 0) {
+        if (!selectedIssueId && issueRenderLines.length > 0) {
           if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
             event.preventDefault()
-            onSelectIssue?.(issueIds[0])
+            onSelectIssue?.(issueRenderLines[0].issueId)
             return
           }
         }
 
         if (!selectedIssueId) return
 
-        const currentIndex = issueIds.indexOf(selectedIssueId)
+        const currentIndex = issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
         if (currentIndex === -1) return
 
         switch (event.key) {
           case 'ArrowDown':
           case 'j': {
             event.preventDefault()
-            const nextIndex = Math.min(currentIndex + 1, issueIds.length - 1)
-            const nextId = issueIds[nextIndex]
-            onSelectIssue?.(nextId)
+            const nextIndex = Math.min(currentIndex + 1, issueRenderLines.length - 1)
+            const nextLine = issueRenderLines[nextIndex]
+            onSelectIssue?.(nextLine.issueId)
             scrollToRow(nextIndex, ROW_HEIGHT)
             break
           }
@@ -510,8 +590,8 @@ export const TaskGraphKonvaView = memo(
           case 'k': {
             event.preventDefault()
             const prevIndex = Math.max(currentIndex - 1, 0)
-            const prevId = issueIds[prevIndex]
-            onSelectIssue?.(prevId)
+            const prevLine = issueRenderLines[prevIndex]
+            onSelectIssue?.(prevLine.issueId)
             scrollToRow(prevIndex, ROW_HEIGHT)
             break
           }
@@ -526,7 +606,7 @@ export const TaskGraphKonvaView = memo(
               )
               if (parentLine) {
                 onSelectIssue?.(parentLine.issueId)
-                const parentIndex = issueIds.indexOf(parentLine.issueId)
+                const parentIndex = issueRenderLines.indexOf(parentLine)
                 if (parentIndex >= 0) scrollToRow(parentIndex, ROW_HEIGHT)
               }
             }
@@ -543,7 +623,7 @@ export const TaskGraphKonvaView = memo(
               )
               if (childLine) {
                 onSelectIssue?.(childLine.issueId)
-                const childIndex = issueIds.indexOf(childLine.issueId)
+                const childIndex = issueRenderLines.indexOf(childLine)
                 if (childIndex >= 0) scrollToRow(childIndex, ROW_HEIGHT)
               }
             }
@@ -553,9 +633,9 @@ export const TaskGraphKonvaView = memo(
           case 'g': {
             if (!event.shiftKey) {
               event.preventDefault()
-              const firstId = issueIds[0]
-              if (firstId) {
-                onSelectIssue?.(firstId)
+              const firstLine = issueRenderLines[0]
+              if (firstLine) {
+                onSelectIssue?.(firstLine.issueId)
                 scrollToRow(0, ROW_HEIGHT)
               }
             }
@@ -564,10 +644,10 @@ export const TaskGraphKonvaView = memo(
 
           case 'G': {
             event.preventDefault()
-            const lastId = issueIds[issueIds.length - 1]
-            if (lastId) {
-              onSelectIssue?.(lastId)
-              scrollToRow(issueIds.length - 1, ROW_HEIGHT)
+            const lastLine = issueRenderLines[issueRenderLines.length - 1]
+            if (lastLine) {
+              onSelectIssue?.(lastLine.issueId)
+              scrollToRow(issueRenderLines.length - 1, ROW_HEIGHT)
             }
             break
           }
@@ -631,7 +711,6 @@ export const TaskGraphKonvaView = memo(
       [
         editMode,
         selectedIssueId,
-        issueIds,
         issueRenderLines,
         onSelectIssue,
         onEditIssue,
@@ -676,11 +755,11 @@ export const TaskGraphKonvaView = memo(
     // Render empty state
     if (renderLines.length === 0) {
       return (
-        <div className={cn('border-border rounded-lg border p-8 text-center', className)}>
-          <p className="text-muted-foreground">
-            No issues found. Create your first issue to get started.
-          </p>
-        </div>
+        <IssuesEmptyState
+          onCreateIssue={() => createIssue({ title: 'New issue' })}
+          isCreating={isCreating}
+          className={className}
+        />
       )
     }
 
@@ -696,7 +775,6 @@ export const TaskGraphKonvaView = memo(
           'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted',
           className
         )}
-        style={{ height: viewportSize.height }}
         onKeyDown={handleKeyDown}
         onWheel={handleWheel}
       >
@@ -711,22 +789,61 @@ export const TaskGraphKonvaView = memo(
         >
           {/* Edges layer */}
           <Layer>
-            {edgePaths.map((edge) => (
-              <KonvaEdge key={edge.id} id={edge.id} points={edge.points} color={edge.color} />
-            ))}
+            {edgePaths.map((edge) => {
+              // Shift edge Y-coordinates when a virtual row is inserted
+              const displayPoints =
+                insertionRowIndex !== null && edge.rowIndex >= insertionRowIndex
+                  ? edge.points.map((v, i) => (i % 2 === 1 ? v + ROW_HEIGHT : v))
+                  : edge.points
+              return (
+                <KonvaEdge key={edge.id} id={edge.id} points={displayPoints} color={edge.color} />
+              )
+            })}
+            {diagonalEdges.map((edge) => {
+              // Find source issue row index to determine if shifting is needed
+              const sourceRowIndex = issueRenderLines.findIndex(
+                (l) => l.issueId === edge.fromIssueId
+              )
+              const displayPoints =
+                insertionRowIndex !== null && sourceRowIndex >= insertionRowIndex
+                  ? edge.points.map((v, i) => (i % 2 === 1 ? v + ROW_HEIGHT : v))
+                  : edge.points
+              return (
+                <KonvaDiagonalEdge
+                  key={edge.id}
+                  id={edge.id}
+                  points={displayPoints}
+                  color={edge.color}
+                />
+              )
+            })}
           </Layer>
 
           {/* Nodes layer */}
           <Layer>
             {issueRenderLines.map((line, rowIndex) => (
               <KonvaIssueNode
-                key={`node-${line.issueId}`}
+                key={`node-${getRenderKey(line)}`}
                 line={line}
-                rowIndex={rowIndex}
+                rowIndex={getDisplayRowIndex(rowIndex, insertionRowIndex)}
+                rowY={
+                  insertionRowIndex !== null && rowIndex >= insertionRowIndex
+                    ? (rowYPositions[rowIndex] ?? rowIndex * ROW_HEIGHT) + ROW_HEIGHT
+                    : rowYPositions[rowIndex]
+                }
                 onClick={() => handleRowClick(line.issueId)}
-                isSelected={selectedIssueId === line.issueId}
+                backgroundColor={backgroundColor}
               />
             ))}
+            {virtualNodeData && (
+              <KonvaVirtualNode
+                lane={virtualNodeData.virtualLane}
+                rowY={
+                  rowYPositions[virtualNodeData.insertionRowIndex] ??
+                  virtualNodeData.insertionRowIndex * ROW_HEIGHT
+                }
+              />
+            )}
           </Layer>
         </Stage>
 
@@ -737,64 +854,71 @@ export const TaskGraphKonvaView = memo(
             transform: `translate(${-camera.x}px, ${-camera.y}px)`,
           }}
         >
+          {/* Inline editor row at insertion point */}
+          {virtualNodeData && pendingNewIssue && (
+            <div
+              style={{
+                position: 'absolute',
+                top:
+                  rowYPositions[virtualNodeData.insertionRowIndex] ??
+                  virtualNodeData.insertionRowIndex * ROW_HEIGHT,
+                left: 0,
+                width: contentSize.width,
+                pointerEvents: 'auto',
+              }}
+            >
+              <InlineEditorRow
+                pendingNewIssue={pendingNewIssue}
+                maxLanes={maxLanes}
+                onTitleChange={handleTitleChange}
+                onSave={async () => {
+                  if (!pendingNewIssue.title.trim()) {
+                    handleCancelEdit()
+                    return
+                  }
+                  const hasExplicitHierarchy =
+                    pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
+                  const parentIssueId = hasExplicitHierarchy
+                    ? pendingNewIssue.pendingParentId
+                    : pendingNewIssue.inheritedParentIssueId
+                  const parentSortOrder = hasExplicitHierarchy
+                    ? undefined
+                    : pendingNewIssue.inheritedParentSortOrder
+                  await createIssue({
+                    title: pendingNewIssue.title.trim(),
+                    parentIssueId,
+                    childIssueId: pendingNewIssue.pendingChildId,
+                    parentSortOrder,
+                  })
+                  containerRef.current?.focus()
+                }}
+                onCancel={handleCancelEdit}
+              />
+            </div>
+          )}
+
+          {/* Issue rows */}
           {issueRenderLines.map((line, rowIndex) => {
+            const renderKey = getRenderKey(line)
             const isSelected = selectedIssueId === line.issueId
             const isExpanded = expandedIds.has(line.issueId)
             const isEditing =
               editMode === KeyboardEditMode.EditingExisting && pendingEdit?.issueId === line.issueId
 
-            const shouldInsertAbove =
-              editMode === KeyboardEditMode.CreatingNew &&
-              pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
-
-            const shouldInsertBelow =
-              editMode === KeyboardEditMode.CreatingNew &&
-              !pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
-
             return (
               <div
-                key={line.issueId}
+                key={renderKey}
                 style={{
                   position: 'absolute',
-                  top: rowIndex * ROW_HEIGHT,
+                  top:
+                    insertionRowIndex !== null && rowIndex >= insertionRowIndex
+                      ? (rowYPositions[rowIndex] ?? rowIndex * ROW_HEIGHT) + ROW_HEIGHT
+                      : (rowYPositions[rowIndex] ?? rowIndex * ROW_HEIGHT),
                   left: 0,
                   width: contentSize.width,
                   pointerEvents: 'auto',
                 }}
               >
-                {/* Inline editor above */}
-                {shouldInsertAbove && (
-                  <InlineEditorRow
-                    pendingNewIssue={pendingNewIssue!}
-                    maxLanes={maxLanes}
-                    onTitleChange={handleTitleChange}
-                    onSave={async () => {
-                      if (!pendingNewIssue?.title.trim()) {
-                        handleCancelEdit()
-                        return
-                      }
-                      const hasExplicitHierarchy =
-                        pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
-                      const parentIssueId = hasExplicitHierarchy
-                        ? pendingNewIssue.pendingParentId
-                        : pendingNewIssue.inheritedParentIssueId
-                      const parentSortOrder = hasExplicitHierarchy
-                        ? undefined
-                        : pendingNewIssue.inheritedParentSortOrder
-                      await createIssue({
-                        title: pendingNewIssue.title.trim(),
-                        parentIssueId,
-                        childIssueId: pendingNewIssue.pendingChildId,
-                        parentSortOrder,
-                      })
-                      containerRef.current?.focus()
-                    }}
-                    onCancel={handleCancelEdit}
-                  />
-                )}
-
                 {/* Issue row or inline edit */}
                 {isEditing && pendingEdit ? (
                   <InlineEditRow
@@ -835,6 +959,7 @@ export const TaskGraphKonvaView = memo(
                     onTypeChange={handleTypeChange}
                     onStatusChange={handleStatusChange}
                     onExecutionModeChange={handleExecutionModeChange}
+                    onSelectFirstInstance={handleSelectFirstInstance}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                   />
@@ -842,7 +967,7 @@ export const TaskGraphKonvaView = memo(
 
                 {/* Expanded details */}
                 {isExpanded && !isEditing && (
-                  <div style={{ marginTop: ROW_HEIGHT }}>
+                  <div>
                     <InlineIssueDetailRow
                       line={line}
                       maxLanes={maxLanes}
@@ -850,39 +975,6 @@ export const TaskGraphKonvaView = memo(
                       onRunAgent={onRunAgent}
                       onOpenSession={onOpenSession}
                       onClose={() => toggleExpanded(line.issueId)}
-                    />
-                  </div>
-                )}
-
-                {/* Inline editor below */}
-                {shouldInsertBelow && (
-                  <div style={{ marginTop: ROW_HEIGHT }}>
-                    <InlineEditorRow
-                      pendingNewIssue={pendingNewIssue!}
-                      maxLanes={maxLanes}
-                      onTitleChange={handleTitleChange}
-                      onSave={async () => {
-                        if (!pendingNewIssue?.title.trim()) {
-                          handleCancelEdit()
-                          return
-                        }
-                        const hasExplicitHierarchy =
-                          pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
-                        const parentIssueId = hasExplicitHierarchy
-                          ? pendingNewIssue.pendingParentId
-                          : pendingNewIssue.inheritedParentIssueId
-                        const parentSortOrder = hasExplicitHierarchy
-                          ? undefined
-                          : pendingNewIssue.inheritedParentSortOrder
-                        await createIssue({
-                          title: pendingNewIssue.title.trim(),
-                          parentIssueId,
-                          childIssueId: pendingNewIssue.pendingChildId,
-                          parentSortOrder,
-                        })
-                        containerRef.current?.focus()
-                      }}
-                      onCancel={handleCancelEdit}
                     />
                   </div>
                 )}

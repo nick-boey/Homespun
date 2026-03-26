@@ -13,7 +13,7 @@ import type {
 interface SessionCardProps {
   session: SessionSummary
   entityTitle?: string
-  entityType?: 'issue' | 'pr'
+  entityType?: 'issue' | 'pr' | 'unknown'
   projectName?: string
   messageCount?: number
   onStop?: (sessionId: string) => void

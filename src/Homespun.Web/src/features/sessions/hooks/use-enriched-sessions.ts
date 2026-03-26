@@ -4,7 +4,7 @@ import { useSessions } from './use-sessions'
 import { useProjects } from '@/features/projects'
 import { Issues, PullRequests } from '@/api'
 import type { SessionSummary } from '@/api/generated/types.gen'
-import type { EntityType } from './use-entity-info'
+import { detectEntityType, type EntityType } from './use-entity-info'
 import type { IssueResponse, PullRequest } from '@/api/generated/types.gen'
 
 export interface EnrichedSession {
@@ -13,15 +13,6 @@ export interface EnrichedSession {
   entityType?: EntityType
   projectName?: string
   messageCount: number
-}
-
-function detectEntityType(entityId: string): EntityType {
-  // Detect entity type based on ID format
-  if (entityId.toLowerCase().startsWith('pr-')) {
-    return 'pr'
-  }
-  // Default to issue for other formats including 'issue-' prefix
-  return 'issue'
 }
 
 export function useEnrichedSessions() {
@@ -43,9 +34,8 @@ export function useEnrichedSessions() {
 
     sessions.forEach((session) => {
       if (session.entityId) {
-        // For issues, we need both entityId and projectId
-        // For PRs, projectId is not needed
         const entityType = detectEntityType(session.entityId)
+        if (entityType === 'unknown') return
         const key =
           entityType === 'issue' && session.projectId
             ? `${session.entityId}:${session.projectId}`
@@ -80,22 +70,22 @@ export function useEnrichedSessions() {
               const response = await PullRequests.getApiPullRequestsById({
                 path: { id: entityId },
               })
-              const pr = response.data as PullRequest
+              const pr = response.data as PullRequest | undefined
               return {
                 type: 'pr' as EntityType,
-                title: pr.title || entityId,
-                id: pr.id || entityId,
+                title: pr?.title || entityId,
+                id: pr?.id || entityId,
               }
             } else {
               const response = await Issues.getApiIssuesByIssueId({
                 path: { issueId: entityId },
                 query: projectId ? { projectId } : undefined,
               })
-              const issue = response.data as IssueResponse
+              const issue = response.data as IssueResponse | undefined
               return {
                 type: 'issue' as EntityType,
-                title: issue.title || entityId,
-                id: issue.id || entityId,
+                title: issue?.title || entityId,
+                id: issue?.id || entityId,
               }
             }
           } catch (error) {

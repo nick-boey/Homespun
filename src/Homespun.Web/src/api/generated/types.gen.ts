@@ -905,6 +905,15 @@ export type QueueStatusResponse = {
     progress?: QueueProgress;
 };
 
+export type RemoveAllParentsRequest = {
+    projectId: string | null;
+};
+
+export type RemoveParentRequest = {
+    projectId: string | null;
+    parentIssueId: string | null;
+};
+
 export type RemovedPrInfo = {
     pullRequestId: string | null;
     beadsIssueId?: string | null;
@@ -2717,6 +2726,60 @@ export type PostApiIssuesByChildIdSetParentResponses = {
 };
 
 export type PostApiIssuesByChildIdSetParentResponse = PostApiIssuesByChildIdSetParentResponses[keyof PostApiIssuesByChildIdSetParentResponses];
+
+export type PostApiIssuesByChildIdRemoveParentData = {
+    body?: RemoveParentRequest;
+    path: {
+        childId: string;
+    };
+    query?: never;
+    url: '/api/issues/{childId}/remove-parent';
+};
+
+export type PostApiIssuesByChildIdRemoveParentErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type PostApiIssuesByChildIdRemoveParentError = PostApiIssuesByChildIdRemoveParentErrors[keyof PostApiIssuesByChildIdRemoveParentErrors];
+
+export type PostApiIssuesByChildIdRemoveParentResponses = {
+    /**
+     * OK
+     */
+    200: IssueResponse;
+};
+
+export type PostApiIssuesByChildIdRemoveParentResponse = PostApiIssuesByChildIdRemoveParentResponses[keyof PostApiIssuesByChildIdRemoveParentResponses];
+
+export type PostApiIssuesByIssueIdRemoveAllParentsData = {
+    body?: RemoveAllParentsRequest;
+    path: {
+        issueId: string;
+    };
+    query?: never;
+    url: '/api/issues/{issueId}/remove-all-parents';
+};
+
+export type PostApiIssuesByIssueIdRemoveAllParentsErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type PostApiIssuesByIssueIdRemoveAllParentsError = PostApiIssuesByIssueIdRemoveAllParentsErrors[keyof PostApiIssuesByIssueIdRemoveAllParentsErrors];
+
+export type PostApiIssuesByIssueIdRemoveAllParentsResponses = {
+    /**
+     * OK
+     */
+    200: IssueResponse;
+};
+
+export type PostApiIssuesByIssueIdRemoveAllParentsResponse = PostApiIssuesByIssueIdRemoveAllParentsResponses[keyof PostApiIssuesByIssueIdRemoveAllParentsResponses];
 
 export type PostApiIssuesByIssueIdMoveSiblingData = {
     body?: MoveSeriesSiblingRequest;

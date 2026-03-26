@@ -170,6 +170,33 @@ public class MoveSeriesSiblingRequest
 }
 
 /// <summary>
+/// Request model for removing a specific parent from an issue.
+/// </summary>
+public class RemoveParentRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The ID of the parent issue to remove.
+    /// </summary>
+    public required string ParentIssueId { get; set; }
+}
+
+/// <summary>
+/// Request model for removing all parents from an issue.
+/// </summary>
+public class RemoveAllParentsRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+}
+
+/// <summary>
 /// Request model for running an agent on an issue.
 /// </summary>
 public class RunAgentRequest
