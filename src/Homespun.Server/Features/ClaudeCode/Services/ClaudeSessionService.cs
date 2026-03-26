@@ -410,14 +410,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             Content = [new ClaudeMessageContent { Type = ClaudeContentType.Text, Text = message }]
         };
         session.Messages.Add(userMessage);
-        session.Status = ClaudeSessionStatus.Running;
-        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
         // Generate a turn ID that identifies this SendMessageAsync invocation as the
         // currently-active one. Any previously-running invocation for this session is
         // now superseded and its post-loop status transitions will be skipped.
+        // This MUST be set before the status broadcast to prevent a race condition:
+        // without this, the await on BroadcastSessionStatusChanged can yield the thread,
+        // allowing a superseded invocation's post-loop guard to see the old turn ID
+        // and erroneously set WaitingForInput.
         var turnId = Guid.NewGuid();
         _currentMessageTurnIds[sessionId] = turnId;
+
+        session.Status = ClaudeSessionStatus.Running;
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
         // Cache the user message
         await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);

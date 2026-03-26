@@ -6,7 +6,7 @@
 
 import { memo } from 'react'
 import { Circle, Line, Group } from 'react-konva'
-import { ClaudeSessionStatus } from '@/api'
+import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { TaskGraphIssueRenderLine } from '../../services'
 import {
   LANE_WIDTH,
@@ -47,10 +47,12 @@ interface KonvaIssueNodeProps {
   line: TaskGraphIssueRenderLine
   /** Row index for vertical positioning */
   rowIndex: number
+  /** Optional Y position override (from row Y offset computation) */
+  rowY?: number
   /** Click handler */
   onClick?: () => void
-  /** Whether this node is selected */
-  isSelected?: boolean
+  /** Background color for no-description nodes (to occlude edges underneath) */
+  backgroundColor?: string
 }
 
 /**
@@ -59,11 +61,12 @@ interface KonvaIssueNodeProps {
 export const KonvaIssueNode = memo(function KonvaIssueNode({
   line,
   rowIndex,
+  rowY,
   onClick,
-  isSelected = false,
+  backgroundColor = '#09090b',
 }: KonvaIssueNodeProps) {
   const cx = getLaneCenterX(line.lane)
-  const cy = rowIndex * ROW_HEIGHT + getRowCenterY()
+  const cy = (rowY ?? rowIndex * ROW_HEIGHT) + getRowCenterY()
   const nodeColor = getTypeColor(line.issueType)
   const isOutlineOnly = !line.hasDescription
 
@@ -74,28 +77,24 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
         <KonvaAgentStatusRing cx={cx} cy={cy} status={line.agentStatus.status} />
       )}
 
-      {/* Selection ring */}
-      {isSelected && (
-        <Circle
-          x={cx}
-          y={cy}
-          radius={NODE_RADIUS + 6}
-          fill="transparent"
-          stroke="#3b82f6"
-          strokeWidth={2}
-          opacity={0.6}
-        />
-      )}
-
       {/* Node circle */}
-      <Circle
-        x={cx}
-        y={cy}
-        radius={NODE_RADIUS}
-        fill={isOutlineOnly ? 'transparent' : nodeColor}
-        stroke={isOutlineOnly ? nodeColor : undefined}
-        strokeWidth={isOutlineOnly ? 2 : 0}
-      />
+      {isOutlineOnly ? (
+        <>
+          {/* Background fill to occlude edges passing underneath */}
+          <Circle x={cx} y={cy} radius={NODE_RADIUS + 1} fill={backgroundColor} />
+          {/* Stroke ring */}
+          <Circle
+            x={cx}
+            y={cy}
+            radius={NODE_RADIUS}
+            fill={backgroundColor}
+            stroke={nodeColor}
+            strokeWidth={2}
+          />
+        </>
+      ) : (
+        <Circle x={cx} y={cy} radius={NODE_RADIUS} fill={nodeColor} />
+      )}
 
       {/* Hidden parent indicator */}
       {line.hasHiddenParent && (
@@ -106,8 +105,41 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
           isSeriesMode={line.hiddenParentIsSeriesMode}
         />
       )}
+
+      {/* Multi-parent diagonal indicator */}
+      {line.multiParentIndex != null && line.multiParentTotal != null && (
+        <KonvaMultiParentIndicator
+          cx={cx}
+          cy={cy}
+          nodeColor={nodeColor}
+          multiParentIndex={line.multiParentIndex}
+          multiParentTotal={line.multiParentTotal}
+        />
+      )}
     </Group>
   )
+})
+
+interface KonvaVirtualNodeProps {
+  /** Lane for the virtual node */
+  lane: number
+  /** Absolute Y position for the row */
+  rowY: number
+}
+
+/**
+ * Konva circle component for rendering a virtual (preview) issue node.
+ * Uses Task color with reduced opacity to indicate it's a preview.
+ */
+export const KonvaVirtualNode = memo(function KonvaVirtualNode({
+  lane,
+  rowY,
+}: KonvaVirtualNodeProps) {
+  const cx = getLaneCenterX(lane)
+  const cy = rowY + getRowCenterY()
+  const nodeColor = getTypeColor(IssueType.TASK)
+
+  return <Circle x={cx} y={cy} radius={NODE_RADIUS} fill={nodeColor} opacity={0.35} />
 })
 
 interface KonvaEdgeProps {
@@ -201,6 +233,75 @@ export const KonvaHiddenParentIndicator = memo(function KonvaHiddenParentIndicat
   }
 })
 
+interface KonvaMultiParentIndicatorProps {
+  cx: number
+  cy: number
+  nodeColor: string
+  multiParentIndex: number
+  multiParentTotal: number
+}
+
+/**
+ * Renders diagonal lines indicating multi-parent issue instances.
+ * First instance: diagonal down-right. Last instance: diagonal up-left. Middle: both.
+ * Uses stepped opacity segments for a fade effect.
+ */
+export const KonvaMultiParentIndicator = memo(function KonvaMultiParentIndicator({
+  cx,
+  cy,
+  nodeColor,
+  multiParentIndex,
+  multiParentTotal,
+}: KonvaMultiParentIndicatorProps) {
+  const lineLength = ROW_HEIGHT / 2
+  const segmentCount = 3
+  const segmentLength = lineLength / segmentCount
+  const isFirst = multiParentIndex === 0
+  const isLast = multiParentIndex === multiParentTotal - 1
+
+  const showDownRight = !isLast
+  const showUpLeft = !isFirst
+
+  return (
+    <Group>
+      {showDownRight &&
+        [0, 1, 2].map((i) => {
+          const opacity = 0.5 - (i * 0.5) / segmentCount
+          const x1 = cx + NODE_RADIUS + 2 + i * segmentLength * 0.7
+          const y1 = cy + NODE_RADIUS + 2 + i * segmentLength * 0.7
+          const x2 = cx + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+          const y2 = cy + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+          return (
+            <Line
+              key={`mp-dr-${i}`}
+              points={[x1, y1, x2, y2]}
+              stroke={nodeColor}
+              strokeWidth={1.5}
+              opacity={opacity}
+            />
+          )
+        })}
+      {showUpLeft &&
+        [0, 1, 2].map((i) => {
+          const opacity = 0.5 - (i * 0.5) / segmentCount
+          const x1 = cx - NODE_RADIUS - 2 - i * segmentLength * 0.7
+          const y1 = cy - NODE_RADIUS - 2 - i * segmentLength * 0.7
+          const x2 = cx - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+          const y2 = cy - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+          return (
+            <Line
+              key={`mp-ul-${i}`}
+              points={[x1, y1, x2, y2]}
+              stroke={nodeColor}
+              strokeWidth={1.5}
+              opacity={opacity}
+            />
+          )
+        })}
+    </Group>
+  )
+})
+
 interface KonvaAgentStatusRingProps {
   cx: number
   cy: number
@@ -230,6 +331,37 @@ export const KonvaAgentStatusRing = memo(function KonvaAgentStatusRing({
       stroke={color}
       strokeWidth={2}
       opacity={0.6}
+    />
+  )
+})
+
+interface KonvaDiagonalEdgeProps {
+  /** Unique ID for the edge */
+  id: string
+  /** Points array [x1, y1, x2, y2] */
+  points: number[]
+  /** Edge color */
+  color: string
+}
+
+/**
+ * Konva line component for rendering a diagonal secondary-parent edge.
+ * Rendered as a dashed line with fading opacity.
+ */
+export const KonvaDiagonalEdge = memo(function KonvaDiagonalEdge({
+  id,
+  points,
+  color,
+}: KonvaDiagonalEdgeProps) {
+  return (
+    <Line
+      key={id}
+      points={points}
+      stroke={color}
+      strokeWidth={LINE_STROKE_WIDTH}
+      dash={[4, 4]}
+      opacity={0.3}
+      lineCap="round"
     />
   )
 })

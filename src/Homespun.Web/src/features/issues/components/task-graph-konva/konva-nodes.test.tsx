@@ -8,6 +8,7 @@ import { Stage, Layer } from 'react-konva'
 import {
   KonvaIssueNode,
   KonvaEdge,
+  KonvaDiagonalEdge,
   KonvaHiddenParentIndicator,
   KonvaAgentStatusRing,
 } from './konva-nodes'
@@ -54,6 +55,8 @@ function createIssueLine(
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.PARALLEL,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
     ...overrides,
   }
 }
@@ -86,18 +89,18 @@ describe('KonvaIssueNode', () => {
     })
   })
 
-  it('renders outline-only circle when no description', () => {
+  it('renders no-description node with solid background fill', () => {
     const line = createIssueLine({
       issueId: 'test-1',
       lane: 0,
       hasDescription: false,
     })
 
-    // Should not throw - outline style applied internally
+    // Should render with background fill to occlude edges underneath
     expect(() =>
       render(
         <KonvaWrapper>
-          <KonvaIssueNode line={line} rowIndex={0} />
+          <KonvaIssueNode line={line} rowIndex={0} backgroundColor="#09090b" />
         </KonvaWrapper>
       )
     ).not.toThrow()
@@ -117,6 +120,76 @@ describe('KonvaIssueNode', () => {
         </KonvaWrapper>
       )
     ).not.toThrow()
+  })
+
+  describe('multi-parent indicator', () => {
+    it('renders without crashing when multiParentIndex is null', () => {
+      const line = createIssueLine({
+        issueId: 'test-1',
+        lane: 0,
+        multiParentIndex: null,
+        multiParentTotal: null,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for first multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 0,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for middle multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 1,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
+
+    it('renders without crashing for last multi-parent instance', () => {
+      const line = createIssueLine({
+        issueId: 'test-mp',
+        lane: 0,
+        multiParentIndex: 2,
+        multiParentTotal: 3,
+      })
+
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaIssueNode line={line} rowIndex={0} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
   })
 })
 
@@ -155,6 +228,32 @@ describe('KonvaEdge', () => {
         </KonvaWrapper>
       )
     ).not.toThrow()
+  })
+})
+
+describe('KonvaDiagonalEdge', () => {
+  it('renders without crashing', () => {
+    expect(() =>
+      render(
+        <KonvaWrapper>
+          <KonvaDiagonalEdge id="diag-1" points={[50, 50, 30, 30]} color="#3b82f6" />
+        </KonvaWrapper>
+      )
+    ).not.toThrow()
+  })
+
+  it('renders with different colors', () => {
+    const colors = ['#3b82f6', '#ef4444', '#22c55e']
+
+    colors.forEach((color) => {
+      expect(() =>
+        render(
+          <KonvaWrapper>
+            <KonvaDiagonalEdge id={`diag-${color}`} points={[0, 0, 20, 20]} color={color} />
+          </KonvaWrapper>
+        )
+      ).not.toThrow()
+    })
   })
 })
 

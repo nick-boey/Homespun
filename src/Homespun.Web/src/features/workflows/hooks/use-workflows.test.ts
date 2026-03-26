@@ -188,7 +188,7 @@ describe('useWorkflow', () => {
     const mock = Workflows.getApiWorkflowsByWorkflowId as Mock
     mock.mockResolvedValueOnce({ data: mockWorkflowDefinition })
 
-    const { result } = renderHook(() => useWorkflow('wf-1'), {
+    const { result } = renderHook(() => useWorkflow('wf-1', 'proj-1'), {
       wrapper: createWrapper(),
     })
 
@@ -197,14 +197,17 @@ describe('useWorkflow', () => {
     })
 
     expect(result.current.workflow).toEqual(mockWorkflowDefinition)
-    expect(mock).toHaveBeenCalledWith({ path: { workflowId: 'wf-1' } })
+    expect(mock).toHaveBeenCalledWith({
+      path: { workflowId: 'wf-1' },
+      query: { projectId: 'proj-1' },
+    })
   })
 
   it('handles error when workflow not found', async () => {
     const mock = Workflows.getApiWorkflowsByWorkflowId as Mock
     mock.mockResolvedValueOnce({ error: { detail: 'Not found' } })
 
-    const { result } = renderHook(() => useWorkflow('wf-missing'), {
+    const { result } = renderHook(() => useWorkflow('wf-missing', 'proj-1'), {
       wrapper: createWrapper(),
     })
 

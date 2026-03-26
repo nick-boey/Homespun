@@ -224,6 +224,17 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           isSeriesMode={line.hiddenParentIsSeriesMode}
         />
       )}
+
+      {/* Multi-parent diagonal indicator */}
+      {line.multiParentIndex != null && line.multiParentTotal != null && (
+        <MultiParentIndicator
+          cx={cx}
+          cy={cy}
+          nodeColor={nodeColor}
+          multiParentIndex={line.multiParentIndex}
+          multiParentTotal={line.multiParentTotal}
+        />
+      )}
     </svg>
   )
 })
@@ -275,6 +286,86 @@ function HiddenParentIndicator({ cx, cy, nodeColor, isSeriesMode }: HiddenParent
       </>
     )
   }
+}
+
+interface MultiParentIndicatorProps {
+  cx: number
+  cy: number
+  nodeColor: string
+  multiParentIndex: number
+  multiParentTotal: number
+}
+
+/**
+ * Renders diagonal lines indicating multi-parent issue instances.
+ * First instance: diagonal down-right. Last instance: diagonal up-left. Middle: both.
+ * Uses stepped opacity segments for a fade effect.
+ */
+function MultiParentIndicator({
+  cx,
+  cy,
+  nodeColor,
+  multiParentIndex,
+  multiParentTotal,
+}: MultiParentIndicatorProps) {
+  const lineLength = ROW_HEIGHT / 2
+  const segmentCount = 3
+  const segmentLength = lineLength / segmentCount
+  const isFirst = multiParentIndex === 0
+  const isLast = multiParentIndex === multiParentTotal - 1
+
+  // Down-right diagonal (shown on first and middle instances)
+  const showDownRight = !isLast
+  // Up-left diagonal (shown on last and middle instances)
+  const showUpLeft = !isFirst
+
+  const segments: React.ReactNode[] = []
+
+  if (showDownRight) {
+    for (let i = 0; i < segmentCount; i++) {
+      const opacity = 0.5 - (i * 0.5) / segmentCount
+      const x1 = cx + NODE_RADIUS + 2 + i * segmentLength * 0.7
+      const y1 = cy + NODE_RADIUS + 2 + i * segmentLength * 0.7
+      const x2 = cx + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+      const y2 = cy + NODE_RADIUS + 2 + (i + 1) * segmentLength * 0.7
+      segments.push(
+        <line
+          key={`mp-dr-${i}`}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={nodeColor}
+          strokeWidth={1.5}
+          opacity={opacity}
+        />
+      )
+    }
+  }
+
+  if (showUpLeft) {
+    for (let i = 0; i < segmentCount; i++) {
+      const opacity = 0.5 - (i * 0.5) / segmentCount
+      const x1 = cx - NODE_RADIUS - 2 - i * segmentLength * 0.7
+      const y1 = cy - NODE_RADIUS - 2 - i * segmentLength * 0.7
+      const x2 = cx - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+      const y2 = cy - NODE_RADIUS - 2 - (i + 1) * segmentLength * 0.7
+      segments.push(
+        <line
+          key={`mp-ul-${i}`}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={nodeColor}
+          strokeWidth={1.5}
+          opacity={opacity}
+        />
+      )
+    }
+  }
+
+  return <>{segments}</>
 }
 
 interface TaskGraphPrSvgProps {

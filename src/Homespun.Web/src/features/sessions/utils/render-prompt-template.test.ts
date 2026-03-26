@@ -116,4 +116,75 @@ Implement dark mode toggle`)
     const result = renderPromptTemplate('Context: {{context}}', mockContext)
     expect(result).toBe('Context: ')
   })
+
+  it('replaces {{selectedIssueId}} placeholder', () => {
+    const contextWithIssue: PromptContext = {
+      ...mockContext,
+      selectedIssueId: 'ISSUE-456',
+    }
+    const result = renderPromptTemplate('Selected: {{selectedIssueId}}', contextWithIssue)
+    expect(result).toBe('Selected: ISSUE-456')
+  })
+
+  it('replaces {{selectedIssueId}} with empty string when undefined', () => {
+    const result = renderPromptTemplate('Selected: {{selectedIssueId}}', mockContext)
+    expect(result).toBe('Selected: ')
+  })
+
+  describe('conditional blocks', () => {
+    it('includes content when {{#if}} value is present', () => {
+      const contextWithIssue: PromptContext = {
+        ...mockContext,
+        selectedIssueId: 'ISSUE-456',
+      }
+      const template = '{{#if selectedIssueId}}Issue: {{selectedIssueId}}{{/if}}'
+      const result = renderPromptTemplate(template, contextWithIssue)
+      expect(result).toBe('Issue: ISSUE-456')
+    })
+
+    it('removes block when {{#if}} value is empty', () => {
+      const template = 'Before{{#if selectedIssueId}} Issue: {{selectedIssueId}}{{/if}} After'
+      const result = renderPromptTemplate(template, mockContext)
+      expect(result).toBe('Before After')
+    })
+
+    it('removes block when {{#if}} value is empty string', () => {
+      const contextWithEmpty: PromptContext = {
+        ...mockContext,
+        selectedIssueId: '',
+      }
+      const template = 'Before{{#if selectedIssueId}} Issue: {{selectedIssueId}}{{/if}} After'
+      const result = renderPromptTemplate(template, contextWithEmpty)
+      expect(result).toBe('Before After')
+    })
+
+    it('handles multiline content inside conditional blocks', () => {
+      const contextWithIssue: PromptContext = {
+        ...mockContext,
+        selectedIssueId: 'ISSUE-456',
+      }
+      const template = '{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}'
+      const result = renderPromptTemplate(template, contextWithIssue)
+      expect(result).toBe('\n**Selected Issue:** ISSUE-456\n')
+    })
+
+    it('handles multiple conditional blocks', () => {
+      const contextWithIssue: PromptContext = {
+        ...mockContext,
+        selectedIssueId: 'ISSUE-456',
+        context: 'tree data',
+      }
+      const template =
+        '{{#if selectedIssueId}}A: {{selectedIssueId}}{{/if}} {{#if context}}B: {{context}}{{/if}}'
+      const result = renderPromptTemplate(template, contextWithIssue)
+      expect(result).toBe('A: ISSUE-456 B: tree data')
+    })
+
+    it('handles mixed present and absent conditional blocks', () => {
+      const template =
+        '{{#if selectedIssueId}}Issue: {{selectedIssueId}}{{/if}} {{#if context}}Context: {{context}}{{/if}}'
+      const result = renderPromptTemplate(template, mockContext)
+      expect(result).toBe(' ')
+    })
+  })
 })

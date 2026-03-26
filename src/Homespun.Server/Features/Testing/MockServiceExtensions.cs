@@ -5,9 +5,11 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Search;
 using Homespun.Features.Secrets;
+using Homespun.Features.Commands;
 using Homespun.Features.Testing.Services;
 using Homespun.Features.Workflows.Services;
 using Microsoft.Extensions.Configuration;
@@ -64,38 +66,52 @@ public static class MockServiceExtensions
         services.AddSingleton<global::Fleece.Core.Serialization.IJsonlSerializer, global::Fleece.Core.Serialization.JsonlSerializer>();
         services.AddSingleton<global::Fleece.Core.Services.Interfaces.IDiffService, global::Fleece.Core.Services.DiffService>();
 
-        // Keep MockFleeceService available for backward compatibility if needed
-        services.AddSingleton<MockFleeceService>();
-
         // Core services
-        services.AddSingleton<ICommandRunner, MockCommandRunner>();
+        services.AddSingleton<ICommandRunner, CommandRunner>();
         services.AddSingleton<IGitHubEnvironmentService, MockGitHubEnvironmentService>();
         services.AddSingleton<IGitHubClientWrapper, MockGitHubClientWrapper>();
 
         // GitHub services
         services.AddScoped<IGitHubService, MockGitHubService>();
-        services.AddScoped<IIssuePrLinkingService, MockIssuePrLinkingService>();
+        services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
         services.AddScoped<IPRStatusResolver, MockPRStatusResolver>();
 
-        // Project service
-        services.AddScoped<IProjectService, MockProjectService>();
+        // Project service - use real ProjectService with temp folder path
+        services.AddScoped<IProjectService>(sp =>
+        {
+            var dataStore = sp.GetRequiredService<IDataStore>();
+            var gitHubService = sp.GetRequiredService<IGitHubService>();
+            var commandRunner = sp.GetRequiredService<ICommandRunner>();
+            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
+            var logger = sp.GetRequiredService<ILogger<ProjectService>>();
 
-        // Secrets service
-        services.AddScoped<ISecretsService, MockSecretsService>();
+            var projectsPath = Path.Combine(tempFolder.RootPath, "projects");
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["HOMESPUN_BASE_PATH"] = projectsPath
+                })
+                .Build();
+
+            return new ProjectService(dataStore, gitHubService, commandRunner, config, logger);
+        });
+
+        // Secrets service (real implementation - uses secrets.env files, works with temp folder structure)
+        services.AddScoped<ISecretsService, SecretsService>();
 
         // Container query service
         services.AddScoped<IContainerQueryService, MockContainerQueryService>();
 
         // Fleece services
         // Transition service depends on IFleeceService (now using real FleeceService)
-        services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
+        services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         // IIssueHistoryService already registered above with FleeceService
         services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
-        services.AddScoped<IFleeceChangeDetectionService, MockFleeceChangeDetectionService>();
-        services.AddScoped<IFleeceConflictDetectionService, MockFleeceConflictDetectionService>();
-        services.AddScoped<IFleeceChangeApplicationService, MockFleeceChangeApplicationService>();
+        services.AddScoped<IFleeceChangeDetectionService, FleeceChangeDetectionService>();
+        services.AddScoped<IFleeceConflictDetectionService, FleeceConflictDetectionService>();
+        services.AddScoped<IFleeceChangeApplicationService, FleeceChangeApplicationService>();
         services.AddScoped<IFleecePostMergeService, FleecePostMergeService>();
 
         // Git services
@@ -123,7 +139,7 @@ public static class MockServiceExtensions
         }
 
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
-        services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
+        services.AddSingleton<IAgentPromptService, AgentPromptService>();
 
         // Agent Orchestration services - configure options and HTTP client first
         services.Configure<MiniPromptOptions>(options => { });  // Empty config - uses defaults
@@ -145,10 +161,13 @@ public static class MockServiceExtensions
             return new MessageCacheStore(tempFolder.SessionsPath, logger);
         });
 
+        // Pull request workflow service (needed by GraphService)
+        services.AddScoped<PullRequestWorkflowService>();
+
         // Graph services
         services.AddSingleton<IGraphCacheService>(sp =>
             new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
-        services.AddScoped<IGraphService, MockGraphService>();
+        services.AddScoped<IGraphService, GraphService>();
 
         // Clone enrichment service
         services.AddScoped<ICloneEnrichmentService, CloneEnrichmentService>();

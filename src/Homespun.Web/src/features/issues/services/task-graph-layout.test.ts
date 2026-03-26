@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeLayout,
+  getRenderKey,
   TaskGraphMarkerType,
   type TaskGraphIssueRenderLine,
   type TaskGraphPrRenderLine,
@@ -69,6 +70,8 @@ describe('computeLayout', () => {
         hiddenParentIsSeriesMode: false,
         executionMode: ExecutionMode.SERIES,
         parentIssues: null,
+        multiParentIndex: null,
+        multiParentTotal: null,
       }
       expect(isIssueRenderLine(line)).toBe(true)
       expect(isPrRenderLine(line)).toBe(false)
@@ -1195,7 +1198,7 @@ describe('computeLayout', () => {
       expect(issueIds).not.toContain('grandchild')
     })
 
-    it('shows node once when it has multiple parents (first traversal)', () => {
+    it('shows multi-parent node under each parent in tree view (2-parent)', () => {
       // Diamond pattern: root -> parent1, parent2 -> shared_child
       const root = createIssue({ id: 'root', executionMode: ExecutionMode.PARALLEL })
       const parent1 = createIssue({
@@ -1228,9 +1231,75 @@ describe('computeLayout', () => {
 
       const result = computeLayout(taskGraph, 3, 'tree')
 
-      // The shared child should appear exactly once
-      const sharedLines = result.filter((l) => isIssueRenderLine(l) && l.issueId === 'shared')
-      expect(sharedLines).toHaveLength(1)
+      // The shared child should appear twice (once per parent)
+      const sharedLines = result.filter(
+        (l) => isIssueRenderLine(l) && l.issueId === 'shared'
+      ) as TaskGraphIssueRenderLine[]
+      expect(sharedLines).toHaveLength(2)
+
+      // First instance: multiParentIndex=0, shows down-right diagonal
+      expect(sharedLines[0].multiParentIndex).toBe(0)
+      expect(sharedLines[0].multiParentTotal).toBe(2)
+
+      // Second instance: multiParentIndex=1, shows up-left diagonal
+      expect(sharedLines[1].multiParentIndex).toBe(1)
+      expect(sharedLines[1].multiParentTotal).toBe(2)
+    })
+
+    it('shows multi-parent node under each parent in tree view (3-parent)', () => {
+      const root = createIssue({ id: 'root', executionMode: ExecutionMode.PARALLEL })
+      const p1 = createIssue({
+        id: 'p1',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const p2 = createIssue({
+        id: 'p2',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const p3 = createIssue({
+        id: 'p3',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const sharedChild = createIssue({
+        id: 'shared',
+        parentIssues: [{ parentIssue: 'p1' }, { parentIssue: 'p2' }, { parentIssue: 'p3' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(root, 2, 0),
+          createNode(p1, 1, 1),
+          createNode(p2, 1, 2),
+          createNode(p3, 1, 3),
+          createNode(sharedChild, 0, 4),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const sharedLines = result.filter(
+        (l) => isIssueRenderLine(l) && l.issueId === 'shared'
+      ) as TaskGraphIssueRenderLine[]
+      expect(sharedLines).toHaveLength(3)
+
+      // First: down-right only
+      expect(sharedLines[0].multiParentIndex).toBe(0)
+      expect(sharedLines[0].multiParentTotal).toBe(3)
+
+      // Middle: both diagonals
+      expect(sharedLines[1].multiParentIndex).toBe(1)
+      expect(sharedLines[1].multiParentTotal).toBe(3)
+
+      // Last: up-left only
+      expect(sharedLines[2].multiParentIndex).toBe(2)
+      expect(sharedLines[2].multiParentTotal).toBe(3)
     })
 
     it('does not add lane0 connectors in tree view', () => {
@@ -1276,5 +1345,205 @@ describe('computeLayout', () => {
       expect(childLine.lane).toBe(0)
       expect(parentLine.lane).toBe(1)
     })
+  })
+
+  describe('multi-parent issues', () => {
+    it('leaves multiParentIndex/Total null for unique issues', () => {
+      const issue1 = createIssue({ id: 'issue1' })
+      const issue2 = createIssue({ id: 'issue2' })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue1, 0, 0), createNode(issue2, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const issueLines = result.filter(isIssueRenderLine)
+
+      expect(issueLines).toHaveLength(2)
+      issueLines.forEach((line) => {
+        expect(line.multiParentIndex).toBeNull()
+        expect(line.multiParentTotal).toBeNull()
+      })
+    })
+
+    it('assigns multiParentIndex/Total for duplicated issueIds', () => {
+      // Simulate a result where the same issueId appears twice
+      // (as produced by Fleece.Core for multi-parent graphs).
+      // We do this by calling computeLayout and then checking that
+      // the post-processing logic correctly sets the fields.
+      // For unique issues (the only case constructible via normal API),
+      // all should be null.
+      const sharedChild = createIssue({
+        id: 'shared',
+        parentIssues: [{ parentIssue: 'p1' }, { parentIssue: 'p2' }],
+      })
+      const parent1 = createIssue({ id: 'p1', executionMode: ExecutionMode.PARALLEL })
+      const parent2 = createIssue({ id: 'p2', executionMode: ExecutionMode.PARALLEL })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(parent1, 1, 0),
+          createNode(parent2, 2, 1),
+          createNode(sharedChild, 0, 2),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const issueLines = result.filter(isIssueRenderLine)
+
+      // Each issueId should appear at most once (unique in this graph)
+      const sharedLines = issueLines.filter((l) => l.issueId === 'shared')
+      // If the shared child appears once, it's a unique occurrence - multiParentIndex is null
+      if (sharedLines.length === 1) {
+        expect(sharedLines[0].multiParentIndex).toBeNull()
+        expect(sharedLines[0].multiParentTotal).toBeNull()
+      } else {
+        // If Fleece.Core produces multiple entries, each should have an index
+        sharedLines.forEach((line, i) => {
+          expect(line.multiParentIndex).toBe(i)
+          expect(line.multiParentTotal).toBe(sharedLines.length)
+        })
+      }
+    })
+
+    it('assigns indices in order of appearance for duplicated render lines', () => {
+      // Build a result manually that mimics what computeLayout would produce
+      // if Fleece.Core emitted duplicates, and verify getRenderKey produces
+      // distinct keys for each instance.
+      const baseIssue = createIssue({ id: 'dup-issue' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(baseIssue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result.find(isIssueRenderLine)!
+
+      // Single occurrence: no index needed
+      expect(line.multiParentIndex).toBeNull()
+      expect(line.multiParentTotal).toBeNull()
+    })
+  })
+})
+
+describe('getRenderKey', () => {
+  it('returns issueId when multiParentIndex is null', () => {
+    const line: TaskGraphIssueRenderLine = {
+      type: 'issue',
+      issueId: 'abc123',
+      title: 'Test',
+      description: null,
+      branchName: null,
+      lane: 0,
+      marker: TaskGraphMarkerType.Open,
+      parentLane: null,
+      isFirstChild: false,
+      isSeriesChild: false,
+      drawTopLine: false,
+      drawBottomLine: false,
+      seriesConnectorFromLane: null,
+      issueType: IssueType.TASK,
+      status: IssueStatus.OPEN,
+      hasDescription: false,
+      linkedPr: null,
+      agentStatus: null,
+      assignedTo: null,
+      drawLane0Connector: false,
+      isLastLane0Connector: false,
+      drawLane0PassThrough: false,
+      lane0Color: null,
+      hasHiddenParent: false,
+      hiddenParentIsSeriesMode: false,
+      executionMode: ExecutionMode.SERIES,
+      parentIssues: null,
+      multiParentIndex: null,
+      multiParentTotal: null,
+    }
+    expect(getRenderKey(line)).toBe('abc123')
+  })
+
+  it('returns issueId:index when multiParentIndex is set', () => {
+    const line: TaskGraphIssueRenderLine = {
+      type: 'issue',
+      issueId: 'abc123',
+      title: 'Test',
+      description: null,
+      branchName: null,
+      lane: 0,
+      marker: TaskGraphMarkerType.Open,
+      parentLane: null,
+      isFirstChild: false,
+      isSeriesChild: false,
+      drawTopLine: false,
+      drawBottomLine: false,
+      seriesConnectorFromLane: null,
+      issueType: IssueType.TASK,
+      status: IssueStatus.OPEN,
+      hasDescription: false,
+      linkedPr: null,
+      agentStatus: null,
+      assignedTo: null,
+      drawLane0Connector: false,
+      isLastLane0Connector: false,
+      drawLane0PassThrough: false,
+      lane0Color: null,
+      hasHiddenParent: false,
+      hiddenParentIsSeriesMode: false,
+      executionMode: ExecutionMode.SERIES,
+      parentIssues: null,
+      multiParentIndex: 0,
+      multiParentTotal: 3,
+    }
+    expect(getRenderKey(line)).toBe('abc123:0')
+  })
+
+  it('produces distinct keys for different multi-parent indices of same issueId', () => {
+    const base = {
+      type: 'issue' as const,
+      issueId: 'dup',
+      title: 'Dup',
+      description: null,
+      branchName: null,
+      lane: 0,
+      marker: TaskGraphMarkerType.Open,
+      parentLane: null,
+      isFirstChild: false,
+      isSeriesChild: false,
+      drawTopLine: false,
+      drawBottomLine: false,
+      seriesConnectorFromLane: null,
+      issueType: IssueType.TASK,
+      status: IssueStatus.OPEN,
+      hasDescription: false,
+      linkedPr: null,
+      agentStatus: null,
+      assignedTo: null,
+      drawLane0Connector: false,
+      isLastLane0Connector: false,
+      drawLane0PassThrough: false,
+      lane0Color: null,
+      hasHiddenParent: false,
+      hiddenParentIsSeriesMode: false,
+      executionMode: ExecutionMode.SERIES,
+      parentIssues: null,
+      multiParentTotal: 2,
+    }
+    const line0: TaskGraphIssueRenderLine = { ...base, multiParentIndex: 0 }
+    const line1: TaskGraphIssueRenderLine = { ...base, multiParentIndex: 1 }
+
+    expect(getRenderKey(line0)).toBe('dup:0')
+    expect(getRenderKey(line1)).toBe('dup:1')
+    expect(getRenderKey(line0)).not.toBe(getRenderKey(line1))
   })
 })

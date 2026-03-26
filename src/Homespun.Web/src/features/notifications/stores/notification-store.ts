@@ -13,8 +13,6 @@ export interface AppNotification extends NotificationDto {
  * Notification preferences stored in local storage.
  */
 export interface NotificationPreferences {
-  showToasts: boolean
-  autoDismissDuration: number // ms
   soundEnabled: boolean
 }
 
@@ -46,8 +44,6 @@ export const useNotificationStore = create<NotificationState>()(
         notifications: [],
         unreadCount: 0,
         preferences: {
-          showToasts: true,
-          autoDismissDuration: 5000,
           soundEnabled: false,
         },
 

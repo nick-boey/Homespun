@@ -34,18 +34,22 @@ const mockPrompts = [
     name: 'Default Prompt',
     mode: 'build',
     isOverride: false,
+    initialMessage:
+      '{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\nModify issues as requested.',
   },
   {
     id: 'prompt-2',
     name: 'Plan Prompt',
     mode: 'plan',
     isOverride: false,
+    initialMessage: 'Plan changes for {{title}}.',
   },
   {
     id: 'prompt-3',
     name: 'Project Override',
     mode: 'build',
     isOverride: true,
+    initialMessage: 'Override prompt for {{title}}.',
   },
 ]
 
@@ -165,15 +169,16 @@ describe('IssuesAgentDialog', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows "None" option and defaults to first prompt when no selection saved', async () => {
+  it('defaults to "None" when no selection saved', async () => {
     render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
       wrapper: createWrapper(),
     })
 
-    // Wait for prompts to load - should default to first prompt
+    // Wait for prompts to load - should default to "None"
     await waitFor(() => {
       const promptSelect = screen.getByRole('combobox', { name: 'Select prompt' })
       expect(promptSelect).toBeInTheDocument()
+      expect(promptSelect).toHaveTextContent('None - Start without prompt (Build mode)')
     })
   })
 
@@ -211,6 +216,10 @@ describe('IssuesAgentDialog', () => {
       data: mockResult,
     } as never)
 
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'abc123', title: 'Test Issue', description: 'Desc', type: 'task' },
+    } as never)
+
     render(
       <IssuesAgentDialog
         open={true}
@@ -221,22 +230,26 @@ describe('IssuesAgentDialog', () => {
       { wrapper: createWrapper() }
     )
 
-    // Wait for prompts to load (defaults to first prompt)
+    // Wait for prompts to load
     await waitFor(() => {
       expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
     })
 
-    // Click start (with default prompt selected)
+    // Explicitly select a prompt (default is now "None")
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(screen.getByRole('option', { name: 'Default Prompt (build)' }))
+
+    // Click start
     await user.click(screen.getByText('Start Agent'))
 
     await waitFor(() => {
       expect(IssuesAgent.postApiIssuesAgentSession).toHaveBeenCalledWith({
-        body: {
+        body: expect.objectContaining({
           projectId: 'proj-1',
           model: 'sonnet',
           selectedIssueId: 'abc123',
           promptId: 'prompt-1',
-        },
+        }),
       })
     })
   })
@@ -279,7 +292,7 @@ describe('IssuesAgentDialog', () => {
     })
   })
 
-  it('calls API with correct params when starting agent', async () => {
+  it('sends user instructions verbatim and navigates on success', async () => {
     const user = userEvent.setup()
     const mockResult = {
       sessionId: 'session-123',
@@ -289,6 +302,10 @@ describe('IssuesAgentDialog', () => {
 
     vi.mocked(IssuesAgent.postApiIssuesAgentSession).mockResolvedValue({
       data: mockResult,
+    } as never)
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'abc123', title: 'Test Issue' },
     } as never)
 
     const onOpenChange = vi.fn()
@@ -308,7 +325,7 @@ describe('IssuesAgentDialog', () => {
       expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
     })
 
-    // Enter instructions
+    // Enter instructions (with "None" prompt selected by default)
     const instructionsInput = screen.getByLabelText('Instructions')
     await user.type(instructionsInput, 'Update the issue status')
 
@@ -322,7 +339,7 @@ describe('IssuesAgentDialog', () => {
           model: 'sonnet',
           selectedIssueId: 'abc123',
           userInstructions: 'Update the issue status',
-          promptId: 'prompt-1',
+          promptId: null,
         },
       })
     })
@@ -432,6 +449,128 @@ describe('IssuesAgentDialog', () => {
     // Wait for prompts to load
     await waitFor(() => {
       expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+  })
+
+  it('hydrates instructions textarea when prompt is selected', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'abc123', title: 'Test Issue', description: 'Test desc', type: 'task' },
+    } as never)
+
+    render(
+      <IssuesAgentDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="proj-1"
+        selectedIssueId="abc123"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts and issue to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select prompt' })).toBeInTheDocument()
+    })
+
+    // Wait for issue data to load
+    await waitFor(() => {
+      expect(screen.getByText('Test Issue')).toBeInTheDocument()
+    })
+
+    // Select a prompt
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(screen.getByRole('option', { name: 'Default Prompt (build)' }))
+
+    // Textarea should be hydrated with rendered template
+    await waitFor(() => {
+      const textarea = screen.getByLabelText('Instructions')
+      expect(textarea).toHaveValue('\n**Selected Issue:** abc123\n\nModify issues as requested.')
+    })
+  })
+
+  it('clears instructions when "None" is selected after a prompt', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'abc123', title: 'Test Issue', description: 'Test desc', type: 'task' },
+    } as never)
+
+    render(
+      <IssuesAgentDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="proj-1"
+        selectedIssueId="abc123"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts and issue
+    await waitFor(() => {
+      expect(screen.getByText('Test Issue')).toBeInTheDocument()
+    })
+
+    // Select a prompt first
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(screen.getByRole('option', { name: 'Default Prompt (build)' }))
+
+    // Verify textarea has content
+    await waitFor(() => {
+      expect(screen.getByLabelText('Instructions')).not.toHaveValue('')
+    })
+
+    // Now select "None"
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(
+      screen.getByRole('option', { name: 'None - Start without prompt (Build mode)' })
+    )
+
+    // Textarea should be cleared
+    await waitFor(() => {
+      expect(screen.getByLabelText('Instructions')).toHaveValue('')
+    })
+  })
+
+  it('replaces instructions when switching between prompts', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'abc123', title: 'My Issue', description: 'desc', type: 'task' },
+    } as never)
+
+    render(
+      <IssuesAgentDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="proj-1"
+        selectedIssueId="abc123"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for issue data
+    await waitFor(() => {
+      expect(screen.getByText('My Issue')).toBeInTheDocument()
+    })
+
+    // Select first prompt
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(screen.getByRole('option', { name: 'Default Prompt (build)' }))
+
+    await waitFor(() => {
+      const value = (screen.getByLabelText('Instructions') as HTMLTextAreaElement).value
+      expect(value).toContain('Modify issues as requested.')
+    })
+
+    // Switch to second prompt
+    await user.click(screen.getByRole('combobox', { name: 'Select prompt' }))
+    await user.click(screen.getByRole('option', { name: 'Plan Prompt (plan)' }))
+
+    // Textarea should be replaced with second prompt's content
+    await waitFor(() => {
+      expect(screen.getByLabelText('Instructions')).toHaveValue('Plan changes for My Issue.')
     })
   })
 })

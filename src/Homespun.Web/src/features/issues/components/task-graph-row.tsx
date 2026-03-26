@@ -65,6 +65,8 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   onStatusChange?: (issueId: string, newStatus: IssueStatus) => void
   /** Callback for changing execution mode */
   onExecutionModeChange?: (issueId: string, newMode: ExecutionMode) => void
+  /** Called when clicking a multi-parent badge to navigate to the first instance */
+  onSelectFirstInstance?: (issueId: string) => void
 }
 
 /**
@@ -89,6 +91,7 @@ export const TaskGraphIssueRow = memo(
       onTypeChange,
       onStatusChange,
       onExecutionModeChange,
+      onSelectFirstInstance,
       className,
       ...props
     },
@@ -219,6 +222,24 @@ export const TaskGraphIssueRow = memo(
               )
             }
           />
+
+          {/* Multi-parent badge */}
+          {line.multiParentTotal != null && line.multiParentIndex != null && (
+            <button
+              type="button"
+              className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-700 transition-colors hover:bg-orange-500/30 dark:text-orange-400"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (line.multiParentIndex !== 0) {
+                  onSelectFirstInstance?.(line.issueId)
+                }
+              }}
+              title={`Instance ${line.multiParentIndex + 1} of ${line.multiParentTotal}. Click to go to the first instance.`}
+              data-testid="multi-parent-badge"
+            >
+              ({line.multiParentIndex + 1}/{line.multiParentTotal})
+            </button>
+          )}
 
           {/* Title - no truncation to allow full horizontal scroll */}
           <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>

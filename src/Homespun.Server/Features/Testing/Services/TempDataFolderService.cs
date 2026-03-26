@@ -10,12 +10,7 @@ namespace Homespun.Features.Testing.Services;
 /// ├── homespun-data.json          # Projects, PRs, prompts
 /// ├── sessions/                   # Session cache
 /// └── projects/
-///     ├── demo-project/
-///     │   ├── .fleece/
-///     │   │   └── issues_{hash}.jsonl
-///     │   ├── .gitignore
-///     │   └── README.md
-///     └── sample-app/
+///     └── demo-project/
 ///         ├── .fleece/
 ///         │   └── issues_{hash}.jsonl
 ///         ├── .gitignore

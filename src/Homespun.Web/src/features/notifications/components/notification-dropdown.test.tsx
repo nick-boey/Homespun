@@ -21,8 +21,6 @@ describe('NotificationDropdown', () => {
       notifications: [],
       unreadCount: 0,
       preferences: {
-        showToasts: true,
-        autoDismissDuration: 5000,
         soundEnabled: false,
       },
     })
