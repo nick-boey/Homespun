@@ -446,4 +446,104 @@ public class FleeceServiceRelationshipTests
     }
 
     #endregion
+
+    #region RemoveParentAsync Tests
+
+    [Test]
+    public async Task RemoveParentAsync_RemovesSpecificParent()
+    {
+        // Arrange - create child with two parents
+        var parentA = await _service.CreateIssueAsync(_tempDir, "Parent A", IssueType.Feature);
+        var parentB = await _service.CreateIssueAsync(_tempDir, "Parent B", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parentA.Id);
+        await _service.AddParentAsync(_tempDir, child.Id, parentB.Id);
+
+        // Act - remove parent A
+        var updated = await _service.RemoveParentAsync(_tempDir, child.Id, parentA.Id);
+
+        // Assert
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].ParentIssue, Is.EqualTo(parentB.Id));
+    }
+
+    [Test]
+    public void RemoveParentAsync_ThrowsWhenChildNotFound()
+    {
+        // Act & Assert
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await _service.RemoveParentAsync(_tempDir, "non-existent", "some-parent"));
+    }
+
+    #endregion
+
+    #region RemoveAllParentsAsync Tests
+
+    [Test]
+    public async Task RemoveAllParentsAsync_RemovesAllParents()
+    {
+        // Arrange - create child with two parents
+        var parentA = await _service.CreateIssueAsync(_tempDir, "Parent A", IssueType.Feature);
+        var parentB = await _service.CreateIssueAsync(_tempDir, "Parent B", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parentA.Id);
+        await _service.AddParentAsync(_tempDir, child.Id, parentB.Id);
+
+        // Act
+        var updated = await _service.RemoveAllParentsAsync(_tempDir, child.Id);
+
+        // Assert
+        Assert.That(updated.ParentIssues, Is.Empty);
+    }
+
+    [Test]
+    public void RemoveAllParentsAsync_ThrowsWhenIssueNotFound()
+    {
+        // Act & Assert
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await _service.RemoveAllParentsAsync(_tempDir, "non-existent"));
+    }
+
+    [Test]
+    public async Task RemoveAllParentsAsync_UpdatesCache()
+    {
+        // Arrange
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Act
+        await _service.RemoveAllParentsAsync(_tempDir, child.Id);
+
+        // Assert - verify cache reflects the change
+        var retrieved = await _service.GetIssueAsync(_tempDir, child.Id);
+        Assert.That(retrieved, Is.Not.Null);
+        Assert.That(retrieved!.ParentIssues, Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveAllParentsAsync_RecordsHistorySnapshot()
+    {
+        // Arrange
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+        _mockHistoryService.Invocations.Clear();
+
+        // Act
+        await _service.RemoveAllParentsAsync(_tempDir, child.Id);
+
+        // Assert
+        _mockHistoryService.Verify(
+            h => h.RecordSnapshotAsync(
+                _tempDir,
+                It.IsAny<IReadOnlyList<Issue>>(),
+                "RemoveAllParents",
+                child.Id,
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    #endregion
 }
