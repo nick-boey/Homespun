@@ -6,7 +6,7 @@
 
 import { memo } from 'react'
 import { Circle, Line, Group } from 'react-konva'
-import { ClaudeSessionStatus } from '@/api'
+import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { TaskGraphIssueRenderLine } from '../../services'
 import {
   LANE_WIDTH,
@@ -108,6 +108,28 @@ export const KonvaIssueNode = memo(function KonvaIssueNode({
       )}
     </Group>
   )
+})
+
+interface KonvaVirtualNodeProps {
+  /** Lane for the virtual node */
+  lane: number
+  /** Display row index (after offset) for vertical positioning */
+  displayRowIndex: number
+}
+
+/**
+ * Konva circle component for rendering a virtual (preview) issue node.
+ * Uses Task color with reduced opacity to indicate it's a preview.
+ */
+export const KonvaVirtualNode = memo(function KonvaVirtualNode({
+  lane,
+  displayRowIndex,
+}: KonvaVirtualNodeProps) {
+  const cx = getLaneCenterX(lane)
+  const cy = displayRowIndex * ROW_HEIGHT + getRowCenterY()
+  const nodeColor = getTypeColor(IssueType.TASK)
+
+  return <Circle x={cx} y={cy} radius={NODE_RADIUS} fill={nodeColor} opacity={0.35} />
 })
 
 interface KonvaEdgeProps {
