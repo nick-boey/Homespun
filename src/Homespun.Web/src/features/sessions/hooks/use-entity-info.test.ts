@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEntityInfo } from './use-entity-info'
 import { Issues, PullRequests } from '@/api'
@@ -176,6 +176,75 @@ describe('useEntityInfo', () => {
     expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
       path: { issueId: 'custom-id' },
       query: undefined,
+    })
+  })
+
+  it('does not fetch entity info for issues-agent prefixed entity IDs', async () => {
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'should-not-fetch', title: 'Should Not Fetch' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const { result } = renderHook(() => useEntityInfo('issues-agent-20260326-000737'), {
+      wrapper: createWrapper(),
+    })
+
+    // Allow the query time to settle (async queryFn runs in microtask)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+
+    // The query should not have fired for issues-agent entity IDs
+    expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
+    expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('does not fetch entity info for rebase prefixed entity IDs', async () => {
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: { id: 'should-not-fetch', title: 'Should Not Fetch' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const { result } = renderHook(() => useEntityInfo('rebase-feature-branch'), {
+      wrapper: createWrapper(),
+    })
+
+    // Allow the query time to settle
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+
+    expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
+    expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('handles API returning undefined data gracefully', async () => {
+    const mockResponse = {
+      data: undefined,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    }
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue(
+      mockResponse as unknown as Awaited<ReturnType<typeof Issues.getApiIssuesByIssueId>>
+    )
+
+    const { result } = renderHook(() => useEntityInfo('issue-404'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({
+        type: 'issue',
+        title: 'issue-404',
+        id: 'issue-404',
+      })
     })
   })
 

@@ -132,6 +132,30 @@ function IssuesList() {
     },
   })
 
+  // Remove parent mutation
+  const removeParentMutation = useMutation({
+    mutationFn: ({ childId, parentIssueId }: { childId: string; parentIssueId: string }) =>
+      Issues.postApiIssuesByChildIdRemoveParent({
+        path: { childId },
+        body: { projectId, parentIssueId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
+
+  // Remove all parents mutation
+  const removeAllParentsMutation = useMutation({
+    mutationFn: ({ issueId }: { issueId: string }) =>
+      Issues.postApiIssuesByIssueIdRemoveAllParents({
+        path: { issueId },
+        body: { projectId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
+
   // Set parent mutation for move operations
   const setParentMutation = useMutation({
     mutationFn: ({ childId, parentIssueId }: { childId: string; parentIssueId: string | null }) =>
@@ -210,6 +234,22 @@ function IssuesList() {
     }
   }, [selectedIssueId, moveOperation])
 
+  const handleRemoveParent = useCallback(() => {
+    if (!selectedIssueId) return
+    if (moveOperation === MoveOperationType.RemoveParent) {
+      setMoveOperation(null)
+      setMoveSourceIssueId(null)
+    } else {
+      setMoveOperation(MoveOperationType.RemoveParent)
+      setMoveSourceIssueId(selectedIssueId)
+    }
+  }, [selectedIssueId, moveOperation])
+
+  const handleRemoveAllParents = useCallback(() => {
+    if (!selectedIssueId) return
+    removeAllParentsMutation.mutate({ issueId: selectedIssueId })
+  }, [selectedIssueId, removeAllParentsMutation])
+
   const handleMoveComplete = useCallback(
     async (targetIssueId: string) => {
       if (!moveSourceIssueId || !moveOperation) return
@@ -227,6 +267,12 @@ function IssuesList() {
             childId: targetIssueId,
             parentIssueId: moveSourceIssueId,
           })
+        } else if (moveOperation === MoveOperationType.RemoveParent) {
+          // Remove target as parent of source (target must be a parent of source)
+          await removeParentMutation.mutateAsync({
+            childId: moveSourceIssueId,
+            parentIssueId: targetIssueId,
+          })
         }
       } finally {
         // Reset move operation state
@@ -234,7 +280,7 @@ function IssuesList() {
         setMoveSourceIssueId(null)
       }
     },
-    [moveSourceIssueId, moveOperation, setParentMutation]
+    [moveSourceIssueId, moveOperation, setParentMutation, removeParentMutation]
   )
 
   const handleMoveCancel = useCallback(() => {
@@ -380,6 +426,9 @@ function IssuesList() {
         onMakeParent={handleMakeParent}
         childOfActive={moveOperation === MoveOperationType.AsChildOf}
         parentOfActive={moveOperation === MoveOperationType.AsParentOf}
+        onRemoveParent={handleRemoveParent}
+        removeParentActive={moveOperation === MoveOperationType.RemoveParent}
+        onRemoveAllParents={handleRemoveAllParents}
         onMoveUp={handleMoveUp}
         onMoveDown={handleMoveDown}
         canMoveUp={canMoveUp}

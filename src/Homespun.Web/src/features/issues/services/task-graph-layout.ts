@@ -58,6 +58,8 @@ export interface TaskGraphIssueRenderLine {
   hiddenParentIsSeriesMode: boolean
   executionMode: ExecutionModeEnum
   parentIssues: Array<{ parentIssue?: string | null; sortOrder?: string | null }> | null
+  multiParentIndex: number | null
+  multiParentTotal: number | null
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -105,6 +107,13 @@ export function isLoadMoreRenderLine(
   line: TaskGraphRenderLine
 ): line is TaskGraphLoadMoreRenderLine {
   return line.type === 'loadMore'
+}
+
+/**
+ * Returns a unique key for a render line, accounting for multi-parent duplicates.
+ */
+export function getRenderKey(line: TaskGraphIssueRenderLine): string {
+  return line.multiParentIndex != null ? `${line.issueId}:${line.multiParentIndex}` : line.issueId
 }
 
 /**
@@ -279,6 +288,28 @@ export function computeLayout(
             result[i] = { ...line, drawLane0PassThrough: true }
           }
         }
+      }
+    }
+  }
+
+  // Post-process: assign multiParentIndex/multiParentTotal for issues appearing more than once
+  const mpCounts = new Map<string, number>()
+  for (const line of result) {
+    if (isIssueRenderLine(line)) {
+      const id = line.issueId.toLowerCase()
+      mpCounts.set(id, (mpCounts.get(id) ?? 0) + 1)
+    }
+  }
+  const mpIdx = new Map<string, number>()
+  for (let i = 0; i < result.length; i++) {
+    const line = result[i]
+    if (isIssueRenderLine(line)) {
+      const id = line.issueId.toLowerCase()
+      const total = mpCounts.get(id) ?? 1
+      if (total > 1) {
+        const idx = mpIdx.get(id) ?? 0
+        mpIdx.set(id, idx + 1)
+        result[i] = { ...line, multiParentIndex: idx, multiParentTotal: total }
       }
     }
   }
@@ -676,6 +707,8 @@ function renderGroup(
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
       parentIssues: node.issue.parentIssues ?? null,
+      multiParentIndex: null,
+      multiParentTotal: null,
     })
   }
 }
@@ -747,9 +780,22 @@ function computeTreeViewLayout(
     }
   }
 
+  // Count how many parents each node has in the group (for multi-parent detection)
+  const parentCountInGroup = new Map<string, number>()
+  for (const node of group) {
+    if (!node.issue?.id) continue
+    let count = 0
+    for (const parentRef of node.issue.parentIssues ?? []) {
+      if (parentRef.parentIssue && nodeById.has(parentRef.parentIssue.toLowerCase())) {
+        count++
+      }
+    }
+    parentCountInGroup.set(node.issue.id.toLowerCase(), count)
+  }
+
   // BFS from roots to assign lanes
   const result: TreeViewNode[] = []
-  const visited = new Set<string>()
+  const enqueueCount = new Map<string, number>()
   const queue: Array<{
     node: TaskGraphNodeResponse
     lane: number
@@ -758,9 +804,12 @@ function computeTreeViewLayout(
 
   // Add roots to queue (lane 0)
   for (const root of roots) {
-    if (root.issue?.id && !visited.has(root.issue.id.toLowerCase())) {
-      queue.push({ node: root, lane: 0, parentNode: null })
-      visited.add(root.issue.id.toLowerCase())
+    if (root.issue?.id) {
+      const rootId = root.issue.id.toLowerCase()
+      if ((enqueueCount.get(rootId) ?? 0) === 0) {
+        queue.push({ node: root, lane: 0, parentNode: null })
+        enqueueCount.set(rootId, 1)
+      }
     }
   }
 
@@ -786,9 +835,15 @@ function computeTreeViewLayout(
     if (nodeId) {
       const children = childrenByParent.get(nodeId) ?? []
       for (const child of children) {
-        if (child.issue?.id && !visited.has(child.issue.id.toLowerCase())) {
+        if (!child.issue?.id) continue
+        const childId = child.issue.id.toLowerCase()
+        const timesEnqueued = enqueueCount.get(childId) ?? 0
+        const totalParents = parentCountInGroup.get(childId) ?? 1
+
+        // Allow multi-parent nodes to be enqueued once per parent
+        if (timesEnqueued < totalParents) {
           queue.push({ node: child, lane: lane + 1, parentNode: node })
-          visited.add(child.issue.id.toLowerCase())
+          enqueueCount.set(childId, timesEnqueued + 1)
         }
       }
     }
@@ -987,6 +1042,8 @@ function renderGroupTreeView(
       hiddenParentIsSeriesMode,
       executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
       parentIssues: node.issue.parentIssues ?? null,
+      multiParentIndex: null,
+      multiParentTotal: null,
     })
   }
 }

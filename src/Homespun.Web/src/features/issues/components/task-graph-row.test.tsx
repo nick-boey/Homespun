@@ -78,6 +78,8 @@ describe('TaskGraphIssueRow', () => {
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
   }
 
   const defaultProps = {
@@ -310,6 +312,62 @@ describe('TaskGraphIssueRow', () => {
       render(<TaskGraphIssueRow {...defaultProps} line={lineWithAssignee} />)
 
       expect(screen.getByText('plainusername')).toBeInTheDocument()
+    })
+  })
+
+  describe('multi-parent badge', () => {
+    it('renders multi-parent badge when multiParentTotal is set', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const lineWithMultiParent = {
+        ...mockLine,
+        multiParentIndex: 0,
+        multiParentTotal: 3,
+      }
+
+      render(<TaskGraphIssueRow {...defaultProps} line={lineWithMultiParent} />)
+
+      const badge = screen.getByTestId('multi-parent-badge')
+      expect(badge).toBeInTheDocument()
+      expect(badge).toHaveTextContent('(1/3)')
+    })
+
+    it('does not render multi-parent badge when multiParentTotal is null', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      render(<TaskGraphIssueRow {...defaultProps} />)
+
+      expect(screen.queryByTestId('multi-parent-badge')).not.toBeInTheDocument()
+    })
+
+    it('calls onSelectFirstInstance when badge clicked on non-first instance', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const onSelectFirstInstance = vi.fn()
+      const lineWithMultiParent = {
+        ...mockLine,
+        multiParentIndex: 1,
+        multiParentTotal: 3,
+      }
+
+      render(
+        <TaskGraphIssueRow
+          {...defaultProps}
+          line={lineWithMultiParent}
+          onSelectFirstInstance={onSelectFirstInstance}
+        />
+      )
+
+      const badge = screen.getByTestId('multi-parent-badge')
+      fireEvent.click(badge)
+
+      expect(onSelectFirstInstance).toHaveBeenCalledWith('test-123')
     })
   })
 

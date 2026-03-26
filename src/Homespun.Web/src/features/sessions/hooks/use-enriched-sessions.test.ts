@@ -306,4 +306,58 @@ describe('useEnrichedSessions', () => {
     result.current.refetch()
     expect(mockRefetch).toHaveBeenCalled()
   })
+
+  it('skips entity info fetch for issues-agent entity IDs', async () => {
+    vi.mocked(useSessions).mockReturnValue({
+      data: [
+        {
+          ...mockSessions[0],
+          id: 'session-agent',
+          entityId: 'issues-agent-20260326-000737',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
+
+    const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.sessions).toHaveLength(1)
+    })
+
+    expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
+    expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
+    expect(result.current.sessions[0].entityTitle).toBeUndefined()
+    expect(result.current.sessions[0].entityType).toBeUndefined()
+  })
+
+  it('skips entity info fetch for rebase entity IDs', async () => {
+    vi.mocked(useSessions).mockReturnValue({
+      data: [
+        {
+          ...mockSessions[0],
+          id: 'session-rebase',
+          entityId: 'rebase-feature-branch',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
+
+    const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.sessions).toHaveLength(1)
+    })
+
+    expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
+    expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
+    expect(result.current.sessions[0].entityTitle).toBeUndefined()
+    expect(result.current.sessions[0].entityType).toBeUndefined()
+  })
 })

@@ -202,6 +202,16 @@ public interface IFleeceService
     Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
 
     /// <summary>
+    /// Removes all parent relationships from an issue.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="issueId">The ID of the issue to remove all parents from.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated issue with all parent relationships removed.</returns>
+    /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
+    Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default);
+
+    /// <summary>
     /// Checks whether setting a parent relationship would create a cycle.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>

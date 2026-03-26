@@ -12,6 +12,7 @@ export {
   KonvaEdge,
   KonvaHiddenParentIndicator,
   KonvaAgentStatusRing,
+  KonvaDiagonalEdge,
 } from './konva-nodes'
 export { KonvaHtmlRow } from './konva-html-row'
 export type { KonvaHtmlRowProps } from './konva-html-row'
@@ -19,5 +20,10 @@ export type { KonvaHtmlRowProps } from './konva-html-row'
 export { useCamera, clampPosition } from './use-camera'
 export type { CameraState, Size } from './use-camera'
 
-export { useEdgePaths, computeEdgePaths } from './use-edge-paths'
-export type { EdgePath } from './use-edge-paths'
+export {
+  useEdgePaths,
+  computeEdgePaths,
+  useDiagonalEdges,
+  computeDiagonalEdges,
+} from './use-edge-paths'
+export type { EdgePath, DiagonalEdgePath } from './use-edge-paths'
