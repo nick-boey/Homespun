@@ -174,6 +174,137 @@ describe('useCamera', () => {
 
       expect(typeof result.current.handleDragEnd).toBe('function')
     })
+
+    it('returns handleDragMove handler', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      expect(typeof result.current.handleDragMove).toBe('function')
+    })
+  })
+
+  describe('handleWheel axis locking', () => {
+    it('locks to vertical when deltaY dominates', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 2,
+          deltaY: 10,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      expect(result.current.camera).toEqual({ x: 0, y: 10 })
+    })
+
+    it('locks to horizontal when deltaX dominates', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 10,
+          deltaY: 2,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      expect(result.current.camera).toEqual({ x: 10, y: 0 })
+    })
+
+    it('locks to horizontal when deltas are equal', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 5,
+          deltaY: 5,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      // >= means horizontal wins on tie
+      expect(result.current.camera).toEqual({ x: 5, y: 0 })
+    })
+  })
+
+  describe('handleDragMove axis locking', () => {
+    const makeMockStage = (x: number, y: number) => ({
+      x: vi.fn().mockReturnValue(x),
+      y: vi.fn().mockReturnValue(y),
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fireEvent = (handler: (e: any) => void, stage: ReturnType<typeof makeMockStage>) => {
+      handler({ target: stage })
+    }
+
+    it('locks to vertical axis when vertical movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First call: initialize drag start position
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second call: move vertically past threshold
+      const movedStage = makeMockStage(0, -20)
+      act(() => {
+        fireEvent(result.current.handleDragMove, movedStage)
+      })
+
+      // Should constrain horizontal: stage x reset to starting position (0)
+      expect(movedStage.x).toHaveBeenCalledWith(0)
+    })
+
+    it('locks to horizontal axis when horizontal movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First call: initialize
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second call: move horizontally past threshold
+      const movedStage = makeMockStage(-20, 0)
+      act(() => {
+        fireEvent(result.current.handleDragMove, movedStage)
+      })
+
+      // Should constrain vertical: stage y reset to starting position (0)
+      expect(movedStage.y).toHaveBeenCalledWith(0)
+    })
+
+    it('resets axis lock after drag end', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First drag: initialize and lock to vertical
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+      const stage1 = makeMockStage(0, -20)
+      act(() => {
+        fireEvent(result.current.handleDragMove, stage1)
+      })
+
+      // End the first drag
+      act(() => {
+        fireEvent(result.current.handleDragEnd, stage1)
+      })
+
+      // Second drag: initialize
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second drag: move horizontally — should lock to horizontal now
+      const stage2 = makeMockStage(-20, 0)
+      act(() => {
+        fireEvent(result.current.handleDragMove, stage2)
+      })
+
+      // Should constrain vertical (locked to horizontal)
+      expect(stage2.y).toHaveBeenCalledWith(0)
+    })
   })
 
   describe('viewport changes', () => {

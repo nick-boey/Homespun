@@ -261,7 +261,7 @@ export const TaskGraphKonvaView = memo(
     }, [maxLanes, rowYPositions, insertionRowIndex])
 
     // Camera state
-    const { camera, scrollToRow, handleDragEnd, handleWheel, touchHandlers } = useCamera(
+    const { camera, scrollToRow, handleDragMove, handleDragEnd, handleWheel, touchHandlers } = useCamera(
       contentSize,
       viewportSize
     )
@@ -785,6 +785,7 @@ export const TaskGraphKonvaView = memo(
           x={-camera.x}
           y={-camera.y}
           draggable
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
         >
           {/* Edges layer */}
