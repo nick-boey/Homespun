@@ -919,7 +919,7 @@ export const TaskGraphKonvaView = memo(
 
                 {/* Expanded details */}
                 {isExpanded && !isEditing && (
-                  <div style={{ marginTop: ROW_HEIGHT }}>
+                  <div>
                     <InlineIssueDetailRow
                       line={line}
                       maxLanes={maxLanes}
