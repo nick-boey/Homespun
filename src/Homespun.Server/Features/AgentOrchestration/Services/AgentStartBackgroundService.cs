@@ -165,7 +165,22 @@ public class AgentStartBackgroundService(
             string? renderedMessage = null;
             var mode = SessionMode.Plan; // Default for None
 
-            if (!string.IsNullOrEmpty(request.PromptId))
+            if (!string.IsNullOrEmpty(request.UserInstructions))
+            {
+                // User instructions override the prompt template
+                renderedMessage = request.UserInstructions;
+
+                // Still resolve mode from prompt if provided
+                if (!string.IsNullOrEmpty(request.PromptId))
+                {
+                    prompt = agentPromptService.GetPrompt(request.PromptId);
+                    if (prompt != null)
+                    {
+                        mode = prompt.Mode;
+                    }
+                }
+            }
+            else if (!string.IsNullOrEmpty(request.PromptId))
             {
                 prompt = agentPromptService.GetPrompt(request.PromptId);
                 if (prompt != null)

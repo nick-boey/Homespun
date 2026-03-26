@@ -955,6 +955,7 @@ export type RunAgentRequest = {
     promptId: string | null;
     model?: string | null;
     baseBranch?: string | null;
+    userInstructions?: string | null;
 };
 
 export type ScheduleTriggerConfig = {
