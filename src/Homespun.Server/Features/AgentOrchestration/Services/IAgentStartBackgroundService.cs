@@ -88,6 +88,12 @@ public record AgentStartRequest
     public string? WorkflowStepId { get; init; }
 
     /// <summary>
+    /// Optional user instructions that override the prompt template.
+    /// When provided, this text is used as the initial message directly instead of rendering the prompt template.
+    /// </summary>
+    public string? UserInstructions { get; init; }
+
+    /// <summary>
     /// Whether this request is part of a workflow execution.
     /// </summary>
     public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;

@@ -14,6 +14,8 @@ export interface RunAgentParams {
   model?: string
   /** Base branch to create the working branch from */
   baseBranch?: string
+  /** Optional user instructions that override the prompt template */
+  userInstructions?: string
 }
 
 export interface RunAgentResult {
@@ -76,6 +78,7 @@ export function useRunAgent() {
           promptId: params.promptId,
           model: params.model,
           baseBranch: params.baseBranch,
+          userInstructions: params.userInstructions,
         },
       })
 

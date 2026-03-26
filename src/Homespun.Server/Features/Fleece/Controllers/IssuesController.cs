@@ -483,7 +483,8 @@ public class IssuesController(
             PromptId = request.PromptId,
             BaseBranch = request.BaseBranch,
             Model = model,
-            BranchName = branchName
+            BranchName = branchName,
+            UserInstructions = request.UserInstructions
         });
 
         logger.LogInformation(

@@ -832,6 +832,44 @@ public class IssuesControllerTests
             Times.Once);
     }
 
+    [Test]
+    public async Task RunAgent_PassesUserInstructionsToBackgroundService()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptId = null,
+            UserInstructions = "Custom instructions for the agent"
+        };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<AcceptedResult>());
+
+        // Verify background service was queued with UserInstructions
+        _agentStartBackgroundServiceMock.Verify(
+            x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(req =>
+                req.IssueId == issueId &&
+                req.UserInstructions == "Custom instructions for the agent")),
+            Times.Once);
+    }
+
     #endregion
 
     #region Update Auto-Assign Tests
