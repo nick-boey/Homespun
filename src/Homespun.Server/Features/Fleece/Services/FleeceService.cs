@@ -631,6 +631,49 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return issue;
     }
 
+    public async Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the issue exists in cache
+        if (!cache.TryGetValue(issueId, out _))
+        {
+            _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
+            throw new KeyNotFoundException($"Issue '{issueId}' not found");
+        }
+
+        // Perform the update via Fleece.Core with empty parent list
+        var service = GetOrCreateIssueService(projectPath);
+        var issue = await service.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: ct);
+
+        // Update the in-memory cache immediately
+        cache[issueId] = issue;
+
+        // Queue a background persistence operation for consistency
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: issueId,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                var currentIssue = await svc.GetByIdAsync(issueId, innerCt);
+                if (currentIssue != null)
+                {
+                    await svc.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: innerCt);
+                }
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        _logger.LogInformation("Removed all parents from issue '{IssueId}'", issueId);
+
+        // Record history snapshot after removing all parents
+        await RecordHistorySnapshotAsync(projectPath, "RemoveAllParents", issueId, $"Removed all parents from '{issueId}'", ct);
+
+        return issue;
+    }
+
     public async Task<bool> WouldCreateCycleAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
     {
         // Self-reference is always a cycle

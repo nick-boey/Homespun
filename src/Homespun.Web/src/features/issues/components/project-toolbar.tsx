@@ -6,6 +6,8 @@ import {
   ChevronDown,
   CornerRightUp,
   CornerLeftDown,
+  Unlink,
+  Unlink2,
   Undo2,
   Redo2,
   Pencil,
@@ -44,6 +46,12 @@ export interface ProjectToolbarProps {
   childOfActive?: boolean
   /** Whether the "Make Parent Of" button is in active selection mode */
   parentOfActive?: boolean
+  /** Callback when Remove Parent is clicked (enters selection mode) */
+  onRemoveParent?: () => void
+  /** Whether the "Remove Parent" button is in active selection mode */
+  removeParentActive?: boolean
+  /** Callback when Remove All Parents is clicked (immediate action) */
+  onRemoveAllParents?: () => void
   /** Callback when Move Up is clicked */
   onMoveUp?: () => void
   /** Callback when Move Down is clicked */
@@ -101,6 +109,9 @@ export function ProjectToolbar({
   onMakeParent,
   childOfActive = false,
   parentOfActive = false,
+  onRemoveParent,
+  removeParentActive = false,
+  onRemoveAllParents,
   onMoveUp,
   onMoveDown,
   canMoveUp = false,
@@ -209,6 +220,29 @@ export function ProjectToolbar({
           className={cn(parentOfActive && 'ring-ring ring-2')}
         >
           <CornerLeftDown className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onRemoveParent}
+          disabled={!hasIssueSelected}
+          aria-label="Remove parent (click to select parent to remove)"
+          title="Remove parent (click to select parent to remove)"
+          data-testid="toolbar-remove-parent"
+          className={cn(removeParentActive && 'ring-ring ring-2')}
+        >
+          <Unlink className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onRemoveAllParents}
+          disabled={!hasIssueSelected}
+          aria-label="Remove all parents"
+          title="Remove all parents"
+          data-testid="toolbar-remove-all-parents"
+        >
+          <Unlink2 className="h-4 w-4" />
         </Button>
       </ButtonGroup>
 

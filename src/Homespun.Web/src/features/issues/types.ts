@@ -27,6 +27,8 @@ export const MoveOperationType = {
   AsChildOf: 'AsChildOf',
   /** Make the target issue a child of the source issue. */
   AsParentOf: 'AsParentOf',
+  /** Remove a specific parent from the source issue. */
+  RemoveParent: 'RemoveParent',
 } as const
 
 export type MoveOperationType = (typeof MoveOperationType)[keyof typeof MoveOperationType]

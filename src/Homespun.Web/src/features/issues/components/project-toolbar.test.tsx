@@ -51,6 +51,8 @@ const defaultProps = {
   onPreviousMatch: vi.fn(),
   onEmbedSearch: vi.fn(),
   onApplyDefaultFilter: vi.fn(),
+  onRemoveParent: vi.fn(),
+  onRemoveAllParents: vi.fn(),
   onMoveUp: vi.fn(),
   onMoveDown: vi.fn(),
   canMoveUp: false,
@@ -140,6 +142,61 @@ describe('ProjectToolbar', () => {
 
       await user.click(screen.getByRole('button', { name: /make parent/i }))
       expect(onMakeParent).toHaveBeenCalled()
+    })
+  })
+
+  describe('Remove parent buttons', () => {
+    it('renders remove parent button', () => {
+      renderToolbar()
+      expect(screen.getByTestId('toolbar-remove-parent')).toBeInTheDocument()
+    })
+
+    it('renders remove all parents button', () => {
+      renderToolbar()
+      expect(screen.getByTestId('toolbar-remove-all-parents')).toBeInTheDocument()
+    })
+
+    it('disables remove parent button when no issue selected', () => {
+      renderToolbar({ selectedIssueId: null })
+      expect(screen.getByTestId('toolbar-remove-parent')).toBeDisabled()
+    })
+
+    it('disables remove all parents button when no issue selected', () => {
+      renderToolbar({ selectedIssueId: null })
+      expect(screen.getByTestId('toolbar-remove-all-parents')).toBeDisabled()
+    })
+
+    it('enables remove parent button when issue is selected', () => {
+      renderToolbar({ selectedIssueId: 'test-issue-1' })
+      expect(screen.getByTestId('toolbar-remove-parent')).not.toBeDisabled()
+    })
+
+    it('enables remove all parents button when issue is selected', () => {
+      renderToolbar({ selectedIssueId: 'test-issue-1' })
+      expect(screen.getByTestId('toolbar-remove-all-parents')).not.toBeDisabled()
+    })
+
+    it('shows ring when remove parent is active', () => {
+      renderToolbar({ selectedIssueId: 'test-issue-1', removeParentActive: true })
+      expect(screen.getByTestId('toolbar-remove-parent')).toHaveClass('ring-2')
+    })
+
+    it('calls onRemoveParent when remove parent button is clicked', async () => {
+      const user = userEvent.setup()
+      const onRemoveParent = vi.fn()
+      renderToolbar({ selectedIssueId: 'test-issue-1', onRemoveParent })
+
+      await user.click(screen.getByTestId('toolbar-remove-parent'))
+      expect(onRemoveParent).toHaveBeenCalled()
+    })
+
+    it('calls onRemoveAllParents when remove all parents button is clicked', async () => {
+      const user = userEvent.setup()
+      const onRemoveAllParents = vi.fn()
+      renderToolbar({ selectedIssueId: 'test-issue-1', onRemoveAllParents })
+
+      await user.click(screen.getByTestId('toolbar-remove-all-parents'))
+      expect(onRemoveAllParents).toHaveBeenCalled()
     })
   })
 
