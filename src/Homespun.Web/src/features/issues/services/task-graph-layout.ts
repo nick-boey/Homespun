@@ -780,9 +780,22 @@ function computeTreeViewLayout(
     }
   }
 
+  // Count how many parents each node has in the group (for multi-parent detection)
+  const parentCountInGroup = new Map<string, number>()
+  for (const node of group) {
+    if (!node.issue?.id) continue
+    let count = 0
+    for (const parentRef of node.issue.parentIssues ?? []) {
+      if (parentRef.parentIssue && nodeById.has(parentRef.parentIssue.toLowerCase())) {
+        count++
+      }
+    }
+    parentCountInGroup.set(node.issue.id.toLowerCase(), count)
+  }
+
   // BFS from roots to assign lanes
   const result: TreeViewNode[] = []
-  const visited = new Set<string>()
+  const enqueueCount = new Map<string, number>()
   const queue: Array<{
     node: TaskGraphNodeResponse
     lane: number
@@ -791,9 +804,12 @@ function computeTreeViewLayout(
 
   // Add roots to queue (lane 0)
   for (const root of roots) {
-    if (root.issue?.id && !visited.has(root.issue.id.toLowerCase())) {
-      queue.push({ node: root, lane: 0, parentNode: null })
-      visited.add(root.issue.id.toLowerCase())
+    if (root.issue?.id) {
+      const rootId = root.issue.id.toLowerCase()
+      if ((enqueueCount.get(rootId) ?? 0) === 0) {
+        queue.push({ node: root, lane: 0, parentNode: null })
+        enqueueCount.set(rootId, 1)
+      }
     }
   }
 
@@ -819,9 +835,15 @@ function computeTreeViewLayout(
     if (nodeId) {
       const children = childrenByParent.get(nodeId) ?? []
       for (const child of children) {
-        if (child.issue?.id && !visited.has(child.issue.id.toLowerCase())) {
+        if (!child.issue?.id) continue
+        const childId = child.issue.id.toLowerCase()
+        const timesEnqueued = enqueueCount.get(childId) ?? 0
+        const totalParents = parentCountInGroup.get(childId) ?? 1
+
+        // Allow multi-parent nodes to be enqueued once per parent
+        if (timesEnqueued < totalParents) {
           queue.push({ node: child, lane: lane + 1, parentNode: node })
-          visited.add(child.issue.id.toLowerCase())
+          enqueueCount.set(childId, timesEnqueued + 1)
         }
       }
     }

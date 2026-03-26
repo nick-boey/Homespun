@@ -1053,7 +1053,7 @@ describe('computeLayout', () => {
       expect(issueIds).not.toContain('grandchild')
     })
 
-    it('shows node once when it has multiple parents (first traversal)', () => {
+    it('shows multi-parent node under each parent in tree view (2-parent)', () => {
       // Diamond pattern: root -> parent1, parent2 -> shared_child
       const root = createIssue({ id: 'root', executionMode: ExecutionMode.PARALLEL })
       const parent1 = createIssue({
@@ -1086,9 +1086,75 @@ describe('computeLayout', () => {
 
       const result = computeLayout(taskGraph, 3, 'tree')
 
-      // The shared child should appear exactly once
-      const sharedLines = result.filter((l) => isIssueRenderLine(l) && l.issueId === 'shared')
-      expect(sharedLines).toHaveLength(1)
+      // The shared child should appear twice (once per parent)
+      const sharedLines = result.filter(
+        (l) => isIssueRenderLine(l) && l.issueId === 'shared'
+      ) as TaskGraphIssueRenderLine[]
+      expect(sharedLines).toHaveLength(2)
+
+      // First instance: multiParentIndex=0, shows down-right diagonal
+      expect(sharedLines[0].multiParentIndex).toBe(0)
+      expect(sharedLines[0].multiParentTotal).toBe(2)
+
+      // Second instance: multiParentIndex=1, shows up-left diagonal
+      expect(sharedLines[1].multiParentIndex).toBe(1)
+      expect(sharedLines[1].multiParentTotal).toBe(2)
+    })
+
+    it('shows multi-parent node under each parent in tree view (3-parent)', () => {
+      const root = createIssue({ id: 'root', executionMode: ExecutionMode.PARALLEL })
+      const p1 = createIssue({
+        id: 'p1',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const p2 = createIssue({
+        id: 'p2',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const p3 = createIssue({
+        id: 'p3',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const sharedChild = createIssue({
+        id: 'shared',
+        parentIssues: [{ parentIssue: 'p1' }, { parentIssue: 'p2' }, { parentIssue: 'p3' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(root, 2, 0),
+          createNode(p1, 1, 1),
+          createNode(p2, 1, 2),
+          createNode(p3, 1, 3),
+          createNode(sharedChild, 0, 4),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const sharedLines = result.filter(
+        (l) => isIssueRenderLine(l) && l.issueId === 'shared'
+      ) as TaskGraphIssueRenderLine[]
+      expect(sharedLines).toHaveLength(3)
+
+      // First: down-right only
+      expect(sharedLines[0].multiParentIndex).toBe(0)
+      expect(sharedLines[0].multiParentTotal).toBe(3)
+
+      // Middle: both diagonals
+      expect(sharedLines[1].multiParentIndex).toBe(1)
+      expect(sharedLines[1].multiParentTotal).toBe(3)
+
+      // Last: up-left only
+      expect(sharedLines[2].multiParentIndex).toBe(2)
+      expect(sharedLines[2].multiParentTotal).toBe(3)
     })
 
     it('does not add lane0 connectors in tree view', () => {
