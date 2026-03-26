@@ -178,6 +178,12 @@ describe('TaskGraphKonvaView', () => {
       expect(rows[0].className).toContain('ring-1')
       expect(rows[0].className).toContain('ring-primary')
     })
+
+    it('does not set inline height style on container so CSS can control sizing', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
+    })
   })
 
   describe('keyboard navigation', () => {
