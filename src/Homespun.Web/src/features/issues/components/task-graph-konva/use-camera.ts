@@ -51,6 +51,17 @@ export function clampPosition(position: number, viewportSize: number, contentSiz
  */
 export function useCamera(contentSize: Size, viewportSize: Size) {
   const [rawCamera, setCamera] = useState<CameraState>({ x: 0, y: 0 })
+  const dragRef = useRef<{
+    startX: number
+    startY: number
+    lockedAxis: 'x' | 'y' | null
+    initialized: boolean
+  }>({
+    startX: 0,
+    startY: 0,
+    lockedAxis: null,
+    initialized: false,
+  })
 
   // Compute clamped camera based on current viewport/content sizes
   const camera = useMemo(
@@ -141,6 +152,43 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
   }, [])
 
   /**
+   * Handler for Konva Stage drag move event.
+   * Constrains drag to a single axis once direction is determined.
+   */
+  const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    const stage = e.target
+    if (!stage || !('x' in stage) || !('y' in stage)) return
+
+    const stageX = typeof stage.x === 'function' ? stage.x() : 0
+    const stageY = typeof stage.y === 'function' ? stage.y() : 0
+    const drag = dragRef.current
+
+    // Capture stage position at start of drag gesture
+    if (!drag.initialized) {
+      drag.startX = stageX
+      drag.startY = stageY
+      drag.initialized = true
+      return
+    }
+
+    if (drag.lockedAxis === null) {
+      const dx = Math.abs(stageX - drag.startX)
+      const dy = Math.abs(stageY - drag.startY)
+      const threshold = 5
+
+      if (dx >= threshold || dy >= threshold) {
+        drag.lockedAxis = dx >= dy ? 'x' : 'y'
+      }
+    }
+
+    if (drag.lockedAxis === 'x' && typeof stage.y === 'function') {
+      stage.y(drag.startY)
+    } else if (drag.lockedAxis === 'y' && typeof stage.x === 'function') {
+      stage.x(drag.startX)
+    }
+  }, [])
+
+  /**
    * Handler for Konva Stage drag end event.
    * Updates camera position based on stage position after drag.
    */
@@ -157,6 +205,9 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
           y: clampPosition(-stageY, viewportSize.height, contentSize.height),
         })
       }
+
+      // Reset drag axis lock for next gesture
+      dragRef.current = { startX: 0, startY: 0, lockedAxis: null, initialized: false }
     },
     [contentSize.width, contentSize.height, viewportSize.width, viewportSize.height]
   )
@@ -167,7 +218,11 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault()
-      panBy(e.deltaX, e.deltaY)
+      if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) {
+        panBy(e.deltaX, 0)
+      } else {
+        panBy(0, e.deltaY)
+      }
     },
     [panBy]
   )
@@ -220,6 +275,7 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
     panBy,
     scrollToRow,
     reset,
+    handleDragMove,
     handleDragEnd,
     handleWheel,
     touchHandlers,
