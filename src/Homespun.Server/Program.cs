@@ -29,6 +29,8 @@ using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 // Enable static web assets resolution for non-production environments (e.g. Mock)
 // By default, only the Development environment activates this automatically
 if (!builder.Environment.IsProduction())
@@ -271,7 +273,6 @@ builder.Services.AddSignalR()
         options.PayloadSerializerOptions.Converters.Add(
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
-builder.Services.AddHealthChecks();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -329,8 +330,8 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 app.MapHub<WorkflowHub>("/hubs/workflows");
 
-// Map health check endpoint
-app.MapHealthChecks("/health");
+// Map health check endpoints (from ServiceDefaults)
+app.MapDefaultEndpoints();
 
 // Map API controllers
 app.MapControllers();
