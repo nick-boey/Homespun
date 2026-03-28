@@ -89,7 +89,7 @@ public record AgentStartRequest
 
     /// <summary>
     /// Optional user instructions that override the prompt template.
-    /// When provided, this text is used as the initial message directly instead of rendering the prompt template.
+    /// When provided, this text is sent as the initial message instead of rendering the prompt template.
     /// </summary>
     public string? UserInstructions { get; init; }
 

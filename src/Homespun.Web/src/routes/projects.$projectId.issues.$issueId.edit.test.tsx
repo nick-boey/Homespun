@@ -78,7 +78,7 @@ vi.mock('@/providers/signalr-provider', () => ({
 const mockAgentLauncherRender = vi.fn()
 
 vi.mock('@/features/agents', () => ({
-  AgentLauncherDialog: ({
+  RunAgentDialog: ({
     open,
     onOpenChange,
     projectId,

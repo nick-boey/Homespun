@@ -31,7 +31,7 @@ import {
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue, useBranchIdGenerationEvents } from '@/features/issues'
 import { AssigneeCombobox } from '@/features/issues/components/assignee-combobox'
-import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
+import { RunAgentDialog, useGenerateBranchId } from '@/features/agents'
 import {
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
@@ -720,8 +720,8 @@ export default function EditIssue() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Agent Launcher Dialog */}
-      <AgentLauncherDialog
+      {/* Run Agent Dialog */}
+      <RunAgentDialog
         open={agentLauncherOpen}
         onOpenChange={setAgentLauncherOpen}
         projectId={projectId}
