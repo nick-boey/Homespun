@@ -12,6 +12,7 @@ using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Observability;
+using Homespun.Features.Observability.HealthChecks;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -24,6 +25,7 @@ using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Homespun.Features.Workflows.Hubs;
 using Homespun.Features.Workflows.Services;
+using Homespun.ServiceDefaults;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Console;
 
@@ -53,6 +55,12 @@ builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatt
     {
         options.UseUtcTimestamp = true;
     });
+
+// Add Aspire ServiceDefaults (OpenTelemetry, service discovery, resilience)
+builder.AddServiceDefaults();
+
+// Register custom Homespun activity sources for tracing
+builder.Services.AddHomespunInstrumentation();
 
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
@@ -271,7 +279,7 @@ builder.Services.AddSignalR()
         options.PayloadSerializerOptions.Converters.Add(
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
-builder.Services.AddHealthChecks();
+builder.Services.AddHomespunHealthChecks(dataDirectory!);
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -329,8 +337,8 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 app.MapHub<WorkflowHub>("/hubs/workflows");
 
-// Map health check endpoint
-app.MapHealthChecks("/health");
+// Map health check endpoints (/health for readiness, /alive for liveness)
+app.MapDefaultEndpoints();
 
 // Map API controllers
 app.MapControllers();
