@@ -1,5 +1,4 @@
 import { IssueType } from '@/api'
-import type { TaskGraphNodeResponse } from '@/api/generated/types.gen'
 
 /**
  * Keyboard edit mode states for the task graph.
@@ -100,16 +99,6 @@ export interface SearchState {
 }
 
 /**
- * Move operation state for the task graph.
- */
-export interface MoveOperationState {
-  /** The current move operation type when in SelectingMoveTarget mode. */
-  currentMoveOperation?: MoveOperationType
-  /** The source issue ID when in SelectingMoveTarget mode. */
-  moveSourceIssueId?: string
-}
-
-/**
  * A simplified render line representation for navigation.
  * This captures the essential fields needed for keyboard navigation from TaskGraphNodeResponse.
  */
@@ -126,41 +115,6 @@ export interface TaskGraphRenderLine {
   issueType: IssueType
   /** Whether this issue is actionable (next in sequence). */
   isActionable: boolean
-}
-
-/**
- * Converts TaskGraphNodeResponse array to TaskGraphRenderLine array.
- */
-export function toRenderLines(nodes: TaskGraphNodeResponse[]): TaskGraphRenderLine[] {
-  return nodes
-    .filter((node) => node.issue?.id)
-    .map((node) => ({
-      issueId: node.issue!.id!,
-      title: node.issue!.title ?? '',
-      lane: node.lane ?? 0,
-      parentLane: node.issue?.parentIssues?.[0]?.parentIssue
-        ? findParentLane(nodes, node.issue.parentIssues[0].parentIssue)
-        : undefined,
-      issueType: node.issue!.type ?? IssueType.TASK,
-      isActionable: node.isActionable ?? false,
-    }))
-}
-
-/**
- * Finds the lane of a parent issue by its ID.
- */
-function findParentLane(nodes: TaskGraphNodeResponse[], parentId: string): number | undefined {
-  const parentNode = nodes.find((n) => n.issue?.id === parentId)
-  return parentNode?.lane
-}
-
-/**
- * Sibling move info for a selected issue.
- */
-export interface SiblingMoveInfo {
-  canMoveUp: boolean
-  canMoveDown: boolean
-  hasSingleParent: boolean
 }
 
 /**

@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import type { TaskGraphNodeResponse } from '@/api/generated/types.gen'
-import { IssueType } from '@/api'
 import {
   KeyboardEditMode,
   MoveOperationType,
@@ -9,7 +7,6 @@ import {
   TYPE_CYCLE_ORDER,
   getNextIssueType,
   TYPE_CYCLE_DEBOUNCE_MS,
-  toRenderLines,
 } from './types'
 
 describe('KeyboardEditMode enum', () => {
@@ -75,113 +72,5 @@ describe('getNextIssueType', () => {
 describe('TYPE_CYCLE_DEBOUNCE_MS', () => {
   it('is 3 seconds (3000ms)', () => {
     expect(TYPE_CYCLE_DEBOUNCE_MS).toBe(3000)
-  })
-})
-
-describe('toRenderLines', () => {
-  it('converts TaskGraphNodeResponse array to TaskGraphRenderLine array', () => {
-    const nodes: TaskGraphNodeResponse[] = [
-      {
-        issue: {
-          id: 'issue-1',
-          title: 'First Issue',
-          type: IssueType.TASK,
-        },
-        lane: 0,
-        row: 0,
-        isActionable: true,
-      },
-      {
-        issue: {
-          id: 'issue-2',
-          title: 'Second Issue',
-          type: IssueType.BUG,
-          parentIssues: [{ parentIssue: 'issue-1', sortOrder: 'a' }],
-        },
-        lane: 1,
-        row: 1,
-        isActionable: false,
-      },
-    ]
-
-    const result = toRenderLines(nodes)
-
-    expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({
-      issueId: 'issue-1',
-      title: 'First Issue',
-      lane: 0,
-      parentLane: undefined,
-      issueType: IssueType.TASK,
-      isActionable: true,
-    })
-    expect(result[1]).toEqual({
-      issueId: 'issue-2',
-      title: 'Second Issue',
-      lane: 1,
-      parentLane: 0,
-      issueType: IssueType.BUG,
-      isActionable: false,
-    })
-  })
-
-  it('filters out nodes without issue id', () => {
-    const nodes: TaskGraphNodeResponse[] = [
-      {
-        issue: {
-          id: 'issue-1',
-          title: 'Valid Issue',
-          type: IssueType.TASK,
-        },
-        lane: 0,
-        row: 0,
-        isActionable: true,
-      },
-      {
-        issue: {
-          title: 'Issue without ID',
-          type: IssueType.TASK,
-        },
-        lane: 1,
-        row: 1,
-        isActionable: false,
-      },
-      {
-        lane: 2,
-        row: 2,
-        isActionable: false,
-      },
-    ]
-
-    const result = toRenderLines(nodes)
-
-    expect(result).toHaveLength(1)
-    expect(result[0].issueId).toBe('issue-1')
-  })
-
-  it('handles empty nodes array', () => {
-    const result = toRenderLines([])
-    expect(result).toEqual([])
-  })
-
-  it('handles missing optional fields with defaults', () => {
-    const nodes: TaskGraphNodeResponse[] = [
-      {
-        issue: {
-          id: 'issue-1',
-        },
-      },
-    ]
-
-    const result = toRenderLines(nodes)
-
-    expect(result[0]).toEqual({
-      issueId: 'issue-1',
-      title: '',
-      lane: 0,
-      parentLane: undefined,
-      issueType: IssueType.TASK,
-      isActionable: false,
-    })
   })
 })
