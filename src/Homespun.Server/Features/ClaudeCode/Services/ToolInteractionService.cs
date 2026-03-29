@@ -466,7 +466,18 @@ public class ToolInteractionService : IToolInteractionService
         session.PlanHasBeenApproved = true;
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
+        // Re-read plan from disk to ensure we have the latest content
         var planContent = session.PlanContent;
+        if (!string.IsNullOrEmpty(session.PlanFilePath))
+        {
+            var (_, freshContent) = await TryReadPlanFileAsync(session.WorkingDirectory, session.PlanFilePath);
+            if (!string.IsNullOrEmpty(freshContent))
+            {
+                planContent = freshContent;
+            }
+        }
+
+        // Clear plan state after capturing content
         ClearPlanState(session);
 
         var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{planContent}";
@@ -493,11 +504,13 @@ public class ToolInteractionService : IToolInteractionService
             "Plan approval for session {SessionId}: approved={Approved}, keepContext={KeepContext}, hasFeedback={HasFeedback}",
             sessionId, approved, keepContext, feedback != null);
 
-        session.HasPendingPlanApproval = false;
-        session.PlanHasBeenApproved = true;
-
         if (approved)
         {
+            // Clear the pending plan approval flag immediately (UI should hide plan controls)
+            // Note: PlanContent/PlanFilePath are preserved for ExecutePlanAsync to use
+            session.HasPendingPlanApproval = false;
+            session.PlanHasBeenApproved = true;
+
             if (keepContext)
             {
                 session.Status = ClaudeSessionStatus.Running;
@@ -538,6 +551,13 @@ public class ToolInteractionService : IToolInteractionService
         }
         else
         {
+            // Reject: clear plan state so new plan_pending events aren't blocked by the guard
+            // and stale PlanContent isn't used as a fallback
+            session.HasPendingPlanApproval = false;
+            session.PlanHasBeenApproved = false;
+            session.PlanContent = null;
+            session.PlanFilePath = null;
+
             session.Status = ClaudeSessionStatus.Running;
             await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
