@@ -261,10 +261,8 @@ export const TaskGraphKonvaView = memo(
     }, [maxLanes, rowYPositions, insertionRowIndex])
 
     // Camera state
-    const { camera, scrollToRow, handleDragMove, handleDragEnd, handleWheel, touchHandlers } = useCamera(
-      contentSize,
-      viewportSize
-    )
+    const { camera, scrollToRow, handleDragMove, handleDragEnd, handleWheel, touchHandlers } =
+      useCamera(contentSize, viewportSize)
 
     // Compute edge paths
     const edgePaths = useEdgePaths(renderLines, rowYPositions)
