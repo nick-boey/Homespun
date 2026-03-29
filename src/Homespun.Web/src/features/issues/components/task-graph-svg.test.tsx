@@ -4,7 +4,13 @@
 
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { TaskGraphNodeSvg, getTypeColor } from './task-graph-svg'
+import {
+  TaskGraphNodeSvg,
+  getTypeColor,
+  getRowY,
+  ROW_HEIGHT,
+  EXPANDED_DETAIL_HEIGHT,
+} from './task-graph-svg'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
 import { IssueType, IssueStatus, ClaudeSessionStatus, ExecutionMode } from '@/api'
@@ -398,5 +404,40 @@ describe('TaskGraphNodeSvg', () => {
     it('should return default color for unknown issue type', () => {
       expect(getTypeColor('unknown' as IssueType)).toBe('#3b82f6') // Default to Task color
     })
+  })
+})
+
+describe('getRowY', () => {
+  const issueLines = [{ issueId: 'a' }, { issueId: 'b' }, { issueId: 'c' }, { issueId: 'd' }]
+
+  it('returns 0 for row index 0 with no expanded rows', () => {
+    expect(getRowY(0, new Set(), issueLines)).toBe(0)
+  })
+
+  it('returns rowIndex * ROW_HEIGHT with no expanded rows', () => {
+    expect(getRowY(2, new Set(), issueLines)).toBe(2 * ROW_HEIGHT)
+    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
+  })
+
+  it('adds EXPANDED_DETAIL_HEIGHT for expanded rows above', () => {
+    const expanded = new Set(['a'])
+    // Row 1 should be offset by ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT (row 0 is expanded)
+    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT)
+  })
+
+  it('adds EXPANDED_DETAIL_HEIGHT for each expanded row above', () => {
+    const expanded = new Set(['a', 'b'])
+    // Row 2: (ROW_HEIGHT + EXPANDED) + (ROW_HEIGHT + EXPANDED)
+    expect(getRowY(2, expanded, issueLines)).toBe(2 * ROW_HEIGHT + 2 * EXPANDED_DETAIL_HEIGHT)
+  })
+
+  it('does not add EXPANDED_DETAIL_HEIGHT for expanded row at or after target index', () => {
+    const expanded = new Set(['c']) // row index 2
+    // Row 1 should not be affected by expanded row at index 2
+    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT)
+  })
+
+  it('handles empty expanded set', () => {
+    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
   })
 })
