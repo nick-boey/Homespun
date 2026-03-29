@@ -8,21 +8,18 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
-namespace Homespun.ServiceDefaults;
+namespace Microsoft.Extensions.Hosting;
 
 public static class Extensions
 {
-    /// <summary>
-    /// Adds Aspire-style service defaults including OpenTelemetry, health checks, and service discovery.
-    /// When OTEL_EXPORTER_OTLP_ENDPOINT is set (e.g. by Aspire AppHost), telemetry is exported to the dashboard.
-    /// When running standalone, telemetry is collected but not exported (no-op).
-    /// </summary>
     public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder)
     {
         builder.ConfigureOpenTelemetry();
+
         builder.AddDefaultHealthChecks();
 
         builder.Services.AddServiceDiscovery();
+
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             http.AddStandardResilienceHandler();
@@ -49,19 +46,19 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
-                tracing.AddAspNetCoreInstrumentation()
+                tracing.AddSource(builder.Environment.ApplicationName)
+                    .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();
             });
 
-        builder.AddOpenTelemetryExporters();
+        AddOpenTelemetryExporters(builder);
 
         return builder;
     }
 
-    private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
+    private static IHostApplicationBuilder AddOpenTelemetryExporters(IHostApplicationBuilder builder)
     {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(
-            builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 
         if (useOtlpExporter)
         {
@@ -79,15 +76,10 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>
-    /// Maps health check endpoints: /health for overall status, /alive for liveness.
-    /// </summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // All health checks must pass for the app to be considered ready to accept traffic
         app.MapHealthChecks("/health");
 
-        // Only health checks tagged with "live" must pass for the app to be considered alive
         app.MapHealthChecks("/alive", new HealthCheckOptions
         {
             Predicate = r => r.Tags.Contains("live")

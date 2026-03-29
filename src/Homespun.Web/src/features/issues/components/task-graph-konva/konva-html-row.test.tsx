@@ -55,6 +55,8 @@ function createIssueLine(
     hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.PARALLEL,
     parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
     ...overrides,
   }
 }
@@ -179,5 +181,44 @@ describe('KonvaHtmlRow', () => {
     renderRow({ isMoveOperationActive: true, isMoveSource: false })
     const row = screen.getByTestId('konva-html-row')
     expect(row.className).toContain('hover:ring-2')
+  })
+
+  describe('multi-parent badge', () => {
+    it('renders multi-parent badge when multiParentTotal is set', () => {
+      const line = createIssueLine({
+        issueId: 'issue-mp',
+        lane: 0,
+        multiParentIndex: 0,
+        multiParentTotal: 3,
+      })
+      renderRow({ line })
+
+      const badge = screen.getByTestId('multi-parent-badge')
+      expect(badge).toBeInTheDocument()
+      expect(badge).toHaveTextContent('(1/3)')
+    })
+
+    it('does not render multi-parent badge when multiParentTotal is null', () => {
+      const line = createIssueLine({ issueId: 'issue-1', lane: 0 })
+      renderRow({ line })
+
+      expect(screen.queryByTestId('multi-parent-badge')).not.toBeInTheDocument()
+    })
+
+    it('calls onSelectFirstInstance when badge clicked on non-first instance', () => {
+      const onSelectFirstInstance = vi.fn()
+      const line = createIssueLine({
+        issueId: 'issue-mp',
+        lane: 0,
+        multiParentIndex: 1,
+        multiParentTotal: 3,
+      })
+      renderRow({ line, onSelectFirstInstance })
+
+      const badge = screen.getByTestId('multi-parent-badge')
+      fireEvent.click(badge)
+
+      expect(onSelectFirstInstance).toHaveBeenCalledWith('issue-mp')
+    })
   })
 })

@@ -25,11 +25,12 @@ using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Homespun.Features.Workflows.Hubs;
 using Homespun.Features.Workflows.Services;
-using Homespun.ServiceDefaults;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
 
 // Enable static web assets resolution for non-production environments (e.g. Mock)
 // By default, only the Development environment activates this automatically
@@ -55,9 +56,6 @@ builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatt
     {
         options.UseUtcTimestamp = true;
     });
-
-// Add Aspire ServiceDefaults (OpenTelemetry, service discovery, resilience)
-builder.AddServiceDefaults();
 
 // Register custom Homespun activity sources for tracing
 builder.Services.AddHomespunInstrumentation();

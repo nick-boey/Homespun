@@ -14,7 +14,12 @@ import { cn } from '@/lib/utils'
 import type { TaskGraphResponse } from '@/api'
 import { ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import { IssueRowSkeleton } from './issue-row-skeleton'
-import { computeLayout, isIssueRenderLine, type TaskGraphIssueRenderLine } from '../services'
+import {
+  computeLayout,
+  isIssueRenderLine,
+  getRenderKey,
+  type TaskGraphIssueRenderLine,
+} from '../services'
 import { ViewMode } from '../types'
 import { TaskGraphNodeSvg, ROW_HEIGHT, getTypeColor } from './task-graph-svg'
 
@@ -118,7 +123,7 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
     >
       {filteredIssueLines.map((line) => (
         <StaticIssueRow
-          key={line.issueId}
+          key={getRenderKey(line)}
           line={line}
           maxLanes={maxLanes}
           changeType={filterMap?.get(line.issueId.toLowerCase())}

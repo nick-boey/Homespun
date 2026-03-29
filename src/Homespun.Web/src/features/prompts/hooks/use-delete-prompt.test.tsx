@@ -3,6 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useDeletePrompt } from './use-delete-prompt'
 import { AgentPrompts } from '@/api'
+import { globalPromptsQueryKey } from './use-global-prompts'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
@@ -10,15 +11,17 @@ vi.mock('@/api', () => ({
   },
 }))
 
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  })
+function createWrapper(queryClient?: QueryClient) {
+  const qc =
+    queryClient ??
+    new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   }
 }
 
@@ -66,5 +69,31 @@ describe('useDeletePrompt', () => {
     })
 
     await waitFor(() => expect(onError).toHaveBeenCalled())
+  })
+
+  it('invalidates global prompts query key when no projectId is provided', async () => {
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+      data: undefined,
+    } as never)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useDeletePrompt({ onSuccess: vi.fn() }), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync('prompt-1')
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: globalPromptsQueryKey(),
+    })
   })
 })

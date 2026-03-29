@@ -545,4 +545,90 @@ describe('MessageList', () => {
       expect(screen.getByText('Second part')).toBeInTheDocument()
     })
   })
+
+  describe('empty message bubble filtering', () => {
+    it('does not render empty bubble for message with empty text alongside tool use', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-empty-1',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: '', isStreaming: false, index: 0 },
+            {
+              type: 'toolUse',
+              toolName: 'read_file',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 1,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.queryByTestId('message-msg-empty-1')).not.toBeInTheDocument()
+    })
+
+    it('does not render empty bubble for message with null text', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-empty-2',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: undefined as unknown as string, isStreaming: false, index: 0 },
+            {
+              type: 'toolUse',
+              toolName: 'read_file',
+              toolUseId: 'tool-2',
+              isStreaming: false,
+              index: 1,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.queryByTestId('message-msg-empty-2')).not.toBeInTheDocument()
+    })
+
+    it('does not render empty bubble for whitespace-only text', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-empty-3',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: '   ', isStreaming: false, index: 0 },
+            {
+              type: 'toolUse',
+              toolName: 'read_file',
+              toolUseId: 'tool-3',
+              isStreaming: false,
+              index: 1,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.queryByTestId('message-msg-empty-3')).not.toBeInTheDocument()
+    })
+
+    it('renders streaming message even if text is currently empty', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-streaming',
+          role: 'assistant',
+          content: [{ type: 'text', text: '', isStreaming: true, index: 0 }],
+          isStreaming: true,
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByTestId('message-msg-streaming')).toBeInTheDocument()
+    })
+  })
 })

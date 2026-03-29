@@ -254,6 +254,9 @@ import type {
   PostApiIssuesAgentSessionData,
   PostApiIssuesAgentSessionErrors,
   PostApiIssuesAgentSessionResponses,
+  PostApiIssuesByChildIdRemoveParentData,
+  PostApiIssuesByChildIdRemoveParentErrors,
+  PostApiIssuesByChildIdRemoveParentResponses,
   PostApiIssuesByChildIdSetParentData,
   PostApiIssuesByChildIdSetParentErrors,
   PostApiIssuesByChildIdSetParentResponses,
@@ -263,6 +266,9 @@ import type {
   PostApiIssuesByIssueIdMoveSiblingData,
   PostApiIssuesByIssueIdMoveSiblingErrors,
   PostApiIssuesByIssueIdMoveSiblingResponses,
+  PostApiIssuesByIssueIdRemoveAllParentsData,
+  PostApiIssuesByIssueIdRemoveAllParentsErrors,
+  PostApiIssuesByIssueIdRemoveAllParentsResponses,
   PostApiIssuesByIssueIdResolveConflictsData,
   PostApiIssuesByIssueIdResolveConflictsErrors,
   PostApiIssuesByIssueIdResolveConflictsResponses,
@@ -939,6 +945,40 @@ export class Issues {
       ThrowOnError
     >({
       url: '/api/issues/{childId}/set-parent',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static postApiIssuesByChildIdRemoveParent<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesByChildIdRemoveParentData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesByChildIdRemoveParentResponses,
+      PostApiIssuesByChildIdRemoveParentErrors,
+      ThrowOnError
+    >({
+      url: '/api/issues/{childId}/remove-parent',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static postApiIssuesByIssueIdRemoveAllParents<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesByIssueIdRemoveAllParentsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesByIssueIdRemoveAllParentsResponses,
+      PostApiIssuesByIssueIdRemoveAllParentsErrors,
+      ThrowOnError
+    >({
+      url: '/api/issues/{issueId}/remove-all-parents',
       ...options,
       headers: {
         'Content-Type': 'application/json',

@@ -568,6 +568,119 @@ public class AgentStartBackgroundServiceTests
         _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
     }
 
+    [Test]
+    public async Task QueueAgentStartAsync_UsesUserInstructions_WhenProvided()
+    {
+        // Arrange
+        var request = CreateTestRequest() with
+        {
+            UserInstructions = "Custom user instructions for the agent"
+        };
+        var clonePath = "/path/to/clone";
+        var session = new ClaudeSession
+        {
+            Id = "session123",
+            EntityId = request.IssueId,
+            ProjectId = request.ProjectId,
+            WorkingDirectory = clonePath,
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
+                request.ProjectLocalPath, request.BranchName))
+            .ReturnsAsync(clonePath);
+
+        // Prompt is still provided but should NOT be used for template rendering
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+            .Returns(new AgentPrompt
+            {
+                Id = "prompt123",
+                Name = "Build",
+                Mode = SessionMode.Build,
+                InitialMessage = "Work on {{title}}"
+            });
+
+        _mockSessionService.Setup(x => x.StartSessionAsync(
+                request.IssueId, request.ProjectId, clonePath,
+                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(session);
+
+        // Act
+        await _service.QueueAgentStartAsync(request);
+        await Task.Delay(200);
+
+        // Assert - Session should use Build mode from prompt
+        _mockSessionService.Verify(x => x.StartSessionAsync(
+            request.IssueId, request.ProjectId, clonePath,
+            SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify RenderTemplate was NOT called (user instructions bypass template rendering)
+        _mockAgentPromptService.Verify(x => x.RenderTemplate(
+            It.IsAny<string>(), It.IsAny<PromptContext>()), Times.Never);
+
+        // Verify ListIssuesAsync was NOT called (no tree context needed)
+        _mockFleeceService.Verify(x => x.ListIssuesAsync(
+            It.IsAny<string>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(),
+            It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
+    }
+
+    [Test]
+    public async Task QueueAgentStartAsync_FallsBackToPromptRendering_WhenUserInstructionsEmpty()
+    {
+        // Arrange
+        var request = CreateTestRequest() with
+        {
+            UserInstructions = null
+        };
+        var clonePath = "/path/to/clone";
+        var session = new ClaudeSession
+        {
+            Id = "session123",
+            EntityId = request.IssueId,
+            ProjectId = request.ProjectId,
+            WorkingDirectory = clonePath,
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
+                request.ProjectLocalPath, request.BranchName))
+            .ReturnsAsync(clonePath);
+
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+            .Returns(new AgentPrompt
+            {
+                Id = "prompt123",
+                Name = "Build",
+                Mode = SessionMode.Build,
+                InitialMessage = "Work on {{title}}"
+            });
+
+        _mockFleeceService.Setup(x => x.ListIssuesAsync(
+                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue>());
+
+        _mockSessionService.Setup(x => x.StartSessionAsync(
+                request.IssueId, request.ProjectId, clonePath,
+                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(session);
+
+        // Act
+        await _service.QueueAgentStartAsync(request);
+        await Task.Delay(200);
+
+        // Assert - RenderTemplate SHOULD be called (fallback to prompt rendering)
+        _mockAgentPromptService.Verify(x => x.RenderTemplate(
+            "Work on {{title}}", It.IsAny<PromptContext>()), Times.Once);
+
+        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
+    }
+
     #endregion
 
     #region Workflow Context Tests
