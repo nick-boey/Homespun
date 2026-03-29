@@ -261,7 +261,15 @@ public static class MockServiceExtensions
         // AG-UI event service for translating A2A events
         services.AddSingleton<IAGUIEventService, AGUIEventService>();
 
-        // Use the real ClaudeSessionService
+        // Session state and decomposed services
+        services.AddSingleton<ISessionStateManager, SessionStateManager>();
+        services.AddSingleton<IToolInteractionService, ToolInteractionService>();
+        services.AddSingleton<ISessionLifecycleService, SessionLifecycleService>();
+        services.AddSingleton<IMessageProcessingService, MessageProcessingService>();
+        services.AddSingleton(sp =>
+            new Lazy<IMessageProcessingService>(() => sp.GetRequiredService<IMessageProcessingService>()));
+        services.AddSingleton(sp =>
+            new Lazy<ISessionLifecycleService>(() => sp.GetRequiredService<ISessionLifecycleService>()));
         services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 
         // Store the test working directory in configuration for the MockGitCloneService

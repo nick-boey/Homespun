@@ -225,6 +225,17 @@ else
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
     builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IAGUIEventService, AGUIEventService>();
+
+    // Session state and decomposed services (registered before facade)
+    builder.Services.AddSingleton<ISessionStateManager, SessionStateManager>();
+    builder.Services.AddSingleton<IToolInteractionService, ToolInteractionService>();
+    builder.Services.AddSingleton<ISessionLifecycleService, SessionLifecycleService>();
+    builder.Services.AddSingleton<IMessageProcessingService, MessageProcessingService>();
+    // Lazy wrappers for circular dependency resolution
+    builder.Services.AddSingleton(sp =>
+        new Lazy<IMessageProcessingService>(() => sp.GetRequiredService<IMessageProcessingService>()));
+    builder.Services.AddSingleton(sp =>
+        new Lazy<ISessionLifecycleService>(() => sp.GetRequiredService<ISessionLifecycleService>()));
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
