@@ -46,10 +46,10 @@ test.describe.serial('Save and Run Agent', () => {
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Verify dialog has the prompt selector
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
-    await expect(promptSelector).toBeVisible()
-    // The prompt selector may have a default value, so just check it exists
+    // Verify dialog has the prompt selector in the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 10000 })
 
     // Close the dialog
     const closeButton = agentDialog.getByRole('button', { name: 'Close' })
@@ -185,8 +185,10 @@ test.describe.serial('Save and Run Agent', () => {
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Select a prompt
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
+    // Select a prompt from the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 10000 })
     await promptSelector.click()
 
     // Select first prompt option
@@ -194,14 +196,14 @@ test.describe.serial('Save and Run Agent', () => {
     await promptOption.click()
 
     // Verify Start Agent button becomes enabled
-    const startButton = agentDialog.getByRole('button', { name: 'Start Agent' })
+    const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
     await expect(startButton).not.toBeDisabled()
 
     // Click Start Agent (in mock mode, this won't actually start an agent)
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible()
+    await expect(agentDialog).not.toBeVisible({ timeout: 10000 })
 
     // Should navigate to issues page after starting agent
     await expect(page).toHaveURL('/projects/demo-project/issues')
@@ -246,8 +248,10 @@ test.describe.serial('Save and Run Agent', () => {
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Select a prompt
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
+    // Select a prompt from the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 10000 })
     await promptSelector.click()
 
     // Select first prompt option
@@ -255,12 +259,12 @@ test.describe.serial('Save and Run Agent', () => {
     await promptOption.click()
 
     // Click Start Agent
-    const startButton = agentDialog.getByRole('button', { name: 'Start Agent' })
+    const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
     await expect(startButton).not.toBeDisabled()
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible()
+    await expect(agentDialog).not.toBeVisible({ timeout: 10000 })
 
     // Should navigate to issues page without showing unsaved changes dialog
     await expect(page).toHaveURL('/projects/demo-project/issues')
