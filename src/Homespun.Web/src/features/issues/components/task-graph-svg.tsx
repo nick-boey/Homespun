@@ -13,6 +13,25 @@ export const LANE_WIDTH = 24
 export const ROW_HEIGHT = 40
 export const NODE_RADIUS = 6
 export const LINE_STROKE_WIDTH = 2
+export const EXPANDED_DETAIL_HEIGHT = 700
+
+/**
+ * Computes the Y offset for a row, accounting for expanded detail panels above it.
+ */
+export function getRowY(
+  rowIndex: number,
+  expandedIds: Set<string>,
+  issueLines: { issueId: string }[]
+): number {
+  let y = 0
+  for (let i = 0; i < rowIndex; i++) {
+    y += ROW_HEIGHT
+    if (expandedIds.has(issueLines[i].issueId)) {
+      y += EXPANDED_DETAIL_HEIGHT
+    }
+  }
+  return y
+}
 
 /** Type colors matching the issue acceptance criteria */
 const TYPE_COLORS: Record<string, string> = {
