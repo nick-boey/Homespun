@@ -24,7 +24,7 @@ var server = builder.AddProject<Projects.Homespun_Server>("server")
 builder.AddViteApp("web", "../Homespun.Web")
     .WithNpm(install: false)
     .WithReference(server)
-    .WithHttpEndpoint(port: 5173)
+    .WithHttpEndpoint(port: 5173, name: "vite")
     .WithEnvironment("VITE_API_URL", server.GetEndpoint("http"))
     .WithExternalHttpEndpoints();
 
