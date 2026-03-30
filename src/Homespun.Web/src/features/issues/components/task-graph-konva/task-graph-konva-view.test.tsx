@@ -220,6 +220,63 @@ describe('TaskGraphKonvaView', () => {
     })
   })
 
+  describe('sizing', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('does not set inline height style on container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
+    })
+
+    it('uses viewport width for content rows when wider than 800px', () => {
+      // Mock ResizeObserver to report 1200px width
+      const originalResizeObserver = window.ResizeObserver
+      class MockWideResizeObserver {
+        callback: ResizeObserverCallback
+        constructor(cb: ResizeObserverCallback) {
+          this.callback = cb
+        }
+        observe(target: Element) {
+          Object.defineProperty(target, 'clientWidth', { value: 1200, configurable: true })
+          Object.defineProperty(target, 'clientHeight', { value: 800, configurable: true })
+          this.callback(
+            [{ target, contentRect: {} as DOMRectReadOnly } as ResizeObserverEntry],
+            this as unknown as ResizeObserver
+          )
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      window.ResizeObserver = MockWideResizeObserver as unknown as typeof ResizeObserver
+
+      try {
+        renderComponent()
+
+        // The HTML overlay row containers should have width > 800 + svgWidth
+        const rows = screen.getAllByTestId('konva-html-row')
+        const rowContainer = rows[0].parentElement!
+        const rowWidth = parseInt(rowContainer.style.width, 10)
+        // With 1200px viewport, content width should be at least 1200px (svgWidth + available area)
+        expect(rowWidth).toBeGreaterThanOrEqual(1200)
+      } finally {
+        window.ResizeObserver = originalResizeObserver
+      }
+    })
+  })
+
   describe('keyboard navigation', () => {
     const sampleGraph = createTaskGraph([
       { id: 'issue-1', title: 'First Issue' },
