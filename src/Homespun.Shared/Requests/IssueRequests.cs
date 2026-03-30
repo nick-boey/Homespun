@@ -207,9 +207,9 @@ public class RunAgentRequest
     public required string ProjectId { get; set; }
 
     /// <summary>
-    /// The agent prompt ID to use, null for None.
+    /// The agent prompt name to use, null for None.
     /// </summary>
-    public required string? PromptId { get; set; }
+    public required string? PromptName { get; set; }
 
     /// <summary>
     /// The Claude model to use (e.g., "sonnet").

@@ -51,7 +51,7 @@ public class AgentPromptsApiTests
         var globalPrompt = globalPrompts!.First();
         var request = new CreateOverrideRequest
         {
-            GlobalPromptId = globalPrompt.Id,
+            GlobalPromptName = globalPrompt.Name,
             ProjectId = "test-project-123",
             InitialMessage = "Custom override message"
         };
@@ -69,7 +69,6 @@ public class AgentPromptsApiTests
             Assert.That(overridePrompt.ProjectId, Is.EqualTo("test-project-123"));
             Assert.That(overridePrompt.InitialMessage, Is.EqualTo("Custom override message"));
             Assert.That(overridePrompt.Mode, Is.EqualTo(globalPrompt.Mode));
-            Assert.That(overridePrompt.Id, Is.Not.EqualTo(globalPrompt.Id));
         });
     }
 
@@ -85,7 +84,7 @@ public class AgentPromptsApiTests
         var globalPrompt = globalPrompts!.First();
         var request = new CreateOverrideRequest
         {
-            GlobalPromptId = globalPrompt.Id,
+            GlobalPromptName = globalPrompt.Name,
             ProjectId = "test-project-456",
             InitialMessage = null
         };
@@ -105,7 +104,7 @@ public class AgentPromptsApiTests
         // Arrange
         var request = new CreateOverrideRequest
         {
-            GlobalPromptId = "non-existent-id",
+            GlobalPromptName = "NonExistentPromptName",
             ProjectId = "test-project",
             InitialMessage = null
         };
@@ -118,47 +117,14 @@ public class AgentPromptsApiTests
     }
 
     [Test]
-    public async Task CreateOverride_ReturnsBadRequest_WhenPromptIsNotGlobal()
-    {
-        // Arrange - Create a project-scoped prompt first
-        var createRequest = new CreateAgentPromptRequest
-        {
-            Name = "ProjectPrompt",
-            InitialMessage = "Test message",
-            Mode = SessionMode.Build,
-            ProjectId = "project-for-test"
-        };
-        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
-        createResponse.EnsureSuccessStatusCode();
-        var projectPrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
-
-        // Try to create override from the project prompt
-        var overrideRequest = new CreateOverrideRequest
-        {
-            GlobalPromptId = projectPrompt!.Id,
-            ProjectId = "another-project",
-            InitialMessage = null
-        };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/agent-prompts/create-override", overrideRequest);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    [Test]
     public async Task CreateOverride_OverrideAppearsInProjectPrompts()
     {
         // Arrange
-        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
-        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        var buildPrompt = globalPrompts!.First(p => p.Name == "Build");
         var projectId = "override-test-project";
 
         var request = new CreateOverrideRequest
         {
-            GlobalPromptId = buildPrompt.Id,
+            GlobalPromptName = "Build",
             ProjectId = projectId,
             InitialMessage = "Custom build message"
         };
@@ -183,23 +149,19 @@ public class AgentPromptsApiTests
     public async Task RemoveOverride_ReturnsOk_WhenOverrideExists()
     {
         // Arrange - Create an override first
-        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
-        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        var buildPrompt = globalPrompts!.First(p => p.Name == "Build");
         var projectId = "remove-override-test-project";
 
         var createRequest = new CreateOverrideRequest
         {
-            GlobalPromptId = buildPrompt.Id,
+            GlobalPromptName = "Build",
             ProjectId = projectId,
             InitialMessage = "Custom message for removal test"
         };
         var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts/create-override", createRequest, JsonOptions);
         createResponse.EnsureSuccessStatusCode();
-        var overridePrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
 
         // Act
-        var response = await _client.DeleteAsync($"/api/agent-prompts/{overridePrompt!.Id}/override");
+        var response = await _client.DeleteAsync($"/api/agent-prompts/by-name/Build/override?projectId={projectId}");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -216,25 +178,10 @@ public class AgentPromptsApiTests
     public async Task RemoveOverride_ReturnsNotFound_WhenPromptDoesNotExist()
     {
         // Act
-        var response = await _client.DeleteAsync("/api/agent-prompts/non-existent-id/override");
+        var response = await _client.DeleteAsync("/api/agent-prompts/by-name/NonExistent/override?projectId=some-project");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    [Test]
-    public async Task RemoveOverride_ReturnsBadRequest_WhenPromptIsGlobal()
-    {
-        // Arrange - Get a global prompt
-        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
-        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        var globalPrompt = globalPrompts!.First();
-
-        // Act
-        var response = await _client.DeleteAsync($"/api/agent-prompts/{globalPrompt.Id}/override");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
@@ -248,12 +195,10 @@ public class AgentPromptsApiTests
             Mode = SessionMode.Build,
             ProjectId = "test-project-unique"
         };
-        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
-        createResponse.EnsureSuccessStatusCode();
-        var projectPrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
 
         // Act
-        var response = await _client.DeleteAsync($"/api/agent-prompts/{projectPrompt!.Id}/override");
+        var response = await _client.DeleteAsync("/api/agent-prompts/by-name/UniqueProjectOnlyPrompt/override?projectId=test-project-unique");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -410,19 +355,15 @@ public class AgentPromptsApiTests
     public async Task RemoveOverride_GlobalPromptAppearsInProjectPrompts_AfterRemoval()
     {
         // Arrange - Create an override
-        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
-        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        var planPrompt = globalPrompts!.First(p => p.Name == "Plan");
         var projectId = "remove-override-restore-test";
 
         var createRequest = new CreateOverrideRequest
         {
-            GlobalPromptId = planPrompt.Id,
+            GlobalPromptName = "Plan",
             ProjectId = projectId,
             InitialMessage = "Custom Plan message"
         };
-        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts/create-override", createRequest, JsonOptions);
-        var overridePrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+        await _client.PostAsJsonAsync("/api/agent-prompts/create-override", createRequest, JsonOptions);
 
         // Verify the override exists
         var projectPromptsBeforeResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
@@ -431,7 +372,7 @@ public class AgentPromptsApiTests
         Assert.That(planPromptBefore.IsOverride, Is.True);
 
         // Act - Remove the override
-        await _client.DeleteAsync($"/api/agent-prompts/{overridePrompt!.Id}/override");
+        await _client.DeleteAsync($"/api/agent-prompts/by-name/Plan/override?projectId={projectId}");
 
         // Assert - Global prompt should now appear instead
         var projectPromptsAfterResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
@@ -441,7 +382,121 @@ public class AgentPromptsApiTests
         {
             Assert.That(planPromptAfter.ProjectId, Is.Null);
             Assert.That(planPromptAfter.IsOverride, Is.False);
-            Assert.That(planPromptAfter.Id, Is.EqualTo(planPrompt.Id)); // Same as original global prompt
         });
+    }
+
+    [Test]
+    public async Task GetByName_ReturnsPromptByName()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/agent-prompts/by-name/Build");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var prompt = await response.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompt, Is.Not.Null);
+            Assert.That(prompt!.Name, Is.EqualTo("Build"));
+            Assert.That(prompt.ProjectId, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task GetByName_ReturnsNotFound_WhenPromptDoesNotExist()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/agent-prompts/by-name/NonExistentPrompt");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task Create_Returns409Conflict_WhenDuplicateNameInSameScope()
+    {
+        // Arrange - Create a prompt
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "DuplicateTestPrompt",
+            InitialMessage = "First",
+            Mode = SessionMode.Build,
+            ProjectId = "dup-test-project"
+        };
+        var firstResponse = await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+        firstResponse.EnsureSuccessStatusCode();
+
+        // Act - Create another with the same name in the same scope
+        var duplicateRequest = new CreateAgentPromptRequest
+        {
+            Name = "DuplicateTestPrompt",
+            InitialMessage = "Second",
+            Mode = SessionMode.Plan,
+            ProjectId = "dup-test-project"
+        };
+        var response = await _client.PostAsJsonAsync("/api/agent-prompts", duplicateRequest, JsonOptions);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
+    public async Task UpdateByName_ReturnsOk_WhenPromptExists()
+    {
+        // Arrange - Create a prompt first
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "UpdateTestPrompt",
+            InitialMessage = "Original message",
+            Mode = SessionMode.Build,
+            ProjectId = "update-test-project"
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+
+        // Act
+        var updateRequest = new UpdateAgentPromptRequest
+        {
+            InitialMessage = "Updated message",
+            Mode = SessionMode.Plan
+        };
+        var response = await _client.PutAsJsonAsync(
+            "/api/agent-prompts/by-name/UpdateTestPrompt?projectId=update-test-project",
+            updateRequest, JsonOptions);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var updated = await response.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(updated!.InitialMessage, Is.EqualTo("Updated message"));
+            Assert.That(updated.Mode, Is.EqualTo(SessionMode.Plan));
+            Assert.That(updated.Name, Is.EqualTo("UpdateTestPrompt"));
+        });
+    }
+
+    [Test]
+    public async Task DeleteByName_ReturnsNoContent_WhenPromptExists()
+    {
+        // Arrange - Create a prompt first
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "DeleteTestPrompt",
+            InitialMessage = "Will be deleted",
+            Mode = SessionMode.Build,
+            ProjectId = "delete-test-project"
+        };
+        await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+
+        // Act
+        var response = await _client.DeleteAsync(
+            "/api/agent-prompts/by-name/DeleteTestPrompt?projectId=delete-test-project");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        // Verify it's gone
+        var getResponse = await _client.GetAsync(
+            "/api/agent-prompts/by-name/DeleteTestPrompt?projectId=delete-test-project");
+        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 }

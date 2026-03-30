@@ -15,8 +15,8 @@ vi.mock('@/api', async (importOriginal) => {
       getApiAgentPromptsProjectByProjectId: vi.fn(),
       getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
       postApiAgentPrompts: vi.fn(),
-      putApiAgentPromptsById: vi.fn(),
-      deleteApiAgentPromptsById: vi.fn(),
+      putApiAgentPromptsByNameByName: vi.fn(),
+      deleteApiAgentPromptsByNameByName: vi.fn(),
       postApiAgentPromptsCreateOverride: vi.fn(),
       postApiAgentPromptsRestoreDefaults: vi.fn(),
       deleteApiAgentPromptsProjectByProjectIdAll: vi.fn(),
@@ -66,14 +66,12 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: '1',
           name: 'First Prompt',
           initialMessage: 'Content 1',
           mode: SessionMode.BUILD,
           projectId: 'proj-1',
         },
         {
-          id: '2',
           name: 'Second Prompt',
           initialMessage: 'Content 2',
           mode: SessionMode.PLAN,
@@ -111,9 +109,9 @@ describe('PromptsList', () => {
   it('shows count when prompts exist', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
-        { id: '1', name: 'First', mode: SessionMode.BUILD, projectId: 'proj-1' },
-        { id: '2', name: 'Second', mode: SessionMode.PLAN, projectId: 'proj-1' },
-        { id: '3', name: 'Third', mode: SessionMode.BUILD, projectId: 'proj-1' },
+        { name: 'First', mode: SessionMode.BUILD, projectId: 'proj-1' },
+        { name: 'Second', mode: SessionMode.PLAN, projectId: 'proj-1' },
+        { name: 'Third', mode: SessionMode.BUILD, projectId: 'proj-1' },
       ],
     } as never)
 
@@ -139,7 +137,7 @@ describe('PromptsList', () => {
 
   it('defaults to Cards view', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
-      data: [{ id: '1', name: 'Test Prompt', mode: SessionMode.BUILD, projectId: 'proj-1' }],
+      data: [{ name: 'Test Prompt', mode: SessionMode.BUILD, projectId: 'proj-1' }],
     } as never)
 
     render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
@@ -159,7 +157,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: '1',
           name: 'Test Prompt',
           initialMessage: 'Hello',
           mode: SessionMode.BUILD,
@@ -214,7 +211,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'global-build',
           name: 'Global Build Prompt',
           initialMessage: 'Global build message',
           mode: SessionMode.BUILD,
@@ -250,7 +246,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'global-build',
           name: 'Global Build Prompt',
           initialMessage: 'Global build message',
           mode: SessionMode.BUILD,
@@ -281,7 +276,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'proj-build',
           name: 'Project Build Prompt',
           initialMessage: 'Project build message',
           mode: SessionMode.BUILD,
@@ -310,7 +304,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
       data: [
         {
-          id: 'global-build',
           name: 'Global Build Prompt',
           initialMessage: 'Global build message',
           mode: SessionMode.BUILD,
@@ -340,7 +333,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'proj-build',
           name: 'Project Build Prompt',
           initialMessage: 'Project build message',
           mode: SessionMode.BUILD,
@@ -374,7 +366,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'proj-1-prompt',
           name: 'Project Prompt',
           initialMessage: 'Project message',
           mode: SessionMode.BUILD,
@@ -382,7 +373,6 @@ describe('PromptsList', () => {
           isOverride: false,
         },
         {
-          id: 'override-prompt',
           name: 'Override Prompt',
           initialMessage: 'Override message',
           mode: SessionMode.BUILD,
@@ -390,7 +380,6 @@ describe('PromptsList', () => {
           isOverride: true,
         },
         {
-          id: 'global-prompt',
           name: 'Global Prompt',
           initialMessage: 'Global message',
           mode: SessionMode.PLAN,
@@ -417,7 +406,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'global-prompt',
           name: 'Global Prompt',
           initialMessage: 'Global message',
           mode: SessionMode.PLAN,
@@ -440,7 +428,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
         {
-          id: 'proj-prompt',
           name: 'Project Prompt',
           initialMessage: 'Project message',
           mode: SessionMode.BUILD,
@@ -463,7 +450,6 @@ describe('PromptsList', () => {
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
       data: [
         {
-          id: 'global-1',
           name: 'Global Prompt',
           initialMessage: 'Message',
           mode: SessionMode.BUILD,
@@ -485,7 +471,7 @@ describe('PromptsList', () => {
 
   it('shows Restore Defaults button on global page', async () => {
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
-      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: null }],
+      data: [{ name: 'Test', mode: SessionMode.BUILD, projectId: null }],
     } as never)
 
     render(<PromptsList isGlobal />, { wrapper: createWrapper() })
@@ -497,7 +483,7 @@ describe('PromptsList', () => {
 
   it('shows Clear Project Prompts button on project page', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
-      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
+      data: [{ name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
     } as never)
 
     render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
@@ -510,7 +496,7 @@ describe('PromptsList', () => {
   it('shows confirmation dialog when Restore Defaults is clicked', async () => {
     const user = userEvent.setup()
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
-      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: null }],
+      data: [{ name: 'Test', mode: SessionMode.BUILD, projectId: null }],
     } as never)
 
     render(<PromptsList isGlobal />, { wrapper: createWrapper() })
@@ -533,7 +519,7 @@ describe('PromptsList', () => {
   it('shows confirmation dialog when Clear Project Prompts is clicked', async () => {
     const user = userEvent.setup()
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
-      data: [{ id: '1', name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
+      data: [{ name: 'Test', mode: SessionMode.BUILD, projectId: 'proj-1' }],
     } as never)
 
     render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })

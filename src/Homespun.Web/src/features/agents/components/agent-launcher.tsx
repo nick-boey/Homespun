@@ -27,8 +27,8 @@ const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 /** Special "None" option - starts session in Plan mode without a system prompt */
 const NO_PROMPT_ID = '__none__'
 const NO_PROMPT_OPTION = {
-  id: NO_PROMPT_ID,
-  name: 'None - Start without prompt (Plan mode)',
+  name: NO_PROMPT_ID,
+  displayName: 'None - Start without prompt (Plan mode)',
   initialMessage: undefined,
   mode: SessionMode.PLAN,
 } as const
@@ -69,7 +69,7 @@ export function AgentLauncher({
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   })
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
+  const [selectedPromptName, setSelectedPromptName] = useState<string>(getInitialPromptId)
 
   // Update localStorage when selections change
   useEffect(() => {
@@ -77,39 +77,39 @@ export function AgentLauncher({
   }, [selectedModel])
 
   useEffect(() => {
-    if (selectedPromptId) {
-      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptId)
+    if (selectedPromptName) {
+      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptName)
     }
-  }, [selectedPromptId])
+  }, [selectedPromptName])
 
-  // Compute the effective selected prompt ID
+  // Compute the effective selected prompt name
   // "No prompt" is always valid; otherwise check if selected prompt exists in list
-  const effectivePromptId = useMemo(() => {
+  const effectivePromptName = useMemo(() => {
     // If "No prompt" is selected, use it
-    if (selectedPromptId === NO_PROMPT_ID) {
+    if (selectedPromptName === NO_PROMPT_ID) {
       return NO_PROMPT_ID
     }
     // Check if the selected prompt exists in the loaded prompts
     if (prompts && prompts.length > 0) {
-      const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+      const selectedExists = prompts.some((p) => p.name === selectedPromptName)
       if (selectedExists) {
-        return selectedPromptId
+        return selectedPromptName
       }
     }
     // Default to "No prompt"
     return NO_PROMPT_ID
-  }, [prompts, selectedPromptId])
+  }, [prompts, selectedPromptName])
 
   // Handler for prompt selection that updates state
   const handlePromptChange = (value: string) => {
-    setSelectedPromptId(value)
+    setSelectedPromptName(value)
   }
 
   // Get the selected prompt object (or NO_PROMPT_OPTION if "No prompt" selected)
   const selectedPrompt =
-    effectivePromptId === NO_PROMPT_ID
+    effectivePromptName === NO_PROMPT_ID
       ? NO_PROMPT_OPTION
-      : prompts?.find((p) => p.id === effectivePromptId)
+      : prompts?.find((p) => p.name === effectivePromptName)
 
   const handleStart = async () => {
     try {
@@ -123,7 +123,7 @@ export function AgentLauncher({
       })
 
       // Navigate to session page if "None" was selected
-      if (effectivePromptId === NO_PROMPT_ID && session.id) {
+      if (effectivePromptName === NO_PROMPT_ID && session.id) {
         navigate({ to: '/sessions/$sessionId', params: { sessionId: session.id } })
       }
 
@@ -139,17 +139,17 @@ export function AgentLauncher({
     <div className={className}>
       <div className="flex items-center gap-2">
         {/* Prompt selector */}
-        <Select value={effectivePromptId} onValueChange={handlePromptChange} disabled={isLoading}>
+        <Select value={effectivePromptName} onValueChange={handlePromptChange} disabled={isLoading}>
           <SelectTrigger className="w-40" aria-label="Select prompt">
             <SelectValue placeholder="Select prompt" />
           </SelectTrigger>
           <SelectContent>
             {/* "None" option always first */}
             <SelectItem key={NO_PROMPT_ID} value={NO_PROMPT_ID}>
-              {NO_PROMPT_OPTION.name}
+              {NO_PROMPT_OPTION.displayName}
             </SelectItem>
             {prompts?.map((prompt) => (
-              <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+              <SelectItem key={prompt.name} value={prompt.name ?? ''}>
                 {prompt.name}
                 {prompt.isOverride && ' (project)'}
               </SelectItem>

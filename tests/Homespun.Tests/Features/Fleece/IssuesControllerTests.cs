@@ -415,7 +415,6 @@ public class IssuesControllerTests
 
         var prompt = new AgentPrompt
         {
-            Id = "prompt-1",
             Name = "Build",
             InitialMessage = "## Issue: {{title}}",
             Mode = SessionMode.Build
@@ -428,7 +427,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
             .ReturnsAsync(issue);
         _agentPromptServiceMock
-            .Setup(x => x.GetPrompt("prompt-1"))
+            .Setup(x => x.GetPrompt("prompt-1", null))
             .Returns(prompt);
         _branchResolverServiceMock
             .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
@@ -437,7 +436,7 @@ public class IssuesControllerTests
         var request = new RunAgentRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = "prompt-1",
+            PromptName = "prompt-1",
             Model = "sonnet"
         };
 
@@ -456,7 +455,7 @@ public class IssuesControllerTests
             x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(req =>
                 req.IssueId == issueId &&
                 req.ProjectId == TestProject.Id &&
-                req.PromptId == "prompt-1" &&
+                req.PromptName == "prompt-1" &&
                 req.Model == "sonnet")),
             Times.Once);
 
@@ -474,7 +473,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(It.IsAny<string>()))
             .ReturnsAsync((Project?)null);
 
-        var request = new RunAgentRequest { ProjectId = "nonexistent", PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = "nonexistent", PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent("issue-123", request);
@@ -499,7 +498,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetIssueAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((Issue?)null);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent("nonexistent", request);
@@ -521,10 +520,10 @@ public class IssuesControllerTests
             .Setup(x => x.GetIssueAsync(TestProject.LocalPath, "ABC123"))
             .ReturnsAsync(issue);
         _agentPromptServiceMock
-            .Setup(x => x.GetPrompt(It.IsAny<string>()))
+            .Setup(x => x.GetPrompt(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns((AgentPrompt?)null);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "nonexistent" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "nonexistent" };
 
         // Act
         var result = await _controller.RunAgent("ABC123", request);
@@ -534,7 +533,7 @@ public class IssuesControllerTests
     }
 
     [Test]
-    public async Task RunAgent_WithNullPromptId_QueuesWithNullPromptId()
+    public async Task RunAgent_WithNullPromptName_QueuesWithNullPromptName()
     {
         // Arrange
         var issueId = "ABC123";
@@ -553,7 +552,7 @@ public class IssuesControllerTests
         var request = new RunAgentRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = null, // Null prompt ID for "None" option
+            PromptName = null, // Null prompt name for "None" option
             Model = "sonnet"
         };
 
@@ -566,16 +565,16 @@ public class IssuesControllerTests
         var response = (RunAgentAcceptedResponse)acceptedResult.Value!;
         Assert.That(response.IssueId, Is.EqualTo(issueId));
 
-        // Verify GetPrompt was NOT called (null prompt ID validation is skipped)
+        // Verify GetPrompt was NOT called (null prompt name validation is skipped)
         _agentPromptServiceMock.Verify(
-            x => x.GetPrompt(It.IsAny<string>()),
+            x => x.GetPrompt(It.IsAny<string>(), It.IsAny<string?>()),
             Times.Never);
 
-        // Verify background service was queued with null PromptId
+        // Verify background service was queued with null PromptName
         _agentStartBackgroundServiceMock.Verify(
             x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(req =>
                 req.IssueId == issueId &&
-                req.PromptId == null)),
+                req.PromptName == null)),
             Times.Once);
     }
 
@@ -606,7 +605,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetSessionByEntityId(issueId))
             .Returns(existingSession);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent(issueId, request);
@@ -646,7 +645,7 @@ public class IssuesControllerTests
         _agentStartupTrackerMock.Setup(x => x.TryMarkAsStarting(issueId))
             .Returns(false);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = null };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = null };
 
         // Act
         var result = await _controller.RunAgent(issueId, request);
@@ -670,7 +669,7 @@ public class IssuesControllerTests
         // Arrange
         var issueId = "ABC123";
         var issue = CreateTestIssue(issueId, "Test Issue");
-        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var prompt = new AgentPrompt { Name = "Build", Mode = SessionMode.Build };
 
         _projectServiceMock
             .Setup(x => x.GetByIdAsync(TestProject.Id))
@@ -682,13 +681,13 @@ public class IssuesControllerTests
             .Setup(x => x.GetSessionByEntityId(issueId))
             .Returns((ClaudeSession?)null); // No existing session
         _agentPromptServiceMock
-            .Setup(x => x.GetPrompt("prompt-1"))
+            .Setup(x => x.GetPrompt("prompt-1", null))
             .Returns(prompt);
         _branchResolverServiceMock
             .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
             .ReturnsAsync((string?)null);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent(issueId, request);
@@ -721,7 +720,7 @@ public class IssuesControllerTests
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Stopped // Not active
         };
-        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var prompt = new AgentPrompt { Name = "Build", Mode = SessionMode.Build };
 
         _projectServiceMock
             .Setup(x => x.GetByIdAsync(TestProject.Id))
@@ -733,13 +732,13 @@ public class IssuesControllerTests
             .Setup(x => x.GetSessionByEntityId(issueId))
             .Returns(stoppedSession); // Session exists but is stopped
         _agentPromptServiceMock
-            .Setup(x => x.GetPrompt("prompt-1"))
+            .Setup(x => x.GetPrompt("prompt-1", null))
             .Returns(prompt);
         _branchResolverServiceMock
             .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
             .ReturnsAsync((string?)null);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent(issueId, request);
@@ -780,7 +779,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetSessionByEntityId(issueId))
             .Returns(waitingSession);
 
-        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptName = "prompt-1" };
 
         // Act
         var result = await _controller.RunAgent(issueId, request);
@@ -814,7 +813,7 @@ public class IssuesControllerTests
         var request = new RunAgentRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = null,
+            PromptName = null,
             BaseBranch = customBaseBranch
         };
 
@@ -852,7 +851,7 @@ public class IssuesControllerTests
         var request = new RunAgentRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = null,
+            PromptName = null,
             UserInstructions = "Custom instructions for the agent"
         };
 

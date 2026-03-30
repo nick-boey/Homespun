@@ -130,7 +130,6 @@ public class AgentPromptServiceTests
         var projectId = "test-project";
         var prompt = new AgentPrompt
         {
-            Id = "proj-issue-agent-modification",
             Name = "ProjectIssueAgentModification",
             Mode = SessionMode.Build,
             ProjectId = projectId,
@@ -141,7 +140,6 @@ public class AgentPromptServiceTests
         // Also add a regular project prompt
         var regularPrompt = new AgentPrompt
         {
-            Id = "proj-plan",
             Name = "ProjectPlan",
             Mode = SessionMode.Plan,
             ProjectId = projectId,
@@ -269,14 +267,41 @@ public class AgentPromptServiceTests
     }
 
     [Test]
-    public async Task GetPrompt_ReturnsByIdIncludingSessionTypePrompts()
+    public async Task CreatePromptAsync_ThrowsWhenDuplicateNameInSameScope()
+    {
+        // Arrange
+        await _service.CreatePromptAsync("TestPrompt", "First message", SessionMode.Build);
+
+        // Act & Assert - duplicate name in global scope should throw
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.CreatePromptAsync("TestPrompt", "Second message", SessionMode.Plan));
+
+        Assert.That(ex!.Message, Does.Contain("already exists"));
+    }
+
+    [Test]
+    public async Task CreatePromptAsync_AllowsSameNameInDifferentScopes()
+    {
+        // Arrange & Act - same name in global and project scope should succeed
+        var global = await _service.CreatePromptAsync("TestPrompt", "Global message", SessionMode.Build);
+        var project = await _service.CreatePromptAsync("TestPrompt", "Project message", SessionMode.Build, "project-123");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(global.ProjectId, Is.Null);
+            Assert.That(project.ProjectId, Is.EqualTo("project-123"));
+        });
+    }
+
+    [Test]
+    public async Task GetPrompt_ReturnsByNameAndProjectIdIncludingSessionTypePrompts()
     {
         // Arrange - create IssueAgentModification prompt
         await _service.EnsureDefaultPromptsAsync();
-        var issueAgentModificationPrompt = _service.GetPromptBySessionType(SessionType.IssueAgentModification);
 
-        // Act - get by ID (should still work even for session-type prompts)
-        var prompt = _service.GetPrompt(issueAgentModificationPrompt!.Id);
+        // Act - get by name+projectId (should still work even for session-type prompts)
+        var prompt = _service.GetPrompt("IssueAgentModification", null);
 
         // Assert
         Assert.Multiple(() =>
@@ -559,7 +584,6 @@ public class AgentPromptServiceTests
         var projectId = "test-project";
         var projectPrompt = new AgentPrompt
         {
-            Id = "proj-build",
             Name = "Build",
             InitialMessage = "Custom project build message",
             Mode = SessionMode.Build,
@@ -608,7 +632,6 @@ public class AgentPromptServiceTests
         // Create a project prompt with a unique name
         var projectPrompt = new AgentPrompt
         {
-            Id = "proj-custom",
             Name = "CustomProjectPrompt",
             InitialMessage = "Custom project message",
             Mode = SessionMode.Build,
@@ -651,7 +674,6 @@ public class AgentPromptServiceTests
         // Create a project prompt that shadows a global prompt
         var projectPrompt = new AgentPrompt
         {
-            Id = "proj-build",
             Name = "Build",
             Mode = SessionMode.Build,
             ProjectId = projectId
@@ -678,7 +700,7 @@ public class AgentPromptServiceTests
         var projectId = "test-project";
 
         // Act
-        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, null);
+        var overridePrompt = await _service.CreateOverrideAsync("Build", projectId, null);
 
         // Assert
         Assert.Multiple(() =>
@@ -688,7 +710,6 @@ public class AgentPromptServiceTests
             Assert.That(overridePrompt.ProjectId, Is.EqualTo(projectId));
             Assert.That(overridePrompt.Mode, Is.EqualTo(globalBuildPrompt.Mode));
             Assert.That(overridePrompt.InitialMessage, Is.EqualTo(globalBuildPrompt.InitialMessage));
-            Assert.That(overridePrompt.Id, Is.Not.EqualTo(globalBuildPrompt.Id)); // Should be a new ID
         });
     }
 
@@ -702,7 +723,7 @@ public class AgentPromptServiceTests
         var customMessage = "Custom override message for this project";
 
         // Act
-        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, customMessage);
+        var overridePrompt = await _service.CreateOverrideAsync("Build", projectId, customMessage);
 
         // Assert
         Assert.Multiple(() =>
@@ -721,23 +742,23 @@ public class AgentPromptServiceTests
 
         // Act & Assert
         var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.CreateOverrideAsync("non-existent-id", projectId, null));
+            () => _service.CreateOverrideAsync("NonExistentPrompt", projectId, null));
 
         Assert.That(ex!.Message, Does.Contain("not found"));
     }
 
     [Test]
-    public async Task CreateOverrideAsync_ThrowsWhenPromptIsNotGlobal()
+    public async Task CreateOverrideAsync_ThrowsWhenPromptNameNotGlobal()
     {
-        // Arrange
+        // Arrange - CreateOverrideAsync looks up by name with null projectId, so this tests non-existent global
         var projectId = "test-project";
-        var projectPrompt = await _service.CreatePromptAsync("ProjectPrompt", "Test", SessionMode.Build, projectId);
+        await _service.CreatePromptAsync("ProjectOnlyPrompt", "Test", SessionMode.Build, projectId);
 
-        // Act & Assert
+        // Act & Assert - trying to create override from a prompt that doesn't exist globally
         var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.CreateOverrideAsync(projectPrompt.Id, "another-project", null));
+            () => _service.CreateOverrideAsync("ProjectOnlyPrompt", "another-project", null));
 
-        Assert.That(ex!.Message, Does.Contain("global prompt"));
+        Assert.That(ex!.Message, Does.Contain("not found"));
     }
 
     [Test]
@@ -745,11 +766,10 @@ public class AgentPromptServiceTests
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
-        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
         var projectId = "test-project";
 
         // Act
-        await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, "Custom message");
+        await _service.CreateOverrideAsync("Build", projectId, "Custom message");
         var projectPrompts = _service.GetPromptsForProject(projectId);
 
         // Assert
@@ -768,26 +788,24 @@ public class AgentPromptServiceTests
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
-        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
         var projectId = "test-project";
 
         // Create an override
-        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, "Custom message");
+        await _service.CreateOverrideAsync("Build", projectId, "Custom message");
 
         // Act
-        var result = await _service.RemoveOverrideAsync(overridePrompt.Id);
+        var result = await _service.RemoveOverrideAsync("Build", projectId);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(result, Is.Not.Null);
-            Assert.That(result.Id, Is.EqualTo(globalBuildPrompt.Id));
             Assert.That(result.Name, Is.EqualTo("Build"));
             Assert.That(result.ProjectId, Is.Null); // Global prompt
         });
 
         // Verify the override was deleted
-        var deletedPrompt = _service.GetPrompt(overridePrompt.Id);
+        var deletedPrompt = _service.GetPrompt("Build", projectId);
         Assert.That(deletedPrompt, Is.Null);
     }
 
@@ -796,23 +814,9 @@ public class AgentPromptServiceTests
     {
         // Act & Assert
         var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.RemoveOverrideAsync("non-existent-id"));
+            () => _service.RemoveOverrideAsync("NonExistent", "some-project"));
 
         Assert.That(ex!.Message, Does.Contain("not found"));
-    }
-
-    [Test]
-    public async Task RemoveOverrideAsync_ThrowsWhenPromptIsNotProjectScoped()
-    {
-        // Arrange
-        await _service.EnsureDefaultPromptsAsync();
-        var globalPrompt = _service.GetAllPrompts().First();
-
-        // Act & Assert
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.RemoveOverrideAsync(globalPrompt.Id));
-
-        Assert.That(ex!.Message, Does.Contain("project prompt"));
     }
 
     [Test]
@@ -820,7 +824,7 @@ public class AgentPromptServiceTests
     {
         // Arrange - Create a project-only prompt (no global equivalent)
         var projectId = "test-project";
-        var projectOnlyPrompt = await _service.CreatePromptAsync(
+        await _service.CreatePromptAsync(
             "UniqueProjectPrompt",
             "Test message",
             SessionMode.Build,
@@ -828,7 +832,7 @@ public class AgentPromptServiceTests
 
         // Act & Assert
         var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _service.RemoveOverrideAsync(projectOnlyPrompt.Id));
+            () => _service.RemoveOverrideAsync("UniqueProjectPrompt", projectId));
 
         Assert.That(ex!.Message, Does.Contain("not an override"));
     }
@@ -838,14 +842,13 @@ public class AgentPromptServiceTests
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
-        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
         var projectId = "test-project";
 
         // Create an override
-        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, "Custom message");
+        await _service.CreateOverrideAsync("Build", projectId, "Custom message");
 
         // Act
-        await _service.RemoveOverrideAsync(overridePrompt.Id);
+        await _service.RemoveOverrideAsync("Build", projectId);
         var projectPrompts = _service.GetPromptsForProject(projectId);
 
         // Assert - Global Build prompt should now be included, not the override
@@ -945,7 +948,6 @@ public class AgentPromptServiceTests
         // Arrange - create IssueModify prompt with Standard category (pre-migration state)
         var prompt = new AgentPrompt
         {
-            Id = "old-im",
             Name = "IssueModify",
             InitialMessage = "old message",
             Mode = SessionMode.Build,
@@ -1011,7 +1013,6 @@ public class AgentPromptServiceTests
         // Create a project-level IssueAgent prompt that overrides IssueModify
         var projectPrompt = new AgentPrompt
         {
-            Id = "proj-im",
             Name = "IssueModify",
             InitialMessage = "Custom project issue modify message",
             Mode = SessionMode.Build,
@@ -1120,7 +1121,7 @@ public class AgentPromptServiceTests
         await _service.EnsureDefaultPromptsAsync();
         var planPrompt = _dataStore.AgentPrompts.First(p => p.Name == "Plan");
         var originalMessage = planPrompt.InitialMessage;
-        await _service.UpdatePromptAsync(planPrompt.Id, "Plan", "Modified message", SessionMode.Plan);
+        await _service.UpdatePromptAsync("Plan", null, "Modified message", SessionMode.Plan);
 
         // Act
         await _service.RestoreDefaultPromptsAsync();

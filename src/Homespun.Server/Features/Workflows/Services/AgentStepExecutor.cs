@@ -27,9 +27,9 @@ public sealed class AgentStepExecutor : IStepExecutor
         }
 
         _logger.LogInformation(
-            "Agent step '{StepId}' started with prompt template '{PromptId}', waiting for completion callback",
+            "Agent step '{StepId}' started with prompt template '{PromptName}', waiting for completion callback",
             step.Id,
-            step.PromptId ?? "(inline)");
+            step.PromptName ?? "(inline)");
 
         // Agent steps require an external callback to complete
         return Task.FromResult(StepResult.WaitingForCallback());

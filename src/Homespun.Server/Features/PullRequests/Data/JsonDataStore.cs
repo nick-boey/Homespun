@@ -51,7 +51,9 @@ public class JsonDataStore : IDataStore
 
     public IReadOnlyList<AgentPrompt> AgentPrompts => _data.AgentPrompts.AsReadOnly();
 
-    public AgentPrompt? GetAgentPrompt(string id) => _data.AgentPrompts.FirstOrDefault(p => p.Id == id);
+    public AgentPrompt? GetAgentPrompt(string name, string? projectId) =>
+        _data.AgentPrompts.FirstOrDefault(p =>
+            p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
 
     public IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId) =>
         _data.AgentPrompts.Where(p => p.ProjectId == projectId).ToList().AsReadOnly();
@@ -213,7 +215,8 @@ public class JsonDataStore : IDataStore
         await _lock.WaitAsync();
         try
         {
-            var index = _data.AgentPrompts.FindIndex(p => p.Id == prompt.Id);
+            var index = _data.AgentPrompts.FindIndex(p =>
+                p.Name.Equals(prompt.Name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == prompt.ProjectId);
             if (index >= 0)
             {
                 _data.AgentPrompts[index] = prompt;
@@ -226,12 +229,13 @@ public class JsonDataStore : IDataStore
         }
     }
 
-    public async Task RemoveAgentPromptAsync(string promptId)
+    public async Task RemoveAgentPromptAsync(string name, string? projectId)
     {
         await _lock.WaitAsync();
         try
         {
-            _data.AgentPrompts.RemoveAll(p => p.Id == promptId);
+            _data.AgentPrompts.RemoveAll(p =>
+                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
             await SaveInternalAsync();
         }
         finally

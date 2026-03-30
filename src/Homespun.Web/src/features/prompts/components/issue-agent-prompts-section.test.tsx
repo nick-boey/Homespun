@@ -14,10 +14,10 @@ vi.mock('@/api', async (importOriginal) => {
       getApiAgentPromptsIssueAgentPrompts: vi.fn(),
       getApiAgentPromptsIssueAgentAvailableByProjectId: vi.fn(),
       postApiAgentPrompts: vi.fn(),
-      putApiAgentPromptsById: vi.fn(),
-      deleteApiAgentPromptsById: vi.fn(),
+      putApiAgentPromptsByNameByName: vi.fn(),
+      deleteApiAgentPromptsByNameByName: vi.fn(),
       postApiAgentPromptsCreateOverride: vi.fn(),
-      deleteApiAgentPromptsByIdOverride: vi.fn(),
+      deleteApiAgentPromptsByNameByNameOverride: vi.fn(),
     },
   }
 })
@@ -35,7 +35,6 @@ function createWrapper() {
 }
 
 const makeSystemPrompt = (overrides = {}) => ({
-  id: 'sys-1',
   name: 'IssueAgentSystem',
   initialMessage: 'System instructions',
   mode: SessionMode.BUILD,
@@ -46,7 +45,6 @@ const makeSystemPrompt = (overrides = {}) => ({
 })
 
 const makeUserSelectablePrompt = (overrides = {}) => ({
-  id: 'user-1',
   name: 'Custom Issue Prompt',
   initialMessage: 'Custom instructions',
   mode: SessionMode.BUILD,
@@ -176,9 +174,8 @@ describe('IssueAgentPromptsSection', () => {
   it('shows inherited issue agent prompts on project page', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId).mockResolvedValue({
       data: [
-        makeUserSelectablePrompt({ id: 'global-ia', projectId: null, isOverride: false }),
+        makeUserSelectablePrompt({ projectId: null, isOverride: false }),
         makeUserSelectablePrompt({
-          id: 'proj-ia',
           name: 'Project Issue Prompt',
           projectId: 'proj-1',
           isOverride: false,
@@ -201,7 +198,7 @@ describe('IssueAgentPromptsSection', () => {
   it('hides delete for inherited global prompts on project page', async () => {
     const user = userEvent.setup()
     vi.mocked(AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId).mockResolvedValue({
-      data: [makeUserSelectablePrompt({ id: 'global-ia', projectId: null, isOverride: false })],
+      data: [makeUserSelectablePrompt({ projectId: null, isOverride: false })],
     } as never)
 
     render(<IssueAgentPromptsSection projectId="proj-1" />, { wrapper: createWrapper() })
@@ -218,7 +215,7 @@ describe('IssueAgentPromptsSection', () => {
   it('shows override flow for inherited global issue agent prompt on project page', async () => {
     const user = userEvent.setup()
     vi.mocked(AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId).mockResolvedValue({
-      data: [makeUserSelectablePrompt({ id: 'global-ia', projectId: null, isOverride: false })],
+      data: [makeUserSelectablePrompt({ projectId: null, isOverride: false })],
     } as never)
 
     render(<IssueAgentPromptsSection projectId="proj-1" />, { wrapper: createWrapper() })
@@ -237,10 +234,7 @@ describe('IssueAgentPromptsSection', () => {
 
   it('shows prompt count', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsIssueAgentPrompts).mockResolvedValue({
-      data: [
-        makeUserSelectablePrompt({ id: 'u1' }),
-        makeUserSelectablePrompt({ id: 'u2', name: 'Another' }),
-      ],
+      data: [makeUserSelectablePrompt(), makeUserSelectablePrompt({ name: 'Another' })],
     } as never)
 
     render(<IssueAgentPromptsSection />, { wrapper: createWrapper() })

@@ -7,13 +7,11 @@ import type { AgentPrompt } from '@/api/generated/types.gen'
 
 const mockPrompts: AgentPrompt[] = [
   {
-    id: 'prompt-1',
     name: 'Test Prompt',
     initialMessage: 'Hello world',
     mode: SessionMode.BUILD,
   },
   {
-    id: 'prompt-2',
     name: 'Another Prompt',
     initialMessage: 'Another message',
     mode: SessionMode.PLAN,
@@ -71,7 +69,7 @@ describe('PromptsCodeEditor', () => {
 
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
     // JSON missing required 'mode' field
-    setTextareaValue(textarea, '[{"id": "1", "name": "Test"}]')
+    setTextareaValue(textarea, '[{"name": "Test"}]')
 
     await user.click(screen.getByRole('button', { name: /apply/i }))
 
@@ -243,14 +241,12 @@ describe('PromptsCodeEditor', () => {
 
     const promptsWithGlobal: AgentPrompt[] = [
       {
-        id: 'global-1',
         name: 'Global Prompt',
         initialMessage: 'Global message',
         mode: SessionMode.BUILD,
         projectId: null,
       },
       {
-        id: 'project-1',
         name: 'Project Prompt',
         initialMessage: 'Project message',
         mode: SessionMode.BUILD,
@@ -263,7 +259,7 @@ describe('PromptsCodeEditor', () => {
         prompts={promptsWithGlobal}
         onApply={onApply}
         isApplying={false}
-        globalPromptIds={['global-1']}
+        globalPromptNames={['Global Prompt']}
       />
     )
 
@@ -271,7 +267,7 @@ describe('PromptsCodeEditor', () => {
     // Remove global prompt, keep only project prompt
     setTextareaValue(
       textarea,
-      '[{"id": "project-1", "name": "Project Prompt", "initialMessage": "Project message", "mode": "build"}]'
+      '[{"name": "Project Prompt", "initialMessage": "Project message", "mode": "build"}]'
     )
 
     await user.click(screen.getByRole('button', { name: /apply/i }))
@@ -291,14 +287,12 @@ describe('PromptsCodeEditor', () => {
 
     const promptsWithGlobal: AgentPrompt[] = [
       {
-        id: 'global-1',
         name: 'Global Prompt',
         initialMessage: 'Global message',
         mode: SessionMode.BUILD,
         projectId: null,
       },
       {
-        id: 'project-1',
         name: 'Project Prompt',
         initialMessage: 'Project message',
         mode: SessionMode.BUILD,
@@ -311,7 +305,7 @@ describe('PromptsCodeEditor', () => {
         prompts={promptsWithGlobal}
         onApply={onApply}
         isApplying={false}
-        globalPromptIds={['global-1']}
+        globalPromptNames={['Global Prompt']}
       />
     )
 
@@ -319,7 +313,7 @@ describe('PromptsCodeEditor', () => {
     // Remove project prompt, keep global prompt
     setTextareaValue(
       textarea,
-      '[{"id": "global-1", "name": "Global Prompt", "initialMessage": "Global message", "mode": "build"}]'
+      '[{"name": "Global Prompt", "initialMessage": "Global message", "mode": "build"}]'
     )
 
     await user.click(screen.getByRole('button', { name: /apply/i }))

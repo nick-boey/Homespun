@@ -47,9 +47,9 @@ public record AgentStartRequest
     public required Issue Issue { get; init; }
 
     /// <summary>
-    /// The prompt ID to use for the agent, or null for None.
+    /// The prompt name to use for the agent, or null for None.
     /// </summary>
-    public string? PromptId { get; init; }
+    public string? PromptName { get; init; }
 
     /// <summary>
     /// The base branch to create the working branch from.

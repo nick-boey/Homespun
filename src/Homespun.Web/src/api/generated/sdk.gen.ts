@@ -3,12 +3,12 @@
 import type { Client, Options as Options2, TDataShape } from './client'
 import { client } from './client.gen'
 import type {
-  DeleteApiAgentPromptsByIdData,
-  DeleteApiAgentPromptsByIdErrors,
-  DeleteApiAgentPromptsByIdOverrideData,
-  DeleteApiAgentPromptsByIdOverrideErrors,
-  DeleteApiAgentPromptsByIdOverrideResponses,
-  DeleteApiAgentPromptsByIdResponses,
+  DeleteApiAgentPromptsByNameByNameData,
+  DeleteApiAgentPromptsByNameByNameErrors,
+  DeleteApiAgentPromptsByNameByNameOverrideData,
+  DeleteApiAgentPromptsByNameByNameOverrideErrors,
+  DeleteApiAgentPromptsByNameByNameOverrideResponses,
+  DeleteApiAgentPromptsByNameByNameResponses,
   DeleteApiAgentPromptsProjectByProjectIdAllData,
   DeleteApiAgentPromptsProjectByProjectIdAllResponses,
   DeleteApiClonesBulkData,
@@ -45,9 +45,9 @@ import type {
   DeleteApiWorkflowsByWorkflowIdResponses,
   GetApiAgentPromptsAvailableForProjectByProjectIdData,
   GetApiAgentPromptsAvailableForProjectByProjectIdResponses,
-  GetApiAgentPromptsByIdData,
-  GetApiAgentPromptsByIdErrors,
-  GetApiAgentPromptsByIdResponses,
+  GetApiAgentPromptsByNameByNameData,
+  GetApiAgentPromptsByNameByNameErrors,
+  GetApiAgentPromptsByNameByNameResponses,
   GetApiAgentPromptsData,
   GetApiAgentPromptsIssueAgentAvailableByProjectIdData,
   GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
@@ -210,6 +210,7 @@ import type {
   PostApiAgentPromptsData,
   PostApiAgentPromptsEnsureDefaultsData,
   PostApiAgentPromptsEnsureDefaultsResponses,
+  PostApiAgentPromptsErrors,
   PostApiAgentPromptsResponses,
   PostApiAgentPromptsRestoreDefaultsData,
   PostApiAgentPromptsRestoreDefaultsResponses,
@@ -338,9 +339,9 @@ import type {
   PostApiWorkflowTemplatesByTemplateIdCreateData,
   PostApiWorkflowTemplatesByTemplateIdCreateErrors,
   PostApiWorkflowTemplatesByTemplateIdCreateResponses,
-  PutApiAgentPromptsByIdData,
-  PutApiAgentPromptsByIdErrors,
-  PutApiAgentPromptsByIdResponses,
+  PutApiAgentPromptsByNameByNameData,
+  PutApiAgentPromptsByNameByNameErrors,
+  PutApiAgentPromptsByNameByNameResponses,
   PutApiIssuesByIssueIdData,
   PutApiIssuesByIssueIdErrors,
   PutApiIssuesByIssueIdResponses,
@@ -391,7 +392,11 @@ export class AgentPrompts {
   public static postApiAgentPrompts<ThrowOnError extends boolean = false>(
     options?: Options<PostApiAgentPromptsData, ThrowOnError>
   ) {
-    return (options?.client ?? client).post<PostApiAgentPromptsResponses, unknown, ThrowOnError>({
+    return (options?.client ?? client).post<
+      PostApiAgentPromptsResponses,
+      PostApiAgentPromptsErrors,
+      ThrowOnError
+    >({
       url: '/api/agent-prompts',
       ...options,
       headers: {
@@ -401,35 +406,35 @@ export class AgentPrompts {
     })
   }
 
-  public static deleteApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByIdData, ThrowOnError>
+  public static deleteApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByIdResponses,
-      DeleteApiAgentPromptsByIdErrors,
+      DeleteApiAgentPromptsByNameByNameResponses,
+      DeleteApiAgentPromptsByNameByNameErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
   }
 
-  public static getApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<GetApiAgentPromptsByIdData, ThrowOnError>
+  public static getApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<GetApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiAgentPromptsByIdResponses,
-      GetApiAgentPromptsByIdErrors,
+      GetApiAgentPromptsByNameByNameResponses,
+      GetApiAgentPromptsByNameByNameErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
   }
 
-  public static putApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<PutApiAgentPromptsByIdData, ThrowOnError>
+  public static putApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<PutApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).put<
-      PutApiAgentPromptsByIdResponses,
-      PutApiAgentPromptsByIdErrors,
+      PutApiAgentPromptsByNameByNameResponses,
+      PutApiAgentPromptsByNameByNameErrors,
       ThrowOnError
     >({
-      url: '/api/agent-prompts/{id}',
+      url: '/api/agent-prompts/by-name/{name}',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -525,14 +530,14 @@ export class AgentPrompts {
     })
   }
 
-  public static deleteApiAgentPromptsByIdOverride<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByIdOverrideData, ThrowOnError>
+  public static deleteApiAgentPromptsByNameByNameOverride<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsByNameByNameOverrideData, ThrowOnError>
   ) {
     return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByIdOverrideResponses,
-      DeleteApiAgentPromptsByIdOverrideErrors,
+      DeleteApiAgentPromptsByNameByNameOverrideResponses,
+      DeleteApiAgentPromptsByNameByNameOverrideErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}/override', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}/override', ...options })
   }
 }
 

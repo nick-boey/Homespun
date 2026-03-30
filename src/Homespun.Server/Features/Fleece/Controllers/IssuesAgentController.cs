@@ -103,10 +103,10 @@ public class IssuesAgentController(
         AgentPrompt? selectedPrompt;
         SessionMode sessionMode;
 
-        if (!string.IsNullOrWhiteSpace(request.PromptId))
+        if (!string.IsNullOrWhiteSpace(request.PromptName))
         {
             // Explicit prompt selection: validate it exists and has the correct category
-            selectedPrompt = agentPromptService.GetPrompt(request.PromptId);
+            selectedPrompt = agentPromptService.GetPrompt(request.PromptName, null);
             if (selectedPrompt == null)
             {
                 return NotFound("Prompt not found");

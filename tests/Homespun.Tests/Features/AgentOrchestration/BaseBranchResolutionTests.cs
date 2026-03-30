@@ -46,7 +46,7 @@ public class BaseBranchResolutionTests
                 Type = IssueType.Task,
                 LastUpdate = ts
             },
-            PromptId = "prompt123",
+            PromptName = "prompt123",
             BaseBranch = baseBranch,
             Model = "sonnet",
             BranchName = $"task/test-issue+{issueId}"

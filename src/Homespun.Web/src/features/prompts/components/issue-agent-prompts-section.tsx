@@ -31,8 +31,8 @@ type ViewMode = 'list' | 'create' | 'edit'
 export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSectionProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
-  const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
-  const [removingOverrideId, setRemovingOverrideId] = useState<string | null>(null)
+  const [deletingPromptName, setDeletingPromptName] = useState<string | null>(null)
+  const [removingOverrideName, setRemovingOverrideName] = useState<string | null>(null)
 
   const isGlobal = !projectId
   const globalPromptsQuery = useIssueAgentPrompts()
@@ -93,10 +93,10 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
   const deletePrompt = useDeletePrompt({
     projectId: isGlobal ? undefined : projectId,
     onSuccess: () => {
-      setDeletingPromptId(null)
+      setDeletingPromptName(null)
     },
     onError: () => {
-      setDeletingPromptId(null)
+      setDeletingPromptName(null)
     },
   })
 
@@ -111,10 +111,10 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
   const removeOverride = useRemoveOverride({
     projectId: projectId || '',
     onSuccess: () => {
-      setRemovingOverrideId(null)
+      setRemovingOverrideName(null)
     },
     onError: () => {
-      setRemovingOverrideId(null)
+      setRemovingOverrideName(null)
     },
   })
 
@@ -133,14 +133,17 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
     setViewMode('edit')
   }
 
-  const handleDelete = async (promptId: string) => {
-    setDeletingPromptId(promptId)
-    await deletePrompt.mutateAsync(promptId)
+  const handleDelete = async (promptName: string) => {
+    setDeletingPromptName(promptName)
+    await deletePrompt.mutateAsync({
+      name: promptName,
+      projectId: isGlobal ? undefined : projectId,
+    })
   }
 
-  const handleRemoveOverride = async (promptId: string) => {
-    setRemovingOverrideId(promptId)
-    await removeOverride.mutateAsync(promptId)
+  const handleRemoveOverride = async (promptName: string) => {
+    setRemovingOverrideName(promptName)
+    await removeOverride.mutateAsync(promptName)
   }
 
   const handleCreate = async (data: {
@@ -162,19 +165,19 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
     initialMessage?: string
     mode: SessionMode
   }) => {
-    if (!editingPrompt?.id) return
+    if (!editingPrompt?.name) return
 
     // If on project page and editing a global prompt, create override
     if (!isGlobal && projectId && isGlobalPrompt(editingPrompt)) {
       await createOverride.mutateAsync({
-        globalPromptId: editingPrompt.id,
+        globalPromptName: editingPrompt.name,
         projectId: projectId,
         initialMessage: data.initialMessage,
       })
     } else {
       await updatePrompt.mutateAsync({
-        id: editingPrompt.id,
-        name: data.name,
+        name: editingPrompt.name,
+        projectId: isGlobal ? undefined : projectId,
         initialMessage: data.initialMessage,
         mode: data.mode,
       })
@@ -303,11 +306,11 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
           <div className="grid gap-4">
             {userPrompts.map((prompt) => (
               <PromptCard
-                key={prompt.id}
+                key={prompt.name}
                 prompt={prompt}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                isDeleting={deletingPromptId === prompt.id}
+                isDeleting={deletingPromptName === prompt.name}
                 showDelete
               />
             ))}
@@ -322,14 +325,14 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
                 <div className="grid gap-4">
                   {projectUserPrompts.map((prompt) => (
                     <PromptCard
-                      key={prompt.id}
+                      key={prompt.name}
                       prompt={prompt}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
-                      isDeleting={deletingPromptId === prompt.id}
+                      isDeleting={deletingPromptName === prompt.name}
                       showDelete
                       onRemoveOverride={projectId ? handleRemoveOverride : undefined}
-                      isRemovingOverride={removingOverrideId === prompt.id}
+                      isRemovingOverride={removingOverrideName === prompt.name}
                     />
                   ))}
                 </div>
@@ -343,7 +346,7 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
                 <div className="grid gap-4">
                   {inheritedUserPrompts.map((prompt) => (
                     <PromptCard
-                      key={prompt.id}
+                      key={prompt.name}
                       prompt={prompt}
                       onEdit={handleEdit}
                       showDelete={false}
@@ -374,7 +377,7 @@ export function IssueAgentPromptsSection({ projectId }: IssueAgentPromptsSection
           <div className="grid gap-4">
             {systemPrompts.map((prompt) => (
               <PromptCard
-                key={prompt.id}
+                key={prompt.name}
                 prompt={prompt}
                 onEdit={handleEditSystem}
                 showDelete={false}

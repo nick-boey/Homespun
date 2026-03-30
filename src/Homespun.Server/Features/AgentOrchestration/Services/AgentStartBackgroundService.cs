@@ -171,9 +171,9 @@ public class AgentStartBackgroundService(
                 renderedMessage = request.UserInstructions;
 
                 // If a prompt was also provided, use its mode; otherwise default to Build
-                if (!string.IsNullOrEmpty(request.PromptId))
+                if (!string.IsNullOrEmpty(request.PromptName))
                 {
-                    prompt = agentPromptService.GetPrompt(request.PromptId);
+                    prompt = agentPromptService.GetPrompt(request.PromptName, null);
                     mode = prompt?.Mode ?? SessionMode.Build;
                 }
                 else
@@ -181,9 +181,9 @@ public class AgentStartBackgroundService(
                     mode = SessionMode.Build;
                 }
             }
-            else if (!string.IsNullOrEmpty(request.PromptId))
+            else if (!string.IsNullOrEmpty(request.PromptName))
             {
-                prompt = agentPromptService.GetPrompt(request.PromptId);
+                prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;

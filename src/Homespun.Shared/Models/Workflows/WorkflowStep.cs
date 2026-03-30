@@ -80,9 +80,9 @@ public class WorkflowStep
     public string? Prompt { get; set; }
 
     /// <summary>
-    /// Reference to a named AgentPrompt template.
+    /// Reference to a named AgentPrompt template (prompt name).
     /// </summary>
-    public string? PromptId { get; set; }
+    public string? PromptName { get; set; }
 
     /// <summary>
     /// The session mode for agent steps (Plan or Build).

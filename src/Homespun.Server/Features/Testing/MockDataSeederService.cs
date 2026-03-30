@@ -643,7 +643,6 @@ public class MockDataSeederService : IHostedService
         // Add a custom prompt
         var customPrompt = new AgentPrompt
         {
-            Id = "review",
             Name = "Code Review",
             InitialMessage = """
                 ## Code Review: {{title}}
