@@ -155,6 +155,12 @@ describe('TaskGraphKonvaView', () => {
       expect(screen.getByTestId('task-graph-konva')).toBeInTheDocument()
     })
 
+    it('does not set inline height style on container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
+    })
+
     it('renders issue titles', () => {
       renderComponent()
       expect(screen.getByText('First Issue')).toBeInTheDocument()

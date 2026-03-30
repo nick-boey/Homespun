@@ -97,7 +97,7 @@ function ProjectLayout() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-6 overflow-hidden">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <div>
