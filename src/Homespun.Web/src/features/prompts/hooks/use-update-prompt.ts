@@ -14,16 +14,18 @@ interface UseUpdatePromptOptions {
 }
 
 interface UpdatePromptParams extends UpdateAgentPromptRequest {
-  id: string
+  name: string
+  projectId?: string
 }
 
 export function useUpdatePrompt(options: UseUpdatePromptOptions) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: UpdatePromptParams) => {
-      const result = await AgentPrompts.putApiAgentPromptsById({
-        path: { id },
+    mutationFn: async ({ name, projectId, ...data }: UpdatePromptParams) => {
+      const result = await AgentPrompts.putApiAgentPromptsByNameByName({
+        path: { name },
+        query: { projectId },
         body: data,
       })
 

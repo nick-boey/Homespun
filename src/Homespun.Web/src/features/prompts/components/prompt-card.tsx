@@ -26,12 +26,12 @@ export interface PromptCardProps {
   prompt: AgentPrompt
   onEdit: (prompt: AgentPrompt) => void
   /** Handler for delete action - required when showDelete is true */
-  onDelete?: (promptId: string) => void
+  onDelete?: (promptName: string) => void
   isDeleting?: boolean
   /** Whether to show the delete option (defaults to true) */
   showDelete?: boolean
   /** Handler for remove override action - only shown when prompt.isOverride is true */
-  onRemoveOverride?: (promptId: string) => void
+  onRemoveOverride?: (promptName: string) => void
   isRemovingOverride?: boolean
 }
 
@@ -82,15 +82,15 @@ export function PromptCard({
   const [showRemoveOverrideDialog, setShowRemoveOverrideDialog] = useState(false)
 
   const handleDelete = () => {
-    if (prompt.id && onDelete) {
-      onDelete(prompt.id)
+    if (prompt.name && onDelete) {
+      onDelete(prompt.name)
     }
     setShowDeleteDialog(false)
   }
 
   const handleRemoveOverride = () => {
-    if (prompt.id && onRemoveOverride) {
-      onRemoveOverride(prompt.id)
+    if (prompt.name && onRemoveOverride) {
+      onRemoveOverride(prompt.name)
     }
     setShowRemoveOverrideDialog(false)
   }

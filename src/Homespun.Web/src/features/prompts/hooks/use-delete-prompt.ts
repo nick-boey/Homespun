@@ -17,9 +17,10 @@ export function useDeletePrompt(options: UseDeletePromptOptions) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const result = await AgentPrompts.deleteApiAgentPromptsById({
-        path: { id },
+    mutationFn: async ({ name, projectId }: { name: string; projectId?: string }) => {
+      const result = await AgentPrompts.deleteApiAgentPromptsByNameByName({
+        path: { name },
+        query: { projectId },
       })
 
       if (result.error) {

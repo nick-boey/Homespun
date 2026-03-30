@@ -35,7 +35,7 @@ const FAILURE_TRANSITIONS = [
 type PromptMode = 'inline' | 'template'
 
 function getInitialPromptMode(step: WorkflowStep): PromptMode {
-  if (step.promptId) return 'template'
+  if (step.promptName) return 'template'
   return 'inline'
 }
 
@@ -106,7 +106,7 @@ export function StepSettingsCard({ step, allSteps, prompts, onChange }: StepSett
                   size="sm"
                   onClick={() => {
                     setPromptMode('inline')
-                    update({ promptId: null })
+                    update({ promptName: null })
                   }}
                 >
                   Inline Prompt
@@ -140,12 +140,12 @@ export function StepSettingsCard({ step, allSteps, prompts, onChange }: StepSett
                 <select
                   data-testid="prompt-template-select"
                   className="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
-                  value={step.promptId ?? ''}
-                  onChange={(e) => update({ promptId: e.target.value || null })}
+                  value={step.promptName ?? ''}
+                  onChange={(e) => update({ promptName: e.target.value || null })}
                 >
                   <option value="">Select a template...</option>
                   {prompts.map((p) => (
-                    <option key={p.id} value={p.id ?? ''}>
+                    <option key={p.name} value={p.name ?? ''}>
                       {p.name}
                     </option>
                   ))}

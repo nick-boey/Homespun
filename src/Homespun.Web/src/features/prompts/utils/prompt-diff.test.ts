@@ -12,7 +12,6 @@ describe('serializePrompts', () => {
   it('serializes prompts with correct fields', () => {
     const prompts: AgentPrompt[] = [
       {
-        id: 'prompt-1',
         name: 'Test Prompt',
         initialMessage: 'Hello world',
         mode: SessionMode.BUILD,
@@ -27,7 +26,6 @@ describe('serializePrompts', () => {
 
     expect(parsed).toHaveLength(1)
     expect(parsed[0]).toEqual({
-      id: 'prompt-1',
       name: 'Test Prompt',
       initialMessage: 'Hello world',
       mode: SessionMode.BUILD,
@@ -36,12 +34,12 @@ describe('serializePrompts', () => {
     expect(parsed[0]).not.toHaveProperty('projectId')
     expect(parsed[0]).not.toHaveProperty('createdAt')
     expect(parsed[0]).not.toHaveProperty('updatedAt')
+    expect(parsed[0]).not.toHaveProperty('id')
   })
 
   it('includes sessionType for Issue Agent Prompts', () => {
     const prompts: AgentPrompt[] = [
       {
-        id: 'issue-prompt-1',
         name: 'Issue Modify',
         initialMessage: 'Modify issues',
         mode: SessionMode.BUILD,
@@ -53,7 +51,6 @@ describe('serializePrompts', () => {
     const parsed = JSON.parse(result)
 
     expect(parsed[0]).toEqual({
-      id: 'issue-prompt-1',
       name: 'Issue Modify',
       initialMessage: 'Modify issues',
       mode: SessionMode.BUILD,
@@ -64,7 +61,6 @@ describe('serializePrompts', () => {
   it('formats JSON with 2-space indentation', () => {
     const prompts: AgentPrompt[] = [
       {
-        id: '1',
         name: 'Test',
         mode: SessionMode.PLAN,
       },
@@ -78,7 +74,6 @@ describe('serializePrompts', () => {
   it('handles prompts with null values', () => {
     const prompts: AgentPrompt[] = [
       {
-        id: 'prompt-1',
         name: 'Test',
         initialMessage: null,
         mode: SessionMode.BUILD,
@@ -96,7 +91,6 @@ describe('parsePrompts', () => {
   it('parses valid JSON array', () => {
     const json = JSON.stringify([
       {
-        id: 'prompt-1',
         name: 'Test',
         mode: SessionMode.BUILD,
       },
@@ -127,7 +121,7 @@ describe('parsePrompts', () => {
   })
 
   it('validates required fields - name is required', () => {
-    const json = JSON.stringify([{ id: 'prompt-1', mode: SessionMode.BUILD }])
+    const json = JSON.stringify([{ mode: SessionMode.BUILD }])
 
     const result = parsePrompts(json)
     expect(result.success).toBe(false)
@@ -137,7 +131,7 @@ describe('parsePrompts', () => {
   })
 
   it('validates required fields - mode is required', () => {
-    const json = JSON.stringify([{ id: 'prompt-1', name: 'Test' }])
+    const json = JSON.stringify([{ name: 'Test' }])
 
     const result = parsePrompts(json)
     expect(result.success).toBe(false)
@@ -147,7 +141,7 @@ describe('parsePrompts', () => {
   })
 
   it('validates mode is a valid SessionMode', () => {
-    const json = JSON.stringify([{ id: 'prompt-1', name: 'Test', mode: 'invalid' }])
+    const json = JSON.stringify([{ name: 'Test', mode: 'invalid' }])
 
     const result = parsePrompts(json)
     expect(result.success).toBe(false)
@@ -164,7 +158,7 @@ describe('parsePrompts', () => {
     }
   })
 
-  it('accepts prompts without id (for new prompts)', () => {
+  it('accepts prompts without extra fields', () => {
     const json = JSON.stringify([
       {
         name: 'New Prompt',
@@ -175,14 +169,12 @@ describe('parsePrompts', () => {
     const result = parsePrompts(json)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data[0].id).toBeUndefined()
+      expect(result.data[0].name).toBe('New Prompt')
     }
   })
 
   it('validates sessionType is a valid SessionType', () => {
-    const json = JSON.stringify([
-      { id: 'prompt-1', name: 'Test', mode: SessionMode.BUILD, sessionType: 'invalid' },
-    ])
+    const json = JSON.stringify([{ name: 'Test', mode: SessionMode.BUILD, sessionType: 'invalid' }])
 
     const result = parsePrompts(json)
     expect(result.success).toBe(false)
@@ -194,7 +186,6 @@ describe('parsePrompts', () => {
   it('accepts valid sessionType values', () => {
     const json = JSON.stringify([
       {
-        id: 'prompt-1',
         name: 'Issue Modify',
         mode: SessionMode.BUILD,
         sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
@@ -210,7 +201,7 @@ describe('parsePrompts', () => {
 })
 
 describe('calculateDiff', () => {
-  it('identifies prompts to create (no id in edited)', () => {
+  it('identifies prompts to create (name not in current)', () => {
     const current: ExportedPrompt[] = []
     const edited: ExportedPrompt[] = [{ name: 'New Prompt', mode: SessionMode.BUILD }]
 
@@ -225,26 +216,23 @@ describe('calculateDiff', () => {
     expect(diff.deletes).toHaveLength(0)
   })
 
-  it('identifies prompts to update (matching id)', () => {
-    const current: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Old Name', mode: SessionMode.BUILD },
-    ]
-    const edited: ExportedPrompt[] = [{ id: 'prompt-1', name: 'New Name', mode: SessionMode.PLAN }]
+  it('identifies prompts to update (matching name, changed content)', () => {
+    const current: ExportedPrompt[] = [{ name: 'My Prompt', mode: SessionMode.BUILD }]
+    const edited: ExportedPrompt[] = [{ name: 'My Prompt', mode: SessionMode.PLAN }]
 
     const diff = calculateDiff(current, edited)
 
     expect(diff.creates).toHaveLength(0)
     expect(diff.updates).toHaveLength(1)
     expect(diff.updates[0]).toEqual({
-      id: 'prompt-1',
-      name: 'New Name',
+      name: 'My Prompt',
       mode: SessionMode.PLAN,
     })
     expect(diff.deletes).toHaveLength(0)
   })
 
   it('identifies prompts to delete (in current but not in edited)', () => {
-    const current: ExportedPrompt[] = [{ id: 'prompt-1', name: 'Deleted', mode: SessionMode.BUILD }]
+    const current: ExportedPrompt[] = [{ name: 'Deleted', mode: SessionMode.BUILD }]
     const edited: ExportedPrompt[] = []
 
     const diff = calculateDiff(current, edited)
@@ -252,13 +240,12 @@ describe('calculateDiff', () => {
     expect(diff.creates).toHaveLength(0)
     expect(diff.updates).toHaveLength(0)
     expect(diff.deletes).toHaveLength(1)
-    expect(diff.deletes[0]).toBe('prompt-1')
+    expect(diff.deletes[0]).toBe('Deleted')
   })
 
   it('does not include Issue Agent Prompts in deletes', () => {
     const current: ExportedPrompt[] = [
       {
-        id: 'issue-prompt-1',
         name: 'Issue Modify',
         mode: SessionMode.BUILD,
         sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
@@ -274,13 +261,13 @@ describe('calculateDiff', () => {
 
   it('handles complex scenario with creates, updates, and deletes', () => {
     const current: ExportedPrompt[] = [
-      { id: 'keep-1', name: 'Stays', mode: SessionMode.BUILD },
-      { id: 'update-1', name: 'Will Update', mode: SessionMode.BUILD },
-      { id: 'delete-1', name: 'Will Delete', mode: SessionMode.PLAN },
+      { name: 'Stays', mode: SessionMode.BUILD },
+      { name: 'Will Update', mode: SessionMode.BUILD },
+      { name: 'Will Delete', mode: SessionMode.PLAN },
     ]
     const edited: ExportedPrompt[] = [
-      { id: 'keep-1', name: 'Stays', mode: SessionMode.BUILD },
-      { id: 'update-1', name: 'Updated Name', mode: SessionMode.PLAN },
+      { name: 'Stays', mode: SessionMode.BUILD },
+      { name: 'Will Update', mode: SessionMode.PLAN },
       { name: 'Brand New', mode: SessionMode.BUILD },
     ]
 
@@ -291,21 +278,20 @@ describe('calculateDiff', () => {
 
     expect(diff.updates).toHaveLength(1)
     expect(diff.updates[0]).toEqual({
-      id: 'update-1',
-      name: 'Updated Name',
+      name: 'Will Update',
       mode: SessionMode.PLAN,
     })
 
     expect(diff.deletes).toHaveLength(1)
-    expect(diff.deletes[0]).toBe('delete-1')
+    expect(diff.deletes[0]).toBe('Will Delete')
   })
 
   it('does not include unchanged prompts in updates', () => {
     const current: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Same', initialMessage: 'Hello', mode: SessionMode.BUILD },
+      { name: 'Same', initialMessage: 'Hello', mode: SessionMode.BUILD },
     ]
     const edited: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Same', initialMessage: 'Hello', mode: SessionMode.BUILD },
+      { name: 'Same', initialMessage: 'Hello', mode: SessionMode.BUILD },
     ]
 
     const diff = calculateDiff(current, edited)
@@ -317,10 +303,10 @@ describe('calculateDiff', () => {
 
   it('detects changes in initialMessage', () => {
     const current: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Same', initialMessage: 'Old', mode: SessionMode.BUILD },
+      { name: 'Same', initialMessage: 'Old', mode: SessionMode.BUILD },
     ]
     const edited: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Same', initialMessage: 'New', mode: SessionMode.BUILD },
+      { name: 'Same', initialMessage: 'New', mode: SessionMode.BUILD },
     ]
 
     const diff = calculateDiff(current, edited)
@@ -331,9 +317,9 @@ describe('calculateDiff', () => {
 
   it('handles null vs undefined initialMessage', () => {
     const current: ExportedPrompt[] = [
-      { id: 'prompt-1', name: 'Test', initialMessage: null, mode: SessionMode.BUILD },
+      { name: 'Test', initialMessage: null, mode: SessionMode.BUILD },
     ]
-    const edited: ExportedPrompt[] = [{ id: 'prompt-1', name: 'Test', mode: SessionMode.BUILD }]
+    const edited: ExportedPrompt[] = [{ name: 'Test', mode: SessionMode.BUILD }]
 
     const diff = calculateDiff(current, edited)
 
@@ -344,7 +330,6 @@ describe('calculateDiff', () => {
   it('allows updates to Issue Agent Prompts', () => {
     const current: ExportedPrompt[] = [
       {
-        id: 'issue-prompt-1',
         name: 'Issue Modify',
         initialMessage: 'Old Message',
         mode: SessionMode.BUILD,
@@ -353,7 +338,6 @@ describe('calculateDiff', () => {
     ]
     const edited: ExportedPrompt[] = [
       {
-        id: 'issue-prompt-1',
         name: 'Issue Modify',
         initialMessage: 'New Message',
         mode: SessionMode.BUILD,

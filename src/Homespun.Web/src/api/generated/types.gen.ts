@@ -17,7 +17,6 @@ export type AgentAlreadyRunningResponse = {
 }
 
 export type AgentPrompt = {
-  id?: string | null
   name?: string | null
   initialMessage?: string | null
   mode?: SessionMode
@@ -286,7 +285,7 @@ export type CreateIssuesAgentSessionRequest = {
   model?: string | null
   selectedIssueId?: string | null
   userInstructions?: string | null
-  promptId?: string | null
+  promptName?: string | null
 }
 
 export type CreateIssuesAgentSessionResponse = {
@@ -306,7 +305,7 @@ export type CreateNotificationRequest = {
 }
 
 export type CreateOverrideRequest = {
-  globalPromptId: string | null
+  globalPromptName: string | null
   projectId: string | null
   initialMessage?: string | null
 }
@@ -954,7 +953,7 @@ export type RunAgentAcceptedResponse = {
 
 export type RunAgentRequest = {
   projectId: string | null
-  promptId: string | null
+  promptName: string | null
   model?: string | null
   baseBranch?: string | null
   userInstructions?: string | null
@@ -1170,7 +1169,6 @@ export type ToolResultData = {
 }
 
 export type UpdateAgentPromptRequest = {
-  name: string | null
   initialMessage?: string | null
   mode?: SessionMode
   category?: PromptCategory
@@ -1365,7 +1363,7 @@ export type WorkflowStep = {
   name: string | null
   stepType?: WorkflowStepType
   prompt?: string | null
-  promptId?: string | null
+  promptName?: string | null
   sessionMode?: SessionMode
   onSuccess?: StepTransition
   onFailure?: StepTransition
@@ -1539,6 +1537,15 @@ export type PostApiAgentPromptsData = {
   url: '/api/agent-prompts'
 }
 
+export type PostApiAgentPromptsErrors = {
+  /**
+   * Conflict
+   */
+  409: ProblemDetails
+}
+
+export type PostApiAgentPromptsError = PostApiAgentPromptsErrors[keyof PostApiAgentPromptsErrors]
+
 export type PostApiAgentPromptsResponses = {
   /**
    * Created
@@ -1549,92 +1556,98 @@ export type PostApiAgentPromptsResponses = {
 export type PostApiAgentPromptsResponse =
   PostApiAgentPromptsResponses[keyof PostApiAgentPromptsResponses]
 
-export type DeleteApiAgentPromptsByIdData = {
+export type DeleteApiAgentPromptsByNameByNameData = {
   body?: never
   path: {
-    id: string
+    name: string
   }
-  query?: never
-  url: '/api/agent-prompts/{id}'
+  query?: {
+    projectId?: string
+  }
+  url: '/api/agent-prompts/by-name/{name}'
 }
 
-export type DeleteApiAgentPromptsByIdErrors = {
+export type DeleteApiAgentPromptsByNameByNameErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type DeleteApiAgentPromptsByIdError =
-  DeleteApiAgentPromptsByIdErrors[keyof DeleteApiAgentPromptsByIdErrors]
+export type DeleteApiAgentPromptsByNameByNameError =
+  DeleteApiAgentPromptsByNameByNameErrors[keyof DeleteApiAgentPromptsByNameByNameErrors]
 
-export type DeleteApiAgentPromptsByIdResponses = {
+export type DeleteApiAgentPromptsByNameByNameResponses = {
   /**
    * No Content
    */
   204: void
 }
 
-export type DeleteApiAgentPromptsByIdResponse =
-  DeleteApiAgentPromptsByIdResponses[keyof DeleteApiAgentPromptsByIdResponses]
+export type DeleteApiAgentPromptsByNameByNameResponse =
+  DeleteApiAgentPromptsByNameByNameResponses[keyof DeleteApiAgentPromptsByNameByNameResponses]
 
-export type GetApiAgentPromptsByIdData = {
+export type GetApiAgentPromptsByNameByNameData = {
   body?: never
   path: {
-    id: string
+    name: string
   }
-  query?: never
-  url: '/api/agent-prompts/{id}'
+  query?: {
+    projectId?: string
+  }
+  url: '/api/agent-prompts/by-name/{name}'
 }
 
-export type GetApiAgentPromptsByIdErrors = {
+export type GetApiAgentPromptsByNameByNameErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type GetApiAgentPromptsByIdError =
-  GetApiAgentPromptsByIdErrors[keyof GetApiAgentPromptsByIdErrors]
+export type GetApiAgentPromptsByNameByNameError =
+  GetApiAgentPromptsByNameByNameErrors[keyof GetApiAgentPromptsByNameByNameErrors]
 
-export type GetApiAgentPromptsByIdResponses = {
+export type GetApiAgentPromptsByNameByNameResponses = {
   /**
    * OK
    */
   200: AgentPrompt
 }
 
-export type GetApiAgentPromptsByIdResponse =
-  GetApiAgentPromptsByIdResponses[keyof GetApiAgentPromptsByIdResponses]
+export type GetApiAgentPromptsByNameByNameResponse =
+  GetApiAgentPromptsByNameByNameResponses[keyof GetApiAgentPromptsByNameByNameResponses]
 
-export type PutApiAgentPromptsByIdData = {
+export type PutApiAgentPromptsByNameByNameData = {
   body?: UpdateAgentPromptRequest
   path: {
-    id: string
+    name: string
   }
-  query?: never
-  url: '/api/agent-prompts/{id}'
+  query?: {
+    projectId?: string
+  }
+  url: '/api/agent-prompts/by-name/{name}'
 }
 
-export type PutApiAgentPromptsByIdErrors = {
+export type PutApiAgentPromptsByNameByNameErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type PutApiAgentPromptsByIdError =
-  PutApiAgentPromptsByIdErrors[keyof PutApiAgentPromptsByIdErrors]
+export type PutApiAgentPromptsByNameByNameError =
+  PutApiAgentPromptsByNameByNameErrors[keyof PutApiAgentPromptsByNameByNameErrors]
 
-export type PutApiAgentPromptsByIdResponses = {
+export type PutApiAgentPromptsByNameByNameResponses = {
   /**
    * OK
    */
   200: AgentPrompt
 }
 
-export type PutApiAgentPromptsByIdResponse =
-  PutApiAgentPromptsByIdResponses[keyof PutApiAgentPromptsByIdResponses]
+export type PutApiAgentPromptsByNameByNameResponse =
+  PutApiAgentPromptsByNameByNameResponses[keyof PutApiAgentPromptsByNameByNameResponses]
 
 export type GetApiAgentPromptsProjectByProjectIdData = {
   body?: never
@@ -1779,6 +1792,10 @@ export type PostApiAgentPromptsCreateOverrideErrors = {
    * Not Found
    */
   404: ProblemDetails
+  /**
+   * Conflict
+   */
+  409: ProblemDetails
 }
 
 export type PostApiAgentPromptsCreateOverrideError =
@@ -1794,16 +1811,18 @@ export type PostApiAgentPromptsCreateOverrideResponses = {
 export type PostApiAgentPromptsCreateOverrideResponse =
   PostApiAgentPromptsCreateOverrideResponses[keyof PostApiAgentPromptsCreateOverrideResponses]
 
-export type DeleteApiAgentPromptsByIdOverrideData = {
+export type DeleteApiAgentPromptsByNameByNameOverrideData = {
   body?: never
   path: {
-    id: string
+    name: string
   }
-  query?: never
-  url: '/api/agent-prompts/{id}/override'
+  query?: {
+    projectId?: string
+  }
+  url: '/api/agent-prompts/by-name/{name}/override'
 }
 
-export type DeleteApiAgentPromptsByIdOverrideErrors = {
+export type DeleteApiAgentPromptsByNameByNameOverrideErrors = {
   /**
    * Bad Request
    */
@@ -1814,18 +1833,18 @@ export type DeleteApiAgentPromptsByIdOverrideErrors = {
   404: ProblemDetails
 }
 
-export type DeleteApiAgentPromptsByIdOverrideError =
-  DeleteApiAgentPromptsByIdOverrideErrors[keyof DeleteApiAgentPromptsByIdOverrideErrors]
+export type DeleteApiAgentPromptsByNameByNameOverrideError =
+  DeleteApiAgentPromptsByNameByNameOverrideErrors[keyof DeleteApiAgentPromptsByNameByNameOverrideErrors]
 
-export type DeleteApiAgentPromptsByIdOverrideResponses = {
+export type DeleteApiAgentPromptsByNameByNameOverrideResponses = {
   /**
    * OK
    */
   200: AgentPrompt
 }
 
-export type DeleteApiAgentPromptsByIdOverrideResponse =
-  DeleteApiAgentPromptsByIdOverrideResponses[keyof DeleteApiAgentPromptsByIdOverrideResponses]
+export type DeleteApiAgentPromptsByNameByNameOverrideResponse =
+  DeleteApiAgentPromptsByNameByNameOverrideResponses[keyof DeleteApiAgentPromptsByNameByNameOverrideResponses]
 
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch

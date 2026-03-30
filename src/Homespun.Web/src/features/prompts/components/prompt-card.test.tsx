@@ -6,7 +6,6 @@ import type { AgentPrompt } from '@/api/generated/types.gen'
 import { SessionMode } from '@/api/generated/types.gen'
 
 const mockPrompt: AgentPrompt = {
-  id: 'prompt-1',
   name: 'Test Prompt',
   initialMessage: 'This is a test system prompt with some content.',
   mode: SessionMode.BUILD,
@@ -74,7 +73,7 @@ describe('PromptCard', () => {
     // Confirm deletion
     await user.click(screen.getByRole('button', { name: /^Delete$/i }))
 
-    expect(onDelete).toHaveBeenCalledWith('prompt-1')
+    expect(onDelete).toHaveBeenCalledWith('Test Prompt')
   })
 
   it('truncates long content preview', () => {
@@ -229,7 +228,7 @@ describe('PromptCard', () => {
     // Confirm removal
     await user.click(screen.getByRole('button', { name: /^Remove$/i }))
 
-    expect(onRemoveOverride).toHaveBeenCalledWith('prompt-1')
+    expect(onRemoveOverride).toHaveBeenCalledWith('Test Prompt')
   })
 
   it('closes Remove override dialog when cancelled', async () => {

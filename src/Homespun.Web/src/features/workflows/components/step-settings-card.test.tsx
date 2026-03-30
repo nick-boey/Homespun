@@ -26,7 +26,7 @@ const mockStep: WorkflowStep = {
   name: 'Build Step',
   stepType: 'agent',
   prompt: 'Build the project',
-  promptId: null,
+  promptName: null,
   sessionMode: 'build',
   onSuccess: { type: 'nextStep' },
   onFailure: { type: 'retry' },
@@ -42,8 +42,8 @@ const mockSteps: WorkflowStep[] = [
 ]
 
 const mockPrompts: AgentPrompt[] = [
-  { id: 'prompt-1', name: 'Code Review', initialMessage: 'Review the code', mode: 'plan' },
-  { id: 'prompt-2', name: 'Build Project', initialMessage: 'Build it', mode: 'build' },
+  { name: 'Code Review', initialMessage: 'Review the code', mode: 'plan' },
+  { name: 'Build Project', initialMessage: 'Build it', mode: 'build' },
 ]
 
 function createWrapper() {
@@ -194,7 +194,7 @@ describe('StepSettingsCard', () => {
     const user = userEvent.setup()
     render(<StepSettingsCard {...defaultProps} />, { wrapper: createWrapper() })
 
-    // Initially shows inline prompt (step has prompt, no promptId)
+    // Initially shows inline prompt (step has prompt, no promptName)
     expect(screen.getByTestId('prompt-textarea')).toBeInTheDocument()
 
     // Switch to template mode
@@ -210,7 +210,7 @@ describe('StepSettingsCard', () => {
     const step: WorkflowStep = {
       ...mockStep,
       prompt: null,
-      promptId: 'prompt-1',
+      promptName: 'Code Review',
     }
     render(<StepSettingsCard {...defaultProps} step={step} />, {
       wrapper: createWrapper(),

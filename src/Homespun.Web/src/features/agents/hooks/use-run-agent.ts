@@ -8,8 +8,8 @@ export interface RunAgentParams {
   issueId: string
   /** The project ID */
   projectId: string
-  /** The agent prompt ID to use, null for None */
-  promptId: string | null
+  /** The agent prompt name to use, null for None */
+  promptName: string | null
   /** The Claude model to use (e.g., "sonnet") */
   model?: string
   /** Base branch to create the working branch from */
@@ -75,7 +75,7 @@ export function useRunAgent() {
         path: { issueId: params.issueId },
         body: {
           projectId: params.projectId,
-          promptId: params.promptId,
+          promptName: params.promptName,
           model: params.model,
           baseBranch: params.baseBranch,
           userInstructions: params.userInstructions,

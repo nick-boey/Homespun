@@ -62,13 +62,11 @@ function createWrapper() {
 
 const mockTaskPrompts: AgentPrompt[] = [
   {
-    id: 'prompt-1',
     name: 'Build Feature',
     initialMessage: 'Build the feature for {{title}}',
     mode: SessionMode.BUILD,
   },
   {
-    id: 'prompt-2',
     name: 'Plan Task',
     initialMessage: 'Create a plan',
     mode: SessionMode.PLAN,
@@ -77,14 +75,12 @@ const mockTaskPrompts: AgentPrompt[] = [
 
 const mockIssuePrompts: AgentPrompt[] = [
   {
-    id: 'issue-prompt-1',
     name: 'Default Prompt',
     initialMessage: 'Work on issues',
     mode: SessionMode.BUILD,
     isOverride: false,
   },
   {
-    id: 'issue-prompt-2',
     name: 'Plan Prompt',
     initialMessage: 'Plan the issues',
     mode: SessionMode.PLAN,
@@ -256,7 +252,7 @@ describe('RunAgentDialog', () => {
           path: { issueId: 'issue-456' },
           body: expect.objectContaining({
             projectId: 'project-123',
-            promptId: 'prompt-1',
+            promptName: 'Build Feature',
           }),
         })
       })

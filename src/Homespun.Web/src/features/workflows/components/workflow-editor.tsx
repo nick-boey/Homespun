@@ -34,7 +34,7 @@ function createDefaultStep(type: WorkflowStep['stepType'] = 'agent'): WorkflowSt
     name: 'New Step',
     stepType: type,
     prompt: null,
-    promptId: null,
+    promptName: null,
     sessionMode: 'build',
     onSuccess: { type: 'nextStep' },
     onFailure: { type: 'exit' },

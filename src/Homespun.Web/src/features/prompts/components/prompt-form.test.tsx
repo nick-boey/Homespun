@@ -16,7 +16,6 @@ describe('PromptForm', () => {
 
   it('populates form with existing prompt data', () => {
     const existingPrompt: AgentPrompt = {
-      id: 'prompt-1',
       name: 'Existing Prompt',
       initialMessage: 'Existing content',
       mode: SessionMode.PLAN,

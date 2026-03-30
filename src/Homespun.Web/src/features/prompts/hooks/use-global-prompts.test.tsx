@@ -34,7 +34,6 @@ describe('useGlobalPrompts', () => {
   it('fetches all global prompts', async () => {
     const mockPrompts: AgentPrompt[] = [
       {
-        id: '1',
         name: 'Global Prompt 1',
         initialMessage: 'Test message',
         mode: SessionMode.PLAN,
@@ -43,7 +42,6 @@ describe('useGlobalPrompts', () => {
         updatedAt: new Date().toISOString(),
       },
       {
-        id: '2',
         name: 'Project Prompt',
         initialMessage: 'Project message',
         mode: SessionMode.BUILD,
@@ -52,7 +50,6 @@ describe('useGlobalPrompts', () => {
         updatedAt: new Date().toISOString(),
       },
       {
-        id: '3',
         name: 'Global Prompt 2',
         initialMessage: 'Another message',
         mode: SessionMode.PLAN,

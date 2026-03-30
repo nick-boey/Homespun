@@ -5,7 +5,6 @@ import type { AgentPrompt } from '@/api/generated/types.gen'
  * Exported prompt format - what we serialize to JSON for editing
  */
 export type ExportedPrompt = {
-  id?: string | null
   name: string | null
   initialMessage?: string | null
   mode: SessionMode
@@ -23,8 +22,8 @@ export type ParseResult =
  * Changes calculated between current and edited prompts
  */
 export type PromptChanges = {
-  creates: Omit<ExportedPrompt, 'id'>[]
-  updates: (ExportedPrompt & { id: string })[]
+  creates: ExportedPrompt[]
+  updates: (ExportedPrompt & { name: string })[]
   deletes: string[]
 }
 
@@ -38,7 +37,6 @@ const VALID_SESSION_TYPES = Object.values(SessionType)
 export function serializePrompts(prompts: AgentPrompt[]): string {
   const exported: ExportedPrompt[] = prompts.map((prompt) => {
     const result: ExportedPrompt = {
-      id: prompt.id,
       name: prompt.name ?? null,
       initialMessage: prompt.initialMessage,
       mode: prompt.mode ?? SessionMode.BUILD,
@@ -115,10 +113,6 @@ export function parsePrompts(json: string): ParseResult {
       mode: obj.mode as SessionMode,
     }
 
-    if (obj.id !== undefined) {
-      prompt.id = obj.id as string | null
-    }
-
     if (obj.initialMessage !== undefined) {
       prompt.initialMessage = obj.initialMessage as string | null
     }
@@ -168,54 +162,52 @@ function promptsEqual(a: ExportedPrompt, b: ExportedPrompt): boolean {
  * Note: Issue Agent Prompts (with sessionType) cannot be deleted.
  */
 export function calculateDiff(current: ExportedPrompt[], edited: ExportedPrompt[]): PromptChanges {
-  const creates: Omit<ExportedPrompt, 'id'>[] = []
-  const updates: (ExportedPrompt & { id: string })[] = []
+  const creates: ExportedPrompt[] = []
+  const updates: (ExportedPrompt & { name: string })[] = []
   const deletes: string[] = []
 
-  // Build a map of current prompts by id
-  const currentById = new Map<string, ExportedPrompt>()
+  // Build a map of current prompts by name
+  const currentByName = new Map<string, ExportedPrompt>()
   for (const prompt of current) {
-    if (prompt.id) {
-      currentById.set(prompt.id, prompt)
+    if (prompt.name) {
+      currentByName.set(prompt.name, prompt)
     }
   }
 
-  // Build a set of edited prompt ids
-  const editedIds = new Set<string>()
+  // Build a set of edited prompt names
+  const editedNames = new Set<string>()
   for (const prompt of edited) {
-    if (prompt.id) {
-      editedIds.add(prompt.id)
+    if (prompt.name) {
+      editedNames.add(prompt.name)
     }
   }
 
   // Process edited prompts
   for (const prompt of edited) {
-    if (!prompt.id) {
-      // New prompt (no id)
-      const { ...createData } = prompt
-      delete (createData as { id?: unknown }).id
-      creates.push(createData)
-    } else {
-      // Existing prompt - check if changed
-      const currentPrompt = currentById.get(prompt.id)
-      if (currentPrompt && !promptsEqual(currentPrompt, prompt)) {
-        updates.push({
-          id: prompt.id,
-          name: prompt.name,
-          initialMessage: prompt.initialMessage,
-          mode: prompt.mode,
-          sessionType: prompt.sessionType,
-        })
-      }
+    if (!prompt.name) {
+      continue
+    }
+    const currentPrompt = currentByName.get(prompt.name)
+    if (!currentPrompt) {
+      // New prompt (name not in current)
+      creates.push(prompt)
+    } else if (!promptsEqual(currentPrompt, prompt)) {
+      // Existing prompt - changed
+      updates.push({
+        name: prompt.name,
+        initialMessage: prompt.initialMessage,
+        mode: prompt.mode,
+        sessionType: prompt.sessionType,
+      })
     }
   }
 
   // Find deleted prompts (in current but not in edited)
   for (const prompt of current) {
-    if (prompt.id && !editedIds.has(prompt.id)) {
+    if (prompt.name && !editedNames.has(prompt.name)) {
       // Skip Issue Agent Prompts - they cannot be deleted
       if (!isIssueAgentPrompt(prompt)) {
-        deletes.push(prompt.id)
+        deletes.push(prompt.name)
       }
     }
   }

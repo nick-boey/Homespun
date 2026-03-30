@@ -200,7 +200,7 @@ function TaskAgentTabContent({
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(TASK_MODEL_STORAGE_KEY) ?? TASK_MODELS[0].value
   })
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(() => {
+  const [selectedPromptName, setSelectedPromptName] = useState<string>(() => {
     return localStorage.getItem(TASK_PROMPT_STORAGE_KEY) ?? ''
   })
   const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {
@@ -227,10 +227,10 @@ function TaskAgentTabContent({
   }, [selectedModel])
 
   useEffect(() => {
-    if (selectedPromptId) {
-      localStorage.setItem(TASK_PROMPT_STORAGE_KEY, selectedPromptId)
+    if (selectedPromptName) {
+      localStorage.setItem(TASK_PROMPT_STORAGE_KEY, selectedPromptName)
     }
-  }, [selectedPromptId])
+  }, [selectedPromptName])
 
   useEffect(() => {
     if (selectedBaseBranch) {
@@ -238,29 +238,29 @@ function TaskAgentTabContent({
     }
   }, [selectedBaseBranch])
 
-  // Compute effective prompt ID
-  const effectivePromptId = useMemo(() => {
-    if (selectedPromptId === NONE_PROMPT_ID) {
+  // Compute effective prompt name
+  const effectivePromptName = useMemo(() => {
+    if (selectedPromptName === NONE_PROMPT_ID) {
       return NONE_PROMPT_ID
     }
     if (!prompts || prompts.length === 0) {
       return ''
     }
-    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
     if (selectedExists) {
-      return selectedPromptId
+      return selectedPromptName
     }
-    return prompts[0].id ?? ''
-  }, [prompts, selectedPromptId])
+    return prompts[0].name ?? ''
+  }, [prompts, selectedPromptName])
 
   // Populate textarea when prompt changes (render-time reconciliation)
-  const [lastTaskPromptId, setLastTaskPromptId] = useState(effectivePromptId)
-  if (effectivePromptId !== lastTaskPromptId) {
-    setLastTaskPromptId(effectivePromptId)
-    if (effectivePromptId === NONE_PROMPT_ID) {
+  const [lastTaskPromptName, setLastTaskPromptName] = useState(effectivePromptName)
+  if (effectivePromptName !== lastTaskPromptName) {
+    setLastTaskPromptName(effectivePromptName)
+    if (effectivePromptName === NONE_PROMPT_ID) {
       setUserInstructions('')
     } else {
-      const prompt = prompts?.find((p) => p.id === effectivePromptId)
+      const prompt = prompts?.find((p) => p.name === effectivePromptName)
       if (prompt?.initialMessage) {
         setUserInstructions(renderPromptTemplate(prompt.initialMessage))
       }
@@ -275,7 +275,7 @@ function TaskAgentTabContent({
       const result = await runAgent.mutateAsync({
         issueId,
         projectId,
-        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
+        promptName: effectivePromptName === NONE_PROMPT_ID ? null : effectivePromptName,
         model: selectedModel,
         baseBranch: effectiveBaseBranch || undefined,
         userInstructions: userInstructions.trim() || undefined,
@@ -294,7 +294,7 @@ function TaskAgentTabContent({
     runAgent,
     issueId,
     projectId,
-    effectivePromptId,
+    effectivePromptName,
     selectedModel,
     effectiveBaseBranch,
     userInstructions,
@@ -313,7 +313,7 @@ function TaskAgentTabContent({
 
   // Combined loading states
   const isLoading = projectLoading || promptsLoading || runAgent.isPending
-  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptId
+  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptName
 
   return (
     <div className="space-y-4 py-4">
@@ -370,8 +370,8 @@ function TaskAgentTabContent({
             {/* Prompt selector */}
             <PromptSelector
               prompts={prompts}
-              effectivePromptId={effectivePromptId}
-              onValueChange={setSelectedPromptId}
+              effectivePromptName={effectivePromptName}
+              onValueChange={setSelectedPromptName}
               disabled={isLoading || !prompts?.length}
               noneLabel="None - Start without prompt (Plan mode)"
             />
@@ -492,7 +492,7 @@ function IssuesAgentTabContent({
   })
 
   // Prompt selection state
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(() => {
+  const [selectedPromptName, setSelectedPromptName] = useState<string>(() => {
     return localStorage.getItem(ISSUES_PROMPT_STORAGE_KEY) ?? ''
   })
 
@@ -506,34 +506,34 @@ function IssuesAgentTabContent({
 
   // Persist prompt selection
   useEffect(() => {
-    if (selectedPromptId) {
-      localStorage.setItem(ISSUES_PROMPT_STORAGE_KEY, selectedPromptId)
+    if (selectedPromptName) {
+      localStorage.setItem(ISSUES_PROMPT_STORAGE_KEY, selectedPromptName)
     }
-  }, [selectedPromptId])
+  }, [selectedPromptName])
 
-  // Compute effective prompt ID
-  const effectivePromptId = useMemo(() => {
-    if (selectedPromptId === NONE_PROMPT_ID) {
+  // Compute effective prompt name
+  const effectivePromptName = useMemo(() => {
+    if (selectedPromptName === NONE_PROMPT_ID) {
       return NONE_PROMPT_ID
     }
     if (!prompts || prompts.length === 0) {
       return NONE_PROMPT_ID
     }
-    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
     if (selectedExists) {
-      return selectedPromptId
+      return selectedPromptName
     }
-    return prompts[0].id ?? ''
-  }, [prompts, selectedPromptId])
+    return prompts[0].name ?? ''
+  }, [prompts, selectedPromptName])
 
   // Populate textarea when prompt changes (render-time reconciliation)
-  const [lastIssuesPromptId, setLastIssuesPromptId] = useState(effectivePromptId)
-  if (effectivePromptId !== lastIssuesPromptId) {
-    setLastIssuesPromptId(effectivePromptId)
-    if (effectivePromptId === NONE_PROMPT_ID) {
+  const [lastIssuesPromptName, setLastIssuesPromptName] = useState(effectivePromptName)
+  if (effectivePromptName !== lastIssuesPromptName) {
+    setLastIssuesPromptName(effectivePromptName)
+    if (effectivePromptName === NONE_PROMPT_ID) {
       setUserInstructions('')
     } else {
-      const prompt = prompts?.find((p) => p.id === effectivePromptId)
+      const prompt = prompts?.find((p) => p.name === effectivePromptName)
       if (prompt?.initialMessage) {
         setUserInstructions(renderPromptTemplate(prompt.initialMessage))
       }
@@ -541,8 +541,8 @@ function IssuesAgentTabContent({
   }
 
   const hasPromptOrInstructions = useMemo(() => {
-    return effectivePromptId !== NONE_PROMPT_ID || userInstructions.trim().length > 0
-  }, [effectivePromptId, userInstructions])
+    return effectivePromptName !== NONE_PROMPT_ID || userInstructions.trim().length > 0
+  }, [effectivePromptName, userInstructions])
 
   const handleStart = useCallback(async () => {
     try {
@@ -551,7 +551,7 @@ function IssuesAgentTabContent({
         model: selectedModel,
         selectedIssueId: selectedIssueId ?? undefined,
         userInstructions: userInstructions.trim() || undefined,
-        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
+        promptName: effectivePromptName === NONE_PROMPT_ID ? null : effectivePromptName,
       })
 
       onSessionCreated?.(result)
@@ -571,7 +571,7 @@ function IssuesAgentTabContent({
     selectedModel,
     selectedIssueId,
     userInstructions,
-    effectivePromptId,
+    effectivePromptName,
     hasPromptOrInstructions,
     onSessionCreated,
     navigate,
@@ -592,8 +592,8 @@ function IssuesAgentTabContent({
           <div className="flex items-center gap-2">
             <PromptSelector
               prompts={prompts}
-              effectivePromptId={effectivePromptId}
-              onValueChange={setSelectedPromptId}
+              effectivePromptName={effectivePromptName}
+              onValueChange={setSelectedPromptName}
               disabled={createSession.isPending}
               noneLabel="None - Start without prompt (Build mode)"
               showMode
@@ -659,7 +659,7 @@ function IssuesAgentTabContent({
 
 interface PromptSelectorProps {
   prompts: AgentPrompt[] | undefined
-  effectivePromptId: string
+  effectivePromptName: string
   onValueChange: (value: string) => void
   disabled: boolean
   noneLabel: string
@@ -668,21 +668,21 @@ interface PromptSelectorProps {
 
 function PromptSelector({
   prompts,
-  effectivePromptId,
+  effectivePromptName,
   onValueChange,
   disabled,
   noneLabel,
   showMode,
 }: PromptSelectorProps) {
   return (
-    <Select value={effectivePromptId} onValueChange={onValueChange} disabled={disabled}>
+    <Select value={effectivePromptName} onValueChange={onValueChange} disabled={disabled}>
       <SelectTrigger className="w-40" aria-label="Select prompt">
         <SelectValue placeholder="Select prompt" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_PROMPT_ID}>{noneLabel}</SelectItem>
         {prompts?.map((prompt) => (
-          <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+          <SelectItem key={prompt.name} value={prompt.name ?? ''}>
             {prompt.name}
             {showMode && prompt.mode ? ` (${prompt.mode})` : ''}
             {prompt.isOverride && ' (project)'}

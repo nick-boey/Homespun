@@ -53,13 +53,11 @@ function createWrapper() {
 
 const mockPrompts: AgentPrompt[] = [
   {
-    id: 'prompt-1',
     name: 'Build Feature',
     initialMessage: 'Build the feature',
     mode: SessionMode.BUILD,
   },
   {
-    id: 'prompt-2',
     name: 'Plan Task',
     initialMessage: 'Create a plan',
     mode: SessionMode.PLAN,
@@ -300,14 +298,12 @@ describe('AgentLauncher', () => {
   it('displays (project) suffix for override prompts in dropdown', async () => {
     const promptsWithOverride: AgentPrompt[] = [
       {
-        id: 'prompt-1',
         name: 'Build Feature',
         initialMessage: 'Build the feature',
         mode: SessionMode.BUILD,
         isOverride: true,
       },
       {
-        id: 'prompt-2',
         name: 'Plan Task',
         initialMessage: 'Create a plan',
         mode: SessionMode.PLAN,

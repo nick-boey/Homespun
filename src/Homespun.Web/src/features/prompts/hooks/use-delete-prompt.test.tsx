@@ -7,7 +7,7 @@ import { globalPromptsQueryKey } from './use-global-prompts'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
-    deleteApiAgentPromptsById: vi.fn(),
+    deleteApiAgentPromptsByNameByName: vi.fn(),
   },
 }))
 
@@ -31,7 +31,7 @@ describe('useDeletePrompt', () => {
   })
 
   it('deletes a prompt successfully', async () => {
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockResolvedValue({
       data: undefined,
     } as never)
 
@@ -41,17 +41,18 @@ describe('useDeletePrompt', () => {
     })
 
     await act(async () => {
-      await result.current.mutateAsync('prompt-1')
+      await result.current.mutateAsync({ name: 'prompt-1', projectId: 'proj-1' })
     })
 
-    expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-1' },
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).toHaveBeenCalledWith({
+      path: { name: 'prompt-1' },
+      query: { projectId: 'proj-1' },
     })
     expect(onSuccess).toHaveBeenCalled()
   })
 
   it('handles API errors', async () => {
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockResolvedValue({
       error: { detail: 'Not found' },
     } as never)
 
@@ -62,7 +63,7 @@ describe('useDeletePrompt', () => {
 
     await act(async () => {
       try {
-        await result.current.mutateAsync('invalid-id')
+        await result.current.mutateAsync({ name: 'invalid-id', projectId: 'proj-1' })
       } catch {
         // Expected to throw
       }
@@ -72,7 +73,7 @@ describe('useDeletePrompt', () => {
   })
 
   it('invalidates global prompts query key when no projectId is provided', async () => {
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockResolvedValue({
       data: undefined,
     } as never)
 
@@ -89,7 +90,7 @@ describe('useDeletePrompt', () => {
     })
 
     await act(async () => {
-      await result.current.mutateAsync('prompt-1')
+      await result.current.mutateAsync({ name: 'prompt-1' })
     })
 
     expect(invalidateSpy).toHaveBeenCalledWith({
