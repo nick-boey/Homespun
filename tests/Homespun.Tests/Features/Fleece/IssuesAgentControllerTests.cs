@@ -415,6 +415,101 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
+    public async Task CreateSession_WithSelectedIssueId_UsesIssueIdAsEntityId()
+    {
+        // Arrange
+        var prompt = new AgentPrompt
+        {
+            Name = "TestPrompt",
+            Mode = SessionMode.Build,
+            Category = PromptCategory.IssueAgent,
+            InitialMessage = "Fix: {{userPrompt}}"
+        };
+
+        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
+            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
+
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptName = "TestPrompt",
+            UserInstructions = "Fix the bug",
+            SelectedIssueId = "abc123"
+        };
+
+        // Act
+        await _controller.CreateSession(request);
+
+        // Assert - entityId should be the SelectedIssueId, not the branch name
+        _sessionServiceMock.Verify(s => s.StartSessionAsync(
+            "abc123", TestProject.Id, It.IsAny<string>(),
+            It.IsAny<SessionMode>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Test]
+    public async Task CreateSession_WithSelectedIssueId_IncludesIssueIdInBranchName()
+    {
+        // Arrange
+        var prompt = new AgentPrompt
+        {
+            Name = "TestPrompt",
+            Mode = SessionMode.Build,
+            Category = PromptCategory.IssueAgent,
+            InitialMessage = "Fix: {{userPrompt}}"
+        };
+
+        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
+            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
+
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptName = "TestPrompt",
+            UserInstructions = "Fix the bug",
+            SelectedIssueId = "abc123"
+        };
+
+        // Act
+        var result = await _controller.CreateSession(request);
+
+        // Assert - branch name should contain the issue ID
+        var created = result.Result as CreatedResult;
+        Assert.That(created, Is.Not.Null);
+        var response = created!.Value as CreateIssuesAgentSessionResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.BranchName, Does.Contain("abc123"));
+    }
+
+    [Test]
+    public async Task CreateSession_WithoutSelectedIssueId_UsesBranchNameAsEntityId()
+    {
+        // Arrange
+        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
+            .Returns(new List<AgentPrompt>());
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentModification))
+            .Returns(new AgentPrompt { InitialMessage = "Fallback template" });
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
+            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
+
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = TestProject.Id,
+            UserInstructions = "Do something"
+        };
+
+        // Act
+        await _controller.CreateSession(request);
+
+        // Assert - entityId should be the branch name (starts with "issues-agent-")
+        _sessionServiceMock.Verify(s => s.StartSessionAsync(
+            It.Is<string>(id => id.StartsWith("issues-agent-") && !id.Contains("abc")),
+            TestProject.Id, It.IsAny<string>(),
+            It.IsAny<SessionMode>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Test]
     public async Task CreateSession_WithoutPromptId_DefaultsToBuildMode()
     {
         // Arrange - no prompts available at all
