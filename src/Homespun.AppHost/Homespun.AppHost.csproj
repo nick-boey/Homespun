@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Aspire AppHost — azd reads this project to generate ACA resources -->
+    <!-- Disable user secrets prompt during azd init -->
+    <UserSecretsId>homespun-apphost</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" Version="13.2.0" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.2.0" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="13.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Homespun.Server\Homespun.Server.csproj" />
+  </ItemGroup>
+
+</Project>

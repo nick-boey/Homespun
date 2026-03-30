@@ -1,0 +1,25 @@
+# Azure Developer CLI (azd) configuration for Homespun
+# Deploys to Azure Container Apps using the Aspire AppHost topology.
+#
+# Usage:
+#   azd init              # Initialize (already done)
+#   azd up                # Provision infrastructure and deploy
+#   azd deploy            # Deploy code changes only
+#   azd down              # Tear down all resources
+#
+# The AppHost project defines the service topology:
+#   - server: ASP.NET Core API (custom Dockerfile)
+#   - worker: TypeScript Hono sidecar (custom Dockerfile)
+#   - web: React frontend (nginx)
+
+name: homespun
+metadata:
+  template: azd-init@1.11.0
+
+# Aspire AppHost drives infrastructure generation.
+# azd reads the AppHost topology and creates ACA resources accordingly.
+services:
+  app:
+    language: dotnet
+    project: ./src/Homespun.AppHost/Homespun.AppHost.csproj
+    host: containerapp
