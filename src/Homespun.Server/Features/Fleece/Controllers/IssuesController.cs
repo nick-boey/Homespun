@@ -203,7 +203,8 @@ public class IssuesController(
                 project.LocalPath,
                 issue.Id,
                 request.ParentIssueId.Trim(),
-                sortOrder: request.ParentSortOrder);
+                siblingIssueId: request.SiblingIssueId?.Trim(),
+                insertBefore: request.InsertBefore);
         }
 
         // If a child issue ID was provided, make the new issue the parent of that child

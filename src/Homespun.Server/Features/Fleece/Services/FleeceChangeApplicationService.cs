@@ -365,7 +365,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 foreach (var parentRef in change.ModifiedIssue.ParentIssues)
                 {
                     await _fleeceService.AddParentAsync(
-                        projectPath, issue.Id, parentRef.ParentIssue, parentRef.SortOrder, cancellationToken);
+                        projectPath, issue.Id, parentRef.ParentIssue, ct: cancellationToken);
                 }
                 break;
 
@@ -431,7 +431,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
 
             foreach (var parent in parentsToAdd)
             {
-                await _fleeceService.AddParentAsync(projectPath, issueId, parent.ParentIssue, parent.SortOrder, cancellationToken);
+                await _fleeceService.AddParentAsync(projectPath, issueId, parent.ParentIssue, ct: cancellationToken);
             }
         }
     }

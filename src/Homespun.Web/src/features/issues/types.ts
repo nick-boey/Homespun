@@ -73,15 +73,16 @@ export interface PendingNewIssue {
   /** Child ID set when Tab is pressed to make this a parent of the adjacent issue. */
   pendingChildId?: string
   /** Sort order for series parent positioning. */
-  sortOrder?: string
   /** True if created with Shift+O (above current), false for o (below current). */
   isAbove: boolean
   /** Reference issue ID used to determine placement context. */
   referenceIssueId?: string
   /** Inherited parent issue ID from the reference issue's parent (sibling creation). */
   inheritedParentIssueId?: string
-  /** Inherited sort order for the parent relationship. */
-  inheritedParentSortOrder?: string
+  /** Sibling issue ID for positioning within the parent's children. */
+  siblingIssueId?: string
+  /** If true, insert before the sibling; if false, insert after. */
+  insertBefore?: boolean
 }
 
 /**

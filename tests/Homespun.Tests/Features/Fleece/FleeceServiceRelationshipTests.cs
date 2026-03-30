@@ -59,7 +59,7 @@ public class FleeceServiceRelationshipTests
         // Arrange - create a single issue with a parent (but no siblings)
         var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
         var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
-        await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
 
         // Act
         var result = await _service.GetPriorSiblingAsync(_tempDir, child.Id);
@@ -77,9 +77,9 @@ public class FleeceServiceRelationshipTests
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
         var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
-        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id);
 
         // Act - get the prior sibling of child3
         var result = await _service.GetPriorSiblingAsync(_tempDir, child3.Id);
@@ -97,8 +97,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act - get the prior sibling of child1 (which is first)
         var result = await _service.GetPriorSiblingAsync(_tempDir, child1.Id);
@@ -151,21 +151,21 @@ public class FleeceServiceRelationshipTests
     [Test]
     public async Task GetChildrenAsync_WithChildren_ReturnsSortedList()
     {
-        // Arrange - create a parent with three children in reverse sort order
+        // Arrange - create a parent with three children added in a specific order
         var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
         var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3", IssueType.Task);
 
-        // Add in reverse order to test sorting
-        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        // DependencyService assigns ascending sort orders in insertion order
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id);
 
         // Act
         var result = await _service.GetChildrenAsync(_tempDir, parent.Id);
 
-        // Assert - should be sorted by sortOrder
+        // Assert - should be sorted by sortOrder (insertion order)
         Assert.That(result, Has.Count.EqualTo(3));
         Assert.That(result[0].Id, Is.EqualTo(child1.Id));
         Assert.That(result[1].Id, Is.EqualTo(child2.Id));
@@ -210,8 +210,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Progress)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Set child2 to Progress status
         await _service.UpdateIssueAsync(_tempDir, child2.Id, status: IssueStatus.Progress);
@@ -235,9 +235,9 @@ public class FleeceServiceRelationshipTests
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
         var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3 (Query)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
-        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id);
 
         // Act - check blocking issues for child3
         var result = await _service.GetBlockingIssuesAsync(_tempDir, child3.Id);
@@ -257,8 +257,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Complete)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Query)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Complete child1
         await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Complete);
@@ -279,8 +279,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Complete)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Closed)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Complete/close the children
         await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Complete);
@@ -302,8 +302,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Review)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Query)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Set child1 to Review status
         await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Review);
@@ -339,9 +339,9 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child of Parent2", IssueType.Task);
 
         // Set up hierarchy: grandparent -> [parent1, parent2], parent2 -> child1
-        await _service.AddParentAsync(_tempDir, parent1.Id, grandparent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, parent2.Id, grandparent.Id, sortOrder: "b");
-        await _service.AddParentAsync(_tempDir, child1.Id, parent2.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, parent1.Id, grandparent.Id);
+        await _service.AddParentAsync(_tempDir, parent2.Id, grandparent.Id);
+        await _service.AddParentAsync(_tempDir, child1.Id, parent2.Id);
 
         // Act - check blocking issues for parent2
         var result = await _service.GetBlockingIssuesAsync(_tempDir, parent2.Id);
@@ -363,8 +363,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act - check blocking issues for child2 (which has an open prior sibling child1)
         var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
@@ -383,8 +383,8 @@ public class FleeceServiceRelationshipTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act - check blocking issues for child2
         var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
@@ -404,8 +404,8 @@ public class FleeceServiceRelationshipTests
         var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Task);
         var child = await _service.CreateIssueAsync(_tempDir, "Child (Open)", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
 
         // Act - check blocking issues for parent (has an open child)
         var result = await _service.GetBlockingIssuesAsync(_tempDir, parent.Id);
@@ -430,11 +430,11 @@ public class FleeceServiceRelationshipTests
         var target = await _service.CreateIssueAsync(_tempDir, "Target Issue", IssueType.Task);
 
         // target has prior siblings under both parents
-        await _service.AddParentAsync(_tempDir, siblingUnderParallel.Id, parallelParent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, target.Id, parallelParent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, siblingUnderParallel.Id, parallelParent.Id);
+        await _service.AddParentAsync(_tempDir, target.Id, parallelParent.Id);
 
-        await _service.AddParentAsync(_tempDir, siblingUnderSeries.Id, seriesParent.Id, sortOrder: "a");
-        await _service.AddParentAsync(_tempDir, target.Id, seriesParent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, siblingUnderSeries.Id, seriesParent.Id);
+        await _service.AddParentAsync(_tempDir, target.Id, seriesParent.Id);
 
         // Act
         var result = await _service.GetBlockingIssuesAsync(_tempDir, target.Id);

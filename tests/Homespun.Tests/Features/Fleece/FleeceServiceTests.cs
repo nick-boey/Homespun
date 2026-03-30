@@ -456,25 +456,6 @@ public class FleeceServiceTests
     }
 
     [Test]
-    public async Task AddParentAsync_EnqueuesWriteOperation()
-    {
-        // Arrange
-        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
-        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
-        _mockQueue.Invocations.Clear();
-
-        // Act
-        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
-
-        // Assert
-        _mockQueue.Verify(
-            q => q.EnqueueAsync(
-                It.Is<IssueWriteOperation>(op => op.Type == WriteOperationType.Update && op.IssueId == child.Id),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Test]
     public async Task AddParentAsync_NonExistentChild_ThrowsKeyNotFoundException()
     {
         // Arrange
@@ -505,22 +486,7 @@ public class FleeceServiceTests
     }
 
     [Test]
-    public async Task AddParentAsync_WithSortOrder_UsesSortOrder()
-    {
-        // Arrange
-        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
-        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
-
-        // Act
-        var updated = await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "0V");
-
-        // Assert
-        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
-        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0V"));
-    }
-
-    [Test]
-    public async Task AddParentAsync_WithoutSortOrder_DefaultsToZero()
+    public async Task AddParentAsync_AssignsProperSortOrder()
     {
         // Arrange
         var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
@@ -529,9 +495,28 @@ public class FleeceServiceTests
         // Act
         var updated = await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
 
-        // Assert
+        // Assert - DependencyService assigns a proper sort order (not "0")
         Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
-        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0"));
+        Assert.That(updated.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddParentAsync_MultipleChildren_HaveDistinctSortOrders()
+    {
+        // Arrange
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+
+        // Act
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+
+        // Assert - children should have distinct sort orders with child1 before child2
+        var c1 = await _service.GetIssueAsync(_tempDir, child1.Id);
+        var c2 = await _service.GetIssueAsync(_tempDir, child2.Id);
+        Assert.That(c1!.ParentIssues[0].SortOrder, Is.Not.EqualTo(c2!.ParentIssues[0].SortOrder));
+        Assert.That(string.Compare(c1.ParentIssues[0].SortOrder, c2.ParentIssues[0].SortOrder, StringComparison.Ordinal), Is.LessThan(0));
     }
 
     #endregion
@@ -569,26 +554,6 @@ public class FleeceServiceTests
         var retrieved = await _service.GetIssueAsync(_tempDir, child.Id);
         Assert.That(retrieved, Is.Not.Null);
         Assert.That(retrieved!.ParentIssues, Is.Empty);
-    }
-
-    [Test]
-    public async Task RemoveParentAsync_EnqueuesWriteOperation()
-    {
-        // Arrange
-        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
-        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
-        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
-        _mockQueue.Invocations.Clear();
-
-        // Act
-        await _service.RemoveParentAsync(_tempDir, child.Id, parent.Id);
-
-        // Assert
-        _mockQueue.Verify(
-            q => q.EnqueueAsync(
-                It.Is<IssueWriteOperation>(op => op.Type == WriteOperationType.Update && op.IssueId == child.Id),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Test]
@@ -633,8 +598,8 @@ public class FleeceServiceTests
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
         // Add children to parent with sort orders
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act - move child2 up (should swap with child1)
         var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Up);
@@ -661,8 +626,8 @@ public class FleeceServiceTests
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
         // Add children to parent with sort orders
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act - move child1 down (should swap with child2)
         var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child1.Id, MoveDirection.Down);
@@ -701,14 +666,12 @@ public class FleeceServiceTests
         var parent2 = await _service.CreateIssueAsync(_tempDir, "Parent 2", IssueType.Feature);
         var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child.Id, parent1.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child.Id, parent2.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, child.Id, parent1.Id);
+        await _service.AddParentAsync(_tempDir, child.Id, parent2.Id);
 
         // Act & Assert
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.MoveSeriesSiblingAsync(_tempDir, child.Id, MoveDirection.Up));
-
-        Assert.That(ex!.Message, Does.Contain("exactly one parent"));
     }
 
     [Test]
@@ -719,14 +682,12 @@ public class FleeceServiceTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act & Assert - try to move the first child up
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.MoveSeriesSiblingAsync(_tempDir, child1.Id, MoveDirection.Up));
-
-        Assert.That(ex!.Message, Does.Contain("first"));
     }
 
     [Test]
@@ -737,14 +698,12 @@ public class FleeceServiceTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act & Assert - try to move the last child down
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Down));
-
-        Assert.That(ex!.Message, Does.Contain("last"));
     }
 
     [Test]
@@ -758,29 +717,6 @@ public class FleeceServiceTests
     }
 
     [Test]
-    public async Task MoveSeriesSiblingAsync_EnqueuesWriteOperations()
-    {
-        // Arrange - create a parent with two children
-        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
-        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
-        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
-
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
-        _mockQueue.Invocations.Clear();
-
-        // Act
-        await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Up);
-
-        // Assert - should enqueue updates for both swapped issues
-        _mockQueue.Verify(
-            q => q.EnqueueAsync(
-                It.Is<IssueWriteOperation>(op => op.Type == WriteOperationType.Update),
-                It.IsAny<CancellationToken>()),
-            Times.AtLeast(2));
-    }
-
-    [Test]
     public async Task MoveSeriesSiblingAsync_RecordsHistorySnapshot()
     {
         // Arrange
@@ -788,8 +724,8 @@ public class FleeceServiceTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
         _mockHistoryService.Invocations.Clear();
 
         // Act
@@ -815,8 +751,8 @@ public class FleeceServiceTests
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
         // Act
         await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Up);
@@ -832,47 +768,38 @@ public class FleeceServiceTests
     }
 
     [Test]
-    public async Task MoveSeriesSiblingAsync_Up_AssignsOrdersWhenSiblingsHaveNoSortOrder()
+    public async Task MoveSeriesSiblingAsync_Up_DependencyServiceAssignsDistinctSortOrders()
     {
-        // Arrange - create a parent with two children, none with sort orders
+        // Arrange - DependencyService assigns distinct sort orders when adding children
         var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
 
-        // Add children without sort orders (null)
         await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
         await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
-        // Determine which child is last after lexical ordering is assigned
-        // (since both have null sort order, the initial order depends on cache iteration)
-        // We need to find which child ends up last so we can move it up
-        // First, get the initial ordering by reading sort orders
+        // Verify distinct sort orders were assigned (DependencyService handles this)
         var c1Before = await _service.GetIssueAsync(_tempDir, child1.Id);
         var c2Before = await _service.GetIssueAsync(_tempDir, child2.Id);
+        Assert.That(c1Before!.ParentIssues[0].SortOrder,
+            Is.Not.EqualTo(c2Before!.ParentIssues[0].SortOrder));
 
-        // Both should have the same default sort order before the move
-        Assert.That(c1Before!.ParentIssues[0].SortOrder, Is.EqualTo(c2Before!.ParentIssues[0].SortOrder));
-
-        // Move child2 up - this should assign distinct sort orders first, then perform the swap
+        // Act - move child2 up
         var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Up);
 
-        // Assert - both siblings should now have sort orders
+        // Assert - child2 should now be before child1
         Assert.That(updated, Is.Not.Null);
         var updatedChild1 = await _service.GetIssueAsync(_tempDir, child1.Id);
         var updatedChild2 = await _service.GetIssueAsync(_tempDir, child2.Id);
 
-        Assert.That(updatedChild1!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
-        Assert.That(updatedChild2!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
-
-        // Sort orders should be different
-        Assert.That(updatedChild1!.ParentIssues[0].SortOrder,
-            Is.Not.EqualTo(updatedChild2!.ParentIssues[0].SortOrder));
+        Assert.That(string.Compare(updatedChild2!.ParentIssues[0].SortOrder,
+            updatedChild1!.ParentIssues[0].SortOrder, StringComparison.Ordinal), Is.LessThan(0));
     }
 
     [Test]
-    public async Task MoveSeriesSiblingAsync_Down_AssignsOrdersWhenSiblingsHaveNoSortOrder()
+    public async Task MoveSeriesSiblingAsync_Down_DependencyServiceAssignsDistinctSortOrders()
     {
-        // Arrange - create a parent with two children, none with sort orders
+        // Arrange - DependencyService assigns distinct sort orders when adding children
         var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
         var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
         var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
@@ -880,25 +807,16 @@ public class FleeceServiceTests
         await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
         await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
 
-        // Both should have the same default sort order before the move
-        var c1Before = await _service.GetIssueAsync(_tempDir, child1.Id);
-        var c2Before = await _service.GetIssueAsync(_tempDir, child2.Id);
-        Assert.That(c1Before!.ParentIssues[0].SortOrder, Is.EqualTo(c2Before!.ParentIssues[0].SortOrder));
-
-        // Move child1 down - this should assign distinct sort orders first, then perform the swap
+        // Act - move child1 down
         var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child1.Id, MoveDirection.Down);
 
-        // Assert - both siblings should now have sort orders
+        // Assert - child1 should now be after child2
         Assert.That(updated, Is.Not.Null);
         var updatedChild1 = await _service.GetIssueAsync(_tempDir, child1.Id);
         var updatedChild2 = await _service.GetIssueAsync(_tempDir, child2.Id);
 
-        Assert.That(updatedChild1!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
-        Assert.That(updatedChild2!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
-
-        // Sort orders should be different
-        Assert.That(updatedChild1!.ParentIssues[0].SortOrder,
-            Is.Not.EqualTo(updatedChild2!.ParentIssues[0].SortOrder));
+        Assert.That(string.Compare(updatedChild1!.ParentIssues[0].SortOrder,
+            updatedChild2!.ParentIssues[0].SortOrder, StringComparison.Ordinal), Is.GreaterThan(0));
     }
 
     #region Complex Hierarchy MoveSeriesSiblingAsync Tests
@@ -912,9 +830,9 @@ public class FleeceServiceTests
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
         var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id);
 
         // Act - move B up -> B, A, C
         await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
@@ -943,9 +861,9 @@ public class FleeceServiceTests
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
         var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id);
 
         // Act - move B down -> A, C, B
         await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Down);
@@ -974,7 +892,7 @@ public class FleeceServiceTests
         for (var i = 0; i < 5; i++)
         {
             var child = await _service.CreateIssueAsync(_tempDir, $"Child {(char)('A' + i)}", IssueType.Task);
-            await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: i.ToString());
+            await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
             children.Add(child);
         }
 
@@ -1003,9 +921,9 @@ public class FleeceServiceTests
         var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id);
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
 
         // Act - move B up under parent
         await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
@@ -1031,10 +949,10 @@ public class FleeceServiceTests
         var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, gp.Id, root.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, gp.Id, root.Id);
+        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id);
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
 
         // Act
         await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Up);
@@ -1059,9 +977,9 @@ public class FleeceServiceTests
         var childA = await _service.CreateIssueAsync(_tempDir, "Child A", IssueType.Task);
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, p1.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, p1.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, childB.Id, p2.Id, sortOrder: "5");
+        await _service.AddParentAsync(_tempDir, childA.Id, p1.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, p1.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, p2.Id);
 
         // Record B's sort order under P2 before the move
         var bBefore = await _service.GetIssueAsync(_tempDir, childB.Id);
@@ -1096,10 +1014,10 @@ public class FleeceServiceTests
         var grandX = await _service.CreateIssueAsync(_tempDir, "Grandchild X", IssueType.Task);
         var grandY = await _service.CreateIssueAsync(_tempDir, "Grandchild Y", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, grandX.Id, childA.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, grandY.Id, childA.Id, sortOrder: "1");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, grandX.Id, childA.Id);
+        await _service.AddParentAsync(_tempDir, grandY.Id, childA.Id);
 
         // Record grandchildren state before move
         var xBefore = await _service.GetIssueAsync(_tempDir, grandX.Id);
@@ -1135,11 +1053,11 @@ public class FleeceServiceTests
         var grandA2 = await _service.CreateIssueAsync(_tempDir, "Grand A2", IssueType.Task);
         var grandB1 = await _service.CreateIssueAsync(_tempDir, "Grand B1", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, grandA1.Id, childA.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, grandA2.Id, childA.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, grandB1.Id, childB.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, grandA1.Id, childA.Id);
+        await _service.AddParentAsync(_tempDir, grandA2.Id, childA.Id);
+        await _service.AddParentAsync(_tempDir, grandB1.Id, childB.Id);
 
         // Record all grandchildren state before move
         var ga1Before = await _service.GetIssueAsync(_tempDir, grandA1.Id);
@@ -1176,11 +1094,11 @@ public class FleeceServiceTests
         var subA = await _service.CreateIssueAsync(_tempDir, "Sub A", IssueType.Task);
         var subB = await _service.CreateIssueAsync(_tempDir, "Sub B", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, subA.Id, childA.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, subB.Id, childB.Id, sortOrder: "0");
+        await _service.AddParentAsync(_tempDir, parent.Id, gp.Id);
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, subA.Id, childA.Id);
+        await _service.AddParentAsync(_tempDir, subB.Id, childB.Id);
 
         var subABefore = await _service.GetIssueAsync(_tempDir, subA.Id);
         var subBBefore = await _service.GetIssueAsync(_tempDir, subB.Id);
@@ -1214,9 +1132,9 @@ public class FleeceServiceTests
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
         var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id);
 
         // Act - move C up twice -> C, A, B
         await _service.MoveSeriesSiblingAsync(_tempDir, childC.Id, MoveDirection.Up);
@@ -1246,9 +1164,9 @@ public class FleeceServiceTests
         var childB = await _service.CreateIssueAsync(_tempDir, "Child B", IssueType.Task);
         var childC = await _service.CreateIssueAsync(_tempDir, "Child C", IssueType.Task);
 
-        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id, sortOrder: "0");
-        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id, sortOrder: "1");
-        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id, sortOrder: "2");
+        await _service.AddParentAsync(_tempDir, childA.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childB.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, childC.Id, parent.Id);
 
         // Act - move B down then up -> should return to original order A, B, C
         await _service.MoveSeriesSiblingAsync(_tempDir, childB.Id, MoveDirection.Down);

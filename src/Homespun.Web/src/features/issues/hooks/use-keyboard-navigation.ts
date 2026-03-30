@@ -330,7 +330,8 @@ export function useKeyboardNavigation(
           pendingChildId: pendingNewIssue.referenceIssueId,
           pendingParentId: undefined,
           inheritedParentIssueId: undefined,
-          inheritedParentSortOrder: undefined,
+          siblingIssueId: undefined,
+          insertBefore: undefined,
         })
         onStateChanged?.()
       }
@@ -345,7 +346,8 @@ export function useKeyboardNavigation(
           pendingParentId: pendingNewIssue.referenceIssueId,
           pendingChildId: undefined,
           inheritedParentIssueId: undefined,
-          inheritedParentSortOrder: undefined,
+          siblingIssueId: undefined,
+          insertBefore: undefined,
         })
         onStateChanged?.()
       }

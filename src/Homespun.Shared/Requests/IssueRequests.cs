@@ -49,9 +49,16 @@ public class CreateIssueRequest
     public string? ParentIssueId { get; set; }
 
     /// <summary>
-    /// Optional sort order for the parent relationship. Used when creating siblings in series-mode parents.
+    /// Optional sibling issue ID for positioning within the parent's children.
+    /// Used with InsertBefore to control where the new issue is placed relative to an existing sibling.
     /// </summary>
-    public string? ParentSortOrder { get; set; }
+    public string? SiblingIssueId { get; set; }
+
+    /// <summary>
+    /// If true, insert before the sibling; if false (default), insert after.
+    /// Only used when SiblingIssueId is provided.
+    /// </summary>
+    public bool InsertBefore { get; set; }
 
     /// <summary>
     /// Optional child issue ID. If provided, the new issue will become the parent of this issue.
