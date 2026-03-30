@@ -2209,6 +2209,8 @@ public class ClaudeSessionServicePlanApprovalTests
             s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "Please add tests", It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        Assert.That(session.PlanHasBeenApproved, Is.False,
+            "PlanHasBeenApproved should be false after rejection to allow new plan_pending events");
     }
 
     [Test]
@@ -2390,6 +2392,128 @@ public class ClaudeSessionServicePlanApprovalTests
         // Note: When worker handles rejection, plan content may be preserved for revision
         Assert.That(session.HasPendingPlanApproval, Is.False,
             "HasPendingPlanApproval should be false after rejection");
+        Assert.That(session.PlanContent, Is.Null,
+            "PlanContent should be cleared after rejection to prevent stale fallback");
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Rejected_ClearsPlanStateForNewPlan()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Old Plan";
+        session.PlanFilePath = "/test/plans/plan.md";
+        session.HasPendingPlanApproval = true;
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+        session.HasPendingPlanApproval = true;
+
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "revise", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: false, keepContext: false, feedback: "revise");
+
+        // Assert - all plan state should be cleared so new plan_pending events work
+        Assert.That(session.PlanHasBeenApproved, Is.False,
+            "PlanHasBeenApproved should be false after rejection to allow new plan_pending events");
+        Assert.That(session.PlanContent, Is.Null,
+            "PlanContent should be null after rejection to prevent stale fallback");
+        Assert.That(session.PlanFilePath, Is.Null,
+            "PlanFilePath should be null after rejection to prevent stale path");
+        Assert.That(session.HasPendingPlanApproval, Is.False,
+            "HasPendingPlanApproval should be false after rejection");
+    }
+
+    [Test]
+    public async Task HandlePlanPendingFromWorker_AfterRejection_ProcessesNewPlan()
+    {
+        // Arrange - Start a session and simulate post-rejection state
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Simulate post-rejection state: plan state cleared, session is Running
+        session.Status = ClaudeSessionStatus.Running;
+        session.PlanHasBeenApproved = false;
+        session.PlanContent = null;
+        session.PlanFilePath = null;
+        session.HasPendingPlanApproval = false;
+
+        var planJson = """{"plan": "# New Revised Plan\n\n1. Better step"}""";
+
+        // Simulate a new plan_pending event arriving after rejection
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Continue with revised plan");
+
+        // Assert - the new plan should be processed
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Status should be WaitingForPlanExecution after new plan_pending");
+        Assert.That(session.HasPendingPlanApproval, Is.True,
+            "HasPendingPlanApproval should be true for new plan");
+        Assert.That(session.PlanContent, Is.EqualTo("# New Revised Plan\n\n1. Better step"),
+            "PlanContent should contain the new plan, not stale content");
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_ReadsFromDisk_WhenPlanFilePathExists()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Create a temp file with fresh plan content
+        var tempDir = Path.Combine(Path.GetTempPath(), "homespun-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var planFilePath = Path.Combine(tempDir, "PLAN.md");
+        await File.WriteAllTextAsync(planFilePath, "# Fresh Plan from Disk");
+
+        try
+        {
+            session.PlanContent = "# Stale Plan";
+            session.PlanFilePath = planFilePath;
+            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+            // Set up agent session for SendMessageAsync call within ExecutePlanAsync
+            _agentExecutionServiceMock
+                .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(CreateSdkMessageStream(
+                    new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                    new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+            // Act
+            await _service.ExecutePlanAsync(session.Id, clearContext: false);
+
+            // Assert - the message sent should contain the fresh disk content
+            var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+            Assert.That(lastUserMessage, Is.Not.Null);
+            Assert.That(lastUserMessage!.Content[0].Text, Does.Contain("# Fresh Plan from Disk"),
+                "ExecutePlanAsync should use plan content from disk when PlanFilePath exists");
+            Assert.That(lastUserMessage.Content[0].Text, Does.Not.Contain("# Stale Plan"),
+                "ExecutePlanAsync should not use stale cached content when disk content is available");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 
     [Test]

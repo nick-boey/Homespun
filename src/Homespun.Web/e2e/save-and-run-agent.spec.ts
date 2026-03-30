@@ -142,7 +142,10 @@ test.describe.serial('Save and Run Agent', () => {
     await expect(agentDialog).not.toBeVisible()
   })
 
-  test('can start agent from launcher after save and run', async ({ page }) => {
+  test('can start agent from launcher after save and run', async ({ page }, testInfo) => {
+    // This test involves navigation + form + dialog + API calls which can be slow in CI
+    testInfo.setTimeout(60000)
+
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
@@ -183,33 +186,35 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for agent launcher dialog
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
-    await expect(agentDialog).toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).toBeVisible({ timeout: 15000 })
 
     // Select a prompt from the task tab
     const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
     const promptSelector = taskTab.locator('button[role="combobox"]').first()
-    await expect(promptSelector).toBeVisible({ timeout: 10000 })
+    await expect(promptSelector).toBeVisible({ timeout: 15000 })
+    await expect(promptSelector).toBeEnabled()
     await promptSelector.click()
 
     // Select first prompt option
     const promptOption = page.getByRole('option').first()
     await promptOption.click()
 
-    // Verify Start Agent button becomes enabled
+    // Wait for Start Agent button to be enabled and click it
     const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
-    await expect(startButton).not.toBeDisabled()
-
-    // Click Start Agent (in mock mode, this won't actually start an agent)
+    await expect(startButton).toBeEnabled({ timeout: 10000 })
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).not.toBeVisible({ timeout: 15000 })
 
     // Should navigate to issues page after starting agent
     await expect(page).toHaveURL('/projects/demo-project/issues')
   })
 
-  test('does not show unsaved changes dialog after starting agent', async ({ page }) => {
+  test('does not show unsaved changes dialog after starting agent', async ({ page }, testInfo) => {
+    // This test involves navigation + form + dialog + API calls which can be slow in CI
+    testInfo.setTimeout(60000)
+
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
@@ -246,25 +251,26 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for agent launcher dialog
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
-    await expect(agentDialog).toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).toBeVisible({ timeout: 15000 })
 
     // Select a prompt from the task tab
     const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
     const promptSelector = taskTab.locator('button[role="combobox"]').first()
-    await expect(promptSelector).toBeVisible({ timeout: 10000 })
+    await expect(promptSelector).toBeVisible({ timeout: 15000 })
+    await expect(promptSelector).toBeEnabled()
     await promptSelector.click()
 
     // Select first prompt option
     const promptOption = page.getByRole('option').first()
     await promptOption.click()
 
-    // Click Start Agent
+    // Wait for Start Agent button to be enabled and click it
     const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
-    await expect(startButton).not.toBeDisabled()
+    await expect(startButton).toBeEnabled({ timeout: 10000 })
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).not.toBeVisible({ timeout: 15000 })
 
     // Should navigate to issues page without showing unsaved changes dialog
     await expect(page).toHaveURL('/projects/demo-project/issues')
