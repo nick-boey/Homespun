@@ -57,7 +57,7 @@ public class IssuesAgentApiTests
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptId = prompt.Id,
+            PromptName = prompt.Name,
             UserInstructions = "Test instructions"
         };
 
@@ -82,7 +82,7 @@ public class IssuesAgentApiTests
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptId = "nonexistent-prompt-id"
+            PromptName = "nonexistent-prompt-id"
         };
 
         // Act
@@ -105,7 +105,7 @@ public class IssuesAgentApiTests
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptId = standardPrompt.Id
+            PromptName = standardPrompt.Name
         };
 
         // Act

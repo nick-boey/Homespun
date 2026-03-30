@@ -46,14 +46,12 @@ describe('useAgentPrompts', () => {
   it('fetches agent prompts for a project', async () => {
     const mockPrompts: AgentPrompt[] = [
       {
-        id: 'prompt-1',
         name: 'Build Prompt',
         initialMessage: 'Start building...',
         mode: SessionMode.BUILD,
         projectId: 'project-123',
       },
       {
-        id: 'prompt-2',
         name: 'Plan Prompt',
         initialMessage: 'Create a plan...',
         mode: SessionMode.PLAN,

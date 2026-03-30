@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts, type UpdateAgentPromptRequest, type AgentPrompt } from '@/api'
+import { globalPromptsQueryKey } from './use-global-prompts'
 import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
@@ -13,16 +14,18 @@ interface UseUpdatePromptOptions {
 }
 
 interface UpdatePromptParams extends UpdateAgentPromptRequest {
-  id: string
+  name: string
+  projectId?: string
 }
 
 export function useUpdatePrompt(options: UseUpdatePromptOptions) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: UpdatePromptParams) => {
-      const result = await AgentPrompts.putApiAgentPromptsById({
-        path: { id },
+    mutationFn: async ({ name, projectId, ...data }: UpdatePromptParams) => {
+      const result = await AgentPrompts.putApiAgentPromptsByNameByName({
+        path: { name },
+        query: { projectId },
         body: data,
       })
 
@@ -49,7 +52,7 @@ export function useUpdatePrompt(options: UseUpdatePromptOptions) {
       } else {
         // Invalidate global prompts list
         queryClient.invalidateQueries({
-          queryKey: ['global-prompts'],
+          queryKey: globalPromptsQueryKey(),
         })
         queryClient.invalidateQueries({
           queryKey: issueAgentPromptsQueryKey,

@@ -30,7 +30,6 @@ describe('useCreateOverride', () => {
 
   it('creates an override prompt successfully', async () => {
     const overridePrompt = {
-      id: 'override-1',
       name: 'Build',
       initialMessage: 'Custom message',
       mode: SessionMode.BUILD,
@@ -48,7 +47,7 @@ describe('useCreateOverride', () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        globalPromptId: 'global-build',
+        globalPromptName: 'global-build',
         projectId: 'proj-1',
         initialMessage: 'Custom message',
       })
@@ -56,7 +55,7 @@ describe('useCreateOverride', () => {
 
     expect(AgentPrompts.postApiAgentPromptsCreateOverride).toHaveBeenCalledWith({
       body: {
-        globalPromptId: 'global-build',
+        globalPromptName: 'global-build',
         projectId: 'proj-1',
         initialMessage: 'Custom message',
       },
@@ -66,7 +65,6 @@ describe('useCreateOverride', () => {
 
   it('creates override without custom message (copies from global)', async () => {
     const overridePrompt = {
-      id: 'override-1',
       name: 'Plan',
       initialMessage: 'Global plan message',
       mode: SessionMode.PLAN,
@@ -82,14 +80,14 @@ describe('useCreateOverride', () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        globalPromptId: 'global-plan',
+        globalPromptName: 'global-plan',
         projectId: 'proj-1',
       })
     })
 
     expect(AgentPrompts.postApiAgentPromptsCreateOverride).toHaveBeenCalledWith({
       body: {
-        globalPromptId: 'global-plan',
+        globalPromptName: 'global-plan',
         projectId: 'proj-1',
       },
     })
@@ -108,7 +106,7 @@ describe('useCreateOverride', () => {
     await act(async () => {
       try {
         await result.current.mutateAsync({
-          globalPromptId: 'non-existent',
+          globalPromptName: 'non-existent',
           projectId: 'proj-1',
         })
       } catch {

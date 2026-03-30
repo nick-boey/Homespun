@@ -112,7 +112,7 @@ public class AgentStartBackgroundServiceTests
                 Type = IssueType.Task,
                 LastUpdate = ts
             },
-            PromptId = "prompt123",
+            PromptName = "prompt123",
             BaseBranch = null,
             Model = "sonnet",
             BranchName = "task/test-issue+issue123"
@@ -150,10 +150,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName, true, "main"))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"
@@ -213,10 +212,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(existingClonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Plan",
                 Mode = SessionMode.Plan,
                 InitialMessage = "Plan for {{title}}"
@@ -293,10 +291,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"
@@ -354,8 +351,8 @@ public class AgentStartBackgroundServiceTests
                 return clonePath;
             });
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
-            .Returns(new AgentPrompt { Id = "prompt123", Name = "Plan", Mode = SessionMode.Plan });
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
+            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
 
         _mockFleeceService.Setup(x => x.ListIssuesAsync(
                 request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
@@ -384,7 +381,7 @@ public class AgentStartBackgroundServiceTests
     {
         // Arrange
         var request = CreateTestRequest();
-        request = request with { PromptId = null };
+        request = request with { PromptName = null };
         var clonePath = "/path/to/clone";
         var session = new ClaudeSession
         {
@@ -450,8 +447,8 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName, true, "develop"))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
-            .Returns(new AgentPrompt { Id = "prompt123", Name = "Plan", Mode = SessionMode.Plan });
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
+            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
 
         _mockFleeceService.Setup(x => x.ListIssuesAsync(
                 request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
@@ -545,8 +542,8 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName, true, stackedBranch))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
-            .Returns(new AgentPrompt { Id = "prompt123", Name = "Plan", Mode = SessionMode.Plan });
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
+            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
 
         _mockFleeceService.Setup(x => x.ListIssuesAsync(
                 request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
@@ -564,6 +561,118 @@ public class AgentStartBackgroundServiceTests
         // Assert - Clone should be created from the stacked PR branch
         _mockCloneService.Verify(x => x.CreateCloneAsync(
             request.ProjectLocalPath, request.BranchName, true, stackedBranch), Times.Once);
+
+        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
+    }
+
+    [Test]
+    public async Task QueueAgentStartAsync_UsesUserInstructions_WhenProvided()
+    {
+        // Arrange
+        var request = CreateTestRequest() with
+        {
+            UserInstructions = "Custom user instructions for the agent"
+        };
+        var clonePath = "/path/to/clone";
+        var session = new ClaudeSession
+        {
+            Id = "session123",
+            EntityId = request.IssueId,
+            ProjectId = request.ProjectId,
+            WorkingDirectory = clonePath,
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
+                request.ProjectLocalPath, request.BranchName))
+            .ReturnsAsync(clonePath);
+
+        // Prompt is still provided but should NOT be used for template rendering
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
+            .Returns(new AgentPrompt
+            {
+                Name = "Build",
+                Mode = SessionMode.Build,
+                InitialMessage = "Work on {{title}}"
+            });
+
+        _mockSessionService.Setup(x => x.StartSessionAsync(
+                request.IssueId, request.ProjectId, clonePath,
+                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(session);
+
+        // Act
+        await _service.QueueAgentStartAsync(request);
+        await Task.Delay(200);
+
+        // Assert - Session should use Build mode from prompt
+        _mockSessionService.Verify(x => x.StartSessionAsync(
+            request.IssueId, request.ProjectId, clonePath,
+            SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify RenderTemplate was NOT called (user instructions bypass template rendering)
+        _mockAgentPromptService.Verify(x => x.RenderTemplate(
+            It.IsAny<string>(), It.IsAny<PromptContext>()), Times.Never);
+
+        // Verify ListIssuesAsync was NOT called (no tree context needed)
+        _mockFleeceService.Verify(x => x.ListIssuesAsync(
+            It.IsAny<string>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(),
+            It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
+    }
+
+    [Test]
+    public async Task QueueAgentStartAsync_FallsBackToPromptRendering_WhenUserInstructionsEmpty()
+    {
+        // Arrange
+        var request = CreateTestRequest() with
+        {
+            UserInstructions = null
+        };
+        var clonePath = "/path/to/clone";
+        var session = new ClaudeSession
+        {
+            Id = "session123",
+            EntityId = request.IssueId,
+            ProjectId = request.ProjectId,
+            WorkingDirectory = clonePath,
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
+                request.ProjectLocalPath, request.BranchName))
+            .ReturnsAsync(clonePath);
+
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
+            .Returns(new AgentPrompt
+            {
+                Name = "Build",
+                Mode = SessionMode.Build,
+                InitialMessage = "Work on {{title}}"
+            });
+
+
+        _mockFleeceService.Setup(x => x.ListIssuesAsync(
+                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue>());
+
+        _mockSessionService.Setup(x => x.StartSessionAsync(
+                request.IssueId, request.ProjectId, clonePath,
+                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(session);
+
+        // Act
+        await _service.QueueAgentStartAsync(request);
+        await Task.Delay(200);
+
+        // Assert - RenderTemplate SHOULD be called (fallback to prompt rendering)
+        _mockAgentPromptService.Verify(x => x.RenderTemplate(
+            "Work on {{title}}", It.IsAny<PromptContext>()), Times.Once);
 
         _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
     }
@@ -598,10 +707,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"
@@ -653,10 +761,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"
@@ -708,10 +815,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"

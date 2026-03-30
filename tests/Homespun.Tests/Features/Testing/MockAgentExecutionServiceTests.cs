@@ -356,6 +356,178 @@ public class MockAgentExecutionServiceTests
 
     #endregion
 
+    #region StartSessionAsync Keyword-Based Response Tests
+
+    [Test]
+    public async Task StartSessionAsync_WithThinkKeyword_YieldsThinkingBlockAndText()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Please think about this problem");
+
+        // Act
+        var messages = await CollectStartMessages(request);
+
+        // Assert
+        var assistantMessages = messages.OfType<SdkAssistantMessage>().ToList();
+        Assert.That(assistantMessages, Has.Count.GreaterThanOrEqualTo(2));
+
+        // Should have thinking block
+        var thinkingMessage = assistantMessages.First();
+        Assert.That(thinkingMessage.Message.Content, Has.Some.TypeOf<SdkThinkingBlock>());
+
+        // Should have text block after thinking
+        var textMessage = assistantMessages.Skip(1).First();
+        Assert.That(textMessage.Message.Content, Has.Some.TypeOf<SdkTextBlock>());
+
+        // Should end with result
+        Assert.That(messages.Last(), Is.TypeOf<SdkResultMessage>());
+    }
+
+    [Test]
+    public async Task StartSessionAsync_WithToolKeyword_YieldsToolUseAndResults()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Use a tool to read the file");
+
+        // Act
+        var messages = await CollectStartMessages(request);
+
+        // Assert
+        var assistantMessages = messages.OfType<SdkAssistantMessage>().ToList();
+        var userMessages = messages.OfType<SdkUserMessage>().ToList();
+
+        var toolUseBlocks = assistantMessages
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkToolUseBlock>()
+            .ToList();
+        Assert.That(toolUseBlocks, Has.Count.GreaterThanOrEqualTo(2)); // Read + Write
+
+        var toolResultBlocks = userMessages
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkToolResultBlock>()
+            .ToList();
+        Assert.That(toolResultBlocks, Has.Count.GreaterThanOrEqualTo(2));
+
+        Assert.That(messages.Last(), Is.TypeOf<SdkResultMessage>());
+    }
+
+    [Test]
+    public async Task StartSessionAsync_WithQuestionKeyword_YieldsQuestionPendingMessage()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Ask a question before proceeding");
+
+        // Act
+        var messages = await CollectStartMessagesUntilPending(request);
+
+        // Assert
+        var questionPending = messages.OfType<SdkQuestionPendingMessage>().FirstOrDefault();
+        Assert.That(questionPending, Is.Not.Null);
+        Assert.That(questionPending!.QuestionsJson, Does.Contain("questions"));
+    }
+
+    [Test]
+    public async Task StartSessionAsync_WithPlanKeyword_YieldsPlanPendingMessage()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Create a plan for this task");
+
+        // Act
+        var messages = await CollectStartMessagesUntilPending(request);
+
+        // Assert
+        var planPending = messages.OfType<SdkPlanPendingMessage>().FirstOrDefault();
+        Assert.That(planPending, Is.Not.Null);
+        Assert.That(planPending!.PlanJson, Does.Contain("plan"));
+    }
+
+    [Test]
+    public async Task StartSessionAsync_WithNoKeywords_YieldsDefaultResponse()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Hello, how are you?");
+
+        // Act
+        var messages = await CollectStartMessages(request);
+
+        // Assert - should still produce session_started, assistant message, and result
+        Assert.That(messages.OfType<SdkSystemMessage>().Any(m => m.Subtype == "session_started"), Is.True);
+        Assert.That(messages.OfType<SdkAssistantMessage>().Any(), Is.True);
+        Assert.That(messages.Last(), Is.TypeOf<SdkResultMessage>());
+    }
+
+    [Test]
+    public async Task StartSessionAsync_WithMultipleKeywords_YieldsCorrectOrder()
+    {
+        // Arrange - think + tool keywords
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Use a tool and then think about the response");
+
+        // Act
+        var messages = await CollectStartMessages(request);
+
+        // Assert - think should come before tool
+        var assistantMessages = messages.OfType<SdkAssistantMessage>().ToList();
+
+        int? thinkIndex = null;
+        int? toolIndex = null;
+        for (int i = 0; i < assistantMessages.Count; i++)
+        {
+            if (thinkIndex == null && assistantMessages[i].Message.Content.Any(c => c is SdkThinkingBlock))
+                thinkIndex = i;
+            if (toolIndex == null && assistantMessages[i].Message.Content.Any(c => c is SdkToolUseBlock))
+                toolIndex = i;
+        }
+
+        Assert.That(thinkIndex, Is.Not.Null, "Should have thinking block");
+        Assert.That(toolIndex, Is.Not.Null, "Should have tool use block");
+        Assert.That(thinkIndex, Is.LessThan(toolIndex), "Thinking should come before tool use");
+    }
+
+    [Test]
+    public async Task StartSessionAsync_AlwaysYieldsSessionStartedFirst()
+    {
+        // Arrange
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Please think about this and use a tool");
+
+        // Act
+        var messages = await CollectStartMessages(request);
+
+        // Assert - first message should always be session_started
+        Assert.That(messages.First(), Is.TypeOf<SdkSystemMessage>());
+        var sysMsg = (SdkSystemMessage)messages.First();
+        Assert.That(sysMsg.Subtype, Is.EqualTo("session_started"));
+    }
+
+    #endregion
+
     #region GetSessionStatusAsync Tests
 
     [Test]
@@ -444,6 +616,28 @@ public class MockAgentExecutionServiceTests
             }
         }
 
+        return messages;
+    }
+
+    private async Task<List<SdkMessage>> CollectStartMessages(AgentStartRequest request)
+    {
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.StartSessionAsync(request))
+        {
+            messages.Add(msg);
+        }
+        return messages;
+    }
+
+    private async Task<List<SdkMessage>> CollectStartMessagesUntilPending(AgentStartRequest request)
+    {
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.StartSessionAsync(request))
+        {
+            messages.Add(msg);
+            if (msg is SdkQuestionPendingMessage or SdkPlanPendingMessage)
+                break;
+        }
         return messages;
     }
 

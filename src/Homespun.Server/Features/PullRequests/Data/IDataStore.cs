@@ -111,14 +111,14 @@ public interface IDataStore
     Task UpdateAgentPromptAsync(AgentPrompt prompt);
 
     /// <summary>
-    /// Removes an agent prompt from the store.
+    /// Removes an agent prompt from the store by name and project scope.
     /// </summary>
-    Task RemoveAgentPromptAsync(string promptId);
+    Task RemoveAgentPromptAsync(string name, string? projectId);
 
     /// <summary>
-    /// Gets an agent prompt by ID.
+    /// Gets an agent prompt by name and project scope (composite key).
     /// </summary>
-    AgentPrompt? GetAgentPrompt(string id);
+    AgentPrompt? GetAgentPrompt(string name, string? projectId);
 
     /// <summary>
     /// Gets agent prompts scoped to a specific project (not global prompts).

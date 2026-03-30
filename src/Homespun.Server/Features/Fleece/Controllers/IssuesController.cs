@@ -203,7 +203,8 @@ public class IssuesController(
                 project.LocalPath,
                 issue.Id,
                 request.ParentIssueId.Trim(),
-                sortOrder: request.ParentSortOrder);
+                siblingIssueId: request.SiblingIssueId?.Trim(),
+                insertBefore: request.InsertBefore);
         }
 
         // If a child issue ID was provided, make the new issue the parent of that child
@@ -360,6 +361,65 @@ public class IssuesController(
     }
 
     /// <summary>
+    /// Remove a specific parent from an issue.
+    /// </summary>
+    [HttpPost("issues/{childId}/remove-parent")]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueResponse>> RemoveParent(string childId, [FromBody] RemoveParentRequest request)
+    {
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var existingIssue = await fleeceService.GetIssueAsync(project.LocalPath, childId);
+        if (existingIssue == null)
+        {
+            return NotFound("Child issue not found");
+        }
+
+        var issue = await fleeceService.RemoveParentAsync(
+            project.LocalPath,
+            childId,
+            request.ParentIssueId);
+
+        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, childId);
+
+        return Ok(issue.ToResponse());
+    }
+
+    /// <summary>
+    /// Remove all parents from an issue.
+    /// </summary>
+    [HttpPost("issues/{issueId}/remove-all-parents")]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueResponse>> RemoveAllParents(string issueId, [FromBody] RemoveAllParentsRequest request)
+    {
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var existingIssue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (existingIssue == null)
+        {
+            return NotFound("Issue not found");
+        }
+
+        var issue = await fleeceService.RemoveAllParentsAsync(
+            project.LocalPath,
+            issueId);
+
+        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+
+        return Ok(issue.ToResponse());
+    }
+
+    /// <summary>
     /// Move a sibling issue up or down in the series order.
     /// </summary>
     [HttpPost("issues/{issueId}/move-sibling")]
@@ -445,9 +505,9 @@ public class IssuesController(
         }
 
         // Validate prompt exists (if provided)
-        if (!string.IsNullOrEmpty(request.PromptId))
+        if (!string.IsNullOrEmpty(request.PromptName))
         {
-            var prompt = agentPromptService.GetPrompt(request.PromptId);
+            var prompt = agentPromptService.GetPrompt(request.PromptName, null);
             if (prompt == null)
             {
                 return NotFound("Prompt not found");
@@ -480,10 +540,11 @@ public class IssuesController(
             ProjectLocalPath = project.LocalPath,
             ProjectDefaultBranch = project.DefaultBranch,
             Issue = issue,
-            PromptId = request.PromptId,
+            PromptName = request.PromptName,
             BaseBranch = request.BaseBranch,
             Model = model,
-            BranchName = branchName
+            BranchName = branchName,
+            UserInstructions = request.UserInstructions
         });
 
         logger.LogInformation(

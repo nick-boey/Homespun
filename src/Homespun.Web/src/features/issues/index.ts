@@ -28,13 +28,10 @@ export {
   TYPE_CYCLE_ORDER,
   TYPE_CYCLE_DEBOUNCE_MS,
   getNextIssueType,
-  toRenderLines,
   type InlineEditState,
   type PendingNewIssue,
   type SearchState,
-  type MoveOperationState,
   type TaskGraphRenderLine,
-  type SiblingMoveInfo,
 } from './types'
 
 // Hooks

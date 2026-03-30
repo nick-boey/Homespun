@@ -33,6 +33,9 @@ COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
 COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
+COPY src/Homespun.AppHost/Homespun.AppHost.csproj src/Homespun.AppHost/
+COPY src/Homespun.ServiceDefaults/Homespun.ServiceDefaults.csproj src/Homespun.ServiceDefaults/
+COPY tests/Homespun.AppHost.Tests/Homespun.AppHost.Tests.csproj tests/Homespun.AppHost.Tests/
 
 # Restore dependencies
 RUN dotnet restore

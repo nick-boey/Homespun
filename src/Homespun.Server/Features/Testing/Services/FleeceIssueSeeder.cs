@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fleece.Core.Models;
@@ -105,5 +106,46 @@ public sealed class FleeceIssueSeeder
         }
 
         _logger.LogDebug("Created minimal project structure at {ProjectPath}", projectPath);
+    }
+
+    /// <summary>
+    /// Initializes a git repository in the given project path with an initial commit.
+    /// This makes the temp folder a real git repo that supports git operations.
+    /// </summary>
+    /// <param name="projectPath">Path to the project root directory.</param>
+    public void InitializeGitRepository(string projectPath)
+    {
+        RunGitCommand(projectPath, "init");
+        RunGitCommand(projectPath, "config user.name 'Test'");
+        RunGitCommand(projectPath, "config user.email 'test@test.com'");
+        RunGitCommand(projectPath, "add -A");
+        RunGitCommand(projectPath, "commit -m 'Initial commit'");
+
+        _logger.LogDebug("Initialized git repository at {ProjectPath}", projectPath);
+    }
+
+    private void RunGitCommand(string workingDirectory, string arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            var error = process.StandardError.ReadToEnd();
+            _logger.LogWarning(
+                "Git command failed: git {Arguments} in {WorkingDirectory} - {Error}",
+                arguments, workingDirectory, error);
+        }
     }
 }

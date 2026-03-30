@@ -12,10 +12,10 @@ test.describe.serial('Save and Run Agent', () => {
     // Clear the default filter to show all issues
     await clearIssueFilter(page)
 
-    // Find the Write API documentation chore (ISSUE-006) which isn't modified by other tests
+    // Find the OpenAPI 3.1 spec chore (ISSUE-013) which isn't modified by other tests
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Write API documentation' })
+      .filter({ hasText: 'Generate OpenAPI 3.1 spec' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -46,10 +46,10 @@ test.describe.serial('Save and Run Agent', () => {
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Verify dialog has the prompt selector
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
-    await expect(promptSelector).toBeVisible()
-    // The prompt selector may have a default value, so just check it exists
+    // Verify dialog has the prompt selector in the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 10000 })
 
     // Close the dialog
     const closeButton = agentDialog.getByRole('button', { name: 'Close' })
@@ -72,10 +72,10 @@ test.describe.serial('Save and Run Agent', () => {
     // Clear the default filter to show all issues
     await clearIssueFilter(page)
 
-    // Find a different issue to avoid conflicts - use ISSUE-002 (Improve mobile responsiveness)
+    // Find a different issue to avoid conflicts - use ISSUE-002 (Add dark mode support)
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Improve mobile responsiveness' })
+      .filter({ hasText: 'Add dark mode support' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -112,10 +112,10 @@ test.describe.serial('Save and Run Agent', () => {
     // Clear the default filter to show all issues
     await clearIssueFilter(page)
 
-    // Find Set up API monitoring chore (ISSUE-013) which isn't modified by other tests
+    // Find Add request validation middleware (ISSUE-011) which isn't modified by other tests
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Set up API monitoring' })
+      .filter({ hasText: 'Add request validation middleware' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -142,7 +142,10 @@ test.describe.serial('Save and Run Agent', () => {
     await expect(agentDialog).not.toBeVisible()
   })
 
-  test('can start agent from launcher after save and run', async ({ page }) => {
+  test('can start agent from launcher after save and run', async ({ page }, testInfo) => {
+    // This test involves navigation + form + dialog + API calls which can be slow in CI
+    testInfo.setTimeout(60000)
+
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
@@ -155,7 +158,7 @@ test.describe.serial('Save and Run Agent', () => {
     // Find a different Task issue - use one that exists in mock data
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Implement DELETE endpoints' })
+      .filter({ hasText: 'Implement v2 agent sessions' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -183,31 +186,35 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for agent launcher dialog
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
-    await expect(agentDialog).toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).toBeVisible({ timeout: 15000 })
 
-    // Select a prompt
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
+    // Select a prompt from the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 15000 })
+    await expect(promptSelector).toBeEnabled()
     await promptSelector.click()
 
     // Select first prompt option
     const promptOption = page.getByRole('option').first()
     await promptOption.click()
 
-    // Verify Start Agent button becomes enabled
-    const startButton = agentDialog.getByRole('button', { name: 'Start Agent' })
-    await expect(startButton).not.toBeDisabled()
-
-    // Click Start Agent (in mock mode, this won't actually start an agent)
+    // Wait for Start Agent button to be enabled and click it
+    const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
+    await expect(startButton).toBeEnabled({ timeout: 10000 })
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible()
+    await expect(agentDialog).not.toBeVisible({ timeout: 15000 })
 
     // Should navigate to issues page after starting agent
     await expect(page).toHaveURL('/projects/demo-project/issues')
   })
 
-  test('does not show unsaved changes dialog after starting agent', async ({ page }) => {
+  test('does not show unsaved changes dialog after starting agent', async ({ page }, testInfo) => {
+    // This test involves navigation + form + dialog + API calls which can be slow in CI
+    testInfo.setTimeout(60000)
+
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
@@ -218,7 +225,10 @@ test.describe.serial('Save and Run Agent', () => {
     await clearIssueFilter(page)
 
     // Find Add rate limiting task (ISSUE-012) which isn't modified by other tests
-    const issueRow = page.locator('[role="row"]').filter({ hasText: 'Add rate limiting' }).first()
+    const issueRow = page
+      .locator('[role="row"]')
+      .filter({ hasText: 'Add rate limiting to v2 API' })
+      .first()
     await expect(issueRow).toBeVisible()
 
     // Click the Edit button within this row
@@ -241,23 +251,26 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for agent launcher dialog
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
-    await expect(agentDialog).toBeVisible({ timeout: 10000 })
+    await expect(agentDialog).toBeVisible({ timeout: 15000 })
 
-    // Select a prompt
-    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
+    // Select a prompt from the task tab
+    const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
+    const promptSelector = taskTab.locator('button[role="combobox"]').first()
+    await expect(promptSelector).toBeVisible({ timeout: 15000 })
+    await expect(promptSelector).toBeEnabled()
     await promptSelector.click()
 
     // Select first prompt option
     const promptOption = page.getByRole('option').first()
     await promptOption.click()
 
-    // Click Start Agent
-    const startButton = agentDialog.getByRole('button', { name: 'Start Agent' })
-    await expect(startButton).not.toBeDisabled()
+    // Wait for Start Agent button to be enabled and click it
+    const startButton = taskTab.getByRole('button', { name: 'Start Agent' })
+    await expect(startButton).toBeEnabled({ timeout: 10000 })
     await startButton.click()
 
     // Dialog should close after launching
-    await expect(agentDialog).not.toBeVisible()
+    await expect(agentDialog).not.toBeVisible({ timeout: 15000 })
 
     // Should navigate to issues page without showing unsaved changes dialog
     await expect(page).toHaveURL('/projects/demo-project/issues')

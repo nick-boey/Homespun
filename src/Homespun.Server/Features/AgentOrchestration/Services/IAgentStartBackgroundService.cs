@@ -47,9 +47,9 @@ public record AgentStartRequest
     public required Issue Issue { get; init; }
 
     /// <summary>
-    /// The prompt ID to use for the agent, or null for None.
+    /// The prompt name to use for the agent, or null for None.
     /// </summary>
-    public string? PromptId { get; init; }
+    public string? PromptName { get; init; }
 
     /// <summary>
     /// The base branch to create the working branch from.
@@ -88,7 +88,19 @@ public record AgentStartRequest
     public string? WorkflowStepId { get; init; }
 
     /// <summary>
+    /// Optional user instructions that override the prompt template.
+    /// When provided, this text is sent as the initial message instead of rendering the prompt template.
+    /// </summary>
+    public string? UserInstructions { get; init; }
+
+    /// <summary>
     /// Whether this request is part of a workflow execution.
     /// </summary>
     public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;
+
+    /// <summary>
+    /// Pre-rendered instructions from the frontend.
+    /// When provided, the server skips prompt template rendering and uses these instructions directly.
+    /// </summary>
+    public string? Instructions { get; init; }
 }

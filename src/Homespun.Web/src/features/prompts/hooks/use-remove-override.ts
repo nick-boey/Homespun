@@ -15,9 +15,10 @@ export function useRemoveOverride(options: UseRemoveOverrideOptions) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (promptId: string) => {
-      const result = await AgentPrompts.deleteApiAgentPromptsByIdOverride({
-        path: { id: promptId },
+    mutationFn: async (promptName: string) => {
+      const result = await AgentPrompts.deleteApiAgentPromptsByNameByNameOverride({
+        path: { name: promptName },
+        query: { projectId: options.projectId },
       })
 
       if (result.error) {

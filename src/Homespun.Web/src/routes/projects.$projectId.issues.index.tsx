@@ -18,9 +18,8 @@ import { MoveOperationType, RenderMode } from '@/features/issues/types'
 import { MoveDirection } from '@/api/generated/types.gen'
 import { useAppStore } from '@/stores/app-store'
 import { parseFilterQuery, type ParsedFilter } from '@/features/issues/services'
-import { AgentLauncherDialog } from '@/features/agents'
+import { RunAgentDialog } from '@/features/agents'
 import { AssignIssueDialog } from '@/features/issues/components/assign-issue-popover'
-import { IssuesAgentDialog } from '@/features/issues-agent'
 import { Issues } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/')({
@@ -72,15 +71,13 @@ function IssuesList() {
   // Filter match count (will be updated by TaskGraphView)
   const [filterMatchCount, setFilterMatchCount] = useState(0)
 
-  // Agent launcher dialog state
-  const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
-  const [agentLauncherIssueId, setAgentLauncherIssueId] = useState<string | null>(null)
+  // Run agent dialog state (consolidates agent launcher + issues agent)
+  const [runAgentOpen, setRunAgentOpen] = useState(false)
+  const [runAgentIssueId, setRunAgentIssueId] = useState<string | null>(null)
+  const [runAgentDefaultTab, setRunAgentDefaultTab] = useState<'task' | 'issues' | undefined>()
 
   // Assign issue popover state
   const [assignPopoverOpen, setAssignPopoverOpen] = useState(false)
-
-  // Issues Agent dialog state
-  const [issuesAgentOpen, setIssuesAgentOpen] = useState(false)
 
   // Move operation state
   const [moveOperation, setMoveOperation] = useState<MoveOperationType | null>(null)
@@ -126,6 +123,30 @@ function IssuesList() {
       Issues.postApiIssuesByIssueIdMoveSibling({
         path: { issueId },
         body: { projectId, direction },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
+
+  // Remove parent mutation
+  const removeParentMutation = useMutation({
+    mutationFn: ({ childId, parentIssueId }: { childId: string; parentIssueId: string }) =>
+      Issues.postApiIssuesByChildIdRemoveParent({
+        path: { childId },
+        body: { projectId, parentIssueId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
+
+  // Remove all parents mutation
+  const removeAllParentsMutation = useMutation({
+    mutationFn: ({ issueId }: { issueId: string }) =>
+      Issues.postApiIssuesByIssueIdRemoveAllParents({
+        path: { issueId },
+        body: { projectId },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
@@ -210,6 +231,22 @@ function IssuesList() {
     }
   }, [selectedIssueId, moveOperation])
 
+  const handleRemoveParent = useCallback(() => {
+    if (!selectedIssueId) return
+    if (moveOperation === MoveOperationType.RemoveParent) {
+      setMoveOperation(null)
+      setMoveSourceIssueId(null)
+    } else {
+      setMoveOperation(MoveOperationType.RemoveParent)
+      setMoveSourceIssueId(selectedIssueId)
+    }
+  }, [selectedIssueId, moveOperation])
+
+  const handleRemoveAllParents = useCallback(() => {
+    if (!selectedIssueId) return
+    removeAllParentsMutation.mutate({ issueId: selectedIssueId })
+  }, [selectedIssueId, removeAllParentsMutation])
+
   const handleMoveComplete = useCallback(
     async (targetIssueId: string) => {
       if (!moveSourceIssueId || !moveOperation) return
@@ -227,6 +264,12 @@ function IssuesList() {
             childId: targetIssueId,
             parentIssueId: moveSourceIssueId,
           })
+        } else if (moveOperation === MoveOperationType.RemoveParent) {
+          // Remove target as parent of source (target must be a parent of source)
+          await removeParentMutation.mutateAsync({
+            childId: moveSourceIssueId,
+            parentIssueId: targetIssueId,
+          })
         }
       } finally {
         // Reset move operation state
@@ -234,7 +277,7 @@ function IssuesList() {
         setMoveSourceIssueId(null)
       }
     },
-    [moveSourceIssueId, moveOperation, setParentMutation]
+    [moveSourceIssueId, moveOperation, setParentMutation, removeParentMutation]
   )
 
   const handleMoveCancel = useCallback(() => {
@@ -244,8 +287,9 @@ function IssuesList() {
 
   const handleOpenAgentLauncher = useCallback(() => {
     if (selectedIssueId) {
-      setAgentLauncherIssueId(selectedIssueId)
-      setAgentLauncherOpen(true)
+      setRunAgentIssueId(selectedIssueId)
+      setRunAgentDefaultTab('task')
+      setRunAgentOpen(true)
     }
   }, [selectedIssueId])
 
@@ -256,13 +300,16 @@ function IssuesList() {
   }, [selectedIssueId])
 
   const handleOpenIssuesAgent = useCallback(() => {
-    setIssuesAgentOpen(true)
+    setRunAgentIssueId(null)
+    setRunAgentDefaultTab('issues')
+    setRunAgentOpen(true)
   }, [])
 
   // Handler for running agent on a specific issue (from row actions)
   const handleRunAgent = useCallback((issueId: string) => {
-    setAgentLauncherIssueId(issueId)
-    setAgentLauncherOpen(true)
+    setRunAgentIssueId(issueId)
+    setRunAgentDefaultTab('task')
+    setRunAgentOpen(true)
   }, [])
 
   // Handler for opening an existing session
@@ -369,7 +416,7 @@ function IssuesList() {
     filterActive && appliedFilterQuery === defaultFilterQuery && defaultFilterQuery !== ''
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Toolbar */}
       <ProjectToolbar
         projectId={projectId}
@@ -380,6 +427,9 @@ function IssuesList() {
         onMakeParent={handleMakeParent}
         childOfActive={moveOperation === MoveOperationType.AsChildOf}
         parentOfActive={moveOperation === MoveOperationType.AsParentOf}
+        onRemoveParent={handleRemoveParent}
+        removeParentActive={moveOperation === MoveOperationType.RemoveParent}
+        onRemoveAllParents={handleRemoveAllParents}
         onMoveUp={handleMoveUp}
         onMoveDown={handleMoveDown}
         canMoveUp={canMoveUp}
@@ -455,15 +505,15 @@ function IssuesList() {
         )}
       </div>
 
-      {/* Agent Launcher Dialog */}
-      {agentLauncherIssueId && (
-        <AgentLauncherDialog
-          open={agentLauncherOpen}
-          onOpenChange={setAgentLauncherOpen}
-          projectId={projectId}
-          issueId={agentLauncherIssueId}
-        />
-      )}
+      {/* Run Agent Dialog (Task Agent + Issues Agent) */}
+      <RunAgentDialog
+        open={runAgentOpen}
+        onOpenChange={setRunAgentOpen}
+        projectId={projectId}
+        issueId={runAgentIssueId ?? undefined}
+        selectedIssueId={selectedIssueId}
+        defaultTab={runAgentDefaultTab}
+      />
 
       {/* Assign Issue Dialog */}
       {selectedIssueId && (
@@ -474,14 +524,6 @@ function IssuesList() {
           issueId={selectedIssueId}
         />
       )}
-
-      {/* Issues Agent Dialog */}
-      <IssuesAgentDialog
-        open={issuesAgentOpen}
-        onOpenChange={setIssuesAgentOpen}
-        projectId={projectId}
-        selectedIssueId={selectedIssueId}
-      />
     </div>
   )
 }

@@ -34,26 +34,30 @@ public class MockAgentStartBackgroundService(
 
             // Resolve prompt and determine mode
             AgentPrompt? prompt = null;
-            string? renderedMessage = null;
+            string? renderedMessage = request.Instructions;
             var mode = SessionMode.Plan; // Default for None
 
-            if (!string.IsNullOrEmpty(request.PromptId))
+            if (!string.IsNullOrEmpty(request.PromptName))
             {
-                prompt = agentPromptService.GetPrompt(request.PromptId);
+                prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;
 
-                    var promptContext = new PromptContext
+                    // Only do server-side template rendering if no pre-rendered instructions provided
+                    if (string.IsNullOrEmpty(renderedMessage))
                     {
-                        Title = request.Issue.Title,
-                        Id = request.Issue.Id,
-                        Description = request.Issue.Description,
-                        Branch = request.BranchName,
-                        Type = request.Issue.Type.ToString()
-                    };
+                        var promptContext = new PromptContext
+                        {
+                            Title = request.Issue.Title,
+                            Id = request.Issue.Id,
+                            Description = request.Issue.Description,
+                            Branch = request.BranchName,
+                            Type = request.Issue.Type.ToString()
+                        };
 
-                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                    }
                 }
             }
 

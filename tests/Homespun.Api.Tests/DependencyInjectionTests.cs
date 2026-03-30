@@ -67,4 +67,5 @@ public class DependencyInjectionTests
 
         Assert.That(diffService, Is.Not.Null);
     }
+
 }

@@ -8,6 +8,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCamera, clampPosition } from './use-camera'
 
+/** Create a mock TouchEvent-like object */
+function createMockTouchEvent(touches: Array<{ clientX: number; clientY: number }>): {
+  touches: Array<{ clientX: number; clientY: number }>
+  preventDefault: ReturnType<typeof vi.fn>
+} {
+  return {
+    touches: touches.map((t) => ({ clientX: t.clientX, clientY: t.clientY })),
+    preventDefault: vi.fn(),
+  }
+}
+
 describe('clampPosition', () => {
   it('returns zero for content smaller than viewport', () => {
     const result = clampPosition(100, 200, 150)
@@ -163,6 +174,137 @@ describe('useCamera', () => {
 
       expect(typeof result.current.handleDragEnd).toBe('function')
     })
+
+    it('returns handleDragMove handler', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      expect(typeof result.current.handleDragMove).toBe('function')
+    })
+  })
+
+  describe('handleWheel axis locking', () => {
+    it('locks to vertical when deltaY dominates', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 2,
+          deltaY: 10,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      expect(result.current.camera).toEqual({ x: 0, y: 10 })
+    })
+
+    it('locks to horizontal when deltaX dominates', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 10,
+          deltaY: 2,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      expect(result.current.camera).toEqual({ x: 10, y: 0 })
+    })
+
+    it('locks to horizontal when deltas are equal', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.handleWheel({
+          deltaX: 5,
+          deltaY: 5,
+          preventDefault: vi.fn(),
+        } as unknown as React.WheelEvent)
+      })
+
+      // >= means horizontal wins on tie
+      expect(result.current.camera).toEqual({ x: 5, y: 0 })
+    })
+  })
+
+  describe('handleDragMove axis locking', () => {
+    const makeMockStage = (x: number, y: number) => ({
+      x: vi.fn().mockReturnValue(x),
+      y: vi.fn().mockReturnValue(y),
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fireEvent = (handler: (e: any) => void, stage: ReturnType<typeof makeMockStage>) => {
+      handler({ target: stage })
+    }
+
+    it('locks to vertical axis when vertical movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First call: initialize drag start position
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second call: move vertically past threshold
+      const movedStage = makeMockStage(0, -20)
+      act(() => {
+        fireEvent(result.current.handleDragMove, movedStage)
+      })
+
+      // Should constrain horizontal: stage x reset to starting position (0)
+      expect(movedStage.x).toHaveBeenCalledWith(0)
+    })
+
+    it('locks to horizontal axis when horizontal movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First call: initialize
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second call: move horizontally past threshold
+      const movedStage = makeMockStage(-20, 0)
+      act(() => {
+        fireEvent(result.current.handleDragMove, movedStage)
+      })
+
+      // Should constrain vertical: stage y reset to starting position (0)
+      expect(movedStage.y).toHaveBeenCalledWith(0)
+    })
+
+    it('resets axis lock after drag end', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First drag: initialize and lock to vertical
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+      const stage1 = makeMockStage(0, -20)
+      act(() => {
+        fireEvent(result.current.handleDragMove, stage1)
+      })
+
+      // End the first drag
+      act(() => {
+        fireEvent(result.current.handleDragEnd, stage1)
+      })
+
+      // Second drag: initialize
+      act(() => {
+        fireEvent(result.current.handleDragMove, makeMockStage(0, 0))
+      })
+
+      // Second drag: move horizontally — should lock to horizontal now
+      const stage2 = makeMockStage(-20, 0)
+      act(() => {
+        fireEvent(result.current.handleDragMove, stage2)
+      })
+
+      // Should constrain vertical (locked to horizontal)
+      expect(stage2.y).toHaveBeenCalledWith(0)
+    })
   })
 
   describe('viewport changes', () => {
@@ -191,6 +333,142 @@ describe('useCamera', () => {
       // Position should remain valid
       expect(result.current.camera.x).toBeLessThanOrEqual(600) // 800 - 200
       expect(result.current.camera.y).toBeLessThanOrEqual(900) // 1200 - 300
+    })
+  })
+
+  describe('touch panning', () => {
+    it('pans on single-finger touch move', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 200 }]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 50, clientY: 150 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Dragged left 50px and up 50px => camera pans right/down by (50, 50)
+      expect(result.current.camera).toEqual({ x: 50, y: 50 })
+    })
+
+    it('tracks cumulative touch moves', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 200, clientY: 200 }]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 180, clientY: 180 }]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 160, clientY: 160 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Total delta: 40px in each direction
+      expect(result.current.camera).toEqual({ x: 40, y: 40 })
+    })
+
+    it('calls preventDefault on touchmove to prevent page scrolling', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 200 }]) as unknown as TouchEvent
+        )
+      })
+
+      const moveEvent = createMockTouchEvent([{ clientX: 90, clientY: 190 }])
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(moveEvent as unknown as TouchEvent)
+      })
+
+      expect(moveEvent.preventDefault).toHaveBeenCalled()
+    })
+
+    it('resets touch tracking on touchend', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 200 }]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchEnd()
+      })
+
+      // Move after touchend should not pan
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 50, clientY: 150 }]) as unknown as TouchEvent
+        )
+      })
+
+      expect(result.current.camera).toEqual({ x: 0, y: 0 })
+    })
+
+    it('ignores multi-touch for single-finger panning', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([
+            { clientX: 100, clientY: 200 },
+            { clientX: 200, clientY: 300 },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([
+            { clientX: 50, clientY: 150 },
+            { clientX: 150, clientY: 250 },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      // Multi-touch should not trigger single-finger panning
+      expect(result.current.camera).toEqual({ x: 0, y: 0 })
+    })
+
+    it('clamps touch panning to content bounds', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 500, clientY: 500 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Try to pan far beyond content
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 0, clientY: 0 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Should be clamped to max scroll
+      expect(result.current.camera.x).toBeLessThanOrEqual(
+        defaultContentSize.width - defaultViewportSize.width
+      )
+      expect(result.current.camera.y).toBeLessThanOrEqual(
+        defaultContentSize.height - defaultViewportSize.height
+      )
     })
   })
 })

@@ -180,26 +180,36 @@ public interface IFleeceService
     Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default);
 
     /// <summary>
-    /// Adds a parent relationship to an issue. The child issue will be blocked by the parent.
+    /// Adds a parent relationship to an issue using Fleece.Core's DependencyService.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>
     /// <param name="childId">The ID of the child issue that will have the parent added.</param>
     /// <param name="parentId">The ID of the parent issue to add.</param>
+    /// <param name="siblingIssueId">Optional sibling issue ID for positioning (Before/After).</param>
+    /// <param name="insertBefore">If true, insert before the sibling; if false, insert after.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue with the new parent relationship.</returns>
-    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
-    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default);
+    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default);
 
     /// <summary>
-    /// Removes a parent relationship from an issue.
+    /// Removes a parent relationship from an issue using Fleece.Core's DependencyService.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>
     /// <param name="childId">The ID of the child issue that will have the parent removed.</param>
     /// <param name="parentId">The ID of the parent issue to remove.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue with the parent relationship removed.</returns>
-    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
     Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes all parent relationships from an issue.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="issueId">The ID of the issue to remove all parents from.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated issue with all parent relationships removed.</returns>
+    /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
+    Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default);
 
     /// <summary>
     /// Checks whether setting a parent relationship would create a cycle.
@@ -213,6 +223,7 @@ public interface IFleeceService
 
     /// <summary>
     /// Sets the parent of an issue, optionally replacing all existing parents.
+    /// Uses Fleece.Core's DependencyService which handles cycle detection internally.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>
     /// <param name="childId">The ID of the child issue.</param>
@@ -220,12 +231,11 @@ public interface IFleeceService
     /// <param name="addToExisting">If true, adds to existing parents; if false, replaces all existing parents.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue.</returns>
-    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
     /// <exception cref="InvalidOperationException">If the relationship would create a cycle.</exception>
     Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default);
 
     /// <summary>
-    /// Moves a series sibling issue up or down by swapping its sort order with the adjacent sibling.
+    /// Moves a series sibling issue up or down using Fleece.Core's DependencyService.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>
     /// <param name="issueId">The issue ID to move.</param>

@@ -131,9 +131,9 @@ public partial class AgentPromptService : IAgentPromptService
         return projectPrompts.Concat(nonOverriddenGlobalPrompts).ToList().AsReadOnly();
     }
 
-    public AgentPrompt? GetPrompt(string id)
+    public AgentPrompt? GetPrompt(string name, string? projectId)
     {
-        return _dataStore.GetAgentPrompt(id);
+        return _dataStore.GetAgentPrompt(name, projectId);
     }
 
     public Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode)
@@ -144,6 +144,14 @@ public partial class AgentPromptService : IAgentPromptService
     public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId,
         PromptCategory category = PromptCategory.Standard)
     {
+        // Validate no duplicate name within the same scope
+        var existing = _dataStore.GetAgentPrompt(name, projectId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException(
+                $"A prompt with name '{name}' already exists in this scope.");
+        }
+
         var prompt = new AgentPrompt
         {
             Name = name,
@@ -159,12 +167,11 @@ public partial class AgentPromptService : IAgentPromptService
         return prompt;
     }
 
-    public async Task<AgentPrompt> UpdatePromptAsync(string id, string name, string? initialMessage, SessionMode mode)
+    public async Task<AgentPrompt> UpdatePromptAsync(string name, string? projectId, string? initialMessage, SessionMode mode)
     {
-        var prompt = _dataStore.GetAgentPrompt(id)
-            ?? throw new InvalidOperationException($"Agent prompt with ID '{id}' not found.");
+        var prompt = _dataStore.GetAgentPrompt(name, projectId)
+            ?? throw new InvalidOperationException($"Agent prompt '{name}' not found.");
 
-        prompt.Name = name;
         prompt.InitialMessage = initialMessage;
         prompt.Mode = mode;
         prompt.UpdatedAt = DateTime.UtcNow;
@@ -173,19 +180,27 @@ public partial class AgentPromptService : IAgentPromptService
         return prompt;
     }
 
-    public async Task DeletePromptAsync(string id)
+    public async Task DeletePromptAsync(string name, string? projectId)
     {
-        await _dataStore.RemoveAgentPromptAsync(id);
+        await _dataStore.RemoveAgentPromptAsync(name, projectId);
     }
 
-    public async Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage)
+    public async Task<AgentPrompt> CreateOverrideAsync(string globalPromptName, string projectId, string? initialMessage)
     {
-        var globalPrompt = _dataStore.GetAgentPrompt(globalPromptId)
-            ?? throw new InvalidOperationException($"Agent prompt with ID '{globalPromptId}' not found.");
+        var globalPrompt = _dataStore.GetAgentPrompt(globalPromptName, null)
+            ?? throw new InvalidOperationException($"Global agent prompt '{globalPromptName}' not found.");
 
         if (globalPrompt.ProjectId != null)
         {
             throw new InvalidOperationException("Cannot create override from a non-global prompt. Only global prompts can be overridden.");
+        }
+
+        // Check if override already exists
+        var existing = _dataStore.GetAgentPrompt(globalPromptName, projectId);
+        if (existing != null)
+        {
+            throw new InvalidOperationException(
+                $"A prompt with name '{globalPromptName}' already exists in this project scope.");
         }
 
         var overridePrompt = new AgentPrompt
@@ -194,6 +209,7 @@ public partial class AgentPromptService : IAgentPromptService
             InitialMessage = initialMessage ?? globalPrompt.InitialMessage,
             Mode = globalPrompt.Mode,
             ProjectId = projectId,
+            Category = globalPrompt.Category,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -202,27 +218,22 @@ public partial class AgentPromptService : IAgentPromptService
         return overridePrompt;
     }
 
-    public async Task<AgentPrompt> RemoveOverrideAsync(string promptId)
+    public async Task<AgentPrompt> RemoveOverrideAsync(string name, string projectId)
     {
-        var prompt = _dataStore.GetAgentPrompt(promptId)
-            ?? throw new InvalidOperationException($"Agent prompt with ID '{promptId}' not found.");
-
-        if (prompt.ProjectId == null)
-        {
-            throw new InvalidOperationException("Cannot remove override: prompt is not a project prompt.");
-        }
+        var prompt = _dataStore.GetAgentPrompt(name, projectId)
+            ?? throw new InvalidOperationException($"Agent prompt '{name}' not found in project '{projectId}'.");
 
         // Find the global prompt with the same name
         var globalPrompt = GetAllPrompts()
-            .FirstOrDefault(p => p.Name.Equals(prompt.Name, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         if (globalPrompt == null)
         {
-            throw new InvalidOperationException($"Cannot remove override: prompt '{prompt.Name}' is not an override of a global prompt.");
+            throw new InvalidOperationException($"Cannot remove override: prompt '{name}' is not an override of a global prompt.");
         }
 
         // Delete the project prompt
-        await _dataStore.RemoveAgentPromptAsync(promptId);
+        await _dataStore.RemoveAgentPromptAsync(name, projectId);
 
         return globalPrompt;
     }
@@ -287,7 +298,7 @@ public partial class AgentPromptService : IAgentPromptService
 
         foreach (var prompt in globalPrompts)
         {
-            await _dataStore.RemoveAgentPromptAsync(prompt.Id);
+            await _dataStore.RemoveAgentPromptAsync(prompt.Name, null);
         }
 
         // Re-create defaults from default-prompts.json
@@ -300,7 +311,7 @@ public partial class AgentPromptService : IAgentPromptService
 
         foreach (var prompt in projectPrompts)
         {
-            await _dataStore.RemoveAgentPromptAsync(prompt.Id);
+            await _dataStore.RemoveAgentPromptAsync(prompt.Name, projectId);
         }
     }
 

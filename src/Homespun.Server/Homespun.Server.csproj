@@ -15,7 +15,7 @@
 
     <ItemGroup>
         <PackageReference Include="A2A" Version="0.3.3-preview" />
-        <PackageReference Include="Fleece.Core" Version="1.7.0" />
+        <PackageReference Include="Fleece.Core" Version="1.7.2" />
         <PackageReference Include="Markdig" Version="0.44.0" />
         <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.0.0-preview.260219.1" />
         <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
@@ -25,7 +25,9 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" />
         <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
+        <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" />
     </ItemGroup>
 
     <ItemGroup>

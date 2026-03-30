@@ -162,31 +162,51 @@ public class AgentStartBackgroundService(
 
             // Step 2: Resolve prompt and render template
             AgentPrompt? prompt = null;
-            string? renderedMessage = null;
+            string? renderedMessage = request.Instructions;
             var mode = SessionMode.Plan; // Default for None
 
-            if (!string.IsNullOrEmpty(request.PromptId))
+            if (!string.IsNullOrWhiteSpace(request.UserInstructions))
             {
-                prompt = agentPromptService.GetPrompt(request.PromptId);
+                // User instructions override the prompt template
+                renderedMessage = request.UserInstructions;
+
+                // If a prompt was also provided, use its mode; otherwise default to Build
+                if (!string.IsNullOrEmpty(request.PromptName))
+                {
+                    prompt = agentPromptService.GetPrompt(request.PromptName, null);
+                    mode = prompt?.Mode ?? SessionMode.Build;
+                }
+                else
+                {
+                    mode = SessionMode.Build;
+                }
+            }
+            else if (!string.IsNullOrEmpty(request.PromptName))
+            {
+                prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;
 
-                    // Build hierarchical context (ancestors and direct children)
-                    var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
-                    var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
-
-                    var promptContext = new PromptContext
+                    // Only do server-side template rendering if no pre-rendered instructions provided
+                    if (string.IsNullOrEmpty(renderedMessage))
                     {
-                        Title = request.Issue.Title,
-                        Id = request.Issue.Id,
-                        Description = request.Issue.Description,
-                        Branch = request.BranchName,
-                        Type = request.Issue.Type.ToString(),
-                        Context = treeContext
-                    };
+                        // Build hierarchical context (ancestors and direct children)
+                        var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
+                        var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
 
-                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                        var promptContext = new PromptContext
+                        {
+                            Title = request.Issue.Title,
+                            Id = request.Issue.Id,
+                            Description = request.Issue.Description,
+                            Branch = request.BranchName,
+                            Type = request.Issue.Type.ToString(),
+                            Context = treeContext
+                        };
+
+                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                    }
                 }
             }
 

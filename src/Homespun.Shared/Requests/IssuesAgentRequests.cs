@@ -32,12 +32,12 @@ public class CreateIssuesAgentSessionRequest
     public string? UserInstructions { get; set; }
 
     /// <summary>
-    /// Optional prompt ID to use for the session.
+    /// Optional prompt name to use for the session.
     /// When provided, the prompt is resolved and its Mode determines the session mode.
     /// Must reference a prompt with Category = IssueAgent.
     /// If not provided, falls back to the first available IssueAgent prompt with Build mode.
     /// </summary>
-    public string? PromptId { get; set; }
+    public string? PromptName { get; set; }
 }
 
 /// <summary>

@@ -12,6 +12,7 @@ using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Observability;
+using Homespun.Features.Observability.HealthChecks;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -28,6 +29,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
 
 // Enable static web assets resolution for non-production environments (e.g. Mock)
 // By default, only the Development environment activates this automatically
@@ -53,6 +56,9 @@ builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatt
     {
         options.UseUtcTimestamp = true;
     });
+
+// Register custom Homespun activity sources for tracing
+builder.Services.AddHomespunInstrumentation();
 
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
@@ -219,6 +225,17 @@ else
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
     builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IAGUIEventService, AGUIEventService>();
+
+    // Session state and decomposed services (registered before facade)
+    builder.Services.AddSingleton<ISessionStateManager, SessionStateManager>();
+    builder.Services.AddSingleton<IToolInteractionService, ToolInteractionService>();
+    builder.Services.AddSingleton<ISessionLifecycleService, SessionLifecycleService>();
+    builder.Services.AddSingleton<IMessageProcessingService, MessageProcessingService>();
+    // Lazy wrappers for circular dependency resolution
+    builder.Services.AddSingleton(sp =>
+        new Lazy<IMessageProcessingService>(() => sp.GetRequiredService<IMessageProcessingService>()));
+    builder.Services.AddSingleton(sp =>
+        new Lazy<ISessionLifecycleService>(() => sp.GetRequiredService<ISessionLifecycleService>()));
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
@@ -271,7 +288,7 @@ builder.Services.AddSignalR()
         options.PayloadSerializerOptions.Converters.Add(
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
-builder.Services.AddHealthChecks();
+builder.Services.AddHomespunHealthChecks(dataDirectory!);
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -329,8 +346,8 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 app.MapHub<WorkflowHub>("/hubs/workflows");
 
-// Map health check endpoint
-app.MapHealthChecks("/health");
+// Map health check endpoints (/health for readiness, /alive for liveness)
+app.MapDefaultEndpoints();
 
 // Map API controllers
 app.MapControllers();

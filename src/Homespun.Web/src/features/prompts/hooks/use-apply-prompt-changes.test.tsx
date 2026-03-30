@@ -9,8 +9,8 @@ import type { PromptChanges } from '../utils/prompt-diff'
 vi.mock('@/api', () => ({
   AgentPrompts: {
     postApiAgentPrompts: vi.fn(),
-    putApiAgentPromptsById: vi.fn(),
-    deleteApiAgentPromptsById: vi.fn(),
+    putApiAgentPromptsByNameByName: vi.fn(),
+    deleteApiAgentPromptsByNameByName: vi.fn(),
   },
 }))
 
@@ -33,7 +33,7 @@ describe('useApplyPromptChanges', () => {
 
   it('creates prompts for items in creates array', async () => {
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockResolvedValue({
-      data: { id: 'new-1', name: 'New Prompt', mode: SessionMode.BUILD },
+      data: { name: 'New Prompt', mode: SessionMode.BUILD },
     } as never)
 
     const onSuccess = vi.fn()
@@ -62,8 +62,8 @@ describe('useApplyPromptChanges', () => {
   })
 
   it('updates prompts for items in updates array', async () => {
-    vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
-      data: { id: 'prompt-1', name: 'Updated Prompt', mode: SessionMode.PLAN },
+    vi.mocked(AgentPrompts.putApiAgentPromptsByNameByName).mockResolvedValue({
+      data: { name: 'Updated Prompt', mode: SessionMode.PLAN },
     } as never)
 
     const onSuccess = vi.fn()
@@ -73,7 +73,7 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [],
-      updates: [{ id: 'prompt-1', name: 'Updated Prompt', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated Prompt', mode: SessionMode.PLAN }],
       deletes: [],
     }
 
@@ -81,10 +81,11 @@ describe('useApplyPromptChanges', () => {
       await result.current.mutateAsync(changes)
     })
 
-    expect(AgentPrompts.putApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-1' },
+    expect(AgentPrompts.putApiAgentPromptsByNameByName).toHaveBeenCalledWith({
+      path: { name: 'Updated Prompt' },
+      query: { projectId: 'proj-1' },
       body: {
-        name: 'Updated Prompt',
+        initialMessage: undefined,
         mode: SessionMode.PLAN,
       },
     })
@@ -92,7 +93,7 @@ describe('useApplyPromptChanges', () => {
   })
 
   it('deletes prompts for items in deletes array', async () => {
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockResolvedValue({
       data: {},
     } as never)
 
@@ -111,12 +112,14 @@ describe('useApplyPromptChanges', () => {
       await result.current.mutateAsync(changes)
     })
 
-    expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledTimes(2)
-    expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-1' },
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).toHaveBeenCalledTimes(2)
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).toHaveBeenCalledWith({
+      path: { name: 'prompt-1' },
+      query: { projectId: 'proj-1' },
     })
-    expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-2' },
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).toHaveBeenCalledWith({
+      path: { name: 'prompt-2' },
+      query: { projectId: 'proj-1' },
     })
     expect(onSuccess).toHaveBeenCalled()
   })
@@ -126,15 +129,15 @@ describe('useApplyPromptChanges', () => {
 
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockImplementation(async () => {
       callOrder.push('create')
-      return { data: { id: 'new-1', name: 'New', mode: SessionMode.BUILD } } as never
+      return { data: { name: 'New', mode: SessionMode.BUILD } } as never
     })
 
-    vi.mocked(AgentPrompts.putApiAgentPromptsById).mockImplementation(async () => {
+    vi.mocked(AgentPrompts.putApiAgentPromptsByNameByName).mockImplementation(async () => {
       callOrder.push('update')
-      return { data: { id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN } } as never
+      return { data: { name: 'Updated', mode: SessionMode.PLAN } } as never
     })
 
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockImplementation(async () => {
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockImplementation(async () => {
       callOrder.push('delete')
       return { data: {} } as never
     })
@@ -145,7 +148,7 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
       deletes: ['delete-1'],
     }
 
@@ -162,7 +165,7 @@ describe('useApplyPromptChanges', () => {
       error: { detail: 'Create failed' },
     } as never)
 
-    vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.putApiAgentPromptsByNameByName).mockResolvedValue({
       data: {},
     } as never)
 
@@ -173,7 +176,7 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
       deletes: [],
     }
 
@@ -187,19 +190,19 @@ describe('useApplyPromptChanges', () => {
 
     await waitFor(() => expect(onError).toHaveBeenCalled())
     // Updates should not have been called because create failed
-    expect(AgentPrompts.putApiAgentPromptsById).not.toHaveBeenCalled()
+    expect(AgentPrompts.putApiAgentPromptsByNameByName).not.toHaveBeenCalled()
   })
 
   it('stops on first error during updates', async () => {
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockResolvedValue({
-      data: { id: 'new-1', name: 'New', mode: SessionMode.BUILD },
+      data: { name: 'New', mode: SessionMode.BUILD },
     } as never)
 
-    vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.putApiAgentPromptsByNameByName).mockResolvedValue({
       error: { detail: 'Update failed' },
     } as never)
 
-    vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.deleteApiAgentPromptsByNameByName).mockResolvedValue({
       data: {},
     } as never)
 
@@ -210,7 +213,7 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
       deletes: ['delete-1'],
     }
 
@@ -225,12 +228,12 @@ describe('useApplyPromptChanges', () => {
     await waitFor(() => expect(onError).toHaveBeenCalled())
     // Create should have been called, but not delete
     expect(AgentPrompts.postApiAgentPrompts).toHaveBeenCalled()
-    expect(AgentPrompts.deleteApiAgentPromptsById).not.toHaveBeenCalled()
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).not.toHaveBeenCalled()
   })
 
   it('uses null projectId for global prompts', async () => {
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockResolvedValue({
-      data: { id: 'new-1', name: 'Global Prompt', mode: SessionMode.BUILD },
+      data: { name: 'Global Prompt', mode: SessionMode.BUILD },
     } as never)
 
     const { result } = renderHook(() => useApplyPromptChanges({ isGlobal: true }), {
@@ -273,14 +276,14 @@ describe('useApplyPromptChanges', () => {
     })
 
     expect(AgentPrompts.postApiAgentPrompts).not.toHaveBeenCalled()
-    expect(AgentPrompts.putApiAgentPromptsById).not.toHaveBeenCalled()
-    expect(AgentPrompts.deleteApiAgentPromptsById).not.toHaveBeenCalled()
+    expect(AgentPrompts.putApiAgentPromptsByNameByName).not.toHaveBeenCalled()
+    expect(AgentPrompts.deleteApiAgentPromptsByNameByName).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalled()
   })
 
   it('includes initialMessage in create request', async () => {
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockResolvedValue({
-      data: { id: 'new-1', name: 'Test', initialMessage: 'Hello', mode: SessionMode.BUILD },
+      data: { name: 'Test', initialMessage: 'Hello', mode: SessionMode.BUILD },
     } as never)
 
     const { result } = renderHook(() => useApplyPromptChanges({ projectId: 'proj-1' }), {
@@ -308,9 +311,8 @@ describe('useApplyPromptChanges', () => {
   })
 
   it('includes initialMessage in update request', async () => {
-    vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
+    vi.mocked(AgentPrompts.putApiAgentPromptsByNameByName).mockResolvedValue({
       data: {
-        id: 'prompt-1',
         name: 'Test',
         initialMessage: 'Updated Hello',
         mode: SessionMode.BUILD,
@@ -323,9 +325,7 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [],
-      updates: [
-        { id: 'prompt-1', name: 'Test', initialMessage: 'Updated Hello', mode: SessionMode.BUILD },
-      ],
+      updates: [{ name: 'Test', initialMessage: 'Updated Hello', mode: SessionMode.BUILD }],
       deletes: [],
     }
 
@@ -333,10 +333,10 @@ describe('useApplyPromptChanges', () => {
       await result.current.mutateAsync(changes)
     })
 
-    expect(AgentPrompts.putApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-1' },
+    expect(AgentPrompts.putApiAgentPromptsByNameByName).toHaveBeenCalledWith({
+      path: { name: 'Test' },
+      query: { projectId: 'proj-1' },
       body: {
-        name: 'Test',
         initialMessage: 'Updated Hello',
         mode: SessionMode.BUILD,
       },

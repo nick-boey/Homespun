@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts } from '@/api'
+import { globalPromptsQueryKey } from './use-global-prompts'
 import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
@@ -16,9 +17,10 @@ export function useDeletePrompt(options: UseDeletePromptOptions) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const result = await AgentPrompts.deleteApiAgentPromptsById({
-        path: { id },
+    mutationFn: async ({ name, projectId }: { name: string; projectId?: string }) => {
+      const result = await AgentPrompts.deleteApiAgentPromptsByNameByName({
+        path: { name },
+        query: { projectId },
       })
 
       if (result.error) {
@@ -44,7 +46,7 @@ export function useDeletePrompt(options: UseDeletePromptOptions) {
       } else {
         // Invalidate global prompts list
         queryClient.invalidateQueries({
-          queryKey: ['global-prompts'],
+          queryKey: globalPromptsQueryKey(),
         })
         queryClient.invalidateQueries({
           queryKey: issueAgentPromptsQueryKey,

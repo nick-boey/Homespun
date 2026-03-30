@@ -83,8 +83,8 @@ public class SessionChatControlsTests
         var mockService = new Mock<IAgentPromptService>();
         var prompts = new List<AgentPrompt>
         {
-            new() { Id = "p1", Name = "Plan", InitialMessage = "Plan {{title}}" },
-            new() { Id = "p2", Name = "Build", InitialMessage = "Build {{title}}" }
+            new() { Name = "Plan", InitialMessage = "Plan {{title}}" },
+            new() { Name = "Build", InitialMessage = "Build {{title}}" }
         };
         mockService.Setup(s => s.GetAllPrompts()).Returns(prompts);
 

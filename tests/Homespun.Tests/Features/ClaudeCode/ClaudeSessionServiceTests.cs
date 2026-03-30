@@ -15,7 +15,6 @@ public class ClaudeSessionServiceTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -25,12 +24,13 @@ public class ClaudeSessionServiceTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -42,6 +42,7 @@ public class ClaudeSessionServiceTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -58,19 +59,72 @@ public class ClaudeSessionServiceTests
         _agUIEventServiceMock.Setup(s => s.CreateRunError(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns((string message, string? code) => new RunErrorEvent { Message = message, Code = code });
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!, // Lazy<IMessageProcessingService> - set below
+            null!); // Lazy<ISessionLifecycleService> - set below
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        // Wire up lazy dependencies for circular references
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        // Recreate messageProcessing with the properly wired toolInteraction
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [Test]
@@ -421,7 +475,6 @@ public class ClaudeSessionServiceMessageTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -431,12 +484,13 @@ public class ClaudeSessionServiceMessageTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -448,6 +502,7 @@ public class ClaudeSessionServiceMessageTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -455,20 +510,70 @@ public class ClaudeSessionServiceMessageTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [Test]
@@ -625,7 +730,6 @@ public class ClaudeSessionServiceModeTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -635,12 +739,13 @@ public class ClaudeSessionServiceModeTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -652,6 +757,7 @@ public class ClaudeSessionServiceModeTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -659,20 +765,70 @@ public class ClaudeSessionServiceModeTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [TestCase(SessionMode.Plan)]
@@ -764,7 +920,6 @@ public class ClaudeSessionServicePlanCaptureTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -774,12 +929,13 @@ public class ClaudeSessionServicePlanCaptureTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -791,6 +947,7 @@ public class ClaudeSessionServicePlanCaptureTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -798,20 +955,70 @@ public class ClaudeSessionServicePlanCaptureTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [Test]
@@ -893,7 +1100,6 @@ public class ClaudeSessionServiceResumeTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -903,6 +1109,7 @@ public class ClaudeSessionServiceResumeTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
     private string _testClaudeDir = null!;
 
     [SetUp]
@@ -912,7 +1119,7 @@ public class ClaudeSessionServiceResumeTests
         Directory.CreateDirectory(_testClaudeDir);
 
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -924,6 +1131,7 @@ public class ClaudeSessionServiceResumeTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -931,20 +1139,70 @@ public class ClaudeSessionServiceResumeTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [TearDown]
@@ -1159,7 +1417,6 @@ public class ClaudeSessionServicePlanExecutionTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -1169,12 +1426,13 @@ public class ClaudeSessionServicePlanExecutionTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -1186,6 +1444,7 @@ public class ClaudeSessionServicePlanExecutionTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1193,20 +1452,70 @@ public class ClaudeSessionServicePlanExecutionTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     /// <summary>
@@ -1367,7 +1676,6 @@ public class ClaudeSessionServiceQuestionPendingTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -1377,12 +1685,13 @@ public class ClaudeSessionServiceQuestionPendingTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -1394,6 +1703,7 @@ public class ClaudeSessionServiceQuestionPendingTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1401,20 +1711,70 @@ public class ClaudeSessionServiceQuestionPendingTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1552,7 +1912,6 @@ public class ClaudeSessionServicePlanApprovalTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -1562,12 +1921,13 @@ public class ClaudeSessionServicePlanApprovalTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -1579,6 +1939,7 @@ public class ClaudeSessionServicePlanApprovalTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1586,20 +1947,70 @@ public class ClaudeSessionServicePlanApprovalTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1798,6 +2209,8 @@ public class ClaudeSessionServicePlanApprovalTests
             s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "Please add tests", It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        Assert.That(session.PlanHasBeenApproved, Is.False,
+            "PlanHasBeenApproved should be false after rejection to allow new plan_pending events");
     }
 
     [Test]
@@ -1979,6 +2392,128 @@ public class ClaudeSessionServicePlanApprovalTests
         // Note: When worker handles rejection, plan content may be preserved for revision
         Assert.That(session.HasPendingPlanApproval, Is.False,
             "HasPendingPlanApproval should be false after rejection");
+        Assert.That(session.PlanContent, Is.Null,
+            "PlanContent should be cleared after rejection to prevent stale fallback");
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Rejected_ClearsPlanStateForNewPlan()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Old Plan";
+        session.PlanFilePath = "/test/plans/plan.md";
+        session.HasPendingPlanApproval = true;
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+        session.HasPendingPlanApproval = true;
+
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "revise", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: false, keepContext: false, feedback: "revise");
+
+        // Assert - all plan state should be cleared so new plan_pending events work
+        Assert.That(session.PlanHasBeenApproved, Is.False,
+            "PlanHasBeenApproved should be false after rejection to allow new plan_pending events");
+        Assert.That(session.PlanContent, Is.Null,
+            "PlanContent should be null after rejection to prevent stale fallback");
+        Assert.That(session.PlanFilePath, Is.Null,
+            "PlanFilePath should be null after rejection to prevent stale path");
+        Assert.That(session.HasPendingPlanApproval, Is.False,
+            "HasPendingPlanApproval should be false after rejection");
+    }
+
+    [Test]
+    public async Task HandlePlanPendingFromWorker_AfterRejection_ProcessesNewPlan()
+    {
+        // Arrange - Start a session and simulate post-rejection state
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Simulate post-rejection state: plan state cleared, session is Running
+        session.Status = ClaudeSessionStatus.Running;
+        session.PlanHasBeenApproved = false;
+        session.PlanContent = null;
+        session.PlanFilePath = null;
+        session.HasPendingPlanApproval = false;
+
+        var planJson = """{"plan": "# New Revised Plan\n\n1. Better step"}""";
+
+        // Simulate a new plan_pending event arriving after rejection
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Continue with revised plan");
+
+        // Assert - the new plan should be processed
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Status should be WaitingForPlanExecution after new plan_pending");
+        Assert.That(session.HasPendingPlanApproval, Is.True,
+            "HasPendingPlanApproval should be true for new plan");
+        Assert.That(session.PlanContent, Is.EqualTo("# New Revised Plan\n\n1. Better step"),
+            "PlanContent should contain the new plan, not stale content");
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_ReadsFromDisk_WhenPlanFilePathExists()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Create a temp file with fresh plan content
+        var tempDir = Path.Combine(Path.GetTempPath(), "homespun-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var planFilePath = Path.Combine(tempDir, "PLAN.md");
+        await File.WriteAllTextAsync(planFilePath, "# Fresh Plan from Disk");
+
+        try
+        {
+            session.PlanContent = "# Stale Plan";
+            session.PlanFilePath = planFilePath;
+            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+            // Set up agent session for SendMessageAsync call within ExecutePlanAsync
+            _agentExecutionServiceMock
+                .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(CreateSdkMessageStream(
+                    new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                    new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+            // Act
+            await _service.ExecutePlanAsync(session.Id, clearContext: false);
+
+            // Assert - the message sent should contain the fresh disk content
+            var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+            Assert.That(lastUserMessage, Is.Not.Null);
+            Assert.That(lastUserMessage!.Content[0].Text, Does.Contain("# Fresh Plan from Disk"),
+                "ExecutePlanAsync should use plan content from disk when PlanFilePath exists");
+            Assert.That(lastUserMessage.Content[0].Text, Does.Not.Contain("# Stale Plan"),
+                "ExecutePlanAsync should not use stale cached content when disk content is available");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 
     [Test]
@@ -2050,7 +2585,6 @@ public class ClaudeSessionServiceToolResultDetectionTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -2060,12 +2594,13 @@ public class ClaudeSessionServiceToolResultDetectionTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -2077,6 +2612,7 @@ public class ClaudeSessionServiceToolResultDetectionTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -2084,20 +2620,70 @@ public class ClaudeSessionServiceToolResultDetectionTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -2405,7 +2991,6 @@ public class ClaudeSessionServiceCloneStateTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -2415,12 +3000,13 @@ public class ClaudeSessionServiceCloneStateTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -2432,6 +3018,7 @@ public class ClaudeSessionServiceCloneStateTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -2439,20 +3026,70 @@ public class ClaudeSessionServiceCloneStateTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     [Test]
@@ -2704,7 +3341,6 @@ public class ClaudeSessionServiceStatusBroadcastTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -2714,6 +3350,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
     private Mock<IClientProxy> _clientProxyMock = null!;
     private List<(string Method, object?[] Args)> _broadcastCalls = null!;
 
@@ -2721,7 +3358,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -2745,6 +3382,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
         _broadcastCalls = new List<(string Method, object?[] Args)>();
 
         var clientsMock = new Mock<IHubClients>();
@@ -2766,20 +3404,70 @@ public class ClaudeSessionServiceStatusBroadcastTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!,
+            null!);
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -3286,7 +3974,6 @@ public class ClaudeSessionServiceTurnIdTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
-    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -3296,12 +3983,13 @@ public class ClaudeSessionServiceTurnIdTests
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
+    private ISessionStateManager _stateManager = null!;
 
     [SetUp]
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
@@ -3325,6 +4013,7 @@ public class ClaudeSessionServiceTurnIdTests
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
+        _stateManager = new SessionStateManager();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -3332,19 +4021,72 @@ public class ClaudeSessionServiceTurnIdTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(
+        var workflowCallback = new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object);
+        var toolInteraction = new ToolInteractionService(
             _sessionStore,
-            _loggerMock.Object,
+            new Mock<ILogger<ToolInteractionService>>().Object,
             _hubContextMock.Object,
-            _discoveryMock.Object,
-            _metadataStoreMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            null!, // Lazy<IMessageProcessingService> - set below
+            null!); // Lazy<ISessionLifecycleService> - set below
+        var messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
             _fleeceTransitionServiceMock.Object,
-            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
+            _stateManager,
+            toolInteraction,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        var lifecycle = new SessionLifecycleService(
+            _sessionStore,
+            new Mock<ILogger<SessionLifecycleService>>().Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _stateManager,
+            new Lazy<IMessageProcessingService>(() => messageProcessing));
+        // Wire up lazy dependencies for circular references
+        var toolInteractionWithDeps = new ToolInteractionService(
+            _sessionStore,
+            new Mock<ILogger<ToolInteractionService>>().Object,
+            _hubContextMock.Object,
+            _agUIEventServiceMock.Object,
+            _agentExecutionServiceMock.Object,
+            _stateManager,
+            workflowCallback,
+            new Lazy<IMessageProcessingService>(() => messageProcessing),
+            new Lazy<ISessionLifecycleService>(() => lifecycle));
+        // Recreate messageProcessing with the properly wired toolInteraction
+        messageProcessing = new MessageProcessingService(
+            _sessionStore,
+            new Mock<ILogger<MessageProcessingService>>().Object,
+            _hubContextMock.Object,
+            _toolResultParser,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object,
+            _stateManager,
+            toolInteractionWithDeps,
+            workflowCallback,
+            _metadataStoreMock.Object);
+        _service = new ClaudeSessionService(
+            lifecycle,
+            messageProcessing,
+            toolInteractionWithDeps,
+            _sessionStore);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -3354,6 +4096,16 @@ public class ClaudeSessionServiceTurnIdTests
             yield return msg;
         }
         await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<SdkMessage> CreateDelayedSdkMessageStream(
+        SdkMessage[] immediate, Task<SdkMessage> delayed)
+    {
+        foreach (var msg in immediate)
+        {
+            yield return msg;
+        }
+        yield return await delayed;
     }
 
     [Test]
@@ -3497,5 +4249,81 @@ public class ClaudeSessionServiceTurnIdTests
         // the post-loop transition is correctly scoped to the current turn.
         Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
             "plan_pending from the current turn should still be processed normally");
+    }
+
+    [Test]
+    public async Task ApprovePlan_ClearContext_WithSlowFirstStream_StatusIsRunningDuringBuildSession()
+    {
+        // This test reproduces the race condition where the first SendMessageAsync's
+        // post-loop guard erroneously sets WaitingForInput during the second SendMessageAsync.
+        //
+        // Timeline without fix:
+        //   1. First SendMessageAsync: plan_pending → status=WaitingForPlanExecution, stream blocks
+        //   2. ApprovePlanAsync(keepContext:false) → ExecutePlanAsync → new SendMessageAsync
+        //   3. New SendMessageAsync sets status=Running, broadcasts (await yields)
+        //   4. First stream's TCS completes → its post-loop guard sees Running + old turnId → sets WaitingForInput
+        //   5. New SendMessageAsync resumes, but status is WaitingForInput → post-loop guard skips transition
+        //
+        // With the fix, the new turnId is written BEFORE the broadcast await, so step 4
+        // sees a mismatched turnId and correctly skips the transition.
+
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planJson = "{\"plan\":\"# Test Plan\\n\\n1. Step one\"}";
+        var firstStreamTcs = new TaskCompletionSource<SdkMessage>();
+
+        // First message stream: yields plan_pending immediately, then blocks on TCS
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateDelayedSdkMessageStream(
+                [
+                    new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                    new SdkPlanPendingMessage("agent-1", planJson)
+                ],
+                firstStreamTcs.Task));
+
+        // Start first SendMessageAsync - it will yield plan_pending then block
+        var firstSendTask = _service.SendMessageAsync(session.Id, "Plan this feature");
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Precondition: should be WaitingForPlanExecution after plan_pending");
+
+        // Worker approve returns true for the deny/clear path
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, false, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var buildStreamSetup = false;
+
+        // Second stream (build): when ExecutePlanAsync starts a new session, release the first stream's TCS
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(
+                It.Is<AgentStartRequest>(r => r.Prompt!.Contains("proceed with the implementation")),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                if (!buildStreamSetup)
+                {
+                    buildStreamSetup = true;
+                    // Release the first stream - simulates the old worker producing a late result
+                    firstStreamTcs.SetResult(new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null));
+                }
+                return CreateSdkMessageStream(
+                    new SdkSystemMessage("agent-2", null, "session_started", null, null),
+                    new SdkResultMessage("agent-2", null, null, 0, 0, false, 0, 0, null));
+            });
+
+        // Act - Approve with clear context, which triggers ExecutePlanAsync → new SendMessageAsync
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: false);
+
+        // Wait for the first stream to finish its post-loop guard
+        await firstSendTask;
+
+        // Assert - The final status should be WaitingForInput, set by the SECOND (build) turn's
+        // post-loop guard. Without the fix, the first turn's post-loop guard would have set
+        // WaitingForInput early (because turnId_B wasn't written yet), and then the second turn's
+        // guard would skip the transition (status already WaitingForInput, not Running).
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput),
+            "Status should be WaitingForInput from the build turn's post-loop completion");
     }
 }

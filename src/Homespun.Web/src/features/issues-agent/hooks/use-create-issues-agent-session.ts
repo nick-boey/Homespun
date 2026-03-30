@@ -9,8 +9,8 @@ export interface CreateIssuesAgentSessionParams {
   selectedIssueId?: string
   /** Optional user instructions for the agent */
   userInstructions?: string
-  /** Optional prompt ID for the agent session */
-  promptId?: string | null
+  /** Optional prompt name for the agent session */
+  promptName?: string | null
 }
 
 export interface CreateIssuesAgentSessionResult {
@@ -32,7 +32,7 @@ export function useCreateIssuesAgentSession() {
           model: params.model,
           selectedIssueId: params.selectedIssueId,
           userInstructions: params.userInstructions,
-          promptId: params.promptId,
+          promptName: params.promptName,
         },
       })
 

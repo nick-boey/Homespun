@@ -109,6 +109,10 @@ public class ProjectService(
             // Set default branch name
             await commandRunner.RunAsync("git", $"branch -M {defaultBranch}", localPath);
 
+            // Configure repo-local git user for the initial commit (may not be set in CI/test environments)
+            await commandRunner.RunAsync("git", "config user.email \"homespun@localhost\"", localPath);
+            await commandRunner.RunAsync("git", "config user.name \"Homespun\"", localPath);
+
             // Create initial commit (required for beads and clones)
             var commitResult = await commandRunner.RunAsync("git", "commit --allow-empty -m \"Initial commit\"", localPath);
             if (!commitResult.Success)

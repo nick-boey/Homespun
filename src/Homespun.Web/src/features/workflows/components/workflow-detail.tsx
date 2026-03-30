@@ -96,7 +96,7 @@ function ExecutionRow({
 }
 
 export function WorkflowDetail({ projectId, workflowId }: WorkflowDetailProps) {
-  const { workflow, isLoading, isError, refetch } = useWorkflow(workflowId)
+  const { workflow, isLoading, isError, refetch } = useWorkflow(workflowId, projectId)
   const updateMutation = useUpdateWorkflow(projectId)
   const {
     executions,

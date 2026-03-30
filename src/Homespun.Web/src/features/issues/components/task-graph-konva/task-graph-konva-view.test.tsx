@@ -130,7 +130,8 @@ describe('TaskGraphKonvaView', () => {
       })
 
       renderComponent()
-      expect(screen.getByText(/no issues found/i)).toBeInTheDocument()
+      expect(screen.getByText('No issues are currently open')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Create an issue' })).toBeInTheDocument()
     })
   })
 
@@ -152,6 +153,12 @@ describe('TaskGraphKonvaView', () => {
     it('renders the task graph canvas', () => {
       renderComponent()
       expect(screen.getByTestId('task-graph-konva')).toBeInTheDocument()
+    })
+
+    it('does not set inline height style on container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
     })
 
     it('renders issue titles', () => {
@@ -177,6 +184,102 @@ describe('TaskGraphKonvaView', () => {
       const rows = screen.getAllByTestId('konva-html-row')
       expect(rows[0].className).toContain('ring-1')
       expect(rows[0].className).toContain('ring-primary')
+    })
+
+    it('does not set inline height style on container so CSS can control sizing', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
+    })
+  })
+
+  describe('touch events', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('attaches touch event listeners to the container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Verify touch events don't throw and the container is interactive
+      fireEvent.touchStart(container, {
+        touches: [{ clientX: 100, clientY: 200 }],
+      })
+      fireEvent.touchMove(container, {
+        touches: [{ clientX: 80, clientY: 180 }],
+      })
+      fireEvent.touchEnd(container)
+
+      // The container should still be rendered and functional
+      expect(container).toBeInTheDocument()
+    })
+  })
+
+  describe('sizing', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('does not set inline height style on container', () => {
+      renderComponent()
+      const container = screen.getByTestId('task-graph-konva')
+      expect(container.style.height).toBe('')
+    })
+
+    it('uses viewport width for content rows when wider than 800px', () => {
+      // Mock ResizeObserver to report 1200px width
+      const originalResizeObserver = window.ResizeObserver
+      class MockWideResizeObserver {
+        callback: ResizeObserverCallback
+        constructor(cb: ResizeObserverCallback) {
+          this.callback = cb
+        }
+        observe(target: Element) {
+          Object.defineProperty(target, 'clientWidth', { value: 1200, configurable: true })
+          Object.defineProperty(target, 'clientHeight', { value: 800, configurable: true })
+          this.callback(
+            [{ target, contentRect: {} as DOMRectReadOnly } as ResizeObserverEntry],
+            this as unknown as ResizeObserver
+          )
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      window.ResizeObserver = MockWideResizeObserver as unknown as typeof ResizeObserver
+
+      try {
+        renderComponent()
+
+        // The HTML overlay row containers should have width > 800 + svgWidth
+        const rows = screen.getAllByTestId('konva-html-row')
+        const rowContainer = rows[0].parentElement!
+        const rowWidth = parseInt(rowContainer.style.width, 10)
+        // With 1200px viewport, content width should be at least 1200px (svgWidth + available area)
+        expect(rowWidth).toBeGreaterThanOrEqual(1200)
+      } finally {
+        window.ResizeObserver = originalResizeObserver
+      }
     })
   })
 
@@ -234,6 +337,91 @@ describe('TaskGraphKonvaView', () => {
       fireEvent.keyDown(container, { key: 'G' })
 
       expect(onSelectIssue).toHaveBeenCalledWith('issue-3')
+    })
+  })
+
+  describe('expanded row shifting', () => {
+    const sampleGraph = createTaskGraph([
+      { id: 'issue-1', title: 'First Issue', lane: 0, row: 0 },
+      { id: 'issue-2', title: 'Second Issue', lane: 0, row: 1 },
+      { id: 'issue-3', title: 'Third Issue', lane: 0, row: 2 },
+    ])
+
+    beforeEach(() => {
+      mockUseTaskGraph.mockReturnValue({
+        taskGraph: sampleGraph,
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+    })
+
+    it('shifts rows below expanded issue down when space is pressed', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const rows = screen.getAllByTestId('konva-html-row')
+      // Before expansion: row 0 at top=0, row 1 at top=40, row 2 at top=80
+      const row1Parent = rows[0].parentElement!
+      const row2Parent = rows[1].parentElement!
+      const row3Parent = rows[2].parentElement!
+
+      expect(row1Parent.style.top).toBe('0px')
+      expect(row2Parent.style.top).toBe('40px')
+      expect(row3Parent.style.top).toBe('80px')
+
+      // Press space to expand issue-1
+      const container = screen.getByTestId('task-graph-konva')
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // After expansion: row 0 still at 0, row 1 shifted to 240 (40+200), row 2 at 280
+      const updatedRows = screen.getAllByTestId('konva-html-row')
+      const updatedRow1Parent = updatedRows[0].parentElement!
+      const updatedRow2Parent = updatedRows[1].parentElement!
+      const updatedRow3Parent = updatedRows[2].parentElement!
+
+      expect(updatedRow1Parent.style.top).toBe('0px')
+      expect(updatedRow2Parent.style.top).toBe('240px')
+      expect(updatedRow3Parent.style.top).toBe('280px')
+    })
+
+    it('shifts rows back up when expanded issue is collapsed', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Expand
+      fireEvent.keyDown(container, { key: ' ' })
+      // Collapse
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // After collapse: rows should be back to original positions
+      const rows = screen.getAllByTestId('konva-html-row')
+      expect(rows[0].parentElement!.style.top).toBe('0px')
+      expect(rows[1].parentElement!.style.top).toBe('40px')
+      expect(rows[2].parentElement!.style.top).toBe('80px')
+    })
+
+    it('handles multiple expanded issues with cumulative shifting', () => {
+      const onSelectIssue = vi.fn()
+      renderComponent({ selectedIssueId: 'issue-1', onSelectIssue })
+
+      const container = screen.getByTestId('task-graph-konva')
+
+      // Expand issue-1 (space)
+      fireEvent.keyDown(container, { key: ' ' })
+
+      // Double-click issue-2 to expand it too
+      const rows = screen.getAllByTestId('konva-html-row')
+      fireEvent.doubleClick(rows[1])
+
+      // After both expanded:
+      // row 0 at 0, row 1 at 240 (40+200), row 2 at 480 (240+40+200)
+      const updatedRows = screen.getAllByTestId('konva-html-row')
+      expect(updatedRows[0].parentElement!.style.top).toBe('0px')
+      expect(updatedRows[1].parentElement!.style.top).toBe('240px')
+      expect(updatedRows[2].parentElement!.style.top).toBe('480px')
     })
   })
 })

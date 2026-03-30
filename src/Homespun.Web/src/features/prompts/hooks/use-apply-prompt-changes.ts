@@ -44,10 +44,10 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
 
       // Execute updates
       for (const update of changes.updates) {
-        const result = await AgentPrompts.putApiAgentPromptsById({
-          path: { id: update.id },
+        const result = await AgentPrompts.putApiAgentPromptsByNameByName({
+          path: { name: update.name! },
+          query: { projectId: isGlobal ? undefined : projectId },
           body: {
-            name: update.name,
             initialMessage: update.initialMessage,
             mode: update.mode,
           },
@@ -59,9 +59,10 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
       }
 
       // Execute deletes
-      for (const id of changes.deletes) {
-        const result = await AgentPrompts.deleteApiAgentPromptsById({
-          path: { id },
+      for (const name of changes.deletes) {
+        const result = await AgentPrompts.deleteApiAgentPromptsByNameByName({
+          path: { name },
+          query: { projectId: isGlobal ? undefined : projectId },
         })
 
         if (result.error) {

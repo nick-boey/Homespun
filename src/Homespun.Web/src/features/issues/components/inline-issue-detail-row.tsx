@@ -85,7 +85,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         'animate-expand bg-muted/30 border-muted overflow-hidden border-t px-3 py-4',
         'transition-all duration-200 ease-out'
       )}
-      style={{ marginLeft: svgWidth }}
+      style={{ marginLeft: svgWidth, height: 700 }}
     >
       {/* Header with badges and close button */}
       <div className="mb-3 flex flex-wrap items-center gap-2">

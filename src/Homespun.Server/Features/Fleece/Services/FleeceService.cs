@@ -5,7 +5,6 @@ using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Shared.Requests;
-using Homespun.Shared.Utilities;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -18,6 +17,7 @@ namespace Homespun.Features.Fleece.Services;
 public sealed class FleeceService : IFleeceService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IIssueService> _issueServices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, IDependencyService> _dependencyServices = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, Issue>> _issueCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly IJsonlSerializer _serializer;
@@ -52,6 +52,16 @@ public sealed class FleeceService : IFleeceService, IDisposable
             var schemaValidator = new SchemaValidator();
             var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
             return new IssueService(storageService, _idGenerator, _gitConfigService, _tagService);
+        });
+    }
+
+    private IDependencyService GetOrCreateDependencyService(string projectPath)
+    {
+        return _dependencyServices.GetOrAdd(projectPath, _ =>
+        {
+            var issueService = GetOrCreateIssueService(projectPath);
+            var validationService = new ValidationService(issueService);
+            return new DependencyService(issueService, validationService);
         });
     }
 
@@ -90,8 +100,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
     {
         _logger.LogDebug("Reloading issues from disk for project: {ProjectPath}", projectPath);
 
-        // Remove the cached IssueService so a fresh one reads current disk state
+        // Remove the cached services so fresh ones read current disk state
         _issueServices.TryRemove(projectPath, out _);
+        _dependencyServices.TryRemove(projectPath, out _);
 
         // Clear the cache initialized flag and existing cache
         _cacheInitialized.TryRemove(projectPath, out _);
@@ -516,53 +527,29 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return deleted;
     }
 
-    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default)
+    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
 
-        // Check if the child issue exists in cache
-        if (!cache.TryGetValue(childId, out var existingIssue))
+        var depService = GetOrCreateDependencyService(projectPath);
+
+        DependencyPosition? position = null;
+        if (!string.IsNullOrEmpty(siblingIssueId))
         {
-            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
-            throw new KeyNotFoundException($"Issue '{childId}' not found");
+            position = new DependencyPosition
+            {
+                Kind = insertBefore ? DependencyPositionKind.Before : DependencyPositionKind.After,
+                SiblingId = siblingIssueId
+            };
         }
 
-        // Build the new parent issues list with the added parent
-        var newParentIssues = existingIssue.ParentIssues.ToList();
-        newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
+        var issue = await depService.AddDependencyAsync(parentId, childId, position, ct: ct);
 
-        // Perform the update via Fleece.Core
-        var service = GetOrCreateIssueService(projectPath);
-        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
-
-        // Update the in-memory cache immediately
+        // Update the in-memory cache
         cache[childId] = issue;
-
-        // Queue a background persistence operation for consistency
-        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: childId,
-            Type: WriteOperationType.Update,
-            WriteAction: async (innerCt) =>
-            {
-                var svc = GetOrCreateIssueService(projectPath);
-                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
-                if (currentIssue != null)
-                {
-                    var updatedParents = currentIssue.ParentIssues.ToList();
-                    if (!updatedParents.Any(p => p.ParentIssue == parentId))
-                    {
-                        updatedParents.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
-                        await svc.UpdateAsync(childId, parentIssues: updatedParents, cancellationToken: innerCt);
-                    }
-                }
-            },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
 
         _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
 
-        // Record history snapshot after adding parent (merge operation)
         await RecordHistorySnapshotAsync(projectPath, "AddParent", childId, $"Linked '{childId}' to parent '{parentId}'", ct);
 
         return issue;
@@ -572,49 +559,58 @@ public sealed class FleeceService : IFleeceService, IDisposable
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
 
-        // Check if the child issue exists in cache
-        if (!cache.TryGetValue(childId, out var existingIssue))
+        var depService = GetOrCreateDependencyService(projectPath);
+        var issue = await depService.RemoveDependencyAsync(parentId, childId, ct);
+
+        // Update the in-memory cache
+        cache[childId] = issue;
+
+        _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
+
+        await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
+
+        return issue;
+    }
+
+    public async Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the issue exists in cache
+        if (!cache.TryGetValue(issueId, out _))
         {
-            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
-            throw new KeyNotFoundException($"Issue '{childId}' not found");
+            _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
+            throw new KeyNotFoundException($"Issue '{issueId}' not found");
         }
 
-        // Build the new parent issues list without the removed parent
-        var newParentIssues = existingIssue.ParentIssues
-            .Where(p => p.ParentIssue != parentId)
-            .ToList();
-
-        // Perform the update via Fleece.Core
+        // Perform the update via Fleece.Core with empty parent list
         var service = GetOrCreateIssueService(projectPath);
-        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
+        var issue = await service.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: ct);
 
         // Update the in-memory cache immediately
-        cache[childId] = issue;
+        cache[issueId] = issue;
 
         // Queue a background persistence operation for consistency
         await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
             ProjectPath: projectPath,
-            IssueId: childId,
+            IssueId: issueId,
             Type: WriteOperationType.Update,
             WriteAction: async (innerCt) =>
             {
                 var svc = GetOrCreateIssueService(projectPath);
-                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
+                var currentIssue = await svc.GetByIdAsync(issueId, innerCt);
                 if (currentIssue != null)
                 {
-                    var updatedParents = currentIssue.ParentIssues
-                        .Where(p => p.ParentIssue != parentId)
-                        .ToList();
-                    await svc.UpdateAsync(childId, parentIssues: updatedParents, cancellationToken: innerCt);
+                    await svc.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: innerCt);
                 }
             },
             QueuedAt: DateTimeOffset.UtcNow
         ), ct);
 
-        _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
+        _logger.LogInformation("Removed all parents from issue '{IssueId}'", issueId);
 
-        // Record history snapshot after removing parent
-        await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
+        // Record history snapshot after removing all parents
+        await RecordHistorySnapshotAsync(projectPath, "RemoveAllParents", issueId, $"Removed all parents from '{issueId}'", ct);
 
         return issue;
     }
@@ -669,72 +665,35 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
     public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default)
     {
-        // Check for cycle
-        if (await WouldCreateCycleAsync(projectPath, childId, parentId, ct))
-        {
-            throw new InvalidOperationException($"Setting '{parentId}' as parent of '{childId}' would create a cycle in the issue hierarchy.");
-        }
-
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
 
-        // Check if the child issue exists
-        if (!cache.TryGetValue(childId, out var existingIssue))
+        var depService = GetOrCreateDependencyService(projectPath);
+
+        try
         {
-            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
-            throw new KeyNotFoundException($"Issue '{childId}' not found");
-        }
+            // replaceExisting is the inverse of addToExisting
+            var issue = await depService.AddDependencyAsync(parentId, childId, replaceExisting: !addToExisting, ct: ct);
 
-        List<ParentIssueRef> newParentIssues;
-        if (addToExisting)
+            // Update the in-memory cache
+            cache[childId] = issue;
+
+            _logger.LogInformation(
+                "Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})",
+                parentId, childId, addToExisting);
+
+            var description = addToExisting
+                ? $"Added '{parentId}' as additional parent of '{childId}'"
+                : $"Set '{parentId}' as sole parent of '{childId}'";
+            await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
+
+            return issue;
+        }
+        catch (Exception ex) when (ex.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase)
+                                   || ex.Message.Contains("circular", StringComparison.OrdinalIgnoreCase))
         {
-            // Add to existing parents (check if already present)
-            newParentIssues = existingIssue.ParentIssues.ToList();
-            if (!newParentIssues.Any(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
-            {
-                newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
-            }
+            throw new InvalidOperationException(
+                $"Setting '{parentId}' as parent of '{childId}' would create a cycle in the issue hierarchy.", ex);
         }
-        else
-        {
-            // Replace all existing parents with the new parent
-            newParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }];
-        }
-
-        // Perform the update via Fleece.Core
-        var service = GetOrCreateIssueService(projectPath);
-        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
-
-        // Update the in-memory cache immediately
-        cache[childId] = issue;
-
-        // Queue a background persistence operation for consistency
-        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: childId,
-            Type: WriteOperationType.Update,
-            WriteAction: async (innerCt) =>
-            {
-                var svc = GetOrCreateIssueService(projectPath);
-                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
-                if (currentIssue != null)
-                {
-                    await svc.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: innerCt);
-                }
-            },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
-
-        _logger.LogInformation(
-            "Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})",
-            parentId, childId, addToExisting);
-
-        // Record history snapshot after setting parent
-        var description = addToExisting
-            ? $"Added '{parentId}' as additional parent of '{childId}'"
-            : $"Set '{parentId}' as sole parent of '{childId}'";
-        await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
-
-        return issue;
     }
 
     public async Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default)
@@ -759,156 +718,40 @@ public sealed class FleeceService : IFleeceService, IDisposable
             throw new InvalidOperationException($"Issue '{issueId}' has multiple parents. Move sibling operation requires exactly one parent.");
         }
 
-        var parentRef = issue.ParentIssues[0];
-        var parentId = parentRef.ParentIssue;
+        var parentId = issue.ParentIssues[0].ParentIssue;
 
-        // Find all siblings under the same parent, sorted by sort order
-        var siblings = cache.Values
-            .Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId))
-            .Select(i => new
-            {
-                Issue = i,
-                SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder
-            })
-            .OrderBy(s => s.SortOrder ?? "", StringComparer.Ordinal)
-            .ToList();
+        var depService = GetOrCreateDependencyService(projectPath);
+        var result = direction == MoveDirection.Up
+            ? await depService.MoveUpAsync(parentId, issueId, ct)
+            : await depService.MoveDownAsync(parentId, issueId, ct);
 
-        _logger.LogDebug(
-            "MoveSeriesSibling: Found {Count} siblings under parent '{ParentId}': {Siblings}",
-            siblings.Count, parentId,
-            string.Join(", ", siblings.Select(s => $"{s.Issue.Id}({s.Issue.Title})={s.SortOrder ?? "null"}")));
-
-        // If siblings lack distinct sort orders (all null/empty or all the same default),
-        // assign lexical ordering to all siblings preserving the current display order
-        var distinctOrders = siblings.Select(s => s.SortOrder ?? "").Distinct().Count();
-        if (distinctOrders < siblings.Count)
+        if (result.Outcome == MoveOutcome.Invalid)
         {
-            var service2 = GetOrCreateIssueService(projectPath);
-            string? prev = null;
-            for (var i = 0; i < siblings.Count; i++)
-            {
-                var newOrder = LexOrderUtils.ComputeMidpoint(prev, null);
-                var sib = siblings[i];
-                var updatedParents = sib.Issue.ParentIssues
-                    .Select(p => p.ParentIssue == parentId
-                        ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = newOrder }
-                        : p)
-                    .ToList();
-
-                var updated = await service2.UpdateAsync(sib.Issue.Id, parentIssues: updatedParents, cancellationToken: ct);
-                cache[sib.Issue.Id] = updated;
-                prev = newOrder;
-            }
-
-            _logger.LogDebug(
-                "MoveSeriesSibling: Reassigned sort orders for siblings under '{ParentId}': {Siblings}",
-                parentId,
-                string.Join(", ", siblings.Select(s => $"{s.Issue.Id}={cache[s.Issue.Id].ParentIssues.First(p => p.ParentIssue == parentId).SortOrder}")));
-
-            // Re-fetch siblings with updated sort orders
-            siblings = cache.Values
-                .Where(i2 => i2.ParentIssues.Any(p => p.ParentIssue == parentId))
-                .Select(i2 => new
-                {
-                    Issue = i2,
-                    SortOrder = i2.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder
-                })
-                .OrderBy(s => s.SortOrder ?? "", StringComparer.Ordinal)
-                .ToList();
+            throw new InvalidOperationException(result.Message ?? $"Cannot move issue '{issueId}' {direction.ToString().ToLower()}.");
         }
 
-        // Find the current issue's position
-        var currentIndex = siblings.FindIndex(s => s.Issue.Id == issueId);
-        if (currentIndex < 0)
+        // Refresh cache for the moved issue and its siblings
+        var issueService = GetOrCreateIssueService(projectPath);
+        var allIssues = await issueService.GetAllAsync(ct);
+        foreach (var refreshedIssue in allIssues.Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId)))
         {
-            throw new InvalidOperationException($"Issue '{issueId}' not found among siblings of parent '{parentId}'");
+            cache[refreshedIssue.Id] = refreshedIssue;
         }
 
-        // Validate movement boundaries
-        if (direction == MoveDirection.Up && currentIndex == 0)
+        // Also update the moved issue itself from the result
+        if (result.UpdatedIssue != null)
         {
-            throw new InvalidOperationException($"Issue '{issueId}' is already first among siblings. Cannot move up.");
+            cache[issueId] = result.UpdatedIssue;
         }
-
-        if (direction == MoveDirection.Down && currentIndex == siblings.Count - 1)
-        {
-            throw new InvalidOperationException($"Issue '{issueId}' is already last among siblings. Cannot move down.");
-        }
-
-        // Get the target sibling to swap with
-        var targetIndex = direction == MoveDirection.Up ? currentIndex - 1 : currentIndex + 1;
-        var targetSibling = siblings[targetIndex];
-
-        // Swap sort orders
-        var currentSortOrder = siblings[currentIndex].SortOrder;
-        var targetSortOrder = targetSibling.SortOrder;
-
-        _logger.LogDebug(
-            "MoveSeriesSibling: Swapping sort orders - {IssueId}({CurrentOrder}) <-> {TargetId}({TargetOrder})",
-            issueId, currentSortOrder, targetSibling.Issue.Id, targetSortOrder);
-
-        // Update the current issue's parent ref with the target's sort order
-        var service = GetOrCreateIssueService(projectPath);
-
-        var updatedCurrentParents = issue.ParentIssues
-            .Select(p => p.ParentIssue == parentId
-                ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = targetSortOrder }
-                : p)
-            .ToList();
-
-        var updatedTargetParents = targetSibling.Issue.ParentIssues
-            .Select(p => p.ParentIssue == parentId
-                ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = currentSortOrder }
-                : p)
-            .ToList();
-
-        // Update both issues via Fleece.Core
-        var updatedCurrent = await service.UpdateAsync(issueId, parentIssues: updatedCurrentParents, cancellationToken: ct);
-        var updatedTarget = await service.UpdateAsync(targetSibling.Issue.Id, parentIssues: updatedTargetParents, cancellationToken: ct);
-
-        // Update the in-memory cache immediately
-        cache[issueId] = updatedCurrent;
-        cache[targetSibling.Issue.Id] = updatedTarget;
-
-        _logger.LogDebug(
-            "MoveSeriesSibling: Updated cache - {IssueId} parentRefs=[{IssuePRefs}], {TargetId} parentRefs=[{TargetPRefs}]",
-            issueId, string.Join(", ", updatedCurrent.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}")),
-            targetSibling.Issue.Id, string.Join(", ", updatedTarget.ParentIssues.Select(p => $"{p.ParentIssue}:{p.SortOrder}")));
-
-        // Queue background persistence for both issues
-        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: issueId,
-            Type: WriteOperationType.Update,
-            WriteAction: async (innerCt) =>
-            {
-                var svc = GetOrCreateIssueService(projectPath);
-                await svc.UpdateAsync(issueId, parentIssues: updatedCurrentParents, cancellationToken: innerCt);
-            },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
-
-        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: targetSibling.Issue.Id,
-            Type: WriteOperationType.Update,
-            WriteAction: async (innerCt) =>
-            {
-                var svc = GetOrCreateIssueService(projectPath);
-                await svc.UpdateAsync(targetSibling.Issue.Id, parentIssues: updatedTargetParents, cancellationToken: innerCt);
-            },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
 
         _logger.LogInformation(
-            "Moved issue '{IssueId}' {Direction} by swapping with '{TargetId}' under parent '{ParentId}'",
-            issueId, direction, targetSibling.Issue.Id, parentId);
+            "Moved issue '{IssueId}' {Direction} under parent '{ParentId}'",
+            issueId, direction, parentId);
 
-        // Record history snapshot
         await RecordHistorySnapshotAsync(projectPath, "MoveSeriesSibling", issueId,
             $"Moved '{issue.Title}' {direction.ToString().ToLower()} in sibling order", ct);
 
-        return updatedCurrent;
+        return result.UpdatedIssue ?? issue;
     }
 
     #endregion
@@ -1005,7 +848,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         // 1. In an open status (Open, Progress, Review)
         // 2. OR in the additionalIssueIds set (regardless of status)
         var includedIssues = cache.Values
-            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
+            .Where(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
                         || additionalIds.Contains(i.Id))
             .ToList();
 
@@ -1018,8 +861,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
         _logger.LogDebug(
             "Building task graph with {TotalCount} issues ({OpenCount} open, {AdditionalCount} additional) for project: {ProjectPath}",
             includedIssues.Count,
-            includedIssues.Count(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review),
-            includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
+            includedIssues.Count(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review),
+            includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
             projectPath);
 
         // Create a temporary IssueService with only the included issues
@@ -1049,6 +892,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         // Clear all caches
         _issueServices.Clear();
+        _dependencyServices.Clear();
         _issueCache.Clear();
         _cacheInitialized.Clear();
     }

@@ -49,9 +49,16 @@ public class CreateIssueRequest
     public string? ParentIssueId { get; set; }
 
     /// <summary>
-    /// Optional sort order for the parent relationship. Used when creating siblings in series-mode parents.
+    /// Optional sibling issue ID for positioning within the parent's children.
+    /// Used with InsertBefore to control where the new issue is placed relative to an existing sibling.
     /// </summary>
-    public string? ParentSortOrder { get; set; }
+    public string? SiblingIssueId { get; set; }
+
+    /// <summary>
+    /// If true, insert before the sibling; if false (default), insert after.
+    /// Only used when SiblingIssueId is provided.
+    /// </summary>
+    public bool InsertBefore { get; set; }
 
     /// <summary>
     /// Optional child issue ID. If provided, the new issue will become the parent of this issue.
@@ -170,6 +177,33 @@ public class MoveSeriesSiblingRequest
 }
 
 /// <summary>
+/// Request model for removing a specific parent from an issue.
+/// </summary>
+public class RemoveParentRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The ID of the parent issue to remove.
+    /// </summary>
+    public required string ParentIssueId { get; set; }
+}
+
+/// <summary>
+/// Request model for removing all parents from an issue.
+/// </summary>
+public class RemoveAllParentsRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+}
+
+/// <summary>
 /// Request model for running an agent on an issue.
 /// </summary>
 public class RunAgentRequest
@@ -180,9 +214,9 @@ public class RunAgentRequest
     public required string ProjectId { get; set; }
 
     /// <summary>
-    /// The agent prompt ID to use, null for None.
+    /// The agent prompt name to use, null for None.
     /// </summary>
-    public required string? PromptId { get; set; }
+    public required string? PromptName { get; set; }
 
     /// <summary>
     /// The Claude model to use (e.g., "sonnet").
@@ -195,6 +229,12 @@ public class RunAgentRequest
     /// If not specified, defaults to project's default branch.
     /// </summary>
     public string? BaseBranch { get; set; }
+
+    /// <summary>
+    /// Optional user instructions that override the prompt template.
+    /// When provided, this text is sent as the initial message instead of rendering the prompt template.
+    /// </summary>
+    public string? UserInstructions { get; set; }
 }
 
 /// <summary>

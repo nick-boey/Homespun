@@ -160,10 +160,13 @@ function MessageItem({ message }: MessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isAssistant = isAssistantSideMessage(message)
 
-  // Filter out tool-related content as they're handled by ToolExecutionGroupDisplay
+  // Filter out tool-related content and empty text/thinking blocks
   const nonToolContent = message.content.filter((c) => {
     const type = normalizeContentType(c.type)
-    return type !== 'toolUse' && type !== 'toolResult'
+    if (type === 'toolUse' || type === 'toolResult') return false
+    if (type === 'text' && !c.text?.trim() && !c.isStreaming) return false
+    if (type === 'thinking' && !c.thinking?.trim()) return false
+    return true
   })
 
   // Don't render if only tool content

@@ -178,11 +178,12 @@ public class MockDataStore : IDataStore
         }
     }
 
-    public AgentPrompt? GetAgentPrompt(string id)
+    public AgentPrompt? GetAgentPrompt(string name, string? projectId)
     {
         lock (_lock)
         {
-            return _agentPrompts.FirstOrDefault(p => p.Id == id);
+            return _agentPrompts.FirstOrDefault(p =>
+                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
         }
     }
 
@@ -207,7 +208,8 @@ public class MockDataStore : IDataStore
     {
         lock (_lock)
         {
-            var index = _agentPrompts.FindIndex(p => p.Id == prompt.Id);
+            var index = _agentPrompts.FindIndex(p =>
+                p.Name.Equals(prompt.Name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == prompt.ProjectId);
             if (index >= 0)
             {
                 _agentPrompts[index] = prompt;
@@ -216,11 +218,12 @@ public class MockDataStore : IDataStore
         return Task.CompletedTask;
     }
 
-    public Task RemoveAgentPromptAsync(string promptId)
+    public Task RemoveAgentPromptAsync(string name, string? projectId)
     {
         lock (_lock)
         {
-            _agentPrompts.RemoveAll(p => p.Id == promptId);
+            _agentPrompts.RemoveAll(p =>
+                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
         }
         return Task.CompletedTask;
     }
