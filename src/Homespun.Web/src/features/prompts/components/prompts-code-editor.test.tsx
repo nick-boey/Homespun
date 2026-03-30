@@ -71,7 +71,7 @@ describe('PromptsCodeEditor', () => {
 
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
     // JSON missing required 'mode' field
-    setTextareaValue(textarea, '[{"id": "1", "name": "Test"}]')
+    setTextareaValue(textarea, '[{"name": "Test"}]')
 
     await user.click(screen.getByRole('button', { name: /apply/i }))
 
@@ -263,7 +263,7 @@ describe('PromptsCodeEditor', () => {
         prompts={promptsWithGlobal}
         onApply={onApply}
         isApplying={false}
-        globalPromptIds={['global-1']}
+        globalPromptNames={['Global Prompt']}
       />
     )
 
@@ -271,7 +271,7 @@ describe('PromptsCodeEditor', () => {
     // Remove global prompt, keep only project prompt
     setTextareaValue(
       textarea,
-      '[{"id": "project-1", "name": "Project Prompt", "initialMessage": "Project message", "mode": "build"}]'
+      '[{"name": "Project Prompt", "initialMessage": "Project message", "mode": "build"}]'
     )
 
     await user.click(screen.getByRole('button', { name: /apply/i }))
@@ -311,7 +311,7 @@ describe('PromptsCodeEditor', () => {
         prompts={promptsWithGlobal}
         onApply={onApply}
         isApplying={false}
-        globalPromptIds={['global-1']}
+        globalPromptNames={['Global Prompt']}
       />
     )
 
@@ -319,7 +319,7 @@ describe('PromptsCodeEditor', () => {
     // Remove project prompt, keep global prompt
     setTextareaValue(
       textarea,
-      '[{"id": "global-1", "name": "Global Prompt", "initialMessage": "Global message", "mode": "build"}]'
+      '[{"name": "Global Prompt", "initialMessage": "Global message", "mode": "build"}]'
     )
 
     await user.click(screen.getByRole('button', { name: /apply/i }))
@@ -330,7 +330,7 @@ describe('PromptsCodeEditor', () => {
     })
   })
 
-  it('allows deleting any prompt when globalPromptIds is not provided', async () => {
+  it('allows deleting any prompt when globalPromptNames is not provided', async () => {
     const user = userEvent.setup()
     const onApply = vi.fn().mockResolvedValue(undefined)
 

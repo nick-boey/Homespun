@@ -192,7 +192,7 @@ describe('AgentLauncherDialog', () => {
         path: { issueId: 'issue-456' },
         body: expect.objectContaining({
           projectId: 'project-123',
-          promptId: 'prompt-1', // First prompt is selected by default
+          promptId: 'prompt-1', // First prompt name resolved to its ID
         }),
       })
     })

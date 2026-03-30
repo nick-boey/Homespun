@@ -45,8 +45,8 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [editorMode, setEditorMode] = useState<EditorMode>('cards')
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
-  const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
-  const [removingOverrideId, setRemovingOverrideId] = useState<string | null>(null)
+  const [deletingPromptName, setDeletingPromptName] = useState<string | null>(null)
+  const [removingOverrideName, setRemovingOverrideName] = useState<string | null>(null)
   const [showRestoreDialog, setShowRestoreDialog] = useState(false)
 
   const globalPromptsQuery = useGlobalPrompts()
@@ -98,10 +98,10 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const deletePrompt = useDeletePrompt({
     projectId: isGlobal ? undefined : projectId,
     onSuccess: () => {
-      setDeletingPromptId(null)
+      setDeletingPromptName(null)
     },
     onError: () => {
-      setDeletingPromptId(null)
+      setDeletingPromptName(null)
     },
   })
 
@@ -121,10 +121,10 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const removeOverride = useRemoveOverride({
     projectId: projectId || '',
     onSuccess: () => {
-      setRemovingOverrideId(null)
+      setRemovingOverrideName(null)
     },
     onError: () => {
-      setRemovingOverrideId(null)
+      setRemovingOverrideName(null)
     },
   })
 
@@ -153,14 +153,20 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     setViewMode('edit')
   }
 
-  const handleDelete = async (promptId: string) => {
-    setDeletingPromptId(promptId)
-    await deletePrompt.mutateAsync(promptId)
+  const handleDelete = async (promptName: string) => {
+    setDeletingPromptName(promptName)
+    const prompt = prompts?.find((p) => p.name === promptName)
+    if (prompt?.id) {
+      await deletePrompt.mutateAsync(prompt.id)
+    }
   }
 
-  const handleRemoveOverride = async (promptId: string) => {
-    setRemovingOverrideId(promptId)
-    await removeOverride.mutateAsync(promptId)
+  const handleRemoveOverride = async (promptName: string) => {
+    setRemovingOverrideName(promptName)
+    const prompt = prompts?.find((p) => p.name === promptName)
+    if (prompt?.id) {
+      await removeOverride.mutateAsync(prompt.id)
+    }
   }
 
   const handleCreate = async (data: {
@@ -181,17 +187,19 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     initialMessage?: string
     mode: SessionMode
   }) => {
-    if (!editingPrompt?.id) return
+    if (!editingPrompt?.name) return
 
     // If we're on the project prompts page and editing a global prompt,
     // create an override instead of updating the global prompt directly
     if (!isGlobal && projectId && isGlobalPrompt(editingPrompt)) {
+      if (!editingPrompt.id) return
       await createOverride.mutateAsync({
         globalPromptId: editingPrompt.id,
         projectId: projectId,
         initialMessage: data.initialMessage,
       })
     } else {
+      if (!editingPrompt.id) return
       await updatePrompt.mutateAsync({
         id: editingPrompt.id,
         name: data.name,
@@ -328,11 +336,11 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
               <div className="grid gap-4">
                 {prompts.map((prompt) => (
                   <PromptCard
-                    key={prompt.id}
+                    key={prompt.name}
                     prompt={prompt}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
-                    isDeleting={deletingPromptId === prompt.id}
+                    isDeleting={deletingPromptName === prompt.name}
                     showDelete
                   />
                 ))}
@@ -347,14 +355,14 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
                     <div className="grid gap-4">
                       {projectPrompts.map((prompt) => (
                         <PromptCard
-                          key={prompt.id}
+                          key={prompt.name}
                           prompt={prompt}
                           onEdit={handleEdit}
                           onDelete={handleDelete}
-                          isDeleting={deletingPromptId === prompt.id}
+                          isDeleting={deletingPromptName === prompt.name}
                           showDelete
                           onRemoveOverride={projectId ? handleRemoveOverride : undefined}
-                          isRemovingOverride={removingOverrideId === prompt.id}
+                          isRemovingOverride={removingOverrideName === prompt.name}
                         />
                       ))}
                     </div>
@@ -368,14 +376,14 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
                     <div className="grid gap-4">
                       {inheritedGlobalPrompts.map((prompt) => (
                         <PromptCard
-                          key={prompt.id}
+                          key={prompt.name}
                           prompt={prompt}
                           onEdit={handleEdit}
                           onDelete={handleDelete}
-                          isDeleting={deletingPromptId === prompt.id}
+                          isDeleting={deletingPromptName === prompt.name}
                           showDelete={false}
                           onRemoveOverride={projectId ? handleRemoveOverride : undefined}
-                          isRemovingOverride={removingOverrideId === prompt.id}
+                          isRemovingOverride={removingOverrideName === prompt.name}
                         />
                       ))}
                     </div>
@@ -396,11 +404,16 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
         <TabsContent value="code">
           <PromptsCodeEditor
             prompts={allPromptsForCodeEditor}
-            onApply={applyPromptChanges.mutateAsync}
+            onApply={(changes) =>
+              applyPromptChanges.mutateAsync({
+                changes,
+                currentPrompts: allPromptsForCodeEditor,
+              })
+            }
             isApplying={applyPromptChanges.isPending}
-            globalPromptIds={
+            globalPromptNames={
               !isGlobal && projectId
-                ? (prompts ?? []).filter((p) => !p.projectId && !p.isOverride).map((p) => p.id!)
+                ? (prompts ?? []).filter((p) => !p.projectId && !p.isOverride).map((p) => p.name!)
                 : undefined
             }
           />

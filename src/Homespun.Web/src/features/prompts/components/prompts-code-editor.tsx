@@ -24,15 +24,15 @@ export interface PromptsCodeEditorProps {
   prompts: AgentPrompt[]
   onApply: (changes: PromptChanges) => Promise<void>
   isApplying: boolean
-  /** IDs of global prompts that cannot be deleted from the project page */
-  globalPromptIds?: string[]
+  /** Names of global prompts that cannot be deleted from the project page */
+  globalPromptNames?: string[]
 }
 
 export function PromptsCodeEditor({
   prompts,
   onApply,
   isApplying,
-  globalPromptIds,
+  globalPromptNames,
 }: PromptsCodeEditorProps) {
   const originalJson = useMemo(() => serializePrompts(prompts), [prompts])
   const [editedJson, setEditedJson] = useState(originalJson)
@@ -72,8 +72,8 @@ export function PromptsCodeEditor({
     const changes = calculateDiff(currentParsed.data, parseResult.data)
 
     // Check if any global prompts are being deleted (not allowed on project page)
-    if (globalPromptIds && globalPromptIds.length > 0) {
-      const globalDeletes = changes.deletes.filter((id) => globalPromptIds.includes(id))
+    if (globalPromptNames && globalPromptNames.length > 0) {
+      const globalDeletes = changes.deletes.filter((name) => globalPromptNames.includes(name))
       if (globalDeletes.length > 0) {
         setError(
           'Cannot delete global prompts from the project page. Remove them from the global prompts page instead.'

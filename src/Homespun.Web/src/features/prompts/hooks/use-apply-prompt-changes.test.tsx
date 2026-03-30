@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useApplyPromptChanges } from './use-apply-prompt-changes'
 import { AgentPrompts } from '@/api'
 import { SessionMode } from '@/api/generated/types.gen'
+import type { AgentPrompt } from '@/api/generated/types.gen'
 import type { PromptChanges } from '../utils/prompt-diff'
 
 vi.mock('@/api', () => ({
@@ -24,6 +25,15 @@ function createWrapper() {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   }
+}
+
+/** Helper to build currentPrompts for name→id resolution */
+function makeCurrentPrompts(...items: { id: string; name: string }[]): AgentPrompt[] {
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    mode: SessionMode.BUILD,
+  }))
 }
 
 describe('useApplyPromptChanges', () => {
@@ -48,7 +58,7 @@ describe('useApplyPromptChanges', () => {
     }
 
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts: [] })
     })
 
     expect(AgentPrompts.postApiAgentPrompts).toHaveBeenCalledWith({
@@ -61,7 +71,7 @@ describe('useApplyPromptChanges', () => {
     expect(onSuccess).toHaveBeenCalled()
   })
 
-  it('updates prompts for items in updates array', async () => {
+  it('updates prompts by resolving name to id', async () => {
     vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
       data: { id: 'prompt-1', name: 'Updated Prompt', mode: SessionMode.PLAN },
     } as never)
@@ -73,12 +83,14 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [],
-      updates: [{ id: 'prompt-1', name: 'Updated Prompt', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated Prompt', mode: SessionMode.PLAN }],
       deletes: [],
     }
 
+    const currentPrompts = makeCurrentPrompts({ id: 'prompt-1', name: 'Updated Prompt' })
+
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts })
     })
 
     expect(AgentPrompts.putApiAgentPromptsById).toHaveBeenCalledWith({
@@ -91,7 +103,7 @@ describe('useApplyPromptChanges', () => {
     expect(onSuccess).toHaveBeenCalled()
   })
 
-  it('deletes prompts for items in deletes array', async () => {
+  it('deletes prompts by resolving name to id', async () => {
     vi.mocked(AgentPrompts.deleteApiAgentPromptsById).mockResolvedValue({
       data: {},
     } as never)
@@ -104,19 +116,24 @@ describe('useApplyPromptChanges', () => {
     const changes: PromptChanges = {
       creates: [],
       updates: [],
-      deletes: ['prompt-1', 'prompt-2'],
+      deletes: ['Prompt A', 'Prompt B'],
     }
 
+    const currentPrompts = makeCurrentPrompts(
+      { id: 'id-a', name: 'Prompt A' },
+      { id: 'id-b', name: 'Prompt B' }
+    )
+
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts })
     })
 
     expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledTimes(2)
     expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-1' },
+      path: { id: 'id-a' },
     })
     expect(AgentPrompts.deleteApiAgentPromptsById).toHaveBeenCalledWith({
-      path: { id: 'prompt-2' },
+      path: { id: 'id-b' },
     })
     expect(onSuccess).toHaveBeenCalled()
   })
@@ -145,12 +162,17 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
-      deletes: ['delete-1'],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
+      deletes: ['Delete Me'],
     }
 
+    const currentPrompts = makeCurrentPrompts(
+      { id: 'existing-1', name: 'Updated' },
+      { id: 'delete-1', name: 'Delete Me' }
+    )
+
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts })
     })
 
     // Creates run first, then updates, then deletes
@@ -173,13 +195,15 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
       deletes: [],
     }
 
+    const currentPrompts = makeCurrentPrompts({ id: 'existing-1', name: 'Updated' })
+
     await act(async () => {
       try {
-        await result.current.mutateAsync(changes)
+        await result.current.mutateAsync({ changes, currentPrompts })
       } catch {
         // Expected to throw
       }
@@ -210,13 +234,18 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [{ name: 'New', mode: SessionMode.BUILD }],
-      updates: [{ id: 'existing-1', name: 'Updated', mode: SessionMode.PLAN }],
-      deletes: ['delete-1'],
+      updates: [{ name: 'Updated', mode: SessionMode.PLAN }],
+      deletes: ['Delete Me'],
     }
+
+    const currentPrompts = makeCurrentPrompts(
+      { id: 'existing-1', name: 'Updated' },
+      { id: 'delete-1', name: 'Delete Me' }
+    )
 
     await act(async () => {
       try {
-        await result.current.mutateAsync(changes)
+        await result.current.mutateAsync({ changes, currentPrompts })
       } catch {
         // Expected to throw
       }
@@ -244,7 +273,7 @@ describe('useApplyPromptChanges', () => {
     }
 
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts: [] })
     })
 
     expect(AgentPrompts.postApiAgentPrompts).toHaveBeenCalledWith({
@@ -269,7 +298,7 @@ describe('useApplyPromptChanges', () => {
     }
 
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts: [] })
     })
 
     expect(AgentPrompts.postApiAgentPrompts).not.toHaveBeenCalled()
@@ -294,7 +323,7 @@ describe('useApplyPromptChanges', () => {
     }
 
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts: [] })
     })
 
     expect(AgentPrompts.postApiAgentPrompts).toHaveBeenCalledWith({
@@ -323,14 +352,14 @@ describe('useApplyPromptChanges', () => {
 
     const changes: PromptChanges = {
       creates: [],
-      updates: [
-        { id: 'prompt-1', name: 'Test', initialMessage: 'Updated Hello', mode: SessionMode.BUILD },
-      ],
+      updates: [{ name: 'Test', initialMessage: 'Updated Hello', mode: SessionMode.BUILD }],
       deletes: [],
     }
 
+    const currentPrompts = makeCurrentPrompts({ id: 'prompt-1', name: 'Test' })
+
     await act(async () => {
-      await result.current.mutateAsync(changes)
+      await result.current.mutateAsync({ changes, currentPrompts })
     })
 
     expect(AgentPrompts.putApiAgentPromptsById).toHaveBeenCalledWith({

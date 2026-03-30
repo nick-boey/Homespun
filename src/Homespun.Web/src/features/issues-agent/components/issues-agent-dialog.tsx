@@ -34,10 +34,10 @@ const MODELS = [
 
 const MODEL_STORAGE_KEY = 'issues-agent-model'
 const PROMPT_STORAGE_KEY = 'issues-agent-prompt'
-const NONE_PROMPT_ID = '__none__'
+const NONE_PROMPT_NAME = '__none__'
 
-/** Get the initial prompt ID from localStorage or return empty string */
-function getInitialPromptId(): string {
+/** Get the initial prompt name from localStorage or return empty string */
+function getInitialPromptName(): string {
   return localStorage.getItem(PROMPT_STORAGE_KEY) ?? ''
 }
 
@@ -83,7 +83,7 @@ export function IssuesAgentDialog({
   })
 
   // Prompt selection state
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
+  const [selectedPromptName, setSelectedPromptName] = useState<string>(getInitialPromptName)
 
   // User instructions state
   const [userInstructions, setUserInstructions] = useState('')
@@ -106,39 +106,45 @@ export function IssuesAgentDialog({
 
   // Persist prompt selection
   useEffect(() => {
-    if (selectedPromptId) {
-      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptId)
+    if (selectedPromptName) {
+      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptName)
     }
-  }, [selectedPromptId])
+  }, [selectedPromptName])
 
-  // Compute effective prompt ID
-  const effectivePromptId = useMemo(() => {
+  // Compute effective prompt name
+  const effectivePromptName = useMemo(() => {
     // Handle None selection
-    if (selectedPromptId === NONE_PROMPT_ID) {
-      return NONE_PROMPT_ID
+    if (selectedPromptName === NONE_PROMPT_NAME) {
+      return NONE_PROMPT_NAME
     }
 
     if (!prompts || prompts.length === 0) {
-      return NONE_PROMPT_ID
+      return NONE_PROMPT_NAME
     }
 
-    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
     if (selectedExists) {
-      return selectedPromptId
+      return selectedPromptName
     }
 
     // Default to first prompt
-    return prompts[0].id ?? ''
-  }, [prompts, selectedPromptId])
+    return prompts[0].name ?? ''
+  }, [prompts, selectedPromptName])
 
   const handleStart = useCallback(async () => {
+    // Resolve prompt name to ID for the API call
+    const promptId =
+      effectivePromptName === NONE_PROMPT_NAME
+        ? null
+        : (prompts?.find((p) => p.name === effectivePromptName)?.id ?? null)
+
     try {
       const result = await createSession.mutateAsync({
         projectId,
         model: selectedModel,
         selectedIssueId: selectedIssueId ?? undefined,
         userInstructions: userInstructions.trim() || undefined,
-        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
+        promptId,
       })
 
       onSessionCreated?.(result)
@@ -155,7 +161,8 @@ export function IssuesAgentDialog({
     selectedModel,
     selectedIssueId,
     userInstructions,
-    effectivePromptId,
+    prompts,
+    effectivePromptName,
     onSessionCreated,
     navigate,
     handleOpenChange,
@@ -216,19 +223,19 @@ export function IssuesAgentDialog({
               </div>
             ) : (
               <Select
-                value={effectivePromptId}
-                onValueChange={setSelectedPromptId}
+                value={effectivePromptName}
+                onValueChange={setSelectedPromptName}
                 disabled={createSession.isPending}
               >
                 <SelectTrigger id="prompt-select" aria-label="Select prompt">
                   <SelectValue placeholder="Select prompt" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_PROMPT_ID}>
+                  <SelectItem value={NONE_PROMPT_NAME}>
                     None - Start without prompt (Build mode)
                   </SelectItem>
                   {prompts?.map((prompt) => (
-                    <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+                    <SelectItem key={prompt.name} value={prompt.name ?? ''}>
                       {prompt.name}
                       {prompt.mode ? ` (${prompt.mode})` : ''}
                       {prompt.isOverride ? ' (project)' : ''}

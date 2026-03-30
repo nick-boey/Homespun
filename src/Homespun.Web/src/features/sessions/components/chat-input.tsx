@@ -85,10 +85,10 @@ export function ChatInput({
 
   // Handle prompt selection - appends rendered template to input
   const handlePromptSelect = useCallback(
-    (promptId: string) => {
+    (promptName: string) => {
       if (!prompts || !issueContext) return
 
-      const prompt = prompts.find((p) => p.id === promptId)
+      const prompt = prompts.find((p) => p.name === promptName)
       if (!prompt?.initialMessage) return
 
       const rendered = renderPromptTemplate(prompt.initialMessage, issueContext)
@@ -189,8 +189,8 @@ export function ChatInput({
                 <DropdownMenuSeparator />
                 {prompts?.map((prompt) => (
                   <DropdownMenuItem
-                    key={prompt.id}
-                    onClick={() => handlePromptSelect(prompt.id ?? '')}
+                    key={prompt.name}
+                    onClick={() => handlePromptSelect(prompt.name ?? '')}
                   >
                     {prompt.name}
                     {prompt.isOverride && ' (project)'}

@@ -145,7 +145,7 @@ export function StepSettingsCard({ step, allSteps, prompts, onChange }: StepSett
                 >
                   <option value="">Select a template...</option>
                   {prompts.map((p) => (
-                    <option key={p.id} value={p.id ?? ''}>
+                    <option key={p.name} value={p.id ?? ''}>
                       {p.name}
                     </option>
                   ))}

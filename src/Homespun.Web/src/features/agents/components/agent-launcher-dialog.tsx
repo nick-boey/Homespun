@@ -34,10 +34,10 @@ const MODELS = [
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 const BASE_BRANCH_STORAGE_KEY = 'agent-launcher-base-branch'
-const NONE_PROMPT_ID = '__none__'
+const NONE_PROMPT_NAME = '__none__'
 
-/** Get the initial prompt ID from localStorage or return empty string */
-function getInitialPromptId(): string {
+/** Get the initial prompt name from localStorage or return empty string */
+function getInitialPromptName(): string {
   return localStorage.getItem(PROMPT_STORAGE_KEY) ?? ''
 }
 
@@ -81,7 +81,7 @@ export function AgentLauncherDialog({
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value // Default to Opus
   })
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
+  const [selectedPromptName, setSelectedPromptName] = useState<string>(getInitialPromptName)
   const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {
     return localStorage.getItem(BASE_BRANCH_STORAGE_KEY) ?? ''
   })
@@ -105,10 +105,10 @@ export function AgentLauncherDialog({
   }, [selectedModel])
 
   useEffect(() => {
-    if (selectedPromptId) {
-      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptId)
+    if (selectedPromptName) {
+      localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptName)
     }
-  }, [selectedPromptId])
+  }, [selectedPromptName])
 
   useEffect(() => {
     if (selectedBaseBranch) {
@@ -116,24 +116,24 @@ export function AgentLauncherDialog({
     }
   }, [selectedBaseBranch])
 
-  // Compute effective prompt ID
-  const effectivePromptId = useMemo(() => {
+  // Compute effective prompt name
+  const effectivePromptName = useMemo(() => {
     // Handle None selection
-    if (selectedPromptId === NONE_PROMPT_ID) {
-      return NONE_PROMPT_ID
+    if (selectedPromptName === NONE_PROMPT_NAME) {
+      return NONE_PROMPT_NAME
     }
 
     if (!prompts || prompts.length === 0) {
       return ''
     }
-    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
     if (selectedExists) {
-      return selectedPromptId
+      return selectedPromptName
     }
 
     // Default to first prompt
-    return prompts[0].id ?? ''
-  }, [prompts, selectedPromptId])
+    return prompts[0].name ?? ''
+  }, [prompts, selectedPromptName])
 
   // Handle start - call server-side run agent endpoint
   // Returns 202 Accepted immediately, dialog closes, and SignalR notifies when agent is ready
@@ -141,11 +141,17 @@ export function AgentLauncherDialog({
     // Clear any previous conflict state
     setConflictSessionId(null)
 
+    // Resolve prompt name to ID for the API call
+    const promptId =
+      effectivePromptName === NONE_PROMPT_NAME
+        ? null
+        : (prompts?.find((p) => p.name === effectivePromptName)?.id ?? null)
+
     try {
       const result = await runAgent.mutateAsync({
         issueId,
         projectId,
-        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
+        promptId,
         model: selectedModel,
         baseBranch: effectiveBaseBranch || undefined,
       })
@@ -166,7 +172,8 @@ export function AgentLauncherDialog({
     runAgent,
     issueId,
     projectId,
-    effectivePromptId,
+    prompts,
+    effectivePromptName,
     selectedModel,
     effectiveBaseBranch,
     onAgentStart,
@@ -184,7 +191,7 @@ export function AgentLauncherDialog({
 
   // Combined loading states
   const isLoading = projectLoading || promptsLoading || runAgent.isPending
-  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptId
+  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptName
 
   // Don't render dialog content when closed
   if (!open) {
@@ -252,8 +259,8 @@ export function AgentLauncherDialog({
               <div className="flex items-center gap-2">
                 {/* Prompt selector */}
                 <Select
-                  value={effectivePromptId}
-                  onValueChange={setSelectedPromptId}
+                  value={effectivePromptName}
+                  onValueChange={setSelectedPromptName}
                   disabled={isLoading || !prompts?.length}
                 >
                   <SelectTrigger className="w-40" aria-label="Select prompt">
@@ -261,11 +268,11 @@ export function AgentLauncherDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {/* "None" option always available as first option */}
-                    <SelectItem value={NONE_PROMPT_ID}>
+                    <SelectItem value={NONE_PROMPT_NAME}>
                       None - Start without prompt (Plan mode)
                     </SelectItem>
                     {prompts?.map((prompt) => (
-                      <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+                      <SelectItem key={prompt.name} value={prompt.name ?? ''}>
                         {prompt.name}
                         {prompt.isOverride && ' (project)'}
                       </SelectItem>

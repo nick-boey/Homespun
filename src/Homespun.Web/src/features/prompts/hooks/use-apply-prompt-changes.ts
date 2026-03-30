@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts } from '@/api'
+import type { AgentPrompt } from '@/api/generated/types.gen'
 import { projectPromptsQueryKey } from './use-project-prompts'
 import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { globalPromptsQueryKey } from './use-global-prompts'
@@ -15,6 +16,12 @@ interface UseApplyPromptChangesOptions {
   onError?: (error: Error) => void
 }
 
+interface ApplyPromptChangesParams {
+  changes: PromptChanges
+  /** Current prompts used to resolve names to IDs for API calls */
+  currentPrompts: AgentPrompt[]
+}
+
 /**
  * Hook to apply bulk changes to prompts (creates, updates, deletes).
  * Executes operations sequentially: creates first, then updates, then deletes.
@@ -25,7 +32,15 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
   const { projectId, isGlobal, onSuccess, onError } = options
 
   return useMutation({
-    mutationFn: async (changes: PromptChanges) => {
+    mutationFn: async ({ changes, currentPrompts }: ApplyPromptChangesParams) => {
+      // Build a name→id lookup from current prompts
+      const nameToId = new Map<string, string>()
+      for (const p of currentPrompts) {
+        if (p.name && p.id) {
+          nameToId.set(p.name, p.id)
+        }
+      }
+
       // Execute creates
       for (const create of changes.creates) {
         const result = await AgentPrompts.postApiAgentPrompts({
@@ -42,10 +57,13 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
         }
       }
 
-      // Execute updates
+      // Execute updates (resolve name → id for API)
       for (const update of changes.updates) {
+        const id = update.name ? nameToId.get(update.name) : undefined
+        if (!id) continue
+
         const result = await AgentPrompts.putApiAgentPromptsById({
-          path: { id: update.id },
+          path: { id },
           body: {
             name: update.name,
             initialMessage: update.initialMessage,
@@ -58,8 +76,11 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
         }
       }
 
-      // Execute deletes
-      for (const id of changes.deletes) {
+      // Execute deletes (resolve name → id for API)
+      for (const name of changes.deletes) {
+        const id = nameToId.get(name)
+        if (!id) continue
+
         const result = await AgentPrompts.deleteApiAgentPromptsById({
           path: { id },
         })

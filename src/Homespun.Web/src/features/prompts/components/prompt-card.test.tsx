@@ -74,7 +74,7 @@ describe('PromptCard', () => {
     // Confirm deletion
     await user.click(screen.getByRole('button', { name: /^Delete$/i }))
 
-    expect(onDelete).toHaveBeenCalledWith('prompt-1')
+    expect(onDelete).toHaveBeenCalledWith('Test Prompt')
   })
 
   it('truncates long content preview', () => {
@@ -229,7 +229,7 @@ describe('PromptCard', () => {
     // Confirm removal
     await user.click(screen.getByRole('button', { name: /^Remove$/i }))
 
-    expect(onRemoveOverride).toHaveBeenCalledWith('prompt-1')
+    expect(onRemoveOverride).toHaveBeenCalledWith('Test Prompt')
   })
 
   it('closes Remove override dialog when cancelled', async () => {
