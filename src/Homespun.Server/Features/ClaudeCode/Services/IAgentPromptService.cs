@@ -30,9 +30,9 @@ public interface IAgentPromptService
     IReadOnlyList<AgentPrompt> GetGlobalPromptsNotOverridden(string projectId);
 
     /// <summary>
-    /// Gets an agent prompt by ID.
+    /// Gets an agent prompt by name and project scope (composite key).
     /// </summary>
-    AgentPrompt? GetPrompt(string id);
+    AgentPrompt? GetPrompt(string name, string? projectId);
 
     /// <summary>
     /// Creates a new global agent prompt.
@@ -46,14 +46,14 @@ public interface IAgentPromptService
         PromptCategory category = PromptCategory.Standard);
 
     /// <summary>
-    /// Updates an existing agent prompt.
+    /// Updates an existing agent prompt identified by name and project scope.
     /// </summary>
-    Task<AgentPrompt> UpdatePromptAsync(string id, string name, string? initialMessage, SessionMode mode);
+    Task<AgentPrompt> UpdatePromptAsync(string name, string? projectId, string? initialMessage, SessionMode mode);
 
     /// <summary>
-    /// Deletes an agent prompt.
+    /// Deletes an agent prompt identified by name and project scope.
     /// </summary>
-    Task DeletePromptAsync(string id);
+    Task DeletePromptAsync(string name, string? projectId);
 
     /// <summary>
     /// Renders a template string with context values.
@@ -101,18 +101,19 @@ public interface IAgentPromptService
     /// Creates a project-scoped prompt that overrides a global prompt.
     /// Copies the name and mode from the global prompt.
     /// </summary>
-    /// <param name="globalPromptId">The ID of the global prompt to override.</param>
+    /// <param name="globalPromptName">The name of the global prompt to override.</param>
     /// <param name="projectId">The project ID to scope the new prompt to.</param>
     /// <param name="initialMessage">Optional custom message. If null, copies from the global prompt.</param>
     /// <returns>The newly created project-scoped prompt.</returns>
-    Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage);
+    Task<AgentPrompt> CreateOverrideAsync(string globalPromptName, string projectId, string? initialMessage);
 
     /// <summary>
     /// Removes a project-scoped override prompt, reverting to the global prompt.
     /// </summary>
-    /// <param name="promptId">The ID of the project prompt override to remove.</param>
+    /// <param name="name">The name of the project prompt override to remove.</param>
+    /// <param name="projectId">The project ID of the override.</param>
     /// <returns>The global prompt that will now take effect.</returns>
-    Task<AgentPrompt> RemoveOverrideAsync(string promptId);
+    Task<AgentPrompt> RemoveOverrideAsync(string name, string projectId);
 
     /// <summary>
     /// Deletes all global prompts and re-creates defaults from default-prompts.json.

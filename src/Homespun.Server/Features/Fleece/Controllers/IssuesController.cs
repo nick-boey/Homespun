@@ -504,9 +504,9 @@ public class IssuesController(
         }
 
         // Validate prompt exists (if provided)
-        if (!string.IsNullOrEmpty(request.PromptId))
+        if (!string.IsNullOrEmpty(request.PromptName))
         {
-            var prompt = agentPromptService.GetPrompt(request.PromptId);
+            var prompt = agentPromptService.GetPrompt(request.PromptName, null);
             if (prompt == null)
             {
                 return NotFound("Prompt not found");
@@ -539,7 +539,7 @@ public class IssuesController(
             ProjectLocalPath = project.LocalPath,
             ProjectDefaultBranch = project.DefaultBranch,
             Issue = issue,
-            PromptId = request.PromptId,
+            PromptName = request.PromptName,
             BaseBranch = request.BaseBranch,
             Model = model,
             BranchName = branchName,

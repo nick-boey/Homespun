@@ -37,9 +37,9 @@ public class MockAgentStartBackgroundService(
             string? renderedMessage = null;
             var mode = SessionMode.Plan; // Default for None
 
-            if (!string.IsNullOrEmpty(request.PromptId))
+            if (!string.IsNullOrEmpty(request.PromptName))
             {
-                prompt = agentPromptService.GetPrompt(request.PromptId);
+                prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;

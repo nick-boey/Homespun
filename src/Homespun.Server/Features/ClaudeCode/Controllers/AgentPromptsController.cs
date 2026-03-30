@@ -16,12 +16,12 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
         return Ok(prompts);
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("by-name/{name}")]
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<AgentPrompt> GetById(string id)
+    public ActionResult<AgentPrompt> GetByName(string name, [FromQuery] string? projectId = null)
     {
-        var prompt = agentPromptService.GetPrompt(id);
+        var prompt = agentPromptService.GetPrompt(Uri.UnescapeDataString(name), projectId);
         if (prompt == null)
         {
             return NotFound();
@@ -48,45 +48,55 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
 
     [HttpPost]
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<AgentPrompt>> Create([FromBody] CreateAgentPromptRequest request)
     {
-        var prompt = await agentPromptService.CreatePromptAsync(
-            request.Name,
-            request.InitialMessage,
-            request.Mode,
-            request.ProjectId,
-            request.Category);
+        try
+        {
+            var prompt = await agentPromptService.CreatePromptAsync(
+                request.Name,
+                request.InitialMessage,
+                request.Mode,
+                request.ProjectId,
+                request.Category);
 
-        return CreatedAtAction(nameof(GetById), new { id = prompt.Id }, prompt);
+            return CreatedAtAction(nameof(GetByName), new { name = prompt.Name, projectId = prompt.ProjectId }, prompt);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+        {
+            return Conflict(ex.Message);
+        }
     }
 
-    [HttpPut("{id}")]
+    [HttpPut("by-name/{name}")]
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<AgentPrompt>> Update(string id, [FromBody] UpdateAgentPromptRequest request)
+    public async Task<ActionResult<AgentPrompt>> Update(string name, [FromQuery] string? projectId, [FromBody] UpdateAgentPromptRequest request)
     {
-        var existing = agentPromptService.GetPrompt(id);
+        var decodedName = Uri.UnescapeDataString(name);
+        var existing = agentPromptService.GetPrompt(decodedName, projectId);
         if (existing == null)
         {
             return NotFound();
         }
 
-        var prompt = await agentPromptService.UpdatePromptAsync(id, request.Name, request.InitialMessage, request.Mode);
+        var prompt = await agentPromptService.UpdatePromptAsync(decodedName, projectId, request.InitialMessage, request.Mode);
         return Ok(prompt);
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("by-name/{name}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(string id)
+    public async Task<IActionResult> Delete(string name, [FromQuery] string? projectId = null)
     {
-        var existing = agentPromptService.GetPrompt(id);
+        var decodedName = Uri.UnescapeDataString(name);
+        var existing = agentPromptService.GetPrompt(decodedName, projectId);
         if (existing == null)
         {
             return NotFound();
         }
 
-        await agentPromptService.DeletePromptAsync(id);
+        await agentPromptService.DeletePromptAsync(decodedName, projectId);
         return NoContent();
     }
 
@@ -153,14 +163,15 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<AgentPrompt>> CreateOverride([FromBody] CreateOverrideRequest request)
     {
-        logger.LogInformation("CreateOverride requested for global prompt {GlobalPromptId} in project {ProjectId}", request.GlobalPromptId, request.ProjectId);
+        logger.LogInformation("CreateOverride requested for global prompt {GlobalPromptName} in project {ProjectId}", request.GlobalPromptName, request.ProjectId);
 
-        var globalPrompt = agentPromptService.GetPrompt(request.GlobalPromptId);
+        var globalPrompt = agentPromptService.GetPrompt(request.GlobalPromptName, null);
         if (globalPrompt == null)
         {
-            return NotFound($"Global prompt with ID '{request.GlobalPromptId}' not found.");
+            return NotFound($"Global prompt '{request.GlobalPromptName}' not found.");
         }
 
         if (globalPrompt.ProjectId != null)
@@ -168,30 +179,38 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
             return BadRequest("Cannot create override from a non-global prompt. Only global prompts can be overridden.");
         }
 
-        var overridePrompt = await agentPromptService.CreateOverrideAsync(
-            request.GlobalPromptId,
-            request.ProjectId,
-            request.InitialMessage);
+        try
+        {
+            var overridePrompt = await agentPromptService.CreateOverrideAsync(
+                request.GlobalPromptName,
+                request.ProjectId,
+                request.InitialMessage);
 
-        logger.LogInformation("Created override {OverrideId} for global prompt {GlobalPromptName} in project {ProjectId}", overridePrompt.Id, overridePrompt.Name, request.ProjectId);
-        return CreatedAtAction(nameof(GetById), new { id = overridePrompt.Id }, overridePrompt);
+            logger.LogInformation("Created override for global prompt {GlobalPromptName} in project {ProjectId}", overridePrompt.Name, request.ProjectId);
+            return CreatedAtAction(nameof(GetByName), new { name = overridePrompt.Name, projectId = overridePrompt.ProjectId }, overridePrompt);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     /// <summary>
     /// Removes a project-scoped prompt override, reverting to the global prompt.
     /// </summary>
-    [HttpDelete("{id}/override")]
+    [HttpDelete("by-name/{name}/override")]
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<AgentPrompt>> RemoveOverride(string id)
+    public async Task<ActionResult<AgentPrompt>> RemoveOverride(string name, [FromQuery] string projectId)
     {
-        logger.LogInformation("RemoveOverride requested for prompt {PromptId}", id);
+        var decodedName = Uri.UnescapeDataString(name);
+        logger.LogInformation("RemoveOverride requested for prompt {Name} in project {ProjectId}", decodedName, projectId);
 
-        var prompt = agentPromptService.GetPrompt(id);
+        var prompt = agentPromptService.GetPrompt(decodedName, projectId);
         if (prompt == null)
         {
-            return NotFound($"Prompt with ID '{id}' not found.");
+            return NotFound($"Prompt '{decodedName}' not found in project '{projectId}'.");
         }
 
         if (prompt.ProjectId == null)
@@ -201,7 +220,7 @@ public class AgentPromptsController(IAgentPromptService agentPromptService, ILog
 
         try
         {
-            var globalPrompt = await agentPromptService.RemoveOverrideAsync(id);
+            var globalPrompt = await agentPromptService.RemoveOverrideAsync(decodedName, projectId);
             return Ok(globalPrompt);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not an override"))
@@ -222,7 +241,6 @@ public class CreateAgentPromptRequest
 
 public class UpdateAgentPromptRequest
 {
-    public required string Name { get; set; }
     public string? InitialMessage { get; set; }
     public SessionMode Mode { get; set; }
     public PromptCategory Category { get; set; } = PromptCategory.Standard;
@@ -230,7 +248,7 @@ public class UpdateAgentPromptRequest
 
 public class CreateOverrideRequest
 {
-    public required string GlobalPromptId { get; set; }
+    public required string GlobalPromptName { get; set; }
     public required string ProjectId { get; set; }
     public string? InitialMessage { get; set; }
 }

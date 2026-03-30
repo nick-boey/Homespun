@@ -6,12 +6,8 @@ namespace Homespun.Shared.Models.Sessions;
 public class AgentPrompt
 {
     /// <summary>
-    /// Unique identifier for the agent prompt.
-    /// </summary>
-    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..6];
-
-    /// <summary>
     /// Display name for the agent prompt (e.g., "Plan", "Build").
+    /// Part of the composite key: Name + ProjectId uniquely identify a prompt.
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
