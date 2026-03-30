@@ -851,7 +851,7 @@ public class IssuesControllerTests
         var request = new RunAgentRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = null,
+            PromptName = null,
             UserInstructions = "Custom instructions for the agent"
         };
 

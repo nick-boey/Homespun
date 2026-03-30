@@ -590,10 +590,9 @@ public class AgentStartBackgroundServiceTests
             .ReturnsAsync(clonePath);
 
         // Prompt is still provided but should NOT be used for template rendering
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"
@@ -649,10 +648,9 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123"))
+        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
             .Returns(new AgentPrompt
             {
-                Id = "prompt123",
                 Name = "Build",
                 Mode = SessionMode.Build,
                 InitialMessage = "Work on {{title}}"

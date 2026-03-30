@@ -385,21 +385,20 @@ public class IssuesAgentControllerTests
         // Arrange
         var prompt = new AgentPrompt
         {
-            Id = "prompt-1",
             Name = "TestPrompt",
             Mode = SessionMode.Build,
             Category = PromptCategory.IssueAgent,
             InitialMessage = "test"
         };
 
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-1")).Returns(prompt);
+        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptId = "prompt-1"
+            PromptName = "TestPrompt"
             // No UserInstructions
         };
 
