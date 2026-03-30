@@ -35,6 +35,7 @@ const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableFo
 const mockGetIssueAgentPrompts = vi.mocked(
   AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId
 )
+const mockGetIssue = vi.mocked(Issues.getApiIssuesByIssueId)
 const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 const mockCreateIssuesAgentSession = vi.mocked(IssuesAgent.postApiIssuesAgentSession)
 
@@ -118,6 +119,14 @@ describe('RunAgentDialog', () => {
     mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockTaskPrompts))
     mockGetIssueAgentPrompts.mockResolvedValue(createMockResponse(mockIssuePrompts))
     mockRunAgent.mockResolvedValue(createMockResponse(createMockRunAgentResponse()))
+    mockGetIssue.mockResolvedValue(
+      createMockResponse({
+        id: 'issue-456',
+        title: 'Test Issue',
+        description: 'A test issue description',
+        type: 'task',
+      })
+    )
   })
 
   it('renders nothing when closed', () => {
@@ -345,11 +354,11 @@ describe('RunAgentDialog', () => {
         expect(within(taskTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
       })
 
-      // The textarea should have the rendered template from first prompt
-      // 'Build the feature for {{title}}' -> 'Build the feature for' (trimmed)
+      // The textarea should have the rendered template from first prompt with issue context
+      // 'Build the feature for {{title}}' -> 'Build the feature for Test Issue'
       await waitFor(() => {
         const textarea = within(taskTab).getByPlaceholderText(/additional instructions/i)
-        expect(textarea).toHaveValue('Build the feature for')
+        expect(textarea).toHaveValue('Build the feature for Test Issue')
       })
     })
   })

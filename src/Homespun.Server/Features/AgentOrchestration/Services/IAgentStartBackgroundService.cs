@@ -97,4 +97,10 @@ public record AgentStartRequest
     /// Whether this request is part of a workflow execution.
     /// </summary>
     public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;
+
+    /// <summary>
+    /// Pre-rendered instructions from the frontend.
+    /// When provided, the server skips prompt template rendering and uses these instructions directly.
+    /// </summary>
+    public string? Instructions { get; init; }
 }
