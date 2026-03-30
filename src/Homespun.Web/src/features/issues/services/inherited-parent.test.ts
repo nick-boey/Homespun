@@ -74,12 +74,16 @@ describe('computeInheritedParentInfo', () => {
         nodes: [createNode(createIssue('orphan-issue'), 0)],
       }
       const result = computeInheritedParentInfo(taskGraph, 'orphan-issue', false)
-      expect(result).toEqual({ parentIssueId: null, sortOrder: null })
+      expect(result).toEqual({
+        parentIssueId: null,
+        siblingIssueId: null,
+        insertBefore: false,
+      })
     })
   })
 
   describe('when reference issue has a parent', () => {
-    it('inherits the parent from reference issue', () => {
+    it('inherits the parent and returns sibling context', () => {
       const taskGraph: TaskGraphResponse = {
         nodes: [
           createNode(createIssue('child-1', 'parent-1', 'a'), 0),
@@ -88,13 +92,14 @@ describe('computeInheritedParentInfo', () => {
       }
       const result = computeInheritedParentInfo(taskGraph, 'child-1', false)
       expect(result?.parentIssueId).toBe('parent-1')
-      expect(result?.sortOrder).toBeDefined()
+      expect(result?.siblingIssueId).toBe('child-1')
+      expect(result?.insertBefore).toBe(false)
     })
   })
 
-  describe('sort order computation', () => {
+  describe('position-based placement', () => {
     describe('creating below reference (isAbove=false)', () => {
-      it('computes sort order after the reference sibling', () => {
+      it('returns siblingIssueId with insertBefore=false', () => {
         const taskGraph: TaskGraphResponse = {
           nodes: [
             createNode(createIssue('child-1', 'parent-1', 'a'), 0),
@@ -102,31 +107,15 @@ describe('computeInheritedParentInfo', () => {
             createNode(createIssue('parent-1'), 2),
           ],
         }
-        // Creating below child-1, sort should be between 'a' and 'b'
         const result = computeInheritedParentInfo(taskGraph, 'child-1', false)
         expect(result?.parentIssueId).toBe('parent-1')
-        expect(result?.sortOrder).toBeDefined()
-        expect(result!.sortOrder! > 'a').toBe(true)
-        expect(result!.sortOrder! < 'b').toBe(true)
-      })
-
-      it('computes sort order after last sibling when reference is last', () => {
-        const taskGraph: TaskGraphResponse = {
-          nodes: [
-            createNode(createIssue('child-1', 'parent-1', 'a'), 0),
-            createNode(createIssue('child-2', 'parent-1', 'b'), 1),
-            createNode(createIssue('parent-1'), 2),
-          ],
-        }
-        // Creating below child-2 (last sibling)
-        const result = computeInheritedParentInfo(taskGraph, 'child-2', false)
-        expect(result?.parentIssueId).toBe('parent-1')
-        expect(result!.sortOrder! > 'b').toBe(true) // After 'b'
+        expect(result?.siblingIssueId).toBe('child-1')
+        expect(result?.insertBefore).toBe(false)
       })
     })
 
     describe('creating above reference (isAbove=true)', () => {
-      it('computes sort order before the reference sibling', () => {
+      it('returns siblingIssueId with insertBefore=true', () => {
         const taskGraph: TaskGraphResponse = {
           nodes: [
             createNode(createIssue('child-1', 'parent-1', 'a'), 0),
@@ -134,25 +123,10 @@ describe('computeInheritedParentInfo', () => {
             createNode(createIssue('parent-1'), 2),
           ],
         }
-        // Creating above child-2, sort should be between 'a' and 'b'
         const result = computeInheritedParentInfo(taskGraph, 'child-2', true)
         expect(result?.parentIssueId).toBe('parent-1')
-        expect(result!.sortOrder! > 'a').toBe(true)
-        expect(result!.sortOrder! < 'b').toBe(true)
-      })
-
-      it('computes sort order before first sibling when reference is first', () => {
-        const taskGraph: TaskGraphResponse = {
-          nodes: [
-            createNode(createIssue('child-1', 'parent-1', 'V'), 0),
-            createNode(createIssue('child-2', 'parent-1', 'b'), 1),
-            createNode(createIssue('parent-1'), 2),
-          ],
-        }
-        // Creating above child-1 (first sibling)
-        const result = computeInheritedParentInfo(taskGraph, 'child-1', true)
-        expect(result?.parentIssueId).toBe('parent-1')
-        expect(result!.sortOrder! < 'V').toBe(true) // Before 'V'
+        expect(result?.siblingIssueId).toBe('child-2')
+        expect(result?.insertBefore).toBe(true)
       })
     })
   })

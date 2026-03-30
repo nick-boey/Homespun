@@ -7,7 +7,6 @@
  */
 
 import type { TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
-import { computeMidpoint } from '../utils/lex-order'
 
 /**
  * Result of computing inherited parent info.
@@ -15,8 +14,10 @@ import { computeMidpoint } from '../utils/lex-order'
 export interface InheritedParentInfo {
   /** The parent issue ID to inherit, or null if the new issue should be an orphan. */
   parentIssueId: string | null
-  /** The sort order for the new issue within the parent's children. */
-  sortOrder: string | null
+  /** The sibling issue ID for positioning, or null if no sibling context. */
+  siblingIssueId: string | null
+  /** If true, insert before the sibling; if false, insert after. */
+  insertBefore: boolean
 }
 
 /**
@@ -51,21 +52,16 @@ export function computeInheritedParentInfo(
   const parentRef = referenceNode.issue.parentIssues?.[0]
   if (!parentRef?.parentIssue) {
     // Reference issue has no parent - new issue will be an orphan
-    return { parentIssueId: null, sortOrder: null }
+    return { parentIssueId: null, siblingIssueId: null, insertBefore: false }
   }
 
   // Reference issue has a parent - new issue inherits that parent
-  const parentIssueId = parentRef.parentIssue
-
-  // Compute sort order for positioning among siblings
-  const sortOrder = computeSortOrderForSibling(
-    taskGraph.nodes,
-    parentIssueId,
-    referenceIssueId,
-    isAbove
-  )
-
-  return { parentIssueId, sortOrder }
+  // Position relative to the reference issue
+  return {
+    parentIssueId: parentRef.parentIssue,
+    siblingIssueId: referenceIssueId,
+    insertBefore: isAbove,
+  }
 }
 
 /**
@@ -76,56 +72,4 @@ function findNodeByIssueId(
   issueId: string
 ): TaskGraphNodeResponse | undefined {
   return nodes.find((n) => n.issue?.id?.toLowerCase() === issueId.toLowerCase())
-}
-
-/**
- * Computes the sort order for a new sibling issue.
- *
- * @param nodes - All nodes in the task graph
- * @param parentIssueId - The parent issue ID
- * @param referenceIssueId - The sibling reference issue ID
- * @param isAbove - True if inserting above the reference, false if below
- * @returns The computed sort order string
- */
-function computeSortOrderForSibling(
-  nodes: TaskGraphNodeResponse[],
-  parentIssueId: string,
-  referenceIssueId: string,
-  isAbove: boolean
-): string {
-  // Find all siblings (children of the same parent)
-  const siblings = nodes
-    .filter((n) => {
-      const parentRef = n.issue?.parentIssues?.[0]
-      return parentRef?.parentIssue?.toLowerCase() === parentIssueId.toLowerCase()
-    })
-    .map((n) => ({
-      issueId: n.issue!.id!,
-      sortOrder: n.issue!.parentIssues?.[0]?.sortOrder ?? 'V',
-      row: n.row ?? 0,
-    }))
-    // Sort by row (visual order in task graph)
-    .sort((a, b) => a.row - b.row)
-
-  // Find the reference sibling's index
-  const referenceIndex = siblings.findIndex(
-    (s) => s.issueId.toLowerCase() === referenceIssueId.toLowerCase()
-  )
-
-  if (referenceIndex < 0) {
-    // Reference not found among siblings - use default
-    return computeMidpoint(null, null)
-  }
-
-  const referenceSibling = siblings[referenceIndex]
-
-  if (isAbove) {
-    // Insert above reference (before in sort order)
-    const previousSibling = referenceIndex > 0 ? siblings[referenceIndex - 1] : null
-    return computeMidpoint(previousSibling?.sortOrder ?? null, referenceSibling.sortOrder)
-  } else {
-    // Insert below reference (after in sort order)
-    const nextSibling = referenceIndex < siblings.length - 1 ? siblings[referenceIndex + 1] : null
-    return computeMidpoint(referenceSibling.sortOrder, nextSibling?.sortOrder ?? null)
-  }
 }

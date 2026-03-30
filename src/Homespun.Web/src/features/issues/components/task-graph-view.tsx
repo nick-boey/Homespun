@@ -328,7 +328,8 @@ export const TaskGraphView = memo(
         isAbove: false,
         referenceIssueId: referenceIssue.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [selectedIndex, issueRenderLines, taskGraph])
@@ -351,7 +352,8 @@ export const TaskGraphView = memo(
         isAbove: true,
         referenceIssueId: referenceIssue.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [selectedIndex, issueRenderLines, taskGraph])
@@ -371,7 +373,8 @@ export const TaskGraphView = memo(
         isAbove: true,
         referenceIssueId: firstIssue?.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [issueRenderLines, taskGraph])
@@ -391,7 +394,8 @@ export const TaskGraphView = memo(
         isAbove: false,
         referenceIssueId: lastIssue?.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [issueRenderLines, taskGraph])
@@ -480,15 +484,15 @@ export const TaskGraphView = memo(
         const parentIssueId = hasExplicitHierarchy
           ? pendingNewIssue.pendingParentId
           : pendingNewIssue.inheritedParentIssueId
-        const parentSortOrder = hasExplicitHierarchy
-          ? undefined
-          : pendingNewIssue.inheritedParentSortOrder
+        const siblingIssueId = hasExplicitHierarchy ? undefined : pendingNewIssue.siblingIssueId
+        const insertBefore = hasExplicitHierarchy ? undefined : pendingNewIssue.insertBefore
 
         await createIssue({
           title: pendingNewIssue.title.trim(),
           parentIssueId,
           childIssueId: pendingNewIssue.pendingChildId,
-          parentSortOrder,
+          siblingIssueId,
+          insertBefore,
         })
         // Return focus to container after save
         containerRef.current?.focus()
@@ -512,15 +516,15 @@ export const TaskGraphView = memo(
         const parentIssueId = hasExplicitHierarchy
           ? pendingNewIssue.pendingParentId
           : pendingNewIssue.inheritedParentIssueId
-        const parentSortOrder = hasExplicitHierarchy
-          ? undefined
-          : pendingNewIssue.inheritedParentSortOrder
+        const siblingIssueId = hasExplicitHierarchy ? undefined : pendingNewIssue.siblingIssueId
+        const insertBefore = hasExplicitHierarchy ? undefined : pendingNewIssue.insertBefore
 
         const issue = await createIssue({
           title: pendingNewIssue.title.trim(),
           parentIssueId,
           childIssueId: pendingNewIssue.pendingChildId,
-          parentSortOrder,
+          siblingIssueId,
+          insertBefore,
         })
         // Navigate to edit page for description
         if (issue?.id) {

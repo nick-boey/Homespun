@@ -389,7 +389,8 @@ export const TaskGraphKonvaView = memo(
         isAbove: false,
         referenceIssueId: referenceIssue.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [selectedIndex, issueRenderLines, taskGraph])
@@ -407,7 +408,8 @@ export const TaskGraphKonvaView = memo(
         isAbove: true,
         referenceIssueId: referenceIssue.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [selectedIndex, issueRenderLines, taskGraph])
@@ -424,7 +426,8 @@ export const TaskGraphKonvaView = memo(
         isAbove: true,
         referenceIssueId: firstIssue?.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [issueRenderLines, taskGraph])
@@ -441,7 +444,8 @@ export const TaskGraphKonvaView = memo(
         isAbove: false,
         referenceIssueId: lastIssue?.issueId,
         inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
+        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
+        insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [issueRenderLines, taskGraph])

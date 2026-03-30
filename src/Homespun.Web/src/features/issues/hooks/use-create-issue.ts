@@ -34,8 +34,10 @@ export interface CreateIssueParams {
   parentIssueId?: string
   /** Set this to make the new issue a parent of the specified child */
   childIssueId?: string
-  /** Sort order for positioning within parent's children */
-  parentSortOrder?: string
+  /** Sibling issue ID for positioning within parent's children */
+  siblingIssueId?: string
+  /** If true, insert before the sibling; if false, insert after */
+  insertBefore?: boolean
 }
 
 export interface UseCreateIssueReturn {
@@ -68,7 +70,14 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
 
   const createIssue = useCallback(
     async (params: CreateIssueParams): Promise<IssueResponse> => {
-      const { title, type = IssueType.TASK, parentIssueId, childIssueId, parentSortOrder } = params
+      const {
+        title,
+        type = IssueType.TASK,
+        parentIssueId,
+        childIssueId,
+        siblingIssueId,
+        insertBefore,
+      } = params
 
       setIsCreating(true)
       setError(null)
@@ -92,9 +101,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
             priority: null,
             linkedPRs: [],
             linkedIssues: null,
-            parentIssues: parentIssueId
-              ? [{ parentIssue: parentIssueId, sortOrder: parentSortOrder ?? 'a' }]
-              : null,
+            parentIssues: parentIssueId ? [{ parentIssue: parentIssueId, sortOrder: 'nnn' }] : null,
             tags: null,
             workingBranchId: null,
             executionMode: ExecutionMode.SERIES,
@@ -133,7 +140,8 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
             type,
             parentIssueId,
             childIssueId,
-            parentSortOrder,
+            siblingIssueId,
+            insertBefore,
           },
         })
 

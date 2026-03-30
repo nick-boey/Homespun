@@ -276,7 +276,8 @@ export type CreateIssueRequest = {
   executionMode?: ExecutionMode
   workingBranchId?: string | null
   parentIssueId?: string | null
-  parentSortOrder?: string | null
+  siblingIssueId?: string | null
+  insertBefore?: boolean
   childIssueId?: string | null
 }
 
