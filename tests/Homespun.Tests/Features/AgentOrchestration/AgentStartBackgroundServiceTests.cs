@@ -656,6 +656,7 @@ public class AgentStartBackgroundServiceTests
                 InitialMessage = "Work on {{title}}"
             });
 
+
         _mockFleeceService.Setup(x => x.ListIssuesAsync(
                 request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Issue>());

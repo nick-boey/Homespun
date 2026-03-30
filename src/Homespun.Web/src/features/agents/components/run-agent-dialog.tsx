@@ -25,6 +25,8 @@ import { useRunAgent, useAgentPrompts } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
+import { useIssueContext } from '@/features/sessions/hooks/use-issue-context'
+import { renderPromptTemplate } from '@/features/sessions/utils/render-prompt-template'
 import { useCreateIssuesAgentSession } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
 import { useIssueAgentAvailablePrompts } from '@/features/issues-agent/hooks/use-issue-agent-available-prompts'
 import type { RunAgentResult } from '../hooks/use-run-agent'
@@ -172,18 +174,6 @@ interface TaskAgentTabContentProps {
   onError?: (error: Error) => void
 }
 
-/** Replace placeholders in prompt template with empty strings (client-side) */
-function renderPromptTemplate(template: string): string {
-  return template
-    .replace(/\{\{title\}\}/g, '')
-    .replace(/\{\{id\}\}/g, '')
-    .replace(/\{\{description\}\}/g, '')
-    .replace(/\{\{branch\}\}/g, '')
-    .replace(/\{\{type\}\}/g, '')
-    .replace(/\{\{context\}\}/g, '')
-    .trim()
-}
-
 function TaskAgentTabContent({
   projectId,
   issueId,
@@ -195,6 +185,9 @@ function TaskAgentTabContent({
 
   // Project data for repo path and default branch
   const { project, isLoading: projectLoading } = useProject(projectId)
+
+  // Issue context for rendering prompt placeholders
+  const { data: issueContext } = useIssueContext(issueId, projectId)
 
   // Selection state
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -253,19 +246,24 @@ function TaskAgentTabContent({
     return prompts[0].name ?? ''
   }, [prompts, selectedPromptName])
 
-  // Populate textarea when prompt changes (render-time reconciliation)
-  const [lastTaskPromptName, setLastTaskPromptName] = useState(effectivePromptName)
-  if (effectivePromptName !== lastTaskPromptName) {
-    setLastTaskPromptName(effectivePromptName)
-    if (effectivePromptName === NONE_PROMPT_ID) {
+  // Populate textarea when prompt or issue context changes
+  useEffect(() => {
+    if (
+      effectivePromptName === NONE_PROMPT_ID ||
+      !effectivePromptName ||
+      !prompts ||
+      !issueContext
+    ) {
       setUserInstructions('')
-    } else {
-      const prompt = prompts?.find((p) => p.name === effectivePromptName)
-      if (prompt?.initialMessage) {
-        setUserInstructions(renderPromptTemplate(prompt.initialMessage))
-      }
+      return
     }
-  }
+    const prompt = prompts.find((p) => p.name === effectivePromptName)
+    if (prompt?.initialMessage) {
+      setUserInstructions(renderPromptTemplate(prompt.initialMessage, issueContext))
+    } else {
+      setUserInstructions('')
+    }
+  }, [effectivePromptName, prompts, issueContext])
 
   // Handle start
   const handleStart = useCallback(async () => {
@@ -483,6 +481,9 @@ function IssuesAgentTabContent({
   const navigate = useNavigate()
   const createSession = useCreateIssuesAgentSession()
 
+  // Issue context for rendering prompt placeholders
+  const { data: issueContext } = useIssueContext(selectedIssueId, projectId)
+
   // Fetch available issue agent prompts
   const { data: prompts, isLoading: promptsLoading } = useIssueAgentAvailablePrompts(projectId)
 
@@ -526,19 +527,22 @@ function IssuesAgentTabContent({
     return prompts[0].name ?? ''
   }, [prompts, selectedPromptName])
 
-  // Populate textarea when prompt changes (render-time reconciliation)
-  const [lastIssuesPromptName, setLastIssuesPromptName] = useState(effectivePromptName)
-  if (effectivePromptName !== lastIssuesPromptName) {
-    setLastIssuesPromptName(effectivePromptName)
-    if (effectivePromptName === NONE_PROMPT_ID) {
+  // Populate textarea when prompt or issue context changes
+  useEffect(() => {
+    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
       setUserInstructions('')
-    } else {
-      const prompt = prompts?.find((p) => p.name === effectivePromptName)
-      if (prompt?.initialMessage) {
-        setUserInstructions(renderPromptTemplate(prompt.initialMessage))
-      }
+      return
     }
-  }
+    const prompt = prompts.find((p) => p.name === effectivePromptName)
+    if (prompt?.initialMessage && issueContext) {
+      setUserInstructions(renderPromptTemplate(prompt.initialMessage, issueContext))
+    } else if (prompt?.initialMessage) {
+      // No issue context available yet - show template without placeholders filled
+      setUserInstructions(prompt.initialMessage)
+    } else {
+      setUserInstructions('')
+    }
+  }, [effectivePromptName, prompts, issueContext])
 
   const hasPromptOrInstructions = useMemo(() => {
     return effectivePromptName !== NONE_PROMPT_ID || userInstructions.trim().length > 0

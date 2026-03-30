@@ -162,7 +162,7 @@ public class AgentStartBackgroundService(
 
             // Step 2: Resolve prompt and render template
             AgentPrompt? prompt = null;
-            string? renderedMessage = null;
+            string? renderedMessage = request.Instructions;
             var mode = SessionMode.Plan; // Default for None
 
             if (!string.IsNullOrWhiteSpace(request.UserInstructions))
@@ -188,21 +188,25 @@ public class AgentStartBackgroundService(
                 {
                     mode = prompt.Mode;
 
-                    // Build hierarchical context (ancestors and direct children)
-                    var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
-                    var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
-
-                    var promptContext = new PromptContext
+                    // Only do server-side template rendering if no pre-rendered instructions provided
+                    if (string.IsNullOrEmpty(renderedMessage))
                     {
-                        Title = request.Issue.Title,
-                        Id = request.Issue.Id,
-                        Description = request.Issue.Description,
-                        Branch = request.BranchName,
-                        Type = request.Issue.Type.ToString(),
-                        Context = treeContext
-                    };
+                        // Build hierarchical context (ancestors and direct children)
+                        var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
+                        var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
 
-                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                        var promptContext = new PromptContext
+                        {
+                            Title = request.Issue.Title,
+                            Id = request.Issue.Id,
+                            Description = request.Issue.Description,
+                            Branch = request.BranchName,
+                            Type = request.Issue.Type.ToString(),
+                            Context = treeContext
+                        };
+
+                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+                    }
                 }
             }
 
