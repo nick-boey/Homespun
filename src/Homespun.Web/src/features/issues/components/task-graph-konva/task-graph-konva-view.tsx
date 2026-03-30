@@ -253,12 +253,14 @@ export const TaskGraphKonvaView = memo(
     // Content size for camera (extra row when creating a new issue)
     const contentSize = useMemo(() => {
       const svgWidth = LANE_WIDTH * maxLanes + LANE_WIDTH / 2
-      const contentWidth = svgWidth + 800 // SVG + content area
+      const minContentArea = 800
+      const availableContentArea = viewportSize.width - svgWidth
+      const contentWidth = svgWidth + Math.max(minContentArea, availableContentArea)
       const lastRowY = rowYPositions.length > 0 ? rowYPositions[rowYPositions.length - 1] : 0
       const extraHeight = insertionRowIndex !== null ? ROW_HEIGHT : 0
       const contentHeight = lastRowY + ROW_HEIGHT + extraHeight
       return { width: contentWidth, height: contentHeight }
-    }, [maxLanes, rowYPositions, insertionRowIndex])
+    }, [maxLanes, rowYPositions, insertionRowIndex, viewportSize.width])
 
     // Camera state
     const { camera, scrollToRow, handleDragMove, handleDragEnd, handleWheel, touchHandlers } =
