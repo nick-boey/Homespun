@@ -55,9 +55,11 @@ public class IssuesAgentController(
             return NotFound("Project not found");
         }
 
-        // Generate branch name: issues-agent-{timestamp}
+        // Generate branch name: issues-agent-{issueId}-{timestamp} or issues-agent-{timestamp}
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var branchName = $"issues-agent-{timestamp}";
+        var branchName = !string.IsNullOrWhiteSpace(request.SelectedIssueId)
+            ? $"issues-agent-{request.SelectedIssueId}-{timestamp}"
+            : $"issues-agent-{timestamp}";
 
         // Pull latest from main branch before creating clone
         var baseBranch = project.DefaultBranch;
@@ -137,9 +139,14 @@ public class IssuesAgentController(
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
+        // Use SelectedIssueId as entityId when available, otherwise fall back to branch name
+        var entityId = !string.IsNullOrWhiteSpace(request.SelectedIssueId)
+            ? request.SelectedIssueId
+            : branchName;
+
         // Create session with resolved mode and system prompt
         var session = await sessionService.StartSessionAsync(
-            branchName,
+            entityId,
             request.ProjectId,
             clonePath,
             sessionMode,

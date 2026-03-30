@@ -116,6 +116,31 @@ public class IssuesAgentApiTests
     }
 
     [Test]
+    public async Task CreateSession_WithSelectedIssueId_IncludesIssueIdInBranchName()
+    {
+        // Arrange
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = _projectId,
+            UserInstructions = "Fix the bug",
+            SelectedIssueId = "abc123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var result = await response.Content.ReadFromJsonAsync<CreateIssuesAgentSessionResponse>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.BranchName, Does.Contain("abc123"));
+            Assert.That(result.BranchName, Does.StartWith("issues-agent-abc123-"));
+        });
+    }
+
+    [Test]
     public async Task CreateSession_WithoutPromptId_ReturnsCreated()
     {
         // Arrange - no prompt ID, backward-compatible behavior
