@@ -559,6 +559,9 @@ terraform.rc
 # Docker Compose environment files
 .env.compose
 
+# Azure Developer CLI (azd) local state
+.azure/
+
 # LikeC4 build output
 docs/architecture/dist/
 docs/architecture/images/
