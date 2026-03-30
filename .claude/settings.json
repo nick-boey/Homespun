@@ -10,5 +10,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "dotnet-skills@dotnet-skills": true
   }
 }
