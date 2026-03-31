@@ -76,6 +76,37 @@ public class IssuesAgentApiTests
     }
 
     [Test]
+    public async Task CreateSession_WithPromptIdAndNoInstructions_ReturnsCreated()
+    {
+        // Arrange - prompt selected but no user instructions (the bug scenario)
+        var promptsResponse = await _client.GetAsync($"/api/agent-prompts/issue-agent/available/{_projectId}");
+        promptsResponse.EnsureSuccessStatusCode();
+        var prompts = await promptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.That(prompts, Is.Not.Empty, "Should have at least one IssueAgent prompt");
+
+        var prompt = prompts!.First();
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = _projectId,
+            PromptId = prompt.Id
+            // NOTE: No UserInstructions - this is the bug scenario
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
+
+        // Assert - should succeed, not leave session in WaitingForInput
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var result = await response.Content.ReadFromJsonAsync<CreateIssuesAgentSessionResponse>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.SessionId, Is.Not.Empty);
+            Assert.That(result.BranchName, Does.StartWith("issues-agent-"));
+        });
+    }
+
+    [Test]
     public async Task CreateSession_WithInvalidPromptId_ReturnsNotFound()
     {
         // Arrange
