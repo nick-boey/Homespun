@@ -83,6 +83,16 @@ describe('IssuesAgentDialog', () => {
     expect(screen.getByText('Start Agent')).toBeInTheDocument()
   })
 
+  it('renders dialog at 80% viewport width and height', () => {
+    render(<IssuesAgentDialog open={true} onOpenChange={() => {}} projectId="proj-1" />, {
+      wrapper: createWrapper(),
+    })
+
+    const dialogContent = document.querySelector('[data-slot="dialog-content"]')
+    expect(dialogContent).toHaveClass('max-h-[80vh]')
+    expect(dialogContent).toHaveClass('sm:max-w-[80vw]')
+  })
+
   it('does not render when closed', () => {
     render(<IssuesAgentDialog open={false} onOpenChange={() => {}} projectId="proj-1" />, {
       wrapper: createWrapper(),

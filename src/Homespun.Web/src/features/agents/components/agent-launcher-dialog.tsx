@@ -193,7 +193,7 @@ export function AgentLauncherDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[80vh] sm:max-w-[80vw]">
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
           <DialogDescription>Configure and start an agent session on this issue</DialogDescription>

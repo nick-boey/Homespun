@@ -116,6 +116,24 @@ describe('AgentLauncherDialog', () => {
     })
   })
 
+  it('renders dialog at 80% viewport width and height', async () => {
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => {
+      const dialogContent = document.querySelector('[data-slot="dialog-content"]')
+      expect(dialogContent).toHaveClass('max-h-[80vh]')
+      expect(dialogContent).toHaveClass('sm:max-w-[80vw]')
+    })
+  })
+
   it('shows loading state while loading prompts', async () => {
     // Delay the prompt loading
     let resolvePrompts: (value: ReturnType<typeof createMockResponse>) => void
@@ -483,6 +501,26 @@ describe('AgentLauncherDialog', () => {
     // Should ALWAYS have None option as first option, regardless of prompt types
     const options = screen.getAllByRole('option')
     expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
+  })
+
+  it('renders dialog at 80% viewport width and height', async () => {
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    const dialogContent = document.querySelector('[data-slot="dialog-content"]')
+    expect(dialogContent).toHaveClass('max-h-[80vh]')
+    expect(dialogContent).toHaveClass('sm:max-w-[80vw]')
   })
 
   it('displays (project) suffix for override prompts in dropdown', async () => {

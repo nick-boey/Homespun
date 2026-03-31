@@ -169,7 +169,7 @@ export function IssuesAgentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[80vh] sm:max-w-[80vw]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ListTodo className="h-5 w-5" />
