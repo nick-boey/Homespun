@@ -76,7 +76,7 @@ public class IssuesAgentApiTests
     }
 
     [Test]
-    public async Task CreateSession_WithPromptIdAndNoInstructions_ReturnsCreated()
+    public async Task CreateSession_WithPromptNameAndNoInstructions_ReturnsCreated()
     {
         // Arrange - prompt selected but no user instructions (the bug scenario)
         var promptsResponse = await _client.GetAsync($"/api/agent-prompts/issue-agent/available/{_projectId}");
@@ -88,7 +88,7 @@ public class IssuesAgentApiTests
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptId = prompt.Id
+            PromptName = prompt.Name
             // NOTE: No UserInstructions - this is the bug scenario
         };
 
