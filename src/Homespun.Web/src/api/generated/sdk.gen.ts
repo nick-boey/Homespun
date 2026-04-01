@@ -235,6 +235,9 @@ import type {
   PostApiExecutionsByExecutionIdStepsByStepIdSignalData,
   PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
   PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
+  PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData,
+  PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
+  PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
   PostApiFleeceSyncByProjectIdPullData,
   PostApiFleeceSyncByProjectIdPullErrors,
   PostApiFleeceSyncByProjectIdPullResponses,
@@ -751,6 +754,16 @@ export class FleeceIssueSync {
       PostApiFleeceSyncByProjectIdPullErrors,
       ThrowOnError
     >({ url: '/api/fleece-sync/{projectId}/pull', ...options })
+  }
+
+  public static postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull<
+    ThrowOnError extends boolean = false,
+  >(options: Options<PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData, ThrowOnError>) {
+    return (options.client ?? client).post<
+      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
+      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
+      ThrowOnError
+    >({ url: '/api/fleece-sync/{projectId}/discard-non-fleece-and-pull', ...options })
   }
 }
 

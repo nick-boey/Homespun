@@ -2325,6 +2325,35 @@ export type PostApiFleeceSyncByProjectIdPullResponses = {
 export type PostApiFleeceSyncByProjectIdPullResponse =
   PostApiFleeceSyncByProjectIdPullResponses[keyof PostApiFleeceSyncByProjectIdPullResponses]
 
+export type PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/fleece-sync/{projectId}/discard-non-fleece-and-pull'
+}
+
+export type PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullError =
+  PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors[keyof PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors]
+
+export type PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses = {
+  /**
+   * OK
+   */
+  200: FleecePullResult
+}
+
+export type PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponse =
+  PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses[keyof PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses]
+
 export type GetApiGithubStatusData = {
   body?: never
   path?: never

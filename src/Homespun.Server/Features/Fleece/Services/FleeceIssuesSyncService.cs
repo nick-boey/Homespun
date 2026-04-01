@@ -118,20 +118,12 @@ public class FleeceIssuesSyncService(
                 CommitsPulled: 0);
         }
 
-        // Step 2: Check for non-fleece changes - block pull if present
+        // Step 2: Detect non-fleece changes (informational - no longer blocks pull)
         var nonFleeceChanges = await GetNonFleeceChangesAsync(projectPath);
         if (nonFleeceChanges.Count > 0)
         {
-            logger.LogWarning("Found {Count} non-fleece changed files that block pull: {Files}",
+            logger.LogInformation("Found {Count} non-fleece changed files, will attempt pull anyway: {Files}",
                 nonFleeceChanges.Count, string.Join(", ", nonFleeceChanges.Take(5)));
-            return new FleecePullResult(
-                Success: false,
-                ErrorMessage: $"Cannot pull: found {nonFleeceChanges.Count} uncommitted non-fleece file(s). Please commit or discard these changes first.",
-                IssuesMerged: 0,
-                WasBehindRemote: false,
-                CommitsPulled: 0,
-                HasNonFleeceChanges: true,
-                NonFleeceChangedFiles: nonFleeceChanges);
         }
 
         // Not behind remote - nothing to do
@@ -143,11 +135,34 @@ public class FleeceIssuesSyncService(
                 ErrorMessage: null,
                 IssuesMerged: 0,
                 WasBehindRemote: false,
-                CommitsPulled: 0);
+                CommitsPulled: 0,
+                HasNonFleeceChanges: nonFleeceChanges.Count > 0,
+                NonFleeceChangedFiles: nonFleeceChanges.Count > 0 ? nonFleeceChanges : null);
         }
 
         // Step 3: Perform pull and merge
         var pullResult = await PullAndMergeFleeceInternalAsync(projectPath, defaultBranch, branchStatus, ct);
+
+        // Enrich result with non-fleece change info
+        if (!pullResult.Success && nonFleeceChanges.Count > 0)
+        {
+            return pullResult with
+            {
+                HasNonFleeceChanges = true,
+                NonFleeceChangedFiles = nonFleeceChanges,
+                ErrorMessage = "Pull failed due to conflicting uncommitted changes. You can discard these changes and retry."
+            };
+        }
+
+        if (nonFleeceChanges.Count > 0)
+        {
+            return pullResult with
+            {
+                HasNonFleeceChanges = true,
+                NonFleeceChangedFiles = nonFleeceChanges
+            };
+        }
+
         return pullResult;
     }
 
