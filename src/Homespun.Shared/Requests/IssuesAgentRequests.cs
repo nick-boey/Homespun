@@ -1,5 +1,6 @@
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Issues;
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Shared.Requests;
 
@@ -26,18 +27,15 @@ public class CreateIssuesAgentSessionRequest
     public string? SelectedIssueId { get; set; }
 
     /// <summary>
-    /// Optional user instructions for the agent.
-    /// When provided, renders the IssueAgentModification prompt and sends as initial message.
+    /// Optional user instructions to send as the initial message.
     /// </summary>
     public string? UserInstructions { get; set; }
 
     /// <summary>
-    /// Optional prompt name to use for the session.
-    /// When provided, the prompt is resolved and its Mode determines the session mode.
-    /// Must reference a prompt with Category = IssueAgent.
-    /// If not provided, falls back to the first available IssueAgent prompt with Build mode.
+    /// The session mode to use (Plan or Build).
+    /// If not specified, defaults to Build.
     /// </summary>
-    public string? PromptName { get; set; }
+    public SessionMode? Mode { get; set; }
 }
 
 /// <summary>

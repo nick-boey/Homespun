@@ -31,6 +31,7 @@ import { useCreateIssuesAgentSession } from '@/features/issues-agent/hooks/use-c
 import { useIssueAgentAvailablePrompts } from '@/features/issues-agent/hooks/use-issue-agent-available-prompts'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 import type { CreateIssuesAgentSessionResult } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
+import { SessionMode } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
 const TASK_MODELS = [
@@ -49,8 +50,10 @@ const ISSUES_MODELS = [
 const TASK_MODEL_STORAGE_KEY = 'agent-launcher-model'
 const TASK_PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 const TASK_BASE_BRANCH_STORAGE_KEY = 'agent-launcher-base-branch'
+const TASK_MODE_STORAGE_KEY = 'agent-launcher-mode'
 const ISSUES_MODEL_STORAGE_KEY = 'issues-agent-model'
 const ISSUES_PROMPT_STORAGE_KEY = 'issues-agent-prompt'
+const ISSUES_MODE_STORAGE_KEY = 'issues-agent-mode'
 const NONE_PROMPT_ID = '__none__'
 
 export interface RunAgentDialogProps {
@@ -198,6 +201,10 @@ function TaskAgentTabContent({
   const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {
     return localStorage.getItem(TASK_BASE_BRANCH_STORAGE_KEY) ?? ''
   })
+  const [selectedMode, setSelectedMode] = useState<SessionMode>(() => {
+    const stored = localStorage.getItem(TASK_MODE_STORAGE_KEY)
+    return stored === SessionMode.BUILD ? SessionMode.BUILD : SessionMode.PLAN
+  })
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [userInstructions, setUserInstructions] = useState('')
 
@@ -230,6 +237,10 @@ function TaskAgentTabContent({
     }
   }, [selectedBaseBranch])
 
+  useEffect(() => {
+    localStorage.setItem(TASK_MODE_STORAGE_KEY, selectedMode)
+  }, [selectedMode])
+
   // Compute effective prompt name
   const effectivePromptName = useMemo(() => {
     if (selectedPromptName === NONE_PROMPT_ID) {
@@ -244,6 +255,18 @@ function TaskAgentTabContent({
     }
     return prompts[0].name ?? ''
   }, [prompts, selectedPromptName])
+
+  // Sync mode from selected prompt
+  useEffect(() => {
+    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
+      setSelectedMode(SessionMode.PLAN)
+      return
+    }
+    const prompt = prompts.find((p) => p.name === effectivePromptName)
+    if (prompt?.mode) {
+      setSelectedMode(prompt.mode)
+    }
+  }, [effectivePromptName, prompts])
 
   // Populate textarea when prompt or issue context changes
   useEffect(() => {
@@ -272,7 +295,7 @@ function TaskAgentTabContent({
       const result = await runAgent.mutateAsync({
         issueId,
         projectId,
-        promptName: effectivePromptName === NONE_PROMPT_ID ? null : effectivePromptName,
+        mode: selectedMode,
         model: selectedModel,
         baseBranch: effectiveBaseBranch || undefined,
         userInstructions: userInstructions.trim() || undefined,
@@ -291,7 +314,7 @@ function TaskAgentTabContent({
     runAgent,
     issueId,
     projectId,
-    effectivePromptName,
+    selectedMode,
     selectedModel,
     effectiveBaseBranch,
     userInstructions,
@@ -370,7 +393,14 @@ function TaskAgentTabContent({
               effectivePromptName={effectivePromptName}
               onValueChange={setSelectedPromptName}
               disabled={isLoading || !prompts?.length}
-              noneLabel="None - Start without prompt (Plan mode)"
+              noneLabel="None - Start without prompt"
+            />
+
+            {/* Mode selector */}
+            <ModeSelector
+              value={selectedMode}
+              onValueChange={setSelectedMode}
+              disabled={isLoading}
             />
 
             {/* Model selector */}
@@ -496,6 +526,12 @@ function IssuesAgentTabContent({
     return localStorage.getItem(ISSUES_PROMPT_STORAGE_KEY) ?? ''
   })
 
+  // Mode selection state
+  const [selectedMode, setSelectedMode] = useState<SessionMode>(() => {
+    const stored = localStorage.getItem(ISSUES_MODE_STORAGE_KEY)
+    return stored === SessionMode.PLAN ? SessionMode.PLAN : SessionMode.BUILD
+  })
+
   // User instructions state
   const [userInstructions, setUserInstructions] = useState('')
 
@@ -511,6 +547,10 @@ function IssuesAgentTabContent({
     }
   }, [selectedPromptName])
 
+  useEffect(() => {
+    localStorage.setItem(ISSUES_MODE_STORAGE_KEY, selectedMode)
+  }, [selectedMode])
+
   // Compute effective prompt name
   const effectivePromptName = useMemo(() => {
     if (selectedPromptName === NONE_PROMPT_ID) {
@@ -525,6 +565,18 @@ function IssuesAgentTabContent({
     }
     return prompts[0].name ?? ''
   }, [prompts, selectedPromptName])
+
+  // Sync mode from selected prompt
+  useEffect(() => {
+    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
+      setSelectedMode(SessionMode.BUILD)
+      return
+    }
+    const prompt = prompts.find((p) => p.name === effectivePromptName)
+    if (prompt?.mode) {
+      setSelectedMode(prompt.mode)
+    }
+  }, [effectivePromptName, prompts])
 
   // Populate textarea when prompt or issue context changes
   useEffect(() => {
@@ -554,7 +606,7 @@ function IssuesAgentTabContent({
         model: selectedModel,
         selectedIssueId: selectedIssueId ?? undefined,
         userInstructions: userInstructions.trim() || undefined,
-        promptName: effectivePromptName === NONE_PROMPT_ID ? null : effectivePromptName,
+        mode: selectedMode,
       })
 
       onSessionCreated?.(result)
@@ -574,7 +626,7 @@ function IssuesAgentTabContent({
     selectedModel,
     selectedIssueId,
     userInstructions,
-    effectivePromptName,
+    selectedMode,
     hasPromptOrInstructions,
     onSessionCreated,
     navigate,
@@ -598,8 +650,15 @@ function IssuesAgentTabContent({
               effectivePromptName={effectivePromptName}
               onValueChange={setSelectedPromptName}
               disabled={createSession.isPending}
-              noneLabel="None - Start without prompt (Build mode)"
+              noneLabel="None - Start without prompt"
               showMode
+            />
+
+            {/* Mode selector */}
+            <ModeSelector
+              value={selectedMode}
+              onValueChange={setSelectedMode}
+              disabled={createSession.isPending}
             />
 
             {/* Model selector */}
@@ -691,6 +750,30 @@ function PromptSelector({
             {prompt.isOverride && ' (project)'}
           </SelectItem>
         ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+interface ModeSelectorProps {
+  value: SessionMode
+  onValueChange: (value: SessionMode) => void
+  disabled: boolean
+}
+
+function ModeSelector({ value, onValueChange, disabled }: ModeSelectorProps) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => onValueChange(v as SessionMode)}
+      disabled={disabled}
+    >
+      <SelectTrigger className="w-24" aria-label="Select mode">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={SessionMode.PLAN}>Plan</SelectItem>
+        <SelectItem value={SessionMode.BUILD}>Build</SelectItem>
       </SelectContent>
     </Select>
   )

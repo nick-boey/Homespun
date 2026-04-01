@@ -160,53 +160,34 @@ public class AgentStartBackgroundService(
                     clonePath, request.BranchName);
             }
 
-            // Step 2: Resolve prompt and render template
-            AgentPrompt? prompt = null;
-            string? renderedMessage = request.Instructions;
-            var mode = SessionMode.Plan; // Default for None
+            // Step 2: Resolve mode and initial message
+            string? renderedMessage = request.Instructions ?? request.UserInstructions;
+            var mode = request.Mode ?? SessionMode.Plan;
 
-            if (!string.IsNullOrWhiteSpace(request.UserInstructions))
+            // Workflow path: when no explicit mode or message, resolve from prompt
+            if (!request.Mode.HasValue && string.IsNullOrEmpty(renderedMessage) &&
+                !string.IsNullOrEmpty(request.PromptName))
             {
-                // User instructions override the prompt template
-                renderedMessage = request.UserInstructions;
-
-                // If a prompt was also provided, use its mode; otherwise default to Build
-                if (!string.IsNullOrEmpty(request.PromptName))
-                {
-                    prompt = agentPromptService.GetPrompt(request.PromptName, null);
-                    mode = prompt?.Mode ?? SessionMode.Build;
-                }
-                else
-                {
-                    mode = SessionMode.Build;
-                }
-            }
-            else if (!string.IsNullOrEmpty(request.PromptName))
-            {
-                prompt = agentPromptService.GetPrompt(request.PromptName, null);
+                var prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;
 
-                    // Only do server-side template rendering if no pre-rendered instructions provided
-                    if (string.IsNullOrEmpty(renderedMessage))
+                    // Build hierarchical context (ancestors and direct children)
+                    var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
+                    var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
+
+                    var promptContext = new PromptContext
                     {
-                        // Build hierarchical context (ancestors and direct children)
-                        var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
-                        var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
+                        Title = request.Issue.Title,
+                        Id = request.Issue.Id,
+                        Description = request.Issue.Description,
+                        Branch = request.BranchName,
+                        Type = request.Issue.Type.ToString(),
+                        Context = treeContext
+                    };
 
-                        var promptContext = new PromptContext
-                        {
-                            Title = request.Issue.Title,
-                            Id = request.Issue.Id,
-                            Description = request.Issue.Description,
-                            Branch = request.BranchName,
-                            Type = request.Issue.Type.ToString(),
-                            Context = treeContext
-                        };
-
-                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
-                    }
+                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
                 }
             }
 

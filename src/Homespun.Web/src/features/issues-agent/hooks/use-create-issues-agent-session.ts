@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { IssuesAgent } from '@/api'
+import { IssuesAgent, SessionMode } from '@/api'
 import { sessionsQueryKey } from '@/features/sessions'
 
 export interface CreateIssuesAgentSessionParams {
@@ -9,8 +9,8 @@ export interface CreateIssuesAgentSessionParams {
   selectedIssueId?: string
   /** Optional user instructions for the agent */
   userInstructions?: string
-  /** Optional prompt name for the agent session */
-  promptName?: string | null
+  /** The session mode to use */
+  mode?: SessionMode
 }
 
 export interface CreateIssuesAgentSessionResult {
@@ -32,7 +32,7 @@ export function useCreateIssuesAgentSession() {
           model: params.model,
           selectedIssueId: params.selectedIssueId,
           userInstructions: params.userInstructions,
-          promptName: params.promptName,
+          mode: params.mode,
         },
       })
 

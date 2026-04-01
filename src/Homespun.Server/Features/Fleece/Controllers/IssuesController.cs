@@ -30,7 +30,6 @@ public class IssuesController(
     IIssueBranchResolverService branchResolverService,
     IIssueHistoryService historyService,
     IClaudeSessionService sessionService,
-    IAgentPromptService agentPromptService,
     IGitCloneService cloneService,
     IBranchIdBackgroundService branchIdBackgroundService,
     IFleeceChangeApplicationService changeApplicationService,
@@ -504,16 +503,6 @@ public class IssuesController(
             });
         }
 
-        // Validate prompt exists (if provided)
-        if (!string.IsNullOrEmpty(request.PromptName))
-        {
-            var prompt = agentPromptService.GetPrompt(request.PromptName, null);
-            if (prompt == null)
-            {
-                return NotFound("Prompt not found");
-            }
-        }
-
         // Try to atomically mark as starting to prevent race conditions
         if (!agentStartupTracker.TryMarkAsStarting(issueId))
         {
@@ -540,11 +529,11 @@ public class IssuesController(
             ProjectLocalPath = project.LocalPath,
             ProjectDefaultBranch = project.DefaultBranch,
             Issue = issue,
-            PromptName = request.PromptName,
             BaseBranch = request.BaseBranch,
             Model = model,
             BranchName = branchName,
-            UserInstructions = request.UserInstructions
+            UserInstructions = request.UserInstructions,
+            Mode = request.Mode
         });
 
         logger.LogInformation(

@@ -214,9 +214,10 @@ public class RunAgentRequest
     public required string ProjectId { get; set; }
 
     /// <summary>
-    /// The agent prompt name to use, null for None.
+    /// The session mode to use (Plan or Build).
+    /// If not specified, defaults to Plan.
     /// </summary>
-    public required string? PromptName { get; set; }
+    public SessionMode? Mode { get; set; }
 
     /// <summary>
     /// The Claude model to use (e.g., "sonnet").
@@ -231,8 +232,7 @@ public class RunAgentRequest
     public string? BaseBranch { get; set; }
 
     /// <summary>
-    /// Optional user instructions that override the prompt template.
-    /// When provided, this text is sent as the initial message instead of rendering the prompt template.
+    /// Optional user instructions to send as the initial message.
     /// </summary>
     public string? UserInstructions { get; set; }
 }

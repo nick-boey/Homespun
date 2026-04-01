@@ -1,9 +1,6 @@
-using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.Git;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
@@ -49,8 +46,8 @@ public class IssuesAgentController(
         [FromBody] CreateIssuesAgentSessionRequest request)
     {
         logger.LogInformation(
-            "Issues Agent session requested: projectId={ProjectId}, promptName={PromptName}, model={Model}, selectedIssueId={SelectedIssueId}",
-            request.ProjectId, request.PromptName ?? "(none)", request.Model ?? "(default)",
+            "Issues Agent session requested: projectId={ProjectId}, mode={Mode}, model={Model}, selectedIssueId={SelectedIssueId}",
+            request.ProjectId, request.Mode?.ToString() ?? "(default)", request.Model ?? "(default)",
             request.SelectedIssueId ?? "(none)");
 
         // Validate project exists
@@ -108,58 +105,18 @@ public class IssuesAgentController(
 
         logger.LogInformation("Created Issues Agent clone at {ClonePath}", clonePath);
 
-        // Ensure default prompts exist
+        // Session mode: use explicit mode from request, default to Build
+        var sessionMode = request.Mode ?? SessionMode.Build;
+
+        // Ensure default prompts exist (needed for system prompt lookup)
         await agentPromptService.EnsureDefaultPromptsAsync();
-
-        // Resolve the prompt to use for initial message and session mode
-        AgentPrompt? selectedPrompt;
-        SessionMode sessionMode;
-
-        if (!string.IsNullOrWhiteSpace(request.PromptName))
-        {
-            // Explicit prompt selection: validate it exists and has the correct category
-            selectedPrompt = agentPromptService.GetPrompt(request.PromptName, null);
-            if (selectedPrompt == null)
-            {
-                logger.LogError(
-                    "Prompt name {PromptName} not found, issue agent terminating. Issue agent will not be starting.",
-                    request.PromptName);
-                return NotFound("Prompt not found");
-            }
-
-            if (selectedPrompt.Category != PromptCategory.IssueAgent)
-            {
-                logger.LogError(
-                    "Prompt category {PromptCategory} not supported, must have Category = IssueAgent. Issue agent will not be starting.",
-                    selectedPrompt.Category);
-                return BadRequest("Prompt must have Category = IssueAgent");
-            }
-
-            sessionMode = selectedPrompt.Mode;
-        }
-        else
-        {
-            // No prompt ID: fall back to first available IssueAgent prompt for the project
-            var availablePrompts = agentPromptService.GetIssueAgentPromptsForProject(request.ProjectId);
-            selectedPrompt = availablePrompts.FirstOrDefault();
-
-            // If no user-selectable prompt found, fall back to the IssueAgentModification session type prompt
-            selectedPrompt ??= agentPromptService.GetPromptBySessionType(SessionType.IssueAgentModification);
-
-            sessionMode = SessionMode.Build;
-        }
-
-        logger.LogInformation(
-            "Resolved Issues Agent prompt: promptName={PromptName}, sessionMode={SessionMode}, source={Source}",
-            selectedPrompt?.Name ?? "(none)", sessionMode,
-            !string.IsNullOrWhiteSpace(request.PromptName) ? "explicit" : "fallback");
 
         // Get the IssueAgentSystem prompt for system prompt
         var systemPromptTemplate = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentSystem);
 
         logger.LogInformation(
-            "Resolved Issues Agent system prompt template: found={Found}",
-            systemPromptTemplate != null);
+            "Issues Agent session mode={SessionMode}, system prompt found={Found}",
+            sessionMode, systemPromptTemplate != null);
 
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "opus";
@@ -189,38 +146,10 @@ public class IssuesAgentController(
             "Issues Agent session created: sessionId={SessionId}, branch={BranchName}, mode={SessionMode}, model={Model}",
             session.Id, branchName, sessionMode, model);
 
-        // Resolve the initial message to send (which also triggers Docker container creation).
-        // Priority: 1) UserInstructions verbatim, 2) server-side rendered prompt template, 3) fallback prompt
-        string? initialMessage = null;
-
-        if (!string.IsNullOrWhiteSpace(request.UserInstructions))
-        {
-            initialMessage = request.UserInstructions;
-            logger.LogInformation("Using user instructions as initial message for Issues Agent session {SessionId}",
-                session.Id);
-        }
-        else if (selectedPrompt?.InitialMessage != null)
-        {
-            // Render the prompt template server-side when no user instructions provided
-            var promptContext = new PromptContext
-            {
-                Id = request.SelectedIssueId ?? string.Empty,
-                SelectedIssueId = request.SelectedIssueId,
-                Branch = branchName
-            };
-
-            initialMessage = agentPromptService.RenderTemplate(selectedPrompt.InitialMessage, promptContext);
-            logger.LogInformation(
-                "Rendered prompt template as initial message for Issues Agent session {SessionId}, prompt={PromptName}",
-                session.Id, selectedPrompt.Name);
-        }
-
-        // Fallback: ensure we always have a message so the Docker container starts
-        if (string.IsNullOrWhiteSpace(initialMessage))
-        {
-            initialMessage = "Begin working on the assigned issues.";
-            logger.LogInformation("Using fallback message for Issues Agent session {SessionId}", session.Id);
-        }
+        // Use user instructions as initial message, or fallback to ensure Docker container starts
+        var initialMessage = !string.IsNullOrWhiteSpace(request.UserInstructions)
+            ? request.UserInstructions
+            : "Begin working on the assigned issues.";
 
         var messageMode = sessionMode;
         var messageToSend = initialMessage;

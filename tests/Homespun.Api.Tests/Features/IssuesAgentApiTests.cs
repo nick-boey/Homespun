@@ -45,19 +45,13 @@ public class IssuesAgentApiTests
     }
 
     [Test]
-    public async Task CreateSession_WithPromptId_ReturnsCreated()
+    public async Task CreateSession_WithBuildMode_ReturnsCreated()
     {
-        // Arrange - Get an IssueAgent prompt
-        var promptsResponse = await _client.GetAsync($"/api/agent-prompts/issue-agent/available/{_projectId}");
-        promptsResponse.EnsureSuccessStatusCode();
-        var prompts = await promptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        Assert.That(prompts, Is.Not.Empty, "Should have at least one IssueAgent prompt");
-
-        var prompt = prompts!.First();
+        // Arrange
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptName = prompt.Name,
+            Mode = SessionMode.Build,
             UserInstructions = "Test instructions"
         };
 
@@ -76,26 +70,19 @@ public class IssuesAgentApiTests
     }
 
     [Test]
-    public async Task CreateSession_WithPromptNameAndNoInstructions_ReturnsCreated()
+    public async Task CreateSession_WithNoInstructions_ReturnsCreated()
     {
-        // Arrange - prompt selected but no user instructions (the bug scenario)
-        var promptsResponse = await _client.GetAsync($"/api/agent-prompts/issue-agent/available/{_projectId}");
-        promptsResponse.EnsureSuccessStatusCode();
-        var prompts = await promptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        Assert.That(prompts, Is.Not.Empty, "Should have at least one IssueAgent prompt");
-
-        var prompt = prompts!.First();
+        // Arrange - no user instructions, should use fallback message
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            PromptName = prompt.Name
-            // NOTE: No UserInstructions - this is the bug scenario
+            Mode = SessionMode.Build
         };
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
 
-        // Assert - should succeed, not leave session in WaitingForInput
+        // Assert - should succeed with fallback message
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var result = await response.Content.ReadFromJsonAsync<CreateIssuesAgentSessionResponse>(JsonOptions);
         Assert.Multiple(() =>
@@ -104,46 +91,6 @@ public class IssuesAgentApiTests
             Assert.That(result!.SessionId, Is.Not.Empty);
             Assert.That(result.BranchName, Does.StartWith("issues-agent-"));
         });
-    }
-
-    [Test]
-    public async Task CreateSession_WithInvalidPromptId_ReturnsNotFound()
-    {
-        // Arrange
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = _projectId,
-            PromptName = "nonexistent-prompt-id"
-        };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    [Test]
-    public async Task CreateSession_WithStandardCategoryPromptId_ReturnsBadRequest()
-    {
-        // Arrange - Get a Standard category prompt
-        var promptsResponse = await _client.GetAsync("/api/agent-prompts");
-        promptsResponse.EnsureSuccessStatusCode();
-        var prompts = await promptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
-        Assert.That(prompts, Is.Not.Empty);
-
-        var standardPrompt = prompts!.First(p => p.Category == PromptCategory.Standard);
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = _projectId,
-            PromptName = standardPrompt.Name
-        };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
@@ -172,13 +119,13 @@ public class IssuesAgentApiTests
     }
 
     [Test]
-    public async Task CreateSession_WithoutPromptId_ReturnsCreated()
+    public async Task CreateSession_WithoutMode_DefaultsToBuild()
     {
-        // Arrange - no prompt ID, backward-compatible behavior
+        // Arrange - no mode specified, should default to Build
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
-            UserInstructions = "Test instructions without prompt"
+            UserInstructions = "Test instructions without mode"
         };
 
         // Act
