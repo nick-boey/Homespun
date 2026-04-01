@@ -86,7 +86,7 @@ public class UpdateWorkflowParams
 
 /// <summary>
 /// Service for storing and retrieving workflow definitions.
-/// Uses JSONL files in the .workflows directory for persistence.
+/// Uses JSONL files in the .fleece/workflows directory for persistence.
 /// </summary>
 public interface IWorkflowStorageService : IDisposable
 {
