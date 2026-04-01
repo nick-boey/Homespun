@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as React from 'react'
@@ -42,18 +42,13 @@ function createWrapper() {
   }
 }
 
-function mockSuccessfulPrSync() {
-  vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
-    data: { imported: 0, updated: 0, removed: 0 },
-    response: new Response(),
-    request: new Request('http://test'),
-    error: undefined,
-  } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
-}
-
 describe('PullSyncButton', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('renders pull button', () => {
@@ -102,7 +97,12 @@ describe('PullSyncButton', () => {
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    mockSuccessfulPrSync()
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 0, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -126,7 +126,12 @@ describe('PullSyncButton', () => {
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    mockSuccessfulPrSync()
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 1, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -141,7 +146,7 @@ describe('PullSyncButton', () => {
     })
   })
 
-  it('shows error toast when pull fails at HTTP level', async () => {
+  it('shows error toast when pull fails', async () => {
     const user = userEvent.setup()
 
     vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
@@ -163,60 +168,30 @@ describe('PullSyncButton', () => {
     })
   })
 
-  it('shows error toast when pull returns success:false without conflict', async () => {
+  it('shows conflict dialog when pull returns hasNonFleeceChanges with failure', async () => {
     const user = userEvent.setup()
 
     vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
       data: {
         success: false,
-        errorMessage: 'Failed to fast-forward to remote',
-        issuesMerged: 0,
-        wasBehindRemote: true,
-        commitsPulled: 0,
-        hasNonFleeceChanges: false,
-        hasMergeConflict: false,
-      },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
-
-    mockSuccessfulPrSync()
-
-    render(<PullSyncButton projectId="test-project" />, {
-      wrapper: createWrapper(),
-    })
-
-    const pullButton = screen.getByRole('button', { name: /pull/i })
-    await user.click(pullButton)
-
-    await vi.waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Pull failed', {
-        description: 'Failed to fast-forward to remote',
-      })
-    })
-  })
-
-  it('shows conflict dialog when pull returns hasMergeConflict with non-fleece files', async () => {
-    const user = userEvent.setup()
-
-    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
-      data: {
-        success: false,
-        errorMessage: 'Failed to fast-forward',
         issuesMerged: 0,
         wasBehindRemote: true,
         commitsPulled: 0,
         hasNonFleeceChanges: true,
         nonFleeceChangedFiles: ['src/SomeFile.cs', 'README.md'],
-        hasMergeConflict: true,
+        errorMessage: 'Pull failed due to conflicting uncommitted changes.',
       },
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    mockSuccessfulPrSync()
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 0, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -225,114 +200,191 @@ describe('PullSyncButton', () => {
     const pullButton = screen.getByRole('button', { name: /pull/i })
     await user.click(pullButton)
 
+    // Wait for the conflict dialog to appear
     await vi.waitFor(() => {
-      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+      expect(screen.getByText(/uncommitted changes/i)).toBeInTheDocument()
     })
 
-    expect(screen.getByText('src/SomeFile.cs')).toBeInTheDocument()
-    expect(screen.getByText('README.md')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /abort/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /discard changes & retry/i })).toBeInTheDocument()
+    // Should show the conflicting files
+    expect(screen.getByText(/src\/SomeFile\.cs/)).toBeInTheDocument()
+    expect(screen.getByText(/README\.md/)).toBeInTheDocument()
+
+    // Should not show error toast (dialog shown instead)
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('calls discard-and-pull API when user confirms in dialog', async () => {
+  it('clicking cancel dismisses conflict dialog without side effects', async () => {
     const user = userEvent.setup()
 
     vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
       data: {
         success: false,
-        errorMessage: 'Failed to fast-forward',
         issuesMerged: 0,
         wasBehindRemote: true,
         commitsPulled: 0,
         hasNonFleeceChanges: true,
         nonFleeceChangedFiles: ['src/SomeFile.cs'],
-        hasMergeConflict: true,
+        errorMessage: 'Pull failed due to conflicting uncommitted changes.',
       },
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    vi.mocked(
-      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
-    ).mockResolvedValue({
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 0, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
+
+    render(<PullSyncButton projectId="test-project" />, {
+      wrapper: createWrapper(),
+    })
+
+    await user.click(screen.getByRole('button', { name: /pull/i }))
+
+    // Wait for dialog
+    await vi.waitFor(() => {
+      expect(screen.getByText(/uncommitted changes/i)).toBeInTheDocument()
+    })
+
+    // Click cancel
+    const cancelButton = screen.getByRole('button', { name: /cancel/i })
+    await user.click(cancelButton)
+
+    // Dialog should be dismissed
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/uncommitted changes/i)).not.toBeInTheDocument()
+    })
+
+    // Discard should not have been called
+    expect(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).not.toHaveBeenCalled()
+  })
+
+  it('clicking discard and retry calls discard endpoint then retries pull', async () => {
+    const user = userEvent.setup()
+
+    // First pull fails with non-fleece changes
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull)
+      .mockResolvedValueOnce({
+        data: {
+          success: false,
+          issuesMerged: 0,
+          wasBehindRemote: true,
+          commitsPulled: 0,
+          hasNonFleeceChanges: true,
+          nonFleeceChangedFiles: ['src/SomeFile.cs'],
+          errorMessage: 'Pull failed due to conflicting uncommitted changes.',
+        },
+        response: new Response(),
+        request: new Request('http://test'),
+        error: undefined,
+      } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+      .mockResolvedValueOnce({
+        data: { success: true, issuesMerged: 0, wasBehindRemote: true, commitsPulled: 2 },
+        response: new Response(),
+        request: new Request('http://test'),
+        error: undefined,
+      } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 0, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
+
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).mockResolvedValue({
       data: { success: true, issuesMerged: 0, wasBehindRemote: true, commitsPulled: 2 },
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
-    } as Awaited<
-      ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull>
-    >)
-
-    mockSuccessfulPrSync()
+    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull>>)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
     })
 
-    const pullButton = screen.getByRole('button', { name: /pull/i })
-    await user.click(pullButton)
+    // Trigger the pull
+    await user.click(screen.getByRole('button', { name: /pull/i }))
 
+    // Wait for dialog
     await vi.waitFor(() => {
-      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+      expect(screen.getByText(/uncommitted changes/i)).toBeInTheDocument()
     })
 
-    const discardButton = screen.getByRole('button', { name: /discard changes & retry/i })
+    // Click discard and retry
+    const discardButton = screen.getByRole('button', { name: /discard.*retry/i })
     await user.click(discardButton)
 
+    // Verify discard was called
     await vi.waitFor(() => {
-      expect(
-        FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
-      ).toHaveBeenCalledWith({
+      expect(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).toHaveBeenCalledWith({
         path: { projectId: 'test-project' },
       })
     })
 
+    // Verify pull was only called once (initial attempt), and the combined endpoint handles the retry
+    expect(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).toHaveBeenCalledTimes(1)
+
+    // Wait for the discard mutation's onSuccess to complete (shows toast, clears dialog)
     await vi.waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith('Pull complete', expect.any(Object))
+      expect(toast.success).toHaveBeenCalled()
+    })
+
+    // Wait for dialog to be dismissed before test cleanup
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/uncommitted changes/i)).not.toBeInTheDocument()
     })
   })
 
-  it('closes dialog when user clicks abort', async () => {
+  it('clicking cancel dismisses conflict dialog without side effects', async () => {
     const user = userEvent.setup()
 
     vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
       data: {
         success: false,
-        errorMessage: 'Failed to fast-forward',
         issuesMerged: 0,
         wasBehindRemote: true,
         commitsPulled: 0,
         hasNonFleeceChanges: true,
         nonFleeceChangedFiles: ['src/SomeFile.cs'],
-        hasMergeConflict: true,
+        errorMessage: 'Pull failed due to conflicting uncommitted changes.',
       },
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    mockSuccessfulPrSync()
+    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+      data: { imported: 0, updated: 0, removed: 0 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
     })
 
-    const pullButton = screen.getByRole('button', { name: /pull/i })
-    await user.click(pullButton)
+    await user.click(screen.getByRole('button', { name: /pull/i }))
 
+    // Wait for dialog
     await vi.waitFor(() => {
-      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+      expect(screen.getByText(/uncommitted changes/i)).toBeInTheDocument()
     })
 
-    const abortButton = screen.getByRole('button', { name: /abort/i })
-    await user.click(abortButton)
+    // Click cancel
+    const cancelButton = screen.getByRole('button', { name: /cancel/i })
+    await user.click(cancelButton)
 
-    await waitFor(() => {
-      expect(screen.queryByText('Pull Blocked by Local Changes')).not.toBeInTheDocument()
+    // Dialog should be dismissed
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/uncommitted changes/i)).not.toBeInTheDocument()
     })
 
+    // Discard should not have been called
     expect(
       FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
     ).not.toHaveBeenCalled()

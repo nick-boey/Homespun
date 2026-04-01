@@ -28,14 +28,10 @@ interface PullSyncButtonProps {
   projectId: string
 }
 
-interface ConflictData {
-  files: string[]
-}
-
 export function PullSyncButton({ projectId }: PullSyncButtonProps) {
   const queryClient = useQueryClient()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [conflictData, setConflictData] = useState<ConflictData | null>(null)
+  const [conflictFiles, setConflictFiles] = useState<string[] | null>(null)
 
   const invalidateQueries = () => {
     queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
@@ -64,20 +60,13 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
       }
     },
     onSuccess: (data) => {
-      if (!data.fleece.success) {
-        if (data.fleece.hasMergeConflict && data.fleece.hasNonFleeceChanges) {
-          setConflictData({
-            files: (data.fleece.nonFleeceChangedFiles as string[]) ?? [],
-          })
-        } else {
-          toast.error('Pull failed', {
-            description: data.fleece.errorMessage ?? 'An unknown error occurred',
-          })
-        }
+      invalidateQueries()
+
+      // Check for soft failure with non-fleece conflicts
+      if (!data.fleece.success && data.fleece.hasNonFleeceChanges) {
+        setConflictFiles(data.fleece.nonFleeceChangedFiles ?? [])
         return
       }
-
-      invalidateQueries()
 
       const messages: string[] = []
 
@@ -112,34 +101,31 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
 
   const discardAndPullMutation = useMutation({
     mutationFn: async () => {
-      const response = await FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull({
-        path: { projectId },
-      })
+      const [fleeceResponse, prResponse] = await Promise.all([
+        FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull({
+          path: { projectId },
+        }),
+        PullRequests.postApiProjectsByProjectIdSync({
+          path: { projectId },
+        }),
+      ])
 
-      if (response.error || !response.data) {
-        throw new Error(response.error?.detail ?? 'Failed to discard and pull')
+      if (fleeceResponse.error || !fleeceResponse.data) {
+        throw new Error(fleeceResponse.error?.detail ?? 'Failed to discard and pull')
       }
 
-      return response.data
+      return {
+        fleece: fleeceResponse.data,
+        prs: prResponse.data,
+      }
     },
     onSuccess: (data) => {
-      setConflictData(null)
-
-      if (!data.success) {
-        toast.error('Pull failed after discarding changes', {
-          description: data.errorMessage ?? 'An unknown error occurred',
-        })
-        return
-      }
-
+      setConflictFiles(null)
       invalidateQueries()
 
       const messages: string[] = []
-      if (data.wasBehindRemote) {
-        messages.push(`Pulled ${data.commitsPulled ?? 0} commit(s)`)
-        if (data.issuesMerged && data.issuesMerged > 0) {
-          messages.push(`Merged ${data.issuesMerged} issue(s)`)
-        }
+      if (data.fleece.wasBehindRemote) {
+        messages.push(`Pulled ${data.fleece.commitsPulled ?? 0} commit(s)`)
       } else {
         messages.push('Already up to date')
       }
@@ -149,7 +135,7 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
       })
     },
     onError: (error) => {
-      setConflictData(null)
+      setConflictFiles(null)
       toast.error('Failed to discard changes and pull', {
         description: error instanceof Error ? error.message : 'An error occurred',
       })
@@ -211,8 +197,7 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
     },
   })
 
-  const isLoading =
-    pullMutation.isPending || syncMutation.isPending || discardAndPullMutation.isPending
+  const isLoading = pullMutation.isPending || syncMutation.isPending || discardAndPullMutation.isPending
 
   const handlePull = () => {
     pullMutation.mutate()
@@ -259,34 +244,35 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
       </div>
 
       <AlertDialog
-        open={conflictData !== null}
-        onOpenChange={(open) => !open && setConflictData(null)}
+        open={conflictFiles !== null}
+        onOpenChange={(open) => !open && setConflictFiles(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Pull Blocked by Local Changes</AlertDialogTitle>
+            <AlertDialogTitle>Uncommitted changes conflict</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2">
-                  The pull could not complete because the following local file changes conflict with
-                  incoming changes:
+                  The pull failed because the following uncommitted files conflict with incoming
+                  changes:
                 </p>
-                <ul className="list-disc space-y-1 pl-5 font-mono text-sm">
-                  {conflictData?.files.map((file) => (
-                    <li key={file}>{file}</li>
+                <ul className="mb-2 list-inside list-disc text-sm">
+                  {conflictFiles?.map((file) => (
+                    <li key={file} className="font-mono text-xs">
+                      {file}
+                    </li>
                   ))}
                 </ul>
-                <p className="mt-2">
-                  You can discard these local changes and retry the pull, or abort to keep your
-                  changes.
+                <p>
+                  You can discard these changes and retry the pull, or cancel to resolve them
+                  manually.
                 </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abort</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
               onClick={() => discardAndPullMutation.mutate()}
               disabled={discardAndPullMutation.isPending}
             >

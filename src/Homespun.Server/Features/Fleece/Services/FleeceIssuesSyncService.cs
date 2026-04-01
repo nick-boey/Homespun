@@ -118,7 +118,7 @@ public class FleeceIssuesSyncService(
                 CommitsPulled: 0);
         }
 
-        // Step 2: Check for non-fleece changes (but don't block - attempt ff-merge first)
+        // Step 2: Detect non-fleece changes (informational - no longer blocks pull)
         var nonFleeceChanges = await GetNonFleeceChangesAsync(projectPath);
         if (nonFleeceChanges.Count > 0)
         {
@@ -135,20 +135,31 @@ public class FleeceIssuesSyncService(
                 ErrorMessage: null,
                 IssuesMerged: 0,
                 WasBehindRemote: false,
-                CommitsPulled: 0);
+                CommitsPulled: 0,
+                HasNonFleeceChanges: nonFleeceChanges.Count > 0,
+                NonFleeceChangedFiles: nonFleeceChanges.Count > 0 ? nonFleeceChanges : null);
         }
 
         // Step 3: Perform pull and merge
         var pullResult = await PullAndMergeFleeceInternalAsync(projectPath, defaultBranch, branchStatus, ct);
 
-        // If ff-merge failed and we have non-fleece changes, report as merge conflict
+        // Enrich result with non-fleece change info
         if (!pullResult.Success && nonFleeceChanges.Count > 0)
         {
             return pullResult with
             {
                 HasNonFleeceChanges = true,
                 NonFleeceChangedFiles = nonFleeceChanges,
-                HasMergeConflict = true
+                ErrorMessage = "Pull failed due to conflicting uncommitted changes. You can discard these changes and retry."
+            };
+        }
+
+        if (nonFleeceChanges.Count > 0)
+        {
+            return pullResult with
+            {
+                HasNonFleeceChanges = true,
+                NonFleeceChangedFiles = nonFleeceChanges
             };
         }
 
