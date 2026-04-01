@@ -20,9 +20,11 @@ vi.mock('@/providers/signalr-provider', () => ({
 
 // Mock TanStack Query
 const mockInvalidateQueries = vi.fn()
+const mockSetQueryData = vi.fn()
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    setQueryData: mockSetQueryData,
   }),
 }))
 
@@ -113,7 +115,7 @@ describe('useBranchIdGenerationEvents', () => {
     })
   })
 
-  it('invalidates issue query when BranchIdGenerated event received', async () => {
+  it('updates issue cache via setQueryData when BranchIdGenerated event received', async () => {
     let branchIdGeneratedHandler: (
       issueId: string,
       projectId: string,
@@ -132,8 +134,44 @@ describe('useBranchIdGenerationEvents', () => {
     branchIdGeneratedHandler('issue-1', 'project-1', 'feature/my-branch', true)
 
     await waitFor(() => {
+      expect(mockSetQueryData).toHaveBeenCalledWith(
+        ['issue', 'issue-1', 'project-1'],
+        expect.any(Function)
+      )
+    })
+
+    // Verify the updater function works correctly
+    const updaterFn = mockSetQueryData.mock.calls[0][1]
+    expect(updaterFn(undefined)).toBeUndefined()
+    expect(updaterFn({ id: 'issue-1', workingBranchId: 'old-branch' })).toEqual({
+      id: 'issue-1',
+      workingBranchId: 'feature/my-branch',
+    })
+  })
+
+  it('does not invalidate issue query when BranchIdGenerated event received', async () => {
+    let branchIdGeneratedHandler: (
+      issueId: string,
+      projectId: string,
+      branchId: string,
+      wasAiGenerated: boolean
+    ) => void = () => {}
+
+    mockConnection.on.mockImplementation((event: string, handler: unknown) => {
+      if (event === 'BranchIdGenerated') {
+        branchIdGeneratedHandler = handler as typeof branchIdGeneratedHandler
+      }
+    })
+
+    renderHook(() => useBranchIdGenerationEvents({ projectId: 'project-1' }))
+
+    branchIdGeneratedHandler('issue-1', 'project-1', 'feature/my-branch', true)
+
+    await waitFor(() => {
+      // Only task graph should be invalidated, not the issue query
+      expect(mockInvalidateQueries).toHaveBeenCalledTimes(1)
       expect(mockInvalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['issue', 'issue-1', 'project-1'],
+        queryKey: ['taskGraph', 'project-1'],
       })
     })
   })
@@ -185,6 +223,7 @@ describe('useBranchIdGenerationEvents', () => {
     await waitFor(() => {
       expect(toast.success).not.toHaveBeenCalled()
       expect(mockInvalidateQueries).not.toHaveBeenCalled()
+      expect(mockSetQueryData).not.toHaveBeenCalled()
     })
   })
 

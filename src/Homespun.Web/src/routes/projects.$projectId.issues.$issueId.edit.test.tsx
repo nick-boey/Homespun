@@ -143,9 +143,10 @@ const createWrapper = () => {
       mutations: { retry: false },
     },
   })
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
+  return Object.assign(Wrapper, { queryClient })
 }
 
 describe('EditIssue Page', () => {
@@ -1008,7 +1009,7 @@ describe('EditIssue Page', () => {
       })
     })
 
-    it('navigates to issues page after agent is started via Save & Run Agent', async () => {
+    it('navigates to issues page after agent is started via Save and Run Agent', async () => {
       vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
         data: mockIssue,
         error: undefined,
@@ -1052,6 +1053,123 @@ describe('EditIssue Page', () => {
         to: '/projects/$projectId/issues',
         params: { projectId: 'project-1' },
       })
+    })
+  })
+
+  describe('Branch ID generation preserves user edits', () => {
+    it('preserves user-edited description when issue data updates with new branch ID', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: { ...mockIssue, workingBranchId: '' },
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      const wrapper = createWrapper()
+      render(<EditIssue />, { wrapper })
+
+      // Wait for form to load
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      // Type into description
+      const descriptionInput = screen.getByLabelText(/description/i)
+      await user.clear(descriptionInput)
+      await user.type(descriptionInput, 'My new description')
+
+      // Simulate branch ID generation completing by updating query cache
+      const { act } = await import('@testing-library/react')
+      await act(async () => {
+        wrapper.queryClient.setQueryData(['issue', 'issue-123', 'project-1'], {
+          ...mockIssue,
+          workingBranchId: 'feature/generated-branch',
+        })
+      })
+
+      // Description should be preserved
+      expect(screen.getByLabelText(/description/i)).toHaveValue('My new description')
+
+      // Branch ID should be updated
+      await waitFor(() => {
+        expect(screen.getByLabelText(/working branch/i)).toHaveValue('feature/generated-branch')
+      })
+    })
+
+    it('updates workingBranchId when user has not edited the branch field', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: { ...mockIssue, workingBranchId: '' },
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      const wrapper = createWrapper()
+      render(<EditIssue />, { wrapper })
+
+      // Wait for form to load
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      // Edit title only (not the branch field)
+      const titleInput = screen.getByLabelText(/title/i)
+      await user.clear(titleInput)
+      await user.type(titleInput, 'Updated Title')
+
+      // Simulate branch ID generation completing
+      const { act } = await import('@testing-library/react')
+      await act(async () => {
+        wrapper.queryClient.setQueryData(['issue', 'issue-123', 'project-1'], {
+          ...mockIssue,
+          title: 'Test Issue',
+          workingBranchId: 'feature/auto-generated',
+        })
+      })
+
+      // Branch field should be updated since user didn't edit it
+      await waitFor(() => {
+        expect(screen.getByLabelText(/working branch/i)).toHaveValue('feature/auto-generated')
+      })
+
+      // Title should still have user's edit
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Updated Title')
+    })
+
+    it('preserves user-edited workingBranchId when issue data changes', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: { ...mockIssue, workingBranchId: '' },
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      const wrapper = createWrapper()
+      render(<EditIssue />, { wrapper })
+
+      // Wait for form to load
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      // User manually types a branch ID
+      const branchInput = screen.getByLabelText(/working branch/i)
+      await user.type(branchInput, 'feature/my-custom-branch')
+
+      // Simulate branch ID generation completing with a different value
+      const { act } = await import('@testing-library/react')
+      await act(async () => {
+        wrapper.queryClient.setQueryData(['issue', 'issue-123', 'project-1'], {
+          ...mockIssue,
+          workingBranchId: 'feature/auto-generated',
+        })
+      })
+
+      // User's manually entered branch ID should be preserved
+      expect(screen.getByLabelText(/working branch/i)).toHaveValue('feature/my-custom-branch')
     })
   })
 })

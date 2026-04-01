@@ -292,12 +292,34 @@ export default function EditIssue() {
     return hasFormChanges(formValues, originalValues)
   }, [issue, formValues])
 
-  // Reset form when issue data loads - use useEffect with proper dependencies
+  // Track whether initial form load has happened and the last server-side branchId
+  const initialLoadRef = useRef(false)
+  const prevServerBranchIdRef = useRef<string | undefined>(undefined)
+
+  // Reset form on initial load; selectively update workingBranchId on subsequent changes
+  // to avoid overwriting user's in-progress edits when a background branch ID generation completes
   useEffect(() => {
-    if (issue) {
+    if (!issue) return
+
+    if (!initialLoadRef.current) {
+      // First load: full reset
       reset(issueToFormValues(issue))
+      initialLoadRef.current = true
+      prevServerBranchIdRef.current = issue.workingBranchId ?? ''
+      return
     }
-  }, [issue, reset])
+
+    // Subsequent updates: only update workingBranchId if changed server-side
+    // and user hasn't manually edited it
+    const newServerBranchId = issue.workingBranchId ?? ''
+    if (newServerBranchId !== prevServerBranchIdRef.current) {
+      const currentFormBranchId = form.getValues('workingBranchId')
+      if (currentFormBranchId === prevServerBranchIdRef.current) {
+        form.setValue('workingBranchId', newServerBranchId, { shouldDirty: true })
+      }
+      prevServerBranchIdRef.current = newServerBranchId
+    }
+  }, [issue, reset, form])
 
   // Create separate mutations for save and save&run
   const updateIssue = useUpdateIssue({
