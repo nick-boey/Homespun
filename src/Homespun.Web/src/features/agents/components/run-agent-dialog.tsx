@@ -40,8 +40,8 @@ const TASK_MODELS = [
 ] as const
 
 const ISSUES_MODELS = [
-  { value: 'sonnet', label: 'Sonnet' },
   { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
   { value: 'haiku', label: 'Haiku' },
 ] as const
 
@@ -76,7 +76,6 @@ export interface RunAgentDialogProps {
 
 /**
  * Unified dialog for launching both Task Agent and Issues Agent sessions.
- * Consolidates AgentLauncherDialog and IssuesAgentDialog into a single tabbed component.
  */
 export function RunAgentDialog({
   open,
@@ -115,7 +114,7 @@ export function RunAgentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[80vh] w-[80vw] flex-col overflow-hidden sm:w-[60vw]">
+      <DialogContent className="flex h-[80vh] w-[80vw] flex-col overflow-hidden sm:h-[60vw] sm:w-[60vw]">
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
           <DialogDescription>Configure and start an agent session</DialogDescription>

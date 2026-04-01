@@ -50,7 +50,8 @@ public class IssuesAgentController(
     {
         logger.LogInformation(
             "Issues Agent session requested: projectId={ProjectId}, promptName={PromptName}, model={Model}, selectedIssueId={SelectedIssueId}",
-            request.ProjectId, request.PromptName ?? "(none)", request.Model ?? "(default)", request.SelectedIssueId ?? "(none)");
+            request.ProjectId, request.PromptName ?? "(none)", request.Model ?? "(default)",
+            request.SelectedIssueId ?? "(none)");
 
         // Validate project exists
         var project = await projectService.GetByIdAsync(request.ProjectId);
@@ -68,7 +69,8 @@ public class IssuesAgentController(
 
         // Pull latest from main branch before creating clone
         var baseBranch = project.DefaultBranch;
-        logger.LogInformation("Pulling latest changes from {BaseBranch} before creating Issues Agent clone", baseBranch);
+        logger.LogInformation("Pulling latest changes from {BaseBranch} before creating Issues Agent clone",
+            baseBranch);
 
         var pullResult = await fleeceIssuesSyncService.PullFleeceOnlyAsync(
             project.LocalPath,
@@ -82,7 +84,8 @@ public class IssuesAgentController(
         }
         else if (pullResult.WasBehindRemote)
         {
-            logger.LogInformation("Pulled {Commits} commits and merged {Issues} issues before Issues Agent clone creation",
+            logger.LogInformation(
+                "Pulled {Commits} commits and merged {Issues} issues before Issues Agent clone creation",
                 pullResult.CommitsPulled, pullResult.IssuesMerged);
         }
 
@@ -118,11 +121,17 @@ public class IssuesAgentController(
             selectedPrompt = agentPromptService.GetPrompt(request.PromptName, null);
             if (selectedPrompt == null)
             {
+                logger.LogError(
+                    "Prompt name {PromptName} not found, issue agent terminating. Issue agent will not be starting.",
+                    request.PromptName);
                 return NotFound("Prompt not found");
             }
 
             if (selectedPrompt.Category != PromptCategory.IssueAgent)
             {
+                logger.LogError(
+                    "Prompt category {PromptCategory} not supported, must have Category = IssueAgent. Issue agent will not be starting.",
+                    selectedPrompt.Category);
                 return BadRequest("Prompt must have Category = IssueAgent");
             }
 
@@ -153,7 +162,7 @@ public class IssuesAgentController(
             systemPromptTemplate != null);
 
         // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "sonnet";
+        var model = request.Model ?? project.DefaultModel ?? "opus";
 
         // Use SelectedIssueId as entityId when available, otherwise fall back to branch name
         var entityId = !string.IsNullOrWhiteSpace(request.SelectedIssueId)
@@ -187,7 +196,8 @@ public class IssuesAgentController(
         if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
             initialMessage = request.UserInstructions;
-            logger.LogInformation("Using user instructions as initial message for Issues Agent session {SessionId}", session.Id);
+            logger.LogInformation("Using user instructions as initial message for Issues Agent session {SessionId}",
+                session.Id);
         }
         else if (selectedPrompt?.InitialMessage != null)
         {
@@ -485,5 +495,4 @@ public class IssuesAgentController(
             Summary = summary
         });
     }
-
 }
