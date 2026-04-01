@@ -187,4 +187,20 @@ public class IssuesAgentApiTests
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
     }
+
+    [Test]
+    public async Task CreateSession_WithInvalidProjectId_ReturnsNotFound()
+    {
+        // Arrange
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = "nonexistent-project-id"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
 }
