@@ -48,10 +48,15 @@ public class IssuesAgentController(
     public async Task<ActionResult<CreateIssuesAgentSessionResponse>> CreateSession(
         [FromBody] CreateIssuesAgentSessionRequest request)
     {
+        logger.LogInformation(
+            "Issues Agent session requested: projectId={ProjectId}, promptName={PromptName}, model={Model}, selectedIssueId={SelectedIssueId}",
+            request.ProjectId, request.PromptName ?? "(none)", request.Model ?? "(default)", request.SelectedIssueId ?? "(none)");
+
         // Validate project exists
         var project = await projectService.GetByIdAsync(request.ProjectId);
         if (project == null)
         {
+            logger.LogWarning("Issues Agent session request failed: project {ProjectId} not found", request.ProjectId);
             return NotFound("Project not found");
         }
 
@@ -93,6 +98,8 @@ public class IssuesAgentController(
 
         if (string.IsNullOrEmpty(clonePath))
         {
+            logger.LogError("Failed to create Issues Agent clone for branch {BranchName} in project {ProjectId}",
+                branchName, request.ProjectId);
             return BadRequest("Failed to create clone for Issues Agent session");
         }
 
@@ -133,8 +140,17 @@ public class IssuesAgentController(
             sessionMode = SessionMode.Build;
         }
 
+        logger.LogInformation(
+            "Resolved Issues Agent prompt: promptName={PromptName}, sessionMode={SessionMode}, source={Source}",
+            selectedPrompt?.Name ?? "(none)", sessionMode,
+            !string.IsNullOrWhiteSpace(request.PromptName) ? "explicit" : "fallback");
+
         // Get the IssueAgentSystem prompt for system prompt
         var systemPromptTemplate = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentSystem);
+
+        logger.LogInformation(
+            "Resolved Issues Agent system prompt template: found={Found}",
+            systemPromptTemplate != null);
 
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "sonnet";
@@ -143,6 +159,10 @@ public class IssuesAgentController(
         var entityId = !string.IsNullOrWhiteSpace(request.SelectedIssueId)
             ? request.SelectedIssueId
             : branchName;
+
+        logger.LogInformation(
+            "Starting Issues Agent session: branch={BranchName}, project={ProjectId}, mode={SessionMode}, model={Model}, clonePath={ClonePath}",
+            branchName, request.ProjectId, sessionMode, model, clonePath);
 
         // Create session with resolved mode and system prompt
         var session = await sessionService.StartSessionAsync(
@@ -155,6 +175,10 @@ public class IssuesAgentController(
 
         // Set session type to IssueAgentModification
         session.SessionType = SessionType.IssueAgentModification;
+
+        logger.LogInformation(
+            "Issues Agent session created: sessionId={SessionId}, branch={BranchName}, mode={SessionMode}, model={Model}",
+            session.Id, branchName, sessionMode, model);
 
         // If user instructions are provided, send them verbatim as initial message
         // (template rendering now happens on the frontend)
@@ -175,6 +199,14 @@ public class IssuesAgentController(
                 }
             });
         }
+        else
+        {
+            logger.LogDebug("No user instructions provided for Issues Agent session {SessionId}, skipping initial message", session.Id);
+        }
+
+        logger.LogInformation(
+            "Issues Agent session creation complete: sessionId={SessionId}, branch={BranchName}, clonePath={ClonePath}",
+            session.Id, branchName, clonePath);
 
         return Created(
             string.Empty,
