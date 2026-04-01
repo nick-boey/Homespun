@@ -5,6 +5,7 @@ import { useNotificationHub } from '@/providers/signalr-provider'
 import { useBranchIdGenerationStore } from '../stores/branch-id-generation-store'
 import { issueQueryKey } from './use-issue'
 import { taskGraphQueryKey } from './use-task-graph'
+import type { IssueResponse } from '@/api'
 
 export interface UseBranchIdGenerationEventsOptions {
   /** Project ID to filter events for */
@@ -35,10 +36,15 @@ export function useBranchIdGenerationEvents(options: UseBranchIdGenerationEvents
       // Update store to stop showing loading indicator
       markComplete(issueId)
 
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({
-        queryKey: issueQueryKey(issueId, eventProjectId),
-      })
+      // Update issue cache directly to avoid triggering a refetch that would
+      // overwrite user's in-progress form edits
+      queryClient.setQueryData(
+        issueQueryKey(issueId, eventProjectId),
+        (oldData: IssueResponse | undefined) => {
+          if (!oldData) return oldData
+          return { ...oldData, workingBranchId: branchId }
+        }
+      )
       queryClient.invalidateQueries({
         queryKey: taskGraphQueryKey(eventProjectId),
       })
