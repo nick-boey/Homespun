@@ -84,7 +84,7 @@ public class WorkflowContextStoreTests
             triggerData);
 
         // Assert - Check the file was created
-        var workflowsDir = Path.Combine(_testProjectPath, ".workflows");
+        var workflowsDir = Path.Combine(_testProjectPath, ".fleece", "workflows");
         var contextFile = Path.Combine(workflowsDir, "context_execution-1.json");
         Assert.That(File.Exists(contextFile), Is.True);
     }
@@ -734,7 +734,7 @@ public class WorkflowContextStoreTests
             "/working/dir",
             triggerData);
 
-        var contextFile = Path.Combine(_testProjectPath, ".workflows", "context_execution-1.json");
+        var contextFile = Path.Combine(_testProjectPath, ".fleece", "workflows", "context_execution-1.json");
         Assert.That(File.Exists(contextFile), Is.True);
 
         // Act
@@ -820,7 +820,7 @@ public class WorkflowContextStoreTests
     public async Task Context_HandlesCorruptedFile()
     {
         // Arrange - Create a corrupted context file
-        var workflowsDir = Path.Combine(_testProjectPath, ".workflows");
+        var workflowsDir = Path.Combine(_testProjectPath, ".fleece", "workflows");
         Directory.CreateDirectory(workflowsDir);
         var contextFile = Path.Combine(workflowsDir, "context_corrupted-1.json");
         await File.WriteAllTextAsync(contextFile, "{ invalid json");

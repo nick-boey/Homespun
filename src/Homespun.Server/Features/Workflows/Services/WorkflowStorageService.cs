@@ -32,7 +32,7 @@ internal class StoredWorkflow
 /// </summary>
 public sealed class WorkflowStorageService : IWorkflowStorageService
 {
-    private const string WorkflowsDirectoryName = ".workflows";
+    private static readonly string WorkflowsDirectoryName = Path.Combine(".fleece", "workflows");
     private const string WorkflowsFilePrefix = "workflows_";
     private const int CurrentSchemaVersion = 1;
 

@@ -33,7 +33,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     // Cancellation tokens for running executions
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _executionCts = new();
 
-    private const string ExecutionsDirectory = ".workflows";
+    private static readonly string ExecutionsDirectory = Path.Combine(".fleece", "workflows");
     private const string ExecutionsFilePrefix = "executions_";
     private const string ExecutionsFileExtension = ".jsonl";
     private const int SchemaVersion = 2;

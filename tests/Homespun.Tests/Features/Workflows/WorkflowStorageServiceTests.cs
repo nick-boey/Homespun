@@ -105,7 +105,7 @@ public class WorkflowStorageServiceTests
         var created = await _service.CreateWorkflowAsync(_testProjectPath, createParams);
 
         // Assert - Check the .workflows directory exists with a file
-        var workflowsDir = Path.Combine(_testProjectPath, ".workflows");
+        var workflowsDir = Path.Combine(_testProjectPath, ".fleece", "workflows");
         Assert.That(Directory.Exists(workflowsDir), Is.True);
 
         var files = Directory.GetFiles(workflowsDir, "workflows_*.jsonl");

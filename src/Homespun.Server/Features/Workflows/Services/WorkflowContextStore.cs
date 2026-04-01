@@ -11,7 +11,7 @@ namespace Homespun.Features.Workflows.Services;
 /// </summary>
 public sealed class WorkflowContextStore : IWorkflowContextStore
 {
-    private const string WorkflowsDirectoryName = ".workflows";
+    private static readonly string WorkflowsDirectoryName = Path.Combine(".fleece", "workflows");
     private const string ContextFilePrefix = "context_";
     private const string ContextFileExtension = ".json";
 
