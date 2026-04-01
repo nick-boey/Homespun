@@ -180,29 +180,51 @@ public class IssuesAgentController(
             "Issues Agent session created: sessionId={SessionId}, branch={BranchName}, mode={SessionMode}, model={Model}",
             session.Id, branchName, sessionMode, model);
 
-        // If user instructions are provided, send them verbatim as initial message
-        // (template rendering now happens on the frontend)
+        // Resolve the initial message to send (which also triggers Docker container creation).
+        // Priority: 1) UserInstructions verbatim, 2) server-side rendered prompt template, 3) fallback prompt
+        string? initialMessage = null;
+
         if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
-            logger.LogInformation("Sending initial message to Issues Agent session {SessionId}", session.Id);
-
-            var messageMode = sessionMode;
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await sessionService.SendMessageAsync(session.Id, request.UserInstructions, messageMode);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
-                }
-            });
+            initialMessage = request.UserInstructions;
+            logger.LogInformation("Using user instructions as initial message for Issues Agent session {SessionId}", session.Id);
         }
-        else
+        else if (selectedPrompt?.InitialMessage != null)
         {
-            logger.LogDebug("No user instructions provided for Issues Agent session {SessionId}, skipping initial message", session.Id);
+            // Render the prompt template server-side when no user instructions provided
+            var promptContext = new PromptContext
+            {
+                Id = request.SelectedIssueId ?? string.Empty,
+                SelectedIssueId = request.SelectedIssueId,
+                Branch = branchName
+            };
+
+            initialMessage = agentPromptService.RenderTemplate(selectedPrompt.InitialMessage, promptContext);
+            logger.LogInformation(
+                "Rendered prompt template as initial message for Issues Agent session {SessionId}, prompt={PromptName}",
+                session.Id, selectedPrompt.Name);
         }
+
+        // Fallback: ensure we always have a message so the Docker container starts
+        if (string.IsNullOrWhiteSpace(initialMessage))
+        {
+            initialMessage = "Begin working on the assigned issues.";
+            logger.LogInformation("Using fallback message for Issues Agent session {SessionId}", session.Id);
+        }
+
+        var messageMode = sessionMode;
+        var messageToSend = initialMessage;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await sessionService.SendMessageAsync(session.Id, messageToSend, messageMode);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
+            }
+        });
 
         logger.LogInformation(
             "Issues Agent session creation complete: sessionId={SessionId}, branch={BranchName}, clonePath={ClonePath}",
