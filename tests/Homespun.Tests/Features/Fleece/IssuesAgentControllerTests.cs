@@ -380,7 +380,7 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithEmptyUserInstructions_DoesNotSendMessage()
+    public async Task CreateSession_WithEmptyUserInstructions_RendersPromptTemplateAndSendsMessage()
     {
         // Arrange
         var prompt = new AgentPrompt
@@ -388,30 +388,68 @@ public class IssuesAgentControllerTests
             Name = "TestPrompt",
             Mode = SessionMode.Build,
             Category = PromptCategory.IssueAgent,
-            InitialMessage = "test"
+            InitialMessage = "Do the work for {{selectedIssueId}}"
         };
 
         _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
+        _agentPromptServiceMock.Setup(a => a.RenderTemplate(
+                prompt.InitialMessage, It.IsAny<PromptContext>()))
+            .Returns("Do the work for issue-1");
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "TestPrompt"
-            // No UserInstructions
+            PromptName = "TestPrompt",
+            SelectedIssueId = "issue-1"
+            // No UserInstructions — server-side template rendering should kick in
         };
 
         // Act
         await _controller.CreateSession(request);
 
-        // Assert - give fire-and-forget task time to execute (if it were to fire)
+        // Assert - give fire-and-forget task time to execute
         await Task.Delay(100);
 
-        // Should NOT send any message
+        // Should render the prompt template server-side
+        _agentPromptServiceMock.Verify(a => a.RenderTemplate(
+            prompt.InitialMessage,
+            It.Is<PromptContext>(ctx => ctx.SelectedIssueId == "issue-1")), Times.Once);
+
+        // Should send the rendered template as initial message
         _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SessionMode>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            "session-abc", "Do the work for issue-1", SessionMode.Build,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task CreateSession_WithNoPromptAndNoInstructions_SendsFallbackMessage()
+    {
+        // Arrange - no prompts available at all, no user instructions
+        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
+            .Returns(new List<AgentPrompt>());
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentModification))
+            .Returns((AgentPrompt?)null);
+        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
+            .Returns((AgentPrompt?)null);
+
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = TestProject.Id
+            // No PromptName, no UserInstructions
+        };
+
+        // Act
+        await _controller.CreateSession(request);
+
+        // Assert - give fire-and-forget task time to execute
+        await Task.Delay(100);
+
+        // Should send a fallback message to ensure the Docker container starts
+        _sessionServiceMock.Verify(s => s.SendMessageAsync(
+            "session-abc", "Begin working on the assigned issues.", SessionMode.Build,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
