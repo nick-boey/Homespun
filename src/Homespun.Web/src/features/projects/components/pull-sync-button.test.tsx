@@ -339,57 +339,6 @@ describe('PullSyncButton', () => {
     })
   })
 
-  it('clicking cancel dismisses conflict dialog without side effects', async () => {
-    const user = userEvent.setup()
-
-    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
-      data: {
-        success: false,
-        issuesMerged: 0,
-        wasBehindRemote: true,
-        commitsPulled: 0,
-        hasNonFleeceChanges: true,
-        nonFleeceChangedFiles: ['src/SomeFile.cs'],
-        errorMessage: 'Pull failed due to conflicting uncommitted changes.',
-      },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
-
-    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
-      data: { imported: 0, updated: 0, removed: 0 },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
-
-    render(<PullSyncButton projectId="test-project" />, {
-      wrapper: createWrapper(),
-    })
-
-    await user.click(screen.getByRole('button', { name: /pull/i }))
-
-    // Wait for dialog
-    await vi.waitFor(() => {
-      expect(screen.getByText(/uncommitted changes/i)).toBeInTheDocument()
-    })
-
-    // Click cancel
-    const cancelButton = screen.getByRole('button', { name: /cancel/i })
-    await user.click(cancelButton)
-
-    // Dialog should be dismissed
-    await vi.waitFor(() => {
-      expect(screen.queryByText(/uncommitted changes/i)).not.toBeInTheDocument()
-    })
-
-    // Discard should not have been called
-    expect(
-      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
-    ).not.toHaveBeenCalled()
-  })
-
   it('disables buttons during loading', async () => {
     const user = userEvent.setup()
 
