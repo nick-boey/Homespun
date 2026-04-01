@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as React from 'react'
@@ -10,6 +10,7 @@ vi.mock('@/api', () => ({
   FleeceIssueSync: {
     postApiFleeceSyncByProjectIdPull: vi.fn(),
     postApiFleeceSyncByProjectIdSync: vi.fn(),
+    postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull: vi.fn(),
   },
   PullRequests: {
     postApiProjectsByProjectIdSync: vi.fn(),
@@ -39,6 +40,15 @@ function createWrapper() {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return React.createElement(QueryClientProvider, { client: queryClient }, children)
   }
+}
+
+function mockSuccessfulPrSync() {
+  vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
+    data: { imported: 0, updated: 0, removed: 0 },
+    response: new Response(),
+    request: new Request('http://test'),
+    error: undefined,
+  } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 }
 
 describe('PullSyncButton', () => {
@@ -92,12 +102,7 @@ describe('PullSyncButton', () => {
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
-      data: { imported: 0, updated: 0, removed: 0 },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
+    mockSuccessfulPrSync()
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -121,12 +126,7 @@ describe('PullSyncButton', () => {
       error: undefined,
     } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
 
-    vi.mocked(PullRequests.postApiProjectsByProjectIdSync).mockResolvedValue({
-      data: { imported: 1, updated: 0, removed: 0 },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
+    mockSuccessfulPrSync()
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -141,7 +141,7 @@ describe('PullSyncButton', () => {
     })
   })
 
-  it('shows error toast when pull fails', async () => {
+  it('shows error toast when pull fails at HTTP level', async () => {
     const user = userEvent.setup()
 
     vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
@@ -161,6 +161,181 @@ describe('PullSyncButton', () => {
     await vi.waitFor(() => {
       expect(toast.error).toHaveBeenCalled()
     })
+  })
+
+  it('shows error toast when pull returns success:false without conflict', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
+      data: {
+        success: false,
+        errorMessage: 'Failed to fast-forward to remote',
+        issuesMerged: 0,
+        wasBehindRemote: true,
+        commitsPulled: 0,
+        hasNonFleeceChanges: false,
+        hasMergeConflict: false,
+      },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+
+    mockSuccessfulPrSync()
+
+    render(<PullSyncButton projectId="test-project" />, {
+      wrapper: createWrapper(),
+    })
+
+    const pullButton = screen.getByRole('button', { name: /pull/i })
+    await user.click(pullButton)
+
+    await vi.waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Pull failed', {
+        description: 'Failed to fast-forward to remote',
+      })
+    })
+  })
+
+  it('shows conflict dialog when pull returns hasMergeConflict with non-fleece files', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
+      data: {
+        success: false,
+        errorMessage: 'Failed to fast-forward',
+        issuesMerged: 0,
+        wasBehindRemote: true,
+        commitsPulled: 0,
+        hasNonFleeceChanges: true,
+        nonFleeceChangedFiles: ['src/SomeFile.cs', 'README.md'],
+        hasMergeConflict: true,
+      },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+
+    mockSuccessfulPrSync()
+
+    render(<PullSyncButton projectId="test-project" />, {
+      wrapper: createWrapper(),
+    })
+
+    const pullButton = screen.getByRole('button', { name: /pull/i })
+    await user.click(pullButton)
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('src/SomeFile.cs')).toBeInTheDocument()
+    expect(screen.getByText('README.md')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /abort/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /discard changes & retry/i })).toBeInTheDocument()
+  })
+
+  it('calls discard-and-pull API when user confirms in dialog', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
+      data: {
+        success: false,
+        errorMessage: 'Failed to fast-forward',
+        issuesMerged: 0,
+        wasBehindRemote: true,
+        commitsPulled: 0,
+        hasNonFleeceChanges: true,
+        nonFleeceChangedFiles: ['src/SomeFile.cs'],
+        hasMergeConflict: true,
+      },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+
+    vi.mocked(
+      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+    ).mockResolvedValue({
+      data: { success: true, issuesMerged: 0, wasBehindRemote: true, commitsPulled: 2 },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<
+      ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull>
+    >)
+
+    mockSuccessfulPrSync()
+
+    render(<PullSyncButton projectId="test-project" />, {
+      wrapper: createWrapper(),
+    })
+
+    const pullButton = screen.getByRole('button', { name: /pull/i })
+    await user.click(pullButton)
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+    })
+
+    const discardButton = screen.getByRole('button', { name: /discard changes & retry/i })
+    await user.click(discardButton)
+
+    await vi.waitFor(() => {
+      expect(
+        FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+      ).toHaveBeenCalledWith({
+        path: { projectId: 'test-project' },
+      })
+    })
+
+    await vi.waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Pull complete', expect.any(Object))
+    })
+  })
+
+  it('closes dialog when user clicks abort', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdPull).mockResolvedValue({
+      data: {
+        success: false,
+        errorMessage: 'Failed to fast-forward',
+        issuesMerged: 0,
+        wasBehindRemote: true,
+        commitsPulled: 0,
+        hasNonFleeceChanges: true,
+        nonFleeceChangedFiles: ['src/SomeFile.cs'],
+        hasMergeConflict: true,
+      },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdPull>>)
+
+    mockSuccessfulPrSync()
+
+    render(<PullSyncButton projectId="test-project" />, {
+      wrapper: createWrapper(),
+    })
+
+    const pullButton = screen.getByRole('button', { name: /pull/i })
+    await user.click(pullButton)
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Pull Blocked by Local Changes')).toBeInTheDocument()
+    })
+
+    const abortButton = screen.getByRole('button', { name: /abort/i })
+    await user.click(abortButton)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Pull Blocked by Local Changes')).not.toBeInTheDocument()
+    })
+
+    expect(
+      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+    ).not.toHaveBeenCalled()
   })
 
   it('disables buttons during loading', async () => {

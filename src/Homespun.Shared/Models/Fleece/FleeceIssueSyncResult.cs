@@ -22,7 +22,8 @@ public record FleecePullResult(
     bool WasBehindRemote,
     int CommitsPulled,
     bool HasNonFleeceChanges = false,
-    IReadOnlyList<string>? NonFleeceChangedFiles = null);
+    IReadOnlyList<string>? NonFleeceChangedFiles = null,
+    bool HasMergeConflict = false);
 
 /// <summary>
 /// Result of a pull operation.

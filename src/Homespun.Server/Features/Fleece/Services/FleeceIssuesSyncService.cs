@@ -118,20 +118,12 @@ public class FleeceIssuesSyncService(
                 CommitsPulled: 0);
         }
 
-        // Step 2: Check for non-fleece changes - block pull if present
+        // Step 2: Check for non-fleece changes (but don't block - attempt ff-merge first)
         var nonFleeceChanges = await GetNonFleeceChangesAsync(projectPath);
         if (nonFleeceChanges.Count > 0)
         {
-            logger.LogWarning("Found {Count} non-fleece changed files that block pull: {Files}",
+            logger.LogInformation("Found {Count} non-fleece changed files, will attempt pull anyway: {Files}",
                 nonFleeceChanges.Count, string.Join(", ", nonFleeceChanges.Take(5)));
-            return new FleecePullResult(
-                Success: false,
-                ErrorMessage: $"Cannot pull: found {nonFleeceChanges.Count} uncommitted non-fleece file(s). Please commit or discard these changes first.",
-                IssuesMerged: 0,
-                WasBehindRemote: false,
-                CommitsPulled: 0,
-                HasNonFleeceChanges: true,
-                NonFleeceChangedFiles: nonFleeceChanges);
         }
 
         // Not behind remote - nothing to do
@@ -148,6 +140,18 @@ public class FleeceIssuesSyncService(
 
         // Step 3: Perform pull and merge
         var pullResult = await PullAndMergeFleeceInternalAsync(projectPath, defaultBranch, branchStatus, ct);
+
+        // If ff-merge failed and we have non-fleece changes, report as merge conflict
+        if (!pullResult.Success && nonFleeceChanges.Count > 0)
+        {
+            return pullResult with
+            {
+                HasNonFleeceChanges = true,
+                NonFleeceChangedFiles = nonFleeceChanges,
+                HasMergeConflict = true
+            };
+        }
+
         return pullResult;
     }
 

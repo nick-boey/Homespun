@@ -81,4 +81,30 @@ public class FleeceIssueSyncController(
 
         return Ok(result);
     }
+
+    [HttpPost("{projectId}/discard-non-fleece-and-pull")]
+    [ProducesResponseType<FleecePullResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<FleecePullResult>> DiscardNonFleeceAndPull(string projectId, CancellationToken ct)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        await fleeceIssuesSyncService.DiscardNonFleeceChangesAsync(project.LocalPath, ct);
+
+        var result = await fleeceIssuesSyncService.PullFleeceOnlyAsync(
+            project.LocalPath,
+            project.DefaultBranch,
+            ct);
+
+        if (result.Success)
+        {
+            await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
+        }
+
+        return Ok(result);
+    }
 }

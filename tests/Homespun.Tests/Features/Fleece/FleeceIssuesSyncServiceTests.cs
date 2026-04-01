@@ -873,10 +873,10 @@ public class FleeceIssuesSyncServiceTests
     }
 
     [Test]
-    public async Task PullFleeceOnlyAsync_WithNonFleeceChanges_ReturnsError()
+    public async Task PullFleeceOnlyAsync_WithNonFleeceChanges_NotBehindRemote_ReturnsSuccess()
     {
-        // Arrange - Behind remote but has non-fleece changes
-        SetupBranchCheck(isOnBranch: true, commitsBehind: 2, commitsAhead: 0);
+        // Arrange - Not behind remote, has non-fleece changes
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 0, commitsAhead: 0);
 
         _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = " M src/SomeFile.cs" });
@@ -885,13 +885,60 @@ public class FleeceIssuesSyncServiceTests
         var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
 
         // Assert
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.HasNonFleeceChanges, Is.True);
-        Assert.That(result.NonFleeceChangedFiles, Does.Contain("src/SomeFile.cs"));
-        Assert.That(result.ErrorMessage, Does.Contain("uncommitted non-fleece file"));
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.WasBehindRemote, Is.False);
+    }
 
-        // Verify no git operations were attempted
-        _mockRunner.Verify(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath), Times.Never);
+    [Test]
+    public async Task PullFleeceOnlyAsync_WithNonFleeceChanges_BehindRemote_FfMergeSucceeds_ReturnsSuccess()
+    {
+        // Arrange - Behind remote with non-fleece changes, but ff-merge succeeds
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 2, commitsAhead: 0);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M src/SomeFile.cs" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.WasBehindRemote, Is.True);
+        Assert.That(result.CommitsPulled, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_WithNonFleeceChanges_BehindRemote_FfMergeFails_ReturnsConflict()
+    {
+        // Arrange - Behind remote with non-fleece changes, ff-merge fails
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 2, commitsAhead: 0);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M src/SomeFile.cs" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: Not possible to fast-forward, aborting." });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.HasMergeConflict, Is.True);
+            Assert.That(result.HasNonFleeceChanges, Is.True);
+            Assert.That(result.NonFleeceChangedFiles, Does.Contain("src/SomeFile.cs"));
+        });
     }
 
     [Test]
