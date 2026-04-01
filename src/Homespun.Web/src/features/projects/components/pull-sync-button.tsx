@@ -197,7 +197,8 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
     },
   })
 
-  const isLoading = pullMutation.isPending || syncMutation.isPending || discardAndPullMutation.isPending
+  const isLoading =
+    pullMutation.isPending || syncMutation.isPending || discardAndPullMutation.isPending
 
   const handlePull = () => {
     pullMutation.mutate()

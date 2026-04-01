@@ -259,7 +259,9 @@ describe('PullSyncButton', () => {
     })
 
     // Discard should not have been called
-    expect(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).not.toHaveBeenCalled()
+    expect(
+      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+    ).not.toHaveBeenCalled()
   })
 
   it('clicking discard and retry calls discard endpoint then retries pull', async () => {
@@ -295,12 +297,16 @@ describe('PullSyncButton', () => {
       error: undefined,
     } as Awaited<ReturnType<typeof PullRequests.postApiProjectsByProjectIdSync>>)
 
-    vi.mocked(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).mockResolvedValue({
+    vi.mocked(
+      FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+    ).mockResolvedValue({
       data: { success: true, issuesMerged: 0, wasBehindRemote: true, commitsPulled: 2 },
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
-    } as Awaited<ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull>>)
+    } as Awaited<
+      ReturnType<typeof FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull>
+    >)
 
     render(<PullSyncButton projectId="test-project" />, {
       wrapper: createWrapper(),
@@ -320,7 +326,9 @@ describe('PullSyncButton', () => {
 
     // Verify discard was called
     await vi.waitFor(() => {
-      expect(FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull).toHaveBeenCalledWith({
+      expect(
+        FleeceIssueSync.postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull
+      ).toHaveBeenCalledWith({
         path: { projectId: 'test-project' },
       })
     })

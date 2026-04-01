@@ -3,12 +3,12 @@
 import type { Client, Options as Options2, TDataShape } from './client'
 import { client } from './client.gen'
 import type {
-  DeleteApiAgentPromptsByIdData,
-  DeleteApiAgentPromptsByIdErrors,
-  DeleteApiAgentPromptsByIdOverrideData,
-  DeleteApiAgentPromptsByIdOverrideErrors,
-  DeleteApiAgentPromptsByIdOverrideResponses,
-  DeleteApiAgentPromptsByIdResponses,
+  DeleteApiAgentPromptsByNameByNameData,
+  DeleteApiAgentPromptsByNameByNameErrors,
+  DeleteApiAgentPromptsByNameByNameOverrideData,
+  DeleteApiAgentPromptsByNameByNameOverrideErrors,
+  DeleteApiAgentPromptsByNameByNameOverrideResponses,
+  DeleteApiAgentPromptsByNameByNameResponses,
   DeleteApiAgentPromptsProjectByProjectIdAllData,
   DeleteApiAgentPromptsProjectByProjectIdAllResponses,
   DeleteApiClonesBulkData,
@@ -45,9 +45,9 @@ import type {
   DeleteApiWorkflowsByWorkflowIdResponses,
   GetApiAgentPromptsAvailableForProjectByProjectIdData,
   GetApiAgentPromptsAvailableForProjectByProjectIdResponses,
-  GetApiAgentPromptsByIdData,
-  GetApiAgentPromptsByIdErrors,
-  GetApiAgentPromptsByIdResponses,
+  GetApiAgentPromptsByNameByNameData,
+  GetApiAgentPromptsByNameByNameErrors,
+  GetApiAgentPromptsByNameByNameResponses,
   GetApiAgentPromptsData,
   GetApiAgentPromptsIssueAgentAvailableByProjectIdData,
   GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
@@ -210,6 +210,7 @@ import type {
   PostApiAgentPromptsData,
   PostApiAgentPromptsEnsureDefaultsData,
   PostApiAgentPromptsEnsureDefaultsResponses,
+  PostApiAgentPromptsErrors,
   PostApiAgentPromptsResponses,
   PostApiAgentPromptsRestoreDefaultsData,
   PostApiAgentPromptsRestoreDefaultsResponses,
@@ -234,12 +235,12 @@ import type {
   PostApiExecutionsByExecutionIdStepsByStepIdSignalData,
   PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
   PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
-  PostApiFleeceSyncByProjectIdPullData,
-  PostApiFleeceSyncByProjectIdPullErrors,
-  PostApiFleeceSyncByProjectIdPullResponses,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
+  PostApiFleeceSyncByProjectIdPullData,
+  PostApiFleeceSyncByProjectIdPullErrors,
+  PostApiFleeceSyncByProjectIdPullResponses,
   PostApiFleeceSyncByProjectIdSyncData,
   PostApiFleeceSyncByProjectIdSyncErrors,
   PostApiFleeceSyncByProjectIdSyncResponses,
@@ -257,6 +258,9 @@ import type {
   PostApiIssuesAgentSessionData,
   PostApiIssuesAgentSessionErrors,
   PostApiIssuesAgentSessionResponses,
+  PostApiIssuesByChildIdRemoveParentData,
+  PostApiIssuesByChildIdRemoveParentErrors,
+  PostApiIssuesByChildIdRemoveParentResponses,
   PostApiIssuesByChildIdSetParentData,
   PostApiIssuesByChildIdSetParentErrors,
   PostApiIssuesByChildIdSetParentResponses,
@@ -266,6 +270,9 @@ import type {
   PostApiIssuesByIssueIdMoveSiblingData,
   PostApiIssuesByIssueIdMoveSiblingErrors,
   PostApiIssuesByIssueIdMoveSiblingResponses,
+  PostApiIssuesByIssueIdRemoveAllParentsData,
+  PostApiIssuesByIssueIdRemoveAllParentsErrors,
+  PostApiIssuesByIssueIdRemoveAllParentsResponses,
   PostApiIssuesByIssueIdResolveConflictsData,
   PostApiIssuesByIssueIdResolveConflictsErrors,
   PostApiIssuesByIssueIdResolveConflictsResponses,
@@ -335,9 +342,9 @@ import type {
   PostApiWorkflowTemplatesByTemplateIdCreateData,
   PostApiWorkflowTemplatesByTemplateIdCreateErrors,
   PostApiWorkflowTemplatesByTemplateIdCreateResponses,
-  PutApiAgentPromptsByIdData,
-  PutApiAgentPromptsByIdErrors,
-  PutApiAgentPromptsByIdResponses,
+  PutApiAgentPromptsByNameByNameData,
+  PutApiAgentPromptsByNameByNameErrors,
+  PutApiAgentPromptsByNameByNameResponses,
   PutApiIssuesByIssueIdData,
   PutApiIssuesByIssueIdErrors,
   PutApiIssuesByIssueIdResponses,
@@ -388,7 +395,11 @@ export class AgentPrompts {
   public static postApiAgentPrompts<ThrowOnError extends boolean = false>(
     options?: Options<PostApiAgentPromptsData, ThrowOnError>
   ) {
-    return (options?.client ?? client).post<PostApiAgentPromptsResponses, unknown, ThrowOnError>({
+    return (options?.client ?? client).post<
+      PostApiAgentPromptsResponses,
+      PostApiAgentPromptsErrors,
+      ThrowOnError
+    >({
       url: '/api/agent-prompts',
       ...options,
       headers: {
@@ -398,35 +409,35 @@ export class AgentPrompts {
     })
   }
 
-  public static deleteApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByIdData, ThrowOnError>
+  public static deleteApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByIdResponses,
-      DeleteApiAgentPromptsByIdErrors,
+      DeleteApiAgentPromptsByNameByNameResponses,
+      DeleteApiAgentPromptsByNameByNameErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
   }
 
-  public static getApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<GetApiAgentPromptsByIdData, ThrowOnError>
+  public static getApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<GetApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiAgentPromptsByIdResponses,
-      GetApiAgentPromptsByIdErrors,
+      GetApiAgentPromptsByNameByNameResponses,
+      GetApiAgentPromptsByNameByNameErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
   }
 
-  public static putApiAgentPromptsById<ThrowOnError extends boolean = false>(
-    options: Options<PutApiAgentPromptsByIdData, ThrowOnError>
+  public static putApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
+    options: Options<PutApiAgentPromptsByNameByNameData, ThrowOnError>
   ) {
     return (options.client ?? client).put<
-      PutApiAgentPromptsByIdResponses,
-      PutApiAgentPromptsByIdErrors,
+      PutApiAgentPromptsByNameByNameResponses,
+      PutApiAgentPromptsByNameByNameErrors,
       ThrowOnError
     >({
-      url: '/api/agent-prompts/{id}',
+      url: '/api/agent-prompts/by-name/{name}',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -522,14 +533,14 @@ export class AgentPrompts {
     })
   }
 
-  public static deleteApiAgentPromptsByIdOverride<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByIdOverrideData, ThrowOnError>
+  public static deleteApiAgentPromptsByNameByNameOverride<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsByNameByNameOverrideData, ThrowOnError>
   ) {
     return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByIdOverrideResponses,
-      DeleteApiAgentPromptsByIdOverrideErrors,
+      DeleteApiAgentPromptsByNameByNameOverrideResponses,
+      DeleteApiAgentPromptsByNameByNameOverrideErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/{id}/override', ...options })
+    >({ url: '/api/agent-prompts/by-name/{name}/override', ...options })
   }
 }
 
@@ -735,16 +746,6 @@ export class FleeceIssueSync {
     >({ url: '/api/fleece-sync/{projectId}/sync', ...options })
   }
 
-  public static postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull<ThrowOnError extends boolean = false>(
-    options: Options<PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData, ThrowOnError>
-  ) {
-    return (options.client ?? client).post<
-      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
-      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
-      ThrowOnError
-    >({ url: '/api/fleece-sync/{projectId}/discard-non-fleece-and-pull', ...options })
-  }
-
   public static postApiFleeceSyncByProjectIdPull<ThrowOnError extends boolean = false>(
     options: Options<PostApiFleeceSyncByProjectIdPullData, ThrowOnError>
   ) {
@@ -753,6 +754,16 @@ export class FleeceIssueSync {
       PostApiFleeceSyncByProjectIdPullErrors,
       ThrowOnError
     >({ url: '/api/fleece-sync/{projectId}/pull', ...options })
+  }
+
+  public static postApiFleeceSyncByProjectIdDiscardNonFleeceAndPull<
+    ThrowOnError extends boolean = false,
+  >(options: Options<PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData, ThrowOnError>) {
+    return (options.client ?? client).post<
+      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
+      PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
+      ThrowOnError
+    >({ url: '/api/fleece-sync/{projectId}/discard-non-fleece-and-pull', ...options })
   }
 }
 
@@ -952,6 +963,40 @@ export class Issues {
       ThrowOnError
     >({
       url: '/api/issues/{childId}/set-parent',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static postApiIssuesByChildIdRemoveParent<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesByChildIdRemoveParentData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesByChildIdRemoveParentResponses,
+      PostApiIssuesByChildIdRemoveParentErrors,
+      ThrowOnError
+    >({
+      url: '/api/issues/{childId}/remove-parent',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static postApiIssuesByIssueIdRemoveAllParents<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesByIssueIdRemoveAllParentsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesByIssueIdRemoveAllParentsResponses,
+      PostApiIssuesByIssueIdRemoveAllParentsErrors,
+      ThrowOnError
+    >({
+      url: '/api/issues/{issueId}/remove-all-parents',
       ...options,
       headers: {
         'Content-Type': 'application/json',
