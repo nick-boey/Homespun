@@ -3,22 +3,24 @@
 # Homespun Mock Mode
 # ============================================================================
 #
-# Runs Homespun with mock services and demo data using dotnet run.
-# No external dependencies (GitHub API, Claude API, etc.) are required.
+# Runs Homespun with mock services and demo data.
+# Starts both the backend (dotnet) and frontend (Vite) dev servers.
+# Logs are captured to logs/mock-backend.log and logs/mock-frontend.log.
 #
 # Usage:
-#   ./mock.sh              # Run in mock mode (foreground)
-#   ./mock.sh &            # Run in mock mode (background)
-#   ./mock.sh --port 8080  # Run in mock mode on custom port
+#   ./mock.sh                  # Run backend + frontend (background, logs to files)
+#   ./mock.sh --foreground     # Run backend only in foreground (original behavior)
+#   ./mock.sh --port 8080      # Run on custom backend port
 #
 # Options:
-#   --port PORT    Override the port from the launch profile
-#   -h, --help     Show this help message
+#   --port PORT      Override the backend port (default: 5101)
+#   --foreground     Run backend only in foreground with output to terminal
+#   -h, --help       Show this help message
 #
-# WARNING: This script runs a long-lived server process. If running as a
+# WARNING: This script runs long-lived server processes. If running as a
 # background shell in Claude Code, do NOT use KillShell on this process.
 # Killing this shell may terminate your entire session. Instead, use
-# pkill or kill with the dotnet process PID directly.
+# pkill or kill with the process PIDs directly.
 
 set -e
 
@@ -38,9 +40,10 @@ log_warn() { echo -e "${YELLOW}$1${NC}"; }
 
 # Default values
 PORT=""
+FOREGROUND=false
 
 show_help() {
-    head -20 "$0" | tail -16
+    head -24 "$0" | tail -20
     exit 0
 }
 
@@ -48,24 +51,89 @@ show_help() {
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --port) PORT="$2"; shift ;;
+        --foreground) FOREGROUND=true ;;
         -h|--help) show_help ;;
         *) echo "Unknown parameter: $1"; show_help ;;
     esac
     shift
 done
 
+# Build the dotnet run command args
+DOTNET_ARGS="--project $PROJECT_ROOT/src/Homespun.Server/Homespun.Server.csproj --launch-profile mock"
+
+if [ -n "$PORT" ]; then
+    DOTNET_ARGS="$DOTNET_ARGS --urls http://localhost:$PORT"
+fi
+
+# Foreground mode: original behavior (backend only, output to terminal)
+if [ "$FOREGROUND" = true ]; then
+    log_info "=== Homespun Mock Mode (foreground) ==="
+    log_info "Running backend only with output to terminal..."
+    log_warn "WARNING: Do not use KillShell on this process - use 'pkill -f dotnet.*mock' instead"
+    echo
+    exec dotnet run $DOTNET_ARGS
+fi
+
+# Background mode: run both backend and frontend with logs captured to files
 log_info "=== Homespun Mock Mode ==="
-log_info "Running with mock services and demo data..."
+log_info "Starting backend and frontend servers..."
 log_warn "WARNING: Do not use KillShell on this process - use 'pkill -f dotnet.*mock' instead"
 echo
 
-# Build the dotnet run command
-DOTNET_ARGS="--project $PROJECT_ROOT/src/Homespun.Server/Homespun.Server.csproj --launch-profile mock"
+# Set up log directory
+LOG_DIR="$PROJECT_ROOT/logs"
+mkdir -p "$LOG_DIR"
 
-# Use exec to replace the shell with dotnet, making the process tree cleaner
-# The dotnet process will have its own PID and can be managed directly
-if [ -n "$PORT" ]; then
-    exec dotnet run $DOTNET_ARGS --urls "http://localhost:$PORT"
+# Cleanup function to kill child processes
+BACKEND_PID=""
+FRONTEND_PID=""
+
+cleanup() {
+    log_info "Shutting down servers..."
+    if [ -n "$BACKEND_PID" ]; then
+        kill "$BACKEND_PID" 2>/dev/null || true
+    fi
+    if [ -n "$FRONTEND_PID" ]; then
+        kill "$FRONTEND_PID" 2>/dev/null || true
+    fi
+    wait "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+    log_info "Servers stopped."
+}
+trap cleanup EXIT INT TERM
+
+# Start backend
+log_info "Starting backend server..."
+dotnet run $DOTNET_ARGS > "$LOG_DIR/mock-backend.log" 2>&1 &
+BACKEND_PID=$!
+log_success "Backend started (PID: $BACKEND_PID)"
+
+# Start frontend
+log_info "Starting frontend dev server..."
+cd "$PROJECT_ROOT/src/Homespun.Web"
+npm run dev > "$LOG_DIR/mock-frontend.log" 2>&1 &
+FRONTEND_PID=$!
+cd "$PROJECT_ROOT"
+log_success "Frontend started (PID: $FRONTEND_PID)"
+
+echo
+log_success "Both servers are running!"
+log_info "Backend log:  $LOG_DIR/mock-backend.log"
+log_info "Frontend log: $LOG_DIR/mock-frontend.log"
+echo
+log_info "Use 'tail -f $LOG_DIR/mock-backend.log' to follow backend logs"
+log_info "Use 'tail -f $LOG_DIR/mock-frontend.log' to follow frontend logs"
+echo
+log_warn "Press Ctrl+C to stop both servers"
+
+# Wait for either process to exit
+wait -n "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+EXIT_CODE=$?
+
+# If one process exited, log which one and wait for cleanup
+if kill -0 "$BACKEND_PID" 2>/dev/null; then
+    log_warn "Frontend process exited (code: $EXIT_CODE). Stopping backend..."
 else
-    exec dotnet run $DOTNET_ARGS
+    log_warn "Backend process exited (code: $EXIT_CODE). Stopping frontend..."
 fi
+
+exit $EXIT_CODE
