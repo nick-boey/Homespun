@@ -151,9 +151,11 @@ function FieldChangesSection({ fieldChanges, isExpanded, onToggle }: FieldChange
           {fieldChanges.map((fc, idx) => (
             <li key={idx} className="text-sm">
               <span className="text-muted-foreground font-medium">{fc.fieldName}:</span>{' '}
-              <span className="text-red-600 line-through">{formatValue(fc.oldValue)}</span>
+              <span className="break-all text-red-600 line-through">
+                {formatValue(fc.oldValue)}
+              </span>
               <span className="text-muted-foreground"> → </span>
-              <span className="text-green-600">{formatValue(fc.newValue)}</span>
+              <span className="break-all text-green-600">{formatValue(fc.newValue)}</span>
             </li>
           ))}
         </ul>
@@ -211,9 +213,6 @@ function IssueInfoSection({ title, issue, isExpanded, onToggle }: IssueInfoSecti
 function formatValue(value: string | null | undefined): string {
   if (value === null || value === undefined) {
     return '(empty)'
-  }
-  if (value.length > 50) {
-    return value.slice(0, 50) + '...'
   }
   return value
 }

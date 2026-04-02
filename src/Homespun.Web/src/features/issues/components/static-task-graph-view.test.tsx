@@ -111,7 +111,7 @@ describe('StaticTaskGraphView', () => {
     expect(screen.getByText('Second Issue')).toBeInTheDocument()
   })
 
-  it('filters to only show issues in filterIssueIds when provided', () => {
+  it('shows all issues but fades unchanged ones when filterIssueIds provided', () => {
     const data = createMockTaskGraph([
       { issue: { id: 'issue-1', title: 'First Issue' } },
       { issue: { id: 'issue-2', title: 'Second Issue' } },
@@ -125,9 +125,17 @@ describe('StaticTaskGraphView', () => {
 
     render(<StaticTaskGraphView data={data} filterIssueIds={filterIssueIds} />)
 
+    // All issues should be visible
     expect(screen.getByText('First Issue')).toBeInTheDocument()
-    expect(screen.queryByText('Second Issue')).not.toBeInTheDocument()
+    expect(screen.getByText('Second Issue')).toBeInTheDocument()
     expect(screen.getByText('Third Issue')).toBeInTheDocument()
+
+    // Unchanged issue should be faded
+    const rows = screen.getAllByTestId('static-task-graph-issue-row')
+    expect(rows[1]).toHaveClass('opacity-50')
+    // Changed issues should not be faded
+    expect(rows[0]).not.toHaveClass('opacity-50')
+    expect(rows[2]).not.toHaveClass('opacity-50')
   })
 
   it('applies created change type style (green)', () => {
@@ -186,18 +194,56 @@ describe('StaticTaskGraphView', () => {
     expect(screen.getByText('Second Issue')).toBeInTheDocument()
   })
 
-  it('shows empty state when all issues are filtered out', () => {
+  it('shows all issues faded when filter matches none', () => {
     const data = createMockTaskGraph([
       { issue: { id: 'issue-1', title: 'First Issue' } },
       { issue: { id: 'issue-2', title: 'Second Issue' } },
     ])
 
-    // Filter for an issue that doesn't exist
+    // Filter for an issue that doesn't exist — all issues render but faded
     const filterIssueIds: FilteredIssue[] = [{ issueId: 'non-existent', changeType: 'created' }]
 
     render(<StaticTaskGraphView data={data} filterIssueIds={filterIssueIds} />)
 
-    expect(screen.getByTestId('static-task-graph-empty')).toBeInTheDocument()
+    expect(screen.getByText('First Issue')).toBeInTheDocument()
+    expect(screen.getByText('Second Issue')).toBeInTheDocument()
+    const rows = screen.getAllByTestId('static-task-graph-issue-row')
+    expect(rows[0]).toHaveClass('opacity-50')
+    expect(rows[1]).toHaveClass('opacity-50')
+  })
+
+  it('applies faded styling to unchanged issues when filterIssueIds provided', () => {
+    const data = createMockTaskGraph([
+      { issue: { id: 'issue-1', title: 'Changed Issue' } },
+      { issue: { id: 'issue-2', title: 'Unchanged Issue A' } },
+      { issue: { id: 'issue-3', title: 'Unchanged Issue B' } },
+    ])
+
+    const filterIssueIds: FilteredIssue[] = [{ issueId: 'issue-1', changeType: 'updated' }]
+
+    render(<StaticTaskGraphView data={data} filterIssueIds={filterIssueIds} />)
+
+    const rows = screen.getAllByTestId('static-task-graph-issue-row')
+    // Changed issue should not be faded
+    expect(rows[0]).not.toHaveClass('opacity-50')
+    // Unchanged issues should be faded with italic text
+    expect(rows[1]).toHaveClass('opacity-50')
+    expect(rows[2]).toHaveClass('opacity-50')
+    expect(screen.getByText('Unchanged Issue A')).toHaveClass('italic')
+    expect(screen.getByText('Unchanged Issue B')).toHaveClass('italic')
+  })
+
+  it('does not apply faded styling when filterIssueIds not provided', () => {
+    const data = createMockTaskGraph([
+      { issue: { id: 'issue-1', title: 'First Issue' } },
+      { issue: { id: 'issue-2', title: 'Second Issue' } },
+    ])
+
+    render(<StaticTaskGraphView data={data} />)
+
+    const rows = screen.getAllByTestId('static-task-graph-issue-row')
+    expect(rows[0]).not.toHaveClass('opacity-50')
+    expect(rows[1]).not.toHaveClass('opacity-50')
   })
 
   it('is read-only and does not include interactive elements', () => {
