@@ -374,15 +374,15 @@ describe('TaskGraphKonvaView', () => {
       const container = screen.getByTestId('task-graph-konva')
       fireEvent.keyDown(container, { key: ' ' })
 
-      // After expansion: row 0 still at 0, row 1 shifted to 240 (40+200), row 2 at 280
+      // After expansion: row 0 still at 0, row 1 shifted to 740 (40+700), row 2 at 780
       const updatedRows = screen.getAllByTestId('konva-html-row')
       const updatedRow1Parent = updatedRows[0].parentElement!
       const updatedRow2Parent = updatedRows[1].parentElement!
       const updatedRow3Parent = updatedRows[2].parentElement!
 
       expect(updatedRow1Parent.style.top).toBe('0px')
-      expect(updatedRow2Parent.style.top).toBe('240px')
-      expect(updatedRow3Parent.style.top).toBe('280px')
+      expect(updatedRow2Parent.style.top).toBe('740px')
+      expect(updatedRow3Parent.style.top).toBe('780px')
     })
 
     it('shifts rows back up when expanded issue is collapsed', () => {
@@ -417,11 +417,11 @@ describe('TaskGraphKonvaView', () => {
       fireEvent.doubleClick(rows[1])
 
       // After both expanded:
-      // row 0 at 0, row 1 at 240 (40+200), row 2 at 480 (240+40+200)
+      // row 0 at 0, row 1 at 740 (40+700), row 2 at 1480 (740+40+700)
       const updatedRows = screen.getAllByTestId('konva-html-row')
       expect(updatedRows[0].parentElement!.style.top).toBe('0px')
-      expect(updatedRows[1].parentElement!.style.top).toBe('240px')
-      expect(updatedRows[2].parentElement!.style.top).toBe('480px')
+      expect(updatedRows[1].parentElement!.style.top).toBe('740px')
+      expect(updatedRows[2].parentElement!.style.top).toBe('1480px')
     })
   })
 })
