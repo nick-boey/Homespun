@@ -63,9 +63,9 @@ test.describe('AG-UI Sessions', () => {
         const badge = firstCard.locator('[data-slot="badge"]').first()
         await expect(badge).toBeVisible()
 
-        // Badge should contain "Issue" or "PR"
+        // Badge should contain "Issue", "PR", or "Issues Agent"
         const badgeText = await badge.textContent()
-        expect(['Issue', 'PR']).toContain(badgeText?.trim())
+        expect(['Issue', 'PR', 'Issues Agent']).toContain(badgeText?.trim())
       }
     })
 
