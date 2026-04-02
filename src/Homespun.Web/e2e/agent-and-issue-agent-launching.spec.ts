@@ -43,6 +43,10 @@ test.describe.serial('Agent and Issue Agent Launching', () => {
     const promptOption = page.getByRole('option').first()
     await promptOption.click()
 
+    // Verify mode selector is present (added by PR #731)
+    const modeSelector = taskTab.locator('[aria-label="Select mode"]')
+    await expect(modeSelector).toBeVisible()
+
     // Verify model selector is present
     const modelSelector = taskTab.locator('[aria-label="Select model"]')
     await expect(modelSelector).toBeVisible()
@@ -91,6 +95,10 @@ test.describe.serial('Agent and Issue Agent Launching', () => {
     // Verify prompt selector is present
     const promptSelector = issuesTab.locator('[aria-label="Select prompt"]')
     await expect(promptSelector).toBeVisible({ timeout: 10000 })
+
+    // Verify mode selector is present (added by PR #731)
+    const modeSelector = issuesTab.locator('[aria-label="Select mode"]')
+    await expect(modeSelector).toBeVisible()
 
     // Verify model selector is present
     const modelSelector = issuesTab.locator('[aria-label="Select model"]')
