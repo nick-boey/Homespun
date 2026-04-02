@@ -70,9 +70,9 @@ public class IssuesAgentApiTests
     }
 
     [Test]
-    public async Task CreateSession_WithNoInstructions_ReturnsCreated()
+    public async Task CreateSession_WithNoInstructions_StartsSessionWithoutInitialMessage()
     {
-        // Arrange - no user instructions, should use fallback message
+        // Arrange - no user instructions, session starts in waiting state
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = _projectId,
@@ -82,7 +82,7 @@ public class IssuesAgentApiTests
         // Act
         var response = await _client.PostAsJsonAsync("/api/issues-agent/session", request, JsonOptions);
 
-        // Assert - should succeed with fallback message
+        // Assert - should succeed without sending initial message
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var result = await response.Content.ReadFromJsonAsync<CreateIssuesAgentSessionResponse>(JsonOptions);
         Assert.Multiple(() =>

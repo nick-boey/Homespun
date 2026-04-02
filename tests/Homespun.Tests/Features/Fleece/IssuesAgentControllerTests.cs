@@ -207,7 +207,7 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithNoInstructions_SendsFallbackMessage()
+    public async Task CreateSession_WithNoInstructions_DoesNotSendMessage()
     {
         // Arrange
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
@@ -224,10 +224,10 @@ public class IssuesAgentControllerTests
         // Give fire-and-forget task time to execute
         await Task.Delay(100);
 
-        // Should send a fallback message to ensure the Docker container starts
+        // Should not send any message - session starts in waiting state
         _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            "session-abc", "Begin working on the assigned issues.", SessionMode.Build,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SessionMode>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]

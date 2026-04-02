@@ -146,24 +146,23 @@ public class IssuesAgentController(
             "Issues Agent session created: sessionId={SessionId}, branch={BranchName}, mode={SessionMode}, model={Model}",
             session.Id, branchName, sessionMode, model);
 
-        // Use user instructions as initial message, or fallback to ensure Docker container starts
-        var initialMessage = !string.IsNullOrWhiteSpace(request.UserInstructions)
-            ? request.UserInstructions
-            : "Begin working on the assigned issues.";
-
-        var messageMode = sessionMode;
-        var messageToSend = initialMessage;
-        _ = Task.Run(async () =>
+        // Only send initial message when user provided instructions
+        if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
-            try
+            var messageMode = sessionMode;
+            var messageToSend = request.UserInstructions;
+            _ = Task.Run(async () =>
             {
-                await sessionService.SendMessageAsync(session.Id, messageToSend, messageMode);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
-            }
-        });
+                try
+                {
+                    await sessionService.SendMessageAsync(session.Id, messageToSend, messageMode);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
+                }
+            });
+        }
 
         logger.LogInformation(
             "Issues Agent session creation complete: sessionId={SessionId}, branch={BranchName}, clonePath={ClonePath}",

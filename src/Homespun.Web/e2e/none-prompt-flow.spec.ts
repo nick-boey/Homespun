@@ -31,12 +31,12 @@ test.describe('None Prompt Flow', () => {
     await page.click('[aria-label="Select prompt"]')
 
     // None option should always be visible and first
-    const noneOption = page.locator('text=None - Start without prompt (Plan mode)')
+    const noneOption = page.locator('text=None - Start without prompt')
     await expect(noneOption).toBeVisible()
 
     // Verify it's the first option
     const firstOption = page.getByRole('option').first()
-    await expect(firstOption).toHaveText('None - Start without prompt (Plan mode)')
+    await expect(firstOption).toHaveText('None - Start without prompt')
   })
 
   // Skip: This test needs to be updated for async agent starting behavior
@@ -70,7 +70,7 @@ test.describe('None Prompt Flow', () => {
     await page.click('[aria-label="Select prompt"]')
 
     // Click the None option
-    await page.locator('text=None - Start without prompt (Plan mode)').click()
+    await page.locator('text=None - Start without prompt').click()
 
     // Click Start Agent
     await page.click('button:has-text("Start Agent")')
@@ -112,7 +112,7 @@ test.describe('None Prompt Flow', () => {
 
     // Open the prompt dropdown and select None
     await page.click('[aria-label="Select prompt"]')
-    await page.locator('text=None - Start without prompt (Plan mode)').click()
+    await page.locator('text=None - Start without prompt').click()
 
     // Start the agent
     await page.click('button:has-text("Start Agent")')
