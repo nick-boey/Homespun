@@ -1,12 +1,12 @@
 [
   {
     "name": "Plan",
-    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease analyze this issue and create a detailed implementation plan. Consider:\n- What files need to be modified or created\n- The approach and architecture\n- Any potential challenges or risks\n- Test requirements\n\nAsk any clarifying questions you may have. Always include in your plan the creation of a PR when the implementation is complete and all tests pass.",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}{{#if context}}\n\n### Issue Context\n{{context}}{{/if}}\n\n---\n\nPlease analyze this issue and create a detailed implementation plan. Consider:\n- What files need to be modified or created\n- The approach and architecture\n- Any potential challenges or risks\n- Test requirements\n\nAsk any clarifying questions you may have. Always include in your plan the creation of a PR when the implementation is complete and all tests pass.",
     "mode": "plan"
   },
   {
     "name": "Build",
-    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass.",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}{{#if context}}\n\n### Issue Context\n{{context}}{{/if}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass.",
     "mode": "build"
   },
   {
@@ -31,7 +31,7 @@
   },
   {
     "name": "Build and Merge",
-    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass. When all tests pass in CI and there are no merge conflicts, perform a squash merge to main. **DO NOT** merge unless all tests pass in CI. If they do not pass the first time, stop execution.",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}{{#if context}}\n\n### Issue Context\n{{context}}{{/if}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass. When all tests pass in CI and there are no merge conflicts, perform a squash merge to main. **DO NOT** merge unless all tests pass in CI. If they do not pass the first time, stop execution.",
     "mode": "build"
   },
   {
@@ -59,13 +59,13 @@
   },
   {
     "name": "Verify",
-    "initialMessage": "Verify that all of the work described in this task and in the child tasks are complete. If they are, mark this issue as complete. If not, add additional child issues to this one to complete the remaining work.",
+    "initialMessage": "{{#if context}}### Issue Context\n{{context}}\n\n{{/if}}Verify that all of the work described in this task and in the child tasks are complete. If they are, mark this issue as complete. If not, add additional child issues to this one to complete the remaining work.",
     "mode": "build",
     "category": "IssueAgent"
   },
   {
     "name": "Expand feature",
-    "initialMessage": "Review the issue description and the descriptions of it's sub-issues (if it has any). Put together a plan to expand this issue into a full implementation plan in sub-issues (as required). Ask any clarifying questions you may have before finalising the plan. Alter this issue's description to make it a specification of the completed feature.",
+    "initialMessage": "{{#if context}}### Issue Context\n{{context}}\n\n{{/if}}Review the issue description and the descriptions of it's sub-issues (if it has any). Put together a plan to expand this issue into a full implementation plan in sub-issues (as required). Ask any clarifying questions you may have before finalising the plan. Alter this issue's description to make it a specification of the completed feature.",
     "mode": "plan",
     "category": "IssueAgent"
   }
