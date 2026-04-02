@@ -247,17 +247,17 @@ E2E tests for the React frontend are located in `src/Homespun.Web/e2e/`. These t
 To start a server running in Mock Mode to investigate with the Playwright MCP:
 
 ```bash
-# Start mock backend server
+# Start both backend and frontend servers (logs captured to logs/ directory)
 ./scripts/mock.sh       # Linux/Mac
 ./scripts/mock.ps1      # Windows
 
-cd src/Homespun.Web
-
-# Start development server
-npm run dev
+# Or run backend only in foreground (original behavior)
+./scripts/mock.sh --foreground
 ```
 
-Review the output to find the ports that the development backend and frontend applications are running on, then use the Playwright MCP tools to investigate.
+Logs are written to `logs/mock-backend.log` and `logs/mock-frontend.log`. Use `tail -f` to follow them.
+
+Review the log files to find the ports that the development backend and frontend applications are running on, then use the Playwright MCP tools to investigate.
 
 ### Critical Shell Management Rules
 
