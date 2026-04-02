@@ -210,7 +210,7 @@ describe('RunAgentDialog', () => {
   })
 
   describe('Task Agent Tab', () => {
-    it('shows prompt dropdown, model dropdown, and start button', async () => {
+    it('shows prompt dropdown, mode dropdown, model dropdown, and start button', async () => {
       render(
         <RunAgentDialog
           open={true}
@@ -226,11 +226,12 @@ describe('RunAgentDialog', () => {
       await waitFor(() => {
         expect(within(taskTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
       })
+      expect(within(taskTab).getByRole('combobox', { name: 'Select mode' })).toBeInTheDocument()
       expect(within(taskTab).getByRole('combobox', { name: /model/i })).toBeInTheDocument()
       expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
     })
 
-    it('calls run agent endpoint on start with userInstructions', async () => {
+    it('sends mode instead of promptName on start', async () => {
       const user = userEvent.setup()
       const onAgentStart = vi.fn()
 
@@ -255,16 +256,20 @@ describe('RunAgentDialog', () => {
       // Click start agent
       await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
 
-      // Should have called the run agent endpoint
+      // Should have called the run agent endpoint with mode, not promptName
       await waitFor(() => {
         expect(mockRunAgent).toHaveBeenCalledWith({
           path: { issueId: 'issue-456' },
           body: expect.objectContaining({
             projectId: 'project-123',
-            promptName: 'Build Feature',
+            mode: SessionMode.BUILD,
           }),
         })
       })
+
+      // Verify promptName is NOT in the request
+      const callBody = mockRunAgent.mock.calls[0]?.[0]?.body
+      expect(callBody).not.toHaveProperty('promptName')
 
       // Should have called onAgentStart
       await waitFor(() => {
@@ -364,7 +369,7 @@ describe('RunAgentDialog', () => {
   })
 
   describe('Issues Agent Tab', () => {
-    it('shows prompt dropdown, model selector, and instructions textarea', async () => {
+    it('shows prompt dropdown, mode dropdown, model selector, and instructions textarea', async () => {
       render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
         wrapper: createWrapper(),
       })
@@ -380,6 +385,7 @@ describe('RunAgentDialog', () => {
       await waitFor(() => {
         expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
       })
+      expect(within(issuesTab).getByRole('combobox', { name: 'Select mode' })).toBeInTheDocument()
       expect(within(issuesTab).getByRole('combobox', { name: /model/i })).toBeInTheDocument()
       expect(within(issuesTab).getByPlaceholderText(/additional instructions/i)).toBeInTheDocument()
     })
@@ -464,6 +470,50 @@ describe('RunAgentDialog', () => {
           params: { sessionId: 'session-123' },
         })
       })
+    })
+
+    it('sends mode in request instead of promptName', async () => {
+      const user = userEvent.setup()
+
+      const mockResult = {
+        sessionId: 'session-123',
+        branchName: 'issues-agent-123',
+        clonePath: '/tmp/clone',
+      }
+
+      mockCreateIssuesAgentSession.mockResolvedValue({
+        data: mockResult,
+      } as never)
+
+      render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
+        wrapper: createWrapper(),
+      })
+
+      const issuesTab = getIssuesTab()
+
+      await waitFor(() => {
+        expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+      })
+
+      // Type instructions
+      const textarea = within(issuesTab).getByPlaceholderText(/additional instructions/i)
+      await user.clear(textarea)
+      await user.type(textarea, 'Test instructions')
+
+      await user.click(within(issuesTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockCreateIssuesAgentSession).toHaveBeenCalledWith({
+          body: expect.objectContaining({
+            projectId: 'project-123',
+            mode: SessionMode.BUILD,
+          }),
+        })
+      })
+
+      // Verify promptName is NOT in the request
+      const callBody = mockCreateIssuesAgentSession.mock.calls[0]?.[0]?.body
+      expect(callBody).not.toHaveProperty('promptName')
     })
   })
 

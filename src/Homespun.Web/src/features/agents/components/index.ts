@@ -1,4 +1,3 @@
-export { AgentLauncher } from './agent-launcher'
 export { RunAgentDialog } from './run-agent-dialog'
 export { AgentStatusIndicator } from './agent-status-indicator'
 export { AgentControlPanel } from './agent-control-panel'

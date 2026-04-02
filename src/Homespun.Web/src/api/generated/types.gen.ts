@@ -286,7 +286,7 @@ export type CreateIssuesAgentSessionRequest = {
   model?: string | null
   selectedIssueId?: string | null
   userInstructions?: string | null
-  promptName?: string | null
+  mode?: SessionMode
 }
 
 export type CreateIssuesAgentSessionResponse = {
@@ -493,6 +493,7 @@ export type FleecePullResult = {
   commitsPulled?: number
   hasNonFleeceChanges?: boolean
   nonFleeceChangedFiles?: Array<string> | null
+  hasMergeConflict?: boolean
 }
 
 export type FullRefreshResult = {
@@ -954,7 +955,7 @@ export type RunAgentAcceptedResponse = {
 
 export type RunAgentRequest = {
   projectId: string | null
-  promptName: string | null
+  mode?: SessionMode
   model?: string | null
   baseBranch?: string | null
   userInstructions?: string | null

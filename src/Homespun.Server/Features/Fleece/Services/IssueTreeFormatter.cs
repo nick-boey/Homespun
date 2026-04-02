@@ -133,6 +133,7 @@ public static class IssueTreeFormatter
         sb.Append("] [");
         sb.Append(issue.Status.ToString().ToLowerInvariant());
         sb.Append("] ");
-        sb.AppendLine(issue.Title);
+        sb.Append(issue.Title);
+        sb.Append('\n');
     }
 }

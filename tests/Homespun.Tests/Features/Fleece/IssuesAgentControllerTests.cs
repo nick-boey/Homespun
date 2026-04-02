@@ -112,30 +112,21 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithBuildModePromptId_UsesBuildSessionMode()
+    public async Task CreateSession_WithExplicitBuildMode_UsesBuildSessionMode()
     {
         // Arrange
-        var buildPrompt = new AgentPrompt
-        {
-            Name = "BuildPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Build template"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-build", null)).Returns(buildPrompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "prompt-build",
+            Mode = SessionMode.Build,
             UserInstructions = "Fix the bug"
         };
 
         // Act
-        var result = await _controller.CreateSession(request);
+        await _controller.CreateSession(request);
 
         // Assert
         _sessionServiceMock.Verify(s => s.StartSessionAsync(
@@ -144,30 +135,21 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithPlanModePromptId_UsesPlanSessionMode()
+    public async Task CreateSession_WithExplicitPlanMode_UsesPlanSessionMode()
     {
         // Arrange
-        var planPrompt = new AgentPrompt
-        {
-            Name = "PlanPrompt",
-            Mode = SessionMode.Plan,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Plan template"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-plan", null)).Returns(planPrompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "prompt-plan",
+            Mode = SessionMode.Plan,
             UserInstructions = "Plan the work"
         };
 
         // Act
-        var result = await _controller.CreateSession(request);
+        await _controller.CreateSession(request);
 
         // Assert
         _sessionServiceMock.Verify(s => s.StartSessionAsync(
@@ -176,19 +158,9 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithoutPromptId_FallsBackToDefaultBehavior()
+    public async Task CreateSession_WithoutMode_DefaultsToBuildMode()
     {
         // Arrange
-        var defaultPrompt = new AgentPrompt
-        {
-            Name = "IssueModify",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Default template"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
-            .Returns(new List<AgentPrompt> { defaultPrompt });
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
@@ -199,104 +171,31 @@ public class IssuesAgentControllerTests
         };
 
         // Act
-        var result = await _controller.CreateSession(request);
+        await _controller.CreateSession(request);
 
-        // Assert - should use Build mode (default)
+        // Assert - defaults to Build mode
         _sessionServiceMock.Verify(s => s.StartSessionAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             SessionMode.Build, It.IsAny<string>(), It.IsAny<string?>()), Times.Once);
-
-        // Should send UserInstructions verbatim (no RenderTemplate call)
-        _agentPromptServiceMock.Verify(a => a.RenderTemplate(
-            It.IsAny<string?>(), It.IsAny<PromptContext>()), Times.Never);
-
-        // Give fire-and-forget task time to execute
-        await Task.Delay(100);
-
-        _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            "session-abc", "Do something", SessionMode.Build,
-            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task CreateSession_WithInvalidPromptId_ReturnsBadRequest()
+    public async Task CreateSession_SendsUserInstructionsVerbatim()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("invalid-id", null)).Returns((AgentPrompt?)null);
-
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = TestProject.Id,
-            PromptName = "invalid-id"
-        };
-
-        // Act
-        var result = await _controller.CreateSession(request);
-
-        // Assert
-        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
-        var notFound = (NotFoundObjectResult)result.Result!;
-        Assert.That(notFound.Value?.ToString(), Does.Contain("Prompt not found"));
-    }
-
-    [Test]
-    public async Task CreateSession_WithNonIssueAgentPromptId_ReturnsBadRequest()
-    {
-        // Arrange
-        var standardPrompt = new AgentPrompt
-        {
-            Name = "StandardPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.Standard
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("standard-prompt", null)).Returns(standardPrompt);
-
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = TestProject.Id,
-            PromptName = "standard-prompt"
-        };
-
-        // Act
-        var result = await _controller.CreateSession(request);
-
-        // Assert
-        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
-        var badRequest = (BadRequestObjectResult)result.Result!;
-        Assert.That(badRequest.Value?.ToString(), Does.Contain("IssueAgent"));
-    }
-
-    [Test]
-    public async Task CreateSession_WithPromptId_SendsUserInstructionsVerbatim()
-    {
-        // Arrange
-        var selectedPrompt = new AgentPrompt
-        {
-            Name = "CustomPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Custom template for {{selectedIssueId}}"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-custom", null)).Returns(selectedPrompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "prompt-custom",
+            Mode = SessionMode.Build,
             UserInstructions = "Fix bug",
             SelectedIssueId = "issue-1"
         };
 
         // Act
-        var result = await _controller.CreateSession(request);
-
-        // Assert - should NOT call RenderTemplate (frontend now handles rendering)
-        _agentPromptServiceMock.Verify(a => a.RenderTemplate(
-            It.IsAny<string?>(), It.IsAny<PromptContext>()), Times.Never);
+        await _controller.CreateSession(request);
 
         // Give fire-and-forget task time to execute
         await Task.Delay(100);
@@ -308,65 +207,45 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithPromptId_SendsMessageWithPromptMode()
+    public async Task CreateSession_WithNoInstructions_DoesNotSendMessage()
     {
         // Arrange
-        var planPrompt = new AgentPrompt
-        {
-            Name = "PlanPrompt",
-            Mode = SessionMode.Plan,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Plan template"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-plan", null)).Returns(planPrompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
+            .Returns((AgentPrompt?)null);
 
         var request = new CreateIssuesAgentSessionRequest
         {
-            ProjectId = TestProject.Id,
-            PromptName = "prompt-plan",
-            UserInstructions = "Do the work"
+            ProjectId = TestProject.Id
         };
 
         // Act
-        var result = await _controller.CreateSession(request);
+        await _controller.CreateSession(request);
 
-        // Assert - give the fire-and-forget task time to execute
+        // Give fire-and-forget task time to execute
         await Task.Delay(100);
 
-        // Should send verbatim UserInstructions with the prompt's mode
+        // Should not send any message - session starts in waiting state
         _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            "session-abc", "Do the work", SessionMode.Plan,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SessionMode>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
     public async Task CreateSession_AlwaysUsesIssueAgentSystemPrompt()
     {
         // Arrange
-        var prompt = new AgentPrompt
-        {
-            Name = "TestPrompt",
-            Mode = SessionMode.Plan,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "test"
-        };
-
         var systemPrompt = new AgentPrompt
         {
             InitialMessage = "You are the system prompt"
         };
 
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("prompt-1", null)).Returns(prompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(systemPrompt);
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "prompt-1"
+            Mode = SessionMode.Plan
         };
 
         // Act
@@ -380,98 +259,16 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithEmptyUserInstructions_RendersPromptTemplateAndSendsMessage()
-    {
-        // Arrange
-        var prompt = new AgentPrompt
-        {
-            Name = "TestPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Do the work for {{selectedIssueId}}"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-        _agentPromptServiceMock.Setup(a => a.RenderTemplate(
-                prompt.InitialMessage, It.IsAny<PromptContext>()))
-            .Returns("Do the work for issue-1");
-
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = TestProject.Id,
-            PromptName = "TestPrompt",
-            SelectedIssueId = "issue-1"
-            // No UserInstructions — server-side template rendering should kick in
-        };
-
-        // Act
-        await _controller.CreateSession(request);
-
-        // Assert - give fire-and-forget task time to execute
-        await Task.Delay(100);
-
-        // Should render the prompt template server-side
-        _agentPromptServiceMock.Verify(a => a.RenderTemplate(
-            prompt.InitialMessage,
-            It.Is<PromptContext>(ctx => ctx.SelectedIssueId == "issue-1")), Times.Once);
-
-        // Should send the rendered template as initial message
-        _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            "session-abc", "Do the work for issue-1", SessionMode.Build,
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
-    public async Task CreateSession_WithNoPromptAndNoInstructions_SendsFallbackMessage()
-    {
-        // Arrange - no prompts available at all, no user instructions
-        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
-            .Returns(new List<AgentPrompt>());
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentModification))
-            .Returns((AgentPrompt?)null);
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns((AgentPrompt?)null);
-
-        var request = new CreateIssuesAgentSessionRequest
-        {
-            ProjectId = TestProject.Id
-            // No PromptName, no UserInstructions
-        };
-
-        // Act
-        await _controller.CreateSession(request);
-
-        // Assert - give fire-and-forget task time to execute
-        await Task.Delay(100);
-
-        // Should send a fallback message to ensure the Docker container starts
-        _sessionServiceMock.Verify(s => s.SendMessageAsync(
-            "session-abc", "Begin working on the assigned issues.", SessionMode.Build,
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Test]
     public async Task CreateSession_WithSelectedIssueId_UsesIssueIdAsEntityId()
     {
         // Arrange
-        var prompt = new AgentPrompt
-        {
-            Name = "TestPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Fix: {{userPrompt}}"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "TestPrompt",
+            Mode = SessionMode.Build,
             UserInstructions = "Fix the bug",
             SelectedIssueId = "abc123"
         };
@@ -489,22 +286,13 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithSelectedIssueId_IncludesIssueIdInBranchName()
     {
         // Arrange
-        var prompt = new AgentPrompt
-        {
-            Name = "TestPrompt",
-            Mode = SessionMode.Build,
-            Category = PromptCategory.IssueAgent,
-            InitialMessage = "Fix: {{userPrompt}}"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPrompt("TestPrompt", null)).Returns(prompt);
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            PromptName = "TestPrompt",
+            Mode = SessionMode.Build,
             UserInstructions = "Fix the bug",
             SelectedIssueId = "abc123"
         };
@@ -524,10 +312,6 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithoutSelectedIssueId_UsesBranchNameAsEntityId()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
-            .Returns(new List<AgentPrompt>());
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentModification))
-            .Returns(new AgentPrompt { InitialMessage = "Fallback template" });
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
@@ -548,28 +332,28 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_WithoutPromptId_DefaultsToBuildMode()
+    public async Task CreateSession_SendsMessageWithExplicitMode()
     {
-        // Arrange - no prompts available at all
-        _agentPromptServiceMock.Setup(a => a.GetIssueAgentPromptsForProject(TestProject.Id))
-            .Returns(new List<AgentPrompt>());
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentModification))
-            .Returns(new AgentPrompt { InitialMessage = "Fallback template" });
+        // Arrange
         _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
             .Returns(new AgentPrompt { InitialMessage = "System prompt" });
 
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
-            UserInstructions = "Do something"
+            Mode = SessionMode.Plan,
+            UserInstructions = "Do the work"
         };
 
         // Act
         await _controller.CreateSession(request);
 
-        // Assert - defaults to Build mode
-        _sessionServiceMock.Verify(s => s.StartSessionAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-            SessionMode.Build, It.IsAny<string>(), It.IsAny<string?>()), Times.Once);
+        // Give the fire-and-forget task time to execute
+        await Task.Delay(100);
+
+        // Should send with the explicit mode
+        _sessionServiceMock.Verify(s => s.SendMessageAsync(
+            "session-abc", "Do the work", SessionMode.Plan,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

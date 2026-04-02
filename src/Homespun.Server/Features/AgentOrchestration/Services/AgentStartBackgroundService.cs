@@ -160,35 +160,19 @@ public class AgentStartBackgroundService(
                     clonePath, request.BranchName);
             }
 
-            // Step 2: Resolve prompt and render template
-            AgentPrompt? prompt = null;
-            string? renderedMessage = request.Instructions;
-            var mode = SessionMode.Plan; // Default for None
+            // Step 2: Resolve mode and initial message
+            string? renderedMessage = request.Instructions ?? request.UserInstructions;
+            var mode = request.Mode ?? SessionMode.Plan;
 
-            if (!string.IsNullOrWhiteSpace(request.UserInstructions))
+            // Resolve mode from prompt when no explicit mode is set
+            if (!request.Mode.HasValue && !string.IsNullOrEmpty(request.PromptName))
             {
-                // User instructions override the prompt template
-                renderedMessage = request.UserInstructions;
-
-                // If a prompt was also provided, use its mode; otherwise default to Build
-                if (!string.IsNullOrEmpty(request.PromptName))
-                {
-                    prompt = agentPromptService.GetPrompt(request.PromptName, null);
-                    mode = prompt?.Mode ?? SessionMode.Build;
-                }
-                else
-                {
-                    mode = SessionMode.Build;
-                }
-            }
-            else if (!string.IsNullOrEmpty(request.PromptName))
-            {
-                prompt = agentPromptService.GetPrompt(request.PromptName, null);
+                var prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;
 
-                    // Only do server-side template rendering if no pre-rendered instructions provided
+                    // Only render template when no user-provided message
                     if (string.IsNullOrEmpty(renderedMessage))
                     {
                         // Build hierarchical context (ancestors and direct children)

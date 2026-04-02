@@ -32,32 +32,29 @@ public class MockAgentStartBackgroundService(
             // Broadcast agent starting
             await notificationHub.BroadcastAgentStarting(request.IssueId, request.ProjectId, request.BranchName);
 
-            // Resolve prompt and determine mode
-            AgentPrompt? prompt = null;
-            string? renderedMessage = request.Instructions;
-            var mode = SessionMode.Plan; // Default for None
+            // Resolve mode and initial message
+            string? renderedMessage = request.Instructions ?? request.UserInstructions;
+            var mode = request.Mode ?? SessionMode.Plan;
 
-            if (!string.IsNullOrEmpty(request.PromptName))
+            // Workflow path: when no explicit mode or message, resolve from prompt
+            if (!request.Mode.HasValue && string.IsNullOrEmpty(renderedMessage) &&
+                !string.IsNullOrEmpty(request.PromptName))
             {
-                prompt = agentPromptService.GetPrompt(request.PromptName, null);
+                var prompt = agentPromptService.GetPrompt(request.PromptName, null);
                 if (prompt != null)
                 {
                     mode = prompt.Mode;
 
-                    // Only do server-side template rendering if no pre-rendered instructions provided
-                    if (string.IsNullOrEmpty(renderedMessage))
+                    var promptContext = new PromptContext
                     {
-                        var promptContext = new PromptContext
-                        {
-                            Title = request.Issue.Title,
-                            Id = request.Issue.Id,
-                            Description = request.Issue.Description,
-                            Branch = request.BranchName,
-                            Type = request.Issue.Type.ToString()
-                        };
+                        Title = request.Issue.Title,
+                        Id = request.Issue.Id,
+                        Description = request.Issue.Description,
+                        Branch = request.BranchName,
+                        Type = request.Issue.Type.ToString()
+                    };
 
-                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
-                    }
+                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
                 }
             }
 

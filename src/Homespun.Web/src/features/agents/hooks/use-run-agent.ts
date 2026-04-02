@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Issues, ClaudeSessionStatus } from '@/api'
+import { Issues, ClaudeSessionStatus, SessionMode } from '@/api'
 import type { RunAgentAcceptedResponse } from '@/api/generated/types.gen'
 import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 
@@ -8,13 +8,13 @@ export interface RunAgentParams {
   issueId: string
   /** The project ID */
   projectId: string
-  /** The agent prompt name to use, null for None */
-  promptName: string | null
+  /** The session mode to use */
+  mode?: SessionMode
   /** The Claude model to use (e.g., "sonnet") */
   model?: string
   /** Base branch to create the working branch from */
   baseBranch?: string
-  /** Optional user instructions that override the prompt template */
+  /** Optional user instructions to send as the initial message */
   userInstructions?: string
 }
 
@@ -75,7 +75,7 @@ export function useRunAgent() {
         path: { issueId: params.issueId },
         body: {
           projectId: params.projectId,
-          promptName: params.promptName,
+          mode: params.mode,
           model: params.model,
           baseBranch: params.baseBranch,
           userInstructions: params.userInstructions,

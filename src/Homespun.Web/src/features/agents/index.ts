@@ -1,6 +1,5 @@
 // Components
 export {
-  AgentLauncher,
   RunAgentDialog,
   AgentStatusIndicator,
   AgentControlPanel,

@@ -94,6 +94,12 @@ public record AgentStartRequest
     public string? UserInstructions { get; init; }
 
     /// <summary>
+    /// The session mode explicitly requested by the caller.
+    /// When provided, takes precedence over prompt-based mode resolution.
+    /// </summary>
+    public SessionMode? Mode { get; init; }
+
+    /// <summary>
     /// Whether this request is part of a workflow execution.
     /// </summary>
     public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;
