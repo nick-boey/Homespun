@@ -81,12 +81,8 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
     return map
   }, [filterIssueIds])
 
-  // Apply filtering if filterIssueIds is provided
-  const filteredIssueLines = useMemo(() => {
-    if (!filterMap) return issueRenderLines
-
-    return issueRenderLines.filter((line) => filterMap.has(line.issueId.toLowerCase()))
-  }, [issueRenderLines, filterMap])
+  // Show all issues (no filtering) — unchanged issues will be styled differently
+  const filteredIssueLines = issueRenderLines
 
   // Compute max lanes for SVG sizing
   const maxLanes = useMemo(() => {
@@ -127,6 +123,7 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
           line={line}
           maxLanes={maxLanes}
           changeType={filterMap?.get(line.issueId.toLowerCase())}
+          isFiltering={filterMap !== null}
           isSelected={selectedIssueId?.toLowerCase() === line.issueId.toLowerCase()}
           onClick={onSelectIssue ? () => onSelectIssue(line.issueId) : undefined}
         />
@@ -139,6 +136,7 @@ interface StaticIssueRowProps {
   line: TaskGraphIssueRenderLine
   maxLanes: number
   changeType?: ChangeType
+  isFiltering?: boolean
   isSelected?: boolean
   onClick?: () => void
 }
@@ -150,6 +148,7 @@ const StaticIssueRow = memo(function StaticIssueRow({
   line,
   maxLanes,
   changeType,
+  isFiltering,
   isSelected,
   onClick,
 }: StaticIssueRowProps) {
@@ -170,6 +169,7 @@ const StaticIssueRow = memo(function StaticIssueRow({
   }, [changeType])
 
   const isDeleted = changeType === 'deleted'
+  const isUnchanged = isFiltering && changeType === undefined
 
   return (
     <div
@@ -178,6 +178,7 @@ const StaticIssueRow = memo(function StaticIssueRow({
       className={cn(
         'flex items-center gap-2',
         borderClass,
+        isUnchanged && 'opacity-50',
         onClick && 'hover:bg-accent/50 cursor-pointer',
         isSelected && 'ring-primary ring-2 ring-inset'
       )}
@@ -218,6 +219,7 @@ const StaticIssueRow = memo(function StaticIssueRow({
         <span
           className={cn('truncate text-sm', {
             'text-muted-foreground line-through': isDeleted,
+            'text-muted-foreground italic': isUnchanged,
           })}
         >
           {line.title || 'Untitled'}

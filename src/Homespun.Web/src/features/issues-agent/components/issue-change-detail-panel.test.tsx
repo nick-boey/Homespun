@@ -206,7 +206,7 @@ describe('IssueChangeDetailPanel', () => {
       expect(screen.getByText('(empty)')).toBeInTheDocument()
     })
 
-    it('truncates long values', () => {
+    it('shows full text for long values', () => {
       const longValue = 'A'.repeat(100)
       const change = createMockChange({
         changeType: ChangeType.UPDATED,
@@ -215,8 +215,8 @@ describe('IssueChangeDetailPanel', () => {
 
       render(<IssueChangeDetailPanel change={change} />)
 
-      // Should show truncated value with ...
-      expect(screen.getByText('A'.repeat(50) + '...')).toBeInTheDocument()
+      // Should show the full value without truncation
+      expect(screen.getByText(longValue)).toBeInTheDocument()
     })
   })
 })
