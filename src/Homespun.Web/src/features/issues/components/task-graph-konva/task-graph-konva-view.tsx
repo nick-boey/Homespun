@@ -85,8 +85,8 @@ export interface TaskGraphKonvaViewRef {
 
 const DEFAULT_VIEWPORT_HEIGHT = 600
 
-/** Estimated height for expanded detail panels */
-export const DETAIL_PANEL_HEIGHT = 200
+/** Height for expanded detail panels (matches InlineIssueDetailRow height) */
+export const DETAIL_PANEL_HEIGHT = 700
 
 /**
  * Main TaskGraphKonvaView component.
