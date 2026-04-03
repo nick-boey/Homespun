@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test'
+import { Page, Locator, APIRequestContext } from '@playwright/test'
 
 /**
  * Navigate to a URL and wait for the page to be fully loaded
@@ -73,6 +73,41 @@ export async function checkStatusIndicators(page: Page) {
 export async function waitForStableStatus(page: Page, stabilityDuration = 6000) {
   // The status indicator polls every 5 seconds, so wait for at least one full cycle
   await page.waitForTimeout(stabilityDuration)
+}
+
+/**
+ * Create a mock agent session via API and optionally send a message to generate tool use messages.
+ * Returns the session ID.
+ */
+export async function createMockSession(
+  request: APIRequestContext,
+  options: { entityId?: string; sendMessage?: string } = {}
+): Promise<string> {
+  const { entityId = 'ISSUE-003', sendMessage } = options
+
+  // Create session via POST /api/sessions
+  const createResponse = await request.post('/api/sessions', {
+    data: {
+      entityId,
+      projectId: 'demo-project',
+      mode: 'build',
+      model: 'sonnet',
+    },
+  })
+
+  const session = await createResponse.json()
+  const sessionId = session.id
+
+  if (sendMessage) {
+    // Send a message to generate tool use responses
+    await request.post(`/api/sessions/${sessionId}/messages`, {
+      data: { message: sendMessage },
+    })
+    // Wait for the mock service to process the message
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  return sessionId
 }
 
 /**
