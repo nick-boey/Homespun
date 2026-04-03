@@ -259,6 +259,56 @@ public class MockAgentExecutionServiceTests
         Assert.That(planPendingMessages, Has.Count.EqualTo(1), "Should have exactly one plan pending message");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WithNoKeywords_EchoesPrompt()
+    {
+        // Arrange
+        var sessionId = await StartSessionAndGetId();
+        var request = new AgentMessageRequest(sessionId, "hello world");
+
+        // Act
+        var messages = await CollectMessages(request);
+
+        // Assert
+        var assistantMessages = messages.OfType<SdkAssistantMessage>().ToList();
+        Assert.That(assistantMessages, Has.Count.GreaterThanOrEqualTo(1));
+
+        var textBlock = assistantMessages
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkTextBlock>()
+            .FirstOrDefault();
+        Assert.That(textBlock, Is.Not.Null);
+        Assert.That(textBlock!.Text, Is.EqualTo("You said 'hello world'"));
+
+        Assert.That(messages.Last(), Is.TypeOf<SdkResultMessage>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WithThinkKeyword_DoesNotEcho()
+    {
+        // Arrange - regression: keyword prompts should NOT echo
+        var sessionId = await StartSessionAndGetId();
+        var request = new AgentMessageRequest(sessionId, "think about this");
+
+        // Act
+        var messages = await CollectMessages(request);
+
+        // Assert - should have thinking blocks, not echo text
+        var textBlocks = messages.OfType<SdkAssistantMessage>()
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkTextBlock>()
+            .ToList();
+        Assert.That(textBlocks.Any(t => t.Text.StartsWith("You said")), Is.False,
+            "Keyword prompts should not produce echo responses");
+
+        // Should still have thinking block
+        var thinkingBlocks = messages.OfType<SdkAssistantMessage>()
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkThinkingBlock>()
+            .ToList();
+        Assert.That(thinkingBlocks, Has.Count.GreaterThanOrEqualTo(1));
+    }
+
     #endregion
 
     #region AnswerQuestionAsync Tests
@@ -458,21 +508,31 @@ public class MockAgentExecutionServiceTests
     }
 
     [Test]
-    public async Task StartSessionAsync_WithNoKeywords_YieldsDefaultResponse()
+    public async Task StartSessionAsync_WithNoKeywords_EchoesPrompt()
     {
         // Arrange
         var request = new AgentStartRequest(
             WorkingDirectory: "/test/path",
             Mode: SessionMode.Build,
             Model: "sonnet",
-            Prompt: "Hello, how are you?");
+            Prompt: "hello world");
 
         // Act
         var messages = await CollectStartMessages(request);
 
         // Assert - should still produce session_started, assistant message, and result
         Assert.That(messages.OfType<SdkSystemMessage>().Any(m => m.Subtype == "session_started"), Is.True);
-        Assert.That(messages.OfType<SdkAssistantMessage>().Any(), Is.True);
+
+        var assistantMessages = messages.OfType<SdkAssistantMessage>().ToList();
+        Assert.That(assistantMessages, Has.Count.GreaterThanOrEqualTo(1));
+
+        var textBlock = assistantMessages
+            .SelectMany(m => m.Message.Content)
+            .OfType<SdkTextBlock>()
+            .FirstOrDefault();
+        Assert.That(textBlock, Is.Not.Null);
+        Assert.That(textBlock!.Text, Is.EqualTo("You said 'hello world'"));
+
         Assert.That(messages.Last(), Is.TypeOf<SdkResultMessage>());
     }
 
