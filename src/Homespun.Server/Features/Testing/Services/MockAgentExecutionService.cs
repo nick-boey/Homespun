@@ -103,7 +103,7 @@ public class MockAgentExecutionService : IAgentExecutionService
             // No keywords - simple default response
             var responseContent = new List<SdkContentBlock>
             {
-                new SdkTextBlock("[Mock] Session started successfully.")
+                new SdkTextBlock($"You said '{request.Prompt}'")
             };
             var apiMessage = new SdkApiMessage("assistant", responseContent);
             yield return new SdkAssistantMessage(sessionId, Guid.NewGuid().ToString(), apiMessage, null);
@@ -129,7 +129,7 @@ public class MockAgentExecutionService : IAgentExecutionService
             {
                 try
                 {
-                    await EmitResponseSequence(session, keywords, channel.Writer, cancellationToken);
+                    await EmitResponseSequence(session, keywords, request.Prompt, channel.Writer, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -173,7 +173,7 @@ public class MockAgentExecutionService : IAgentExecutionService
         {
             try
             {
-                await EmitResponseSequence(session, keywords, channel.Writer, cancellationToken);
+                await EmitResponseSequence(session, keywords, request.Message, channel.Writer, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -216,6 +216,7 @@ public class MockAgentExecutionService : IAgentExecutionService
     private async Task EmitResponseSequence(
         MockSession session,
         HashSet<MockKeyword> keywords,
+        string prompt,
         ChannelWriter<SdkMessage> writer,
         CancellationToken ct)
     {
@@ -250,7 +251,17 @@ public class MockAgentExecutionService : IAgentExecutionService
             return; // Plan continuation will close channel
         }
 
-        // No question or plan - emit result and close
+        // No question or plan - emit echo text if no keywords matched, then result
+        if (keywords.Count == 0)
+        {
+            var echoContent = new List<SdkContentBlock>
+            {
+                new SdkTextBlock($"You said '{prompt}'")
+            };
+            var echoMessage = new SdkApiMessage("assistant", echoContent);
+            await writer.WriteAsync(new SdkAssistantMessage(sessionId, Guid.NewGuid().ToString(), echoMessage, null), ct);
+        }
+
         await EmitResultMessage(sessionId, writer);
         writer.Complete();
     }
