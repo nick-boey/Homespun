@@ -545,7 +545,7 @@ public class MockDataSeederService : IHostedService
 
             new()
             {
-                Id = "e2e/parent1",
+                Id = "e2Prt1",
                 Title = "E2E Test: Parent Issue 1",
                 Description = "A parent issue for testing keyboard hierarchy controls.",
                 Type = IssueType.Feature,
@@ -557,31 +557,31 @@ public class MockDataSeederService : IHostedService
             },
             new()
             {
-                Id = "e2e/child1",
+                Id = "e2Chd1",
                 Title = "E2E Test: Child Issue 1",
                 Description = "A child issue of parent1 for testing hierarchy.",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "e2e/parent1", SortOrder = "0" }],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "e2Prt1", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddDays(-1)
             },
             new()
             {
-                Id = "e2e/child2",
+                Id = "e2Chd2",
                 Title = "E2E Test: Child Issue 2",
                 Description = "Another child issue of parent1 for testing hierarchy.",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "e2e/parent1", SortOrder = "1" }],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "e2Prt1", SortOrder = "1" }],
                 CreatedAt = now.AddDays(-2),
                 LastUpdate = now.AddDays(-1)
             },
             new()
             {
-                Id = "e2e/orphan",
+                Id = "e2Orph",
                 Title = "E2E Test: Orphan Issue",
                 Description = "An issue with no parent for testing hierarchy creation.",
                 Type = IssueType.Task,
@@ -592,7 +592,7 @@ public class MockDataSeederService : IHostedService
             },
             new()
             {
-                Id = "e2e/series-parent",
+                Id = "e2SPrt",
                 Title = "E2E Test: Series Parent",
                 Description = "A parent issue with series execution mode.",
                 Type = IssueType.Feature,
@@ -604,25 +604,25 @@ public class MockDataSeederService : IHostedService
             },
             new()
             {
-                Id = "e2e/series-child1",
+                Id = "e2SCh1",
                 Title = "E2E Test: Series Child 1",
                 Description = "First child in a series execution parent.",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "e2e/series-parent", SortOrder = "0" }],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "e2SPrt", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddDays(-1)
             },
             new()
             {
-                Id = "e2e/series-child2",
+                Id = "e2SCh2",
                 Title = "E2E Test: Series Child 2",
                 Description = "Second child in a series execution parent.",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "e2e/series-parent", SortOrder = "1" }],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "e2SPrt", SortOrder = "1" }],
                 CreatedAt = now.AddDays(-2),
                 LastUpdate = now.AddDays(-1)
             }
