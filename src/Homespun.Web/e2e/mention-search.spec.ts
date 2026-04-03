@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { createMockSession } from './utils/test-helpers'
 
 test.describe('Mention search', () => {
   test.beforeEach(async ({ page }) => {
@@ -148,9 +149,16 @@ test.describe('Mention search', () => {
   })
 
   test.describe('Chat input', () => {
+    let sessionId: string
+
+    test.beforeAll(async ({ request }) => {
+      // Create a session via API since there are no pre-seeded sessions
+      sessionId = await createMockSession(request)
+    })
+
     test.beforeEach(async ({ page }) => {
-      // Navigate to a session page (using demo-session-001 from mock data)
-      await page.goto('/sessions/demo-session-001')
+      // Navigate to the dynamically created session
+      await page.goto(`/sessions/${sessionId}`)
       // Wait for session to load
       await page.waitForLoadState('networkidle')
     })
