@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RunAgentDialog } from './run-agent-dialog'
 import { AgentPrompts, Issues, IssuesAgent, SessionMode } from '@/api'
 import type { ReactNode } from 'react'
-import type { AgentPrompt, RunAgentAcceptedResponse } from '@/api/generated/types.gen'
+import type {
+  AgentPrompt,
+  RunAgentAcceptedResponse,
+  WorkflowSummary,
+} from '@/api/generated/types.gen'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -24,6 +28,22 @@ vi.mock('@/api', async (importOriginal) => {
     },
   }
 })
+
+// Mock workflow hooks
+const mockUseWorkflows = vi.fn()
+const mockExecuteWorkflowMutate = vi.fn()
+const mockExecuteWorkflowMutateAsync = vi.fn()
+const mockUseExecuteWorkflow = vi.fn(() => ({
+  mutate: mockExecuteWorkflowMutate,
+  mutateAsync: mockExecuteWorkflowMutateAsync,
+  isPending: false,
+  isSuccess: false,
+}))
+
+vi.mock('@/features/workflows', () => ({
+  useWorkflows: (...args: unknown[]) => mockUseWorkflows(...args),
+  useExecuteWorkflow: () => mockUseExecuteWorkflow(),
+}))
 
 // Mock useNavigate from tanstack router
 const mockNavigate = vi.fn()
@@ -100,6 +120,39 @@ function createMockRunAgentResponse(
   }
 }
 
+const mockWorkflows: WorkflowSummary[] = [
+  {
+    id: 'wf-1',
+    title: 'Build Pipeline',
+    description: 'Runs CI build',
+    enabled: true,
+    triggerType: 'manual',
+    stepCount: 3,
+    version: 1,
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'wf-2',
+    title: 'Deploy Pipeline',
+    description: 'Deploys to production',
+    enabled: false,
+    triggerType: 'event',
+    stepCount: 5,
+    version: 2,
+    updatedAt: '2026-01-02T00:00:00Z',
+  },
+  {
+    id: 'wf-3',
+    title: 'Test Suite',
+    description: 'Runs tests',
+    enabled: true,
+    triggerType: 'manual',
+    stepCount: 2,
+    version: 1,
+    updatedAt: '2026-01-03T00:00:00Z',
+  },
+]
+
 /** Get the task tab content container */
 function getTaskTab() {
   return screen.getByTestId('task-tab-content')
@@ -110,10 +163,25 @@ function getIssuesTab() {
   return screen.getByTestId('issues-tab-content')
 }
 
+/** Get the workflow tab content container */
+function getWorkflowTab() {
+  return screen.getByTestId('workflow-tab-content')
+}
+
 describe('RunAgentDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+
+    // Setup default workflow mock responses
+    mockUseWorkflows.mockReturnValue({
+      workflows: mockWorkflows,
+      isLoading: false,
+      isError: false,
+      error: null,
+    })
+    mockExecuteWorkflowMutate.mockReset()
+    mockExecuteWorkflowMutateAsync.mockReset()
 
     // Setup default mock responses
     mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockTaskPrompts))
@@ -158,9 +226,10 @@ describe('RunAgentDialog', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
 
-    // Should have both tabs
+    // Should have all three tabs
     expect(screen.getByRole('tab', { name: /task agent/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /issues agent/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /workflow/i })).toBeInTheDocument()
   })
 
   it('defaults to task tab when issueId is provided', async () => {
@@ -514,6 +583,170 @@ describe('RunAgentDialog', () => {
       // Verify promptName is NOT in the request
       const callBody = mockCreateIssuesAgentSession.mock.calls[0]?.[0]?.body
       expect(callBody).not.toHaveProperty('promptName')
+    })
+  })
+
+  describe('Workflow Tab', () => {
+    it('shows loading state while workflows load', async () => {
+      mockUseWorkflows.mockReturnValue({
+        workflows: [],
+        isLoading: true,
+        isError: false,
+        error: null,
+      })
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+      expect(within(workflowTab).getByText(/loading workflows/i)).toBeInTheDocument()
+    })
+
+    it('shows workflow dropdown and start button when loaded', async () => {
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+
+      // Should show a select for workflows and a start button
+      expect(
+        within(workflowTab).getByRole('combobox', { name: /select workflow/i })
+      ).toBeInTheDocument()
+      expect(
+        within(workflowTab).getByRole('button', { name: /start workflow/i })
+      ).toBeInTheDocument()
+    })
+
+    it('shows only enabled workflows in dropdown', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+
+      // Open the dropdown
+      await user.click(within(workflowTab).getByRole('combobox', { name: /select workflow/i }))
+
+      // Should show enabled workflows
+      expect(screen.getByRole('option', { name: /build pipeline/i })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /test suite/i })).toBeInTheDocument()
+
+      // Should NOT show disabled workflows
+      expect(screen.queryByRole('option', { name: /deploy pipeline/i })).not.toBeInTheDocument()
+    })
+
+    it('shows empty state when no enabled workflows', async () => {
+      mockUseWorkflows.mockReturnValue({
+        workflows: [{ id: 'wf-2', title: 'Deploy', enabled: false }],
+        isLoading: false,
+        isError: false,
+        error: null,
+      })
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+      expect(within(workflowTab).getByText(/no enabled workflows/i)).toBeInTheDocument()
+    })
+
+    it('executes workflow with issue context on start', async () => {
+      const user = userEvent.setup()
+      const onOpenChange = vi.fn()
+
+      mockExecuteWorkflowMutateAsync.mockResolvedValue({
+        executionId: 'exec-1',
+        workflowId: 'wf-1',
+        status: 'queued',
+      })
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={onOpenChange}
+          projectId="project-123"
+          issueId="issue-456"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+
+      // Click start workflow
+      await user.click(within(workflowTab).getByRole('button', { name: /start workflow/i }))
+
+      await waitFor(() => {
+        expect(mockExecuteWorkflowMutateAsync).toHaveBeenCalledWith({
+          workflowId: 'wf-1',
+          projectId: 'project-123',
+          input: { issueId: 'issue-456' },
+        })
+      })
+
+      // Should close dialog on success
+      await waitFor(() => {
+        expect(onOpenChange).toHaveBeenCalledWith(false)
+      })
+    })
+
+    it('executes workflow without issue context when no issueId', async () => {
+      const user = userEvent.setup()
+
+      mockExecuteWorkflowMutateAsync.mockResolvedValue({
+        executionId: 'exec-1',
+        workflowId: 'wf-1',
+        status: 'queued',
+      })
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          defaultTab="workflow"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const workflowTab = getWorkflowTab()
+      await user.click(within(workflowTab).getByRole('button', { name: /start workflow/i }))
+
+      await waitFor(() => {
+        expect(mockExecuteWorkflowMutateAsync).toHaveBeenCalledWith({
+          workflowId: 'wf-1',
+          projectId: 'project-123',
+        })
+      })
     })
   })
 
