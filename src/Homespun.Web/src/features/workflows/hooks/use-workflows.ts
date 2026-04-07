@@ -188,16 +188,25 @@ export function useExecuteWorkflow() {
   const telemetry = useTelemetry()
 
   return useMutation({
-    mutationFn: async (workflowId: string) => {
+    mutationFn: async ({
+      workflowId,
+      projectId,
+      input,
+    }: {
+      workflowId: string
+      projectId?: string
+      input?: Record<string, unknown>
+    }) => {
       const response = await Workflows.postApiWorkflowsByWorkflowIdExecute({
         path: { workflowId },
+        body: projectId ? { projectId, input } : undefined,
       })
       if (response.error || !response.data) {
         throw new Error('Failed to execute workflow')
       }
       return response.data
     },
-    onSuccess: (data, workflowId) => {
+    onSuccess: (data, { workflowId }) => {
       telemetry.trackEvent('workflow_executed', {
         workflowId,
         executionId: data.executionId ?? '',
@@ -205,7 +214,7 @@ export function useExecuteWorkflow() {
       queryClient.invalidateQueries({ queryKey: workflowExecutionsQueryKey(workflowId) })
       queryClient.invalidateQueries({ queryKey: workflowsQueryKey('') })
     },
-    onError: (error: Error, workflowId) => {
+    onError: (error: Error, { workflowId }) => {
       telemetry.trackEvent('workflow_execution_failed', {
         workflowId,
         error: error.message,

@@ -85,7 +85,7 @@ export function WorkflowList({ projectId }: WorkflowListProps) {
   }
 
   const handleExecute = (workflowId: string) => {
-    executeWorkflow.mutate(workflowId)
+    executeWorkflow.mutate({ workflowId })
   }
 
   const handleRetry = async () => {

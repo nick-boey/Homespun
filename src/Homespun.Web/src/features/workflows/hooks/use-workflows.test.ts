@@ -286,7 +286,7 @@ describe('useExecuteWorkflow', () => {
     vi.clearAllMocks()
   })
 
-  it('executes a workflow', async () => {
+  it('executes a workflow with workflowId only', async () => {
     const mock = Workflows.postApiWorkflowsByWorkflowIdExecute as Mock
     mock.mockResolvedValueOnce({
       data: { executionId: 'exec-new', workflowId: 'wf-1', status: 'queued' },
@@ -296,13 +296,39 @@ describe('useExecuteWorkflow', () => {
       wrapper: createWrapper(),
     })
 
-    result.current.mutate('wf-1')
+    result.current.mutate({ workflowId: 'wf-1' })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
 
     expect(mock).toHaveBeenCalledWith({ path: { workflowId: 'wf-1' } })
+  })
+
+  it('executes a workflow with projectId and input', async () => {
+    const mock = Workflows.postApiWorkflowsByWorkflowIdExecute as Mock
+    mock.mockResolvedValueOnce({
+      data: { executionId: 'exec-new', workflowId: 'wf-1', status: 'queued' },
+    })
+
+    const { result } = renderHook(() => useExecuteWorkflow(), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({
+      workflowId: 'wf-1',
+      projectId: 'proj-1',
+      input: { issueId: 'issue-123' },
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mock).toHaveBeenCalledWith({
+      path: { workflowId: 'wf-1' },
+      body: { projectId: 'proj-1', input: { issueId: 'issue-123' } },
+    })
   })
 })
 
