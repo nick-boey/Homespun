@@ -126,14 +126,15 @@ echo
 log_warn "Press Ctrl+C to stop both servers"
 
 # Wait for either process to exit
-wait -n "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
-EXIT_CODE=$?
+while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
+    sleep 1
+done
 
-# If one process exited, log which one and wait for cleanup
+# Determine which process exited
 if kill -0 "$BACKEND_PID" 2>/dev/null; then
-    log_warn "Frontend process exited (code: $EXIT_CODE). Stopping backend..."
+    wait "$FRONTEND_PID" 2>/dev/null || true
+    log_warn "Frontend process exited. Stopping backend..."
 else
-    log_warn "Backend process exited (code: $EXIT_CODE). Stopping frontend..."
+    wait "$BACKEND_PID" 2>/dev/null || true
+    log_warn "Backend process exited. Stopping frontend..."
 fi
-
-exit $EXIT_CODE
