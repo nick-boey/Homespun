@@ -2,10 +2,17 @@
  * Camera/viewport state management hook for Konva canvas.
  *
  * Handles panning, scrolling, and viewport bounds for the task graph canvas.
+ * Includes momentum/inertia scrolling and axis locking for touch interactions.
  */
 
-import { useCallback, useState, useMemo, useRef } from 'react'
+import { useCallback, useState, useMemo, useRef, useEffect } from 'react'
 import type Konva from 'konva'
+
+export const AXIS_LOCK_THRESHOLD = 5
+export const MOMENTUM_FRICTION = 0.95
+export const MOMENTUM_MIN_VELOCITY = 0.5
+export const VELOCITY_SAMPLE_COUNT = 5
+export const VELOCITY_SAMPLE_MAX_AGE = 100
 
 /**
  * Camera state representing the viewport position.
@@ -40,6 +47,15 @@ export function clampPosition(position: number, viewportSize: number, contentSiz
 
   const maxScroll = contentSize - viewportSize
   return Math.max(0, Math.min(position, maxScroll))
+}
+
+interface TouchState {
+  lastX: number
+  lastY: number
+  startX: number
+  startY: number
+  lockedAxis: 'x' | 'y' | null
+  samples: Array<{ dx: number; dy: number; time: number }>
 }
 
 /**
@@ -144,11 +160,35 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
     [contentSize.height, viewportSize.height]
   )
 
+  // Momentum animation state
+  const momentumRef = useRef<number | null>(null)
+  const panByRef = useRef(panBy)
+  useEffect(() => {
+    panByRef.current = panBy
+  }, [panBy])
+
+  const cancelMomentum = useCallback(() => {
+    if (momentumRef.current !== null) {
+      cancelAnimationFrame(momentumRef.current)
+      momentumRef.current = null
+    }
+  }, [])
+
   /**
    * Reset camera to origin.
    */
   const reset = useCallback(() => {
+    cancelMomentum()
     setCamera({ x: 0, y: 0 })
+  }, [cancelMomentum])
+
+  // Cancel momentum on unmount
+  useEffect(() => {
+    return () => {
+      if (momentumRef.current !== null) {
+        cancelAnimationFrame(momentumRef.current)
+      }
+    }
   }, [])
 
   /**
@@ -227,30 +267,75 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
     [panBy]
   )
 
-  // Touch panning state
-  const touchRef = useRef<{ lastX: number; lastY: number } | null>(null)
+  // Touch panning state with axis locking and velocity tracking
+  const touchRef = useRef<TouchState | null>(null)
 
   /**
    * Handler for touchstart — records initial touch position for panning.
+   * Cancels any in-progress momentum animation.
    * Only tracks single-finger touches (multi-touch is ignored for panning).
    */
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      touchRef.current = { lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
-    }
-  }, [])
+  const handleTouchStart = useCallback(
+    (e: TouchEvent) => {
+      cancelMomentum()
+      if (e.touches.length === 1) {
+        const x = e.touches[0].clientX
+        const y = e.touches[0].clientY
+        touchRef.current = {
+          lastX: x,
+          lastY: y,
+          startX: x,
+          startY: y,
+          lockedAxis: null,
+          samples: [],
+        }
+      }
+    },
+    [cancelMomentum]
+  )
 
   /**
    * Handler for touchmove — pans the camera by the touch delta.
+   * Implements axis locking and velocity sample tracking.
    * Calls preventDefault to stop the page from scrolling.
    */
   const handleTouchMove = useCallback(
     (e: TouchEvent) => {
       if (e.touches.length === 1 && touchRef.current) {
         e.preventDefault()
-        const dx = touchRef.current.lastX - e.touches[0].clientX
-        const dy = touchRef.current.lastY - e.touches[0].clientY
-        touchRef.current = { lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
+        const touch = touchRef.current
+        const clientX = e.touches[0].clientX
+        const clientY = e.touches[0].clientY
+
+        let dx = touch.lastX - clientX
+        let dy = touch.lastY - clientY
+
+        // Axis locking: determine lock after threshold is exceeded
+        if (touch.lockedAxis === null) {
+          const totalDx = Math.abs(clientX - touch.startX)
+          const totalDy = Math.abs(clientY - touch.startY)
+
+          if (totalDx >= AXIS_LOCK_THRESHOLD || totalDy >= AXIS_LOCK_THRESHOLD) {
+            touch.lockedAxis = totalDx >= totalDy ? 'x' : 'y'
+          }
+        }
+
+        // Apply axis lock
+        if (touch.lockedAxis === 'x') {
+          dy = 0
+        } else if (touch.lockedAxis === 'y') {
+          dx = 0
+        }
+
+        touch.lastX = clientX
+        touch.lastY = clientY
+
+        // Track velocity samples
+        touch.samples.push({ dx, dy, time: performance.now() })
+        if (touch.samples.length > VELOCITY_SAMPLE_COUNT) {
+          touch.samples.shift()
+        }
+
         panBy(dx, dy)
       }
     },
@@ -258,10 +343,57 @@ export function useCamera(contentSize: Size, viewportSize: Size) {
   )
 
   /**
-   * Handler for touchend — clears touch tracking state.
+   * Handler for touchend — computes velocity and starts momentum animation.
    */
   const handleTouchEnd = useCallback(() => {
+    const touch = touchRef.current
+    if (!touch) {
+      return
+    }
+
+    const lockedAxis = touch.lockedAxis
+    const now = performance.now()
+
+    // Compute weighted average velocity from recent samples
+    const recentSamples = touch.samples.filter((s) => now - s.time < VELOCITY_SAMPLE_MAX_AGE)
+
+    let vx = 0
+    let vy = 0
+
+    if (recentSamples.length > 0) {
+      for (const sample of recentSamples) {
+        vx += sample.dx
+        vy += sample.dy
+      }
+      vx /= recentSamples.length
+      vy /= recentSamples.length
+    }
+
     touchRef.current = null
+
+    // Only start momentum if velocity exceeds threshold
+    if (Math.abs(vx) < MOMENTUM_MIN_VELOCITY && Math.abs(vy) < MOMENTUM_MIN_VELOCITY) {
+      return
+    }
+
+    const animateMomentum = () => {
+      vx *= MOMENTUM_FRICTION
+      vy *= MOMENTUM_FRICTION
+
+      // Apply axis lock during momentum
+      const effectiveDx = lockedAxis === 'y' ? 0 : vx
+      const effectiveDy = lockedAxis === 'x' ? 0 : vy
+
+      panByRef.current(effectiveDx, effectiveDy)
+
+      if (Math.abs(vx) >= MOMENTUM_MIN_VELOCITY || Math.abs(vy) >= MOMENTUM_MIN_VELOCITY) {
+        momentumRef.current = requestAnimationFrame(animateMomentum)
+      } else {
+        momentumRef.current = null
+      }
+    }
+
+    momentumRef.current = requestAnimationFrame(animateMomentum)
   }, [])
 
   const touchHandlers: TouchHandlers = useMemo(

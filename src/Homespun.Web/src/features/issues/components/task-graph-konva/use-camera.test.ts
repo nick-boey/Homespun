@@ -4,9 +4,15 @@
  * Tests camera/viewport state management for Konva canvas panning.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useCamera, clampPosition } from './use-camera'
+import {
+  useCamera,
+  clampPosition,
+  AXIS_LOCK_THRESHOLD,
+  MOMENTUM_FRICTION,
+  MOMENTUM_MIN_VELOCITY,
+} from './use-camera'
 
 /** Create a mock TouchEvent-like object */
 function createMockTouchEvent(touches: Array<{ clientX: number; clientY: number }>): {
@@ -346,14 +352,15 @@ describe('useCamera', () => {
         )
       })
 
+      // Move only vertically to avoid axis lock ambiguity
       act(() => {
         result.current.touchHandlers.handleTouchMove(
-          createMockTouchEvent([{ clientX: 50, clientY: 150 }]) as unknown as TouchEvent
+          createMockTouchEvent([{ clientX: 100, clientY: 150 }]) as unknown as TouchEvent
         )
       })
 
-      // Dragged left 50px and up 50px => camera pans right/down by (50, 50)
-      expect(result.current.camera).toEqual({ x: 50, y: 50 })
+      // Dragged up 50px => camera pans down by 50, x unchanged
+      expect(result.current.camera).toEqual({ x: 0, y: 50 })
     })
 
     it('tracks cumulative touch moves', () => {
@@ -365,20 +372,21 @@ describe('useCamera', () => {
         )
       })
 
+      // Move only horizontally to test cumulative panning with axis lock
       act(() => {
         result.current.touchHandlers.handleTouchMove(
-          createMockTouchEvent([{ clientX: 180, clientY: 180 }]) as unknown as TouchEvent
+          createMockTouchEvent([{ clientX: 180, clientY: 200 }]) as unknown as TouchEvent
         )
       })
 
       act(() => {
         result.current.touchHandlers.handleTouchMove(
-          createMockTouchEvent([{ clientX: 160, clientY: 160 }]) as unknown as TouchEvent
+          createMockTouchEvent([{ clientX: 160, clientY: 200 }]) as unknown as TouchEvent
         )
       })
 
-      // Total delta: 40px in each direction
-      expect(result.current.camera).toEqual({ x: 40, y: 40 })
+      // Total delta: 40px horizontally
+      expect(result.current.camera).toEqual({ x: 40, y: 0 })
     })
 
     it('calls preventDefault on touchmove to prevent page scrolling', () => {
@@ -469,6 +477,333 @@ describe('useCamera', () => {
       expect(result.current.camera.y).toBeLessThanOrEqual(
         defaultContentSize.height - defaultViewportSize.height
       )
+    })
+  })
+
+  describe('touch axis locking', () => {
+    it('locks to vertical when vertical movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Move vertically past threshold, with small horizontal component
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([
+            { clientX: 98, clientY: 100 - AXIS_LOCK_THRESHOLD - 10 },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      // Should only pan vertically (y changes, x stays 0)
+      expect(result.current.camera.x).toBe(0)
+      expect(result.current.camera.y).toBeGreaterThan(0)
+    })
+
+    it('locks to horizontal when horizontal movement exceeds threshold first', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Move horizontally past threshold, with small vertical component
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([
+            { clientX: 100 - AXIS_LOCK_THRESHOLD - 10, clientY: 98 },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      // Should only pan horizontally (x changes, y stays 0)
+      expect(result.current.camera.x).toBeGreaterThan(0)
+      expect(result.current.camera.y).toBe(0)
+    })
+
+    it('moves freely in both axes below threshold', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Move less than threshold in both axes
+      const smallDelta = Math.floor(AXIS_LOCK_THRESHOLD / 2)
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([
+            { clientX: 100 - smallDelta, clientY: 100 - smallDelta },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      // Both axes should move since we're below the lock threshold
+      expect(result.current.camera.x).toBe(smallDelta)
+      expect(result.current.camera.y).toBe(smallDelta)
+    })
+
+    it('resets axis lock on new touch gesture', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // First gesture: lock to vertical
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 100, clientY: 80 }]) as unknown as TouchEvent
+        )
+      })
+      act(() => {
+        result.current.touchHandlers.handleTouchEnd()
+      })
+
+      const afterFirst = { ...result.current.camera }
+
+      // Second gesture: lock to horizontal
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 200, clientY: 200 }]) as unknown as TouchEvent
+        )
+      })
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([
+            { clientX: 200 - AXIS_LOCK_THRESHOLD - 10, clientY: 198 },
+          ]) as unknown as TouchEvent
+        )
+      })
+
+      // X should have changed from horizontal swipe, Y should be same as after first gesture
+      expect(result.current.camera.x).toBeGreaterThan(afterFirst.x)
+      expect(result.current.camera.y).toBe(afterFirst.y)
+    })
+  })
+
+  describe('touch momentum', () => {
+    let rafCallbacks: Map<number, FrameRequestCallback>
+    let rafId: number
+
+    beforeEach(() => {
+      rafCallbacks = new Map()
+      rafId = 0
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        const id = ++rafId
+        rafCallbacks.set(id, cb)
+        return id
+      })
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+        rafCallbacks.delete(id)
+      })
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    function flushRaf(frames: number = 1) {
+      for (let i = 0; i < frames; i++) {
+        const pending = new Map(rafCallbacks)
+        rafCallbacks.clear()
+        for (const cb of pending.values()) {
+          cb(performance.now())
+        }
+      }
+    }
+
+    function simulateFastSwipe(
+      handlers: ReturnType<typeof useCamera>['touchHandlers'],
+      direction: 'up' | 'down' | 'left' | 'right',
+      speed: number = 20
+    ) {
+      const startX = 200
+      const startY = 200
+
+      act(() => {
+        handlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: startX, clientY: startY }]) as unknown as TouchEvent
+        )
+      })
+
+      // Generate several fast move events to build velocity
+      for (let i = 1; i <= 5; i++) {
+        const dx = direction === 'left' ? -speed * i : direction === 'right' ? speed * i : 0
+        const dy = direction === 'up' ? -speed * i : direction === 'down' ? speed * i : 0
+        act(() => {
+          handlers.handleTouchMove(
+            createMockTouchEvent([
+              { clientX: startX + dx, clientY: startY + dy },
+            ]) as unknown as TouchEvent
+          )
+        })
+      }
+
+      act(() => {
+        handlers.handleTouchEnd()
+      })
+    }
+
+    it('continues scrolling with momentum after a fast swipe', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+      const posAfterSwipe = result.current.camera.y
+
+      // Flush several rAF frames — camera should continue moving
+      act(() => {
+        flushRaf(5)
+      })
+
+      expect(result.current.camera.y).toBeGreaterThan(posAfterSwipe)
+    })
+
+    it('decelerates and eventually stops', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+
+      // Flush enough frames for momentum to stop
+      // With friction 0.95 and min velocity 0.5, even a velocity of 100 stops within ~200 frames
+      let prevY = result.current.camera.y
+      let stopped = false
+      for (let frame = 0; frame < 300; frame++) {
+        act(() => {
+          flushRaf(1)
+        })
+        const currentY = result.current.camera.y
+        if (currentY === prevY) {
+          stopped = true
+          break
+        }
+        prevY = currentY
+      }
+
+      expect(stopped).toBe(true)
+    })
+
+    it('respects axis lock during momentum', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      // Swipe mostly vertically to trigger vertical axis lock
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+
+      act(() => {
+        flushRaf(5)
+      })
+
+      // X should not have changed (axis locked to vertical)
+      expect(result.current.camera.x).toBe(0)
+      expect(result.current.camera.y).toBeGreaterThan(0)
+    })
+
+    it('cancels momentum when new touch begins', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+
+      // Let momentum run a few frames
+      act(() => {
+        flushRaf(3)
+      })
+      const posBeforeNewTouch = result.current.camera.y
+
+      // Start new touch — should cancel momentum
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Flush more frames — position should not change (momentum cancelled)
+      act(() => {
+        flushRaf(5)
+      })
+
+      expect(result.current.camera.y).toBe(posBeforeNewTouch)
+    })
+
+    it('does not start momentum for slow/stationary touchend', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      act(() => {
+        result.current.touchHandlers.handleTouchStart(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      // Single slow move (below minimum velocity)
+      act(() => {
+        result.current.touchHandlers.handleTouchMove(
+          createMockTouchEvent([{ clientX: 100, clientY: 100 }]) as unknown as TouchEvent
+        )
+      })
+
+      act(() => {
+        result.current.touchHandlers.handleTouchEnd()
+      })
+
+      const posAfterEnd = { ...result.current.camera }
+
+      act(() => {
+        flushRaf(5)
+      })
+
+      // Position should not change — no momentum started
+      expect(result.current.camera).toEqual(posAfterEnd)
+    })
+
+    it('cancels momentum on reset()', () => {
+      const { result } = renderHook(() => useCamera(defaultContentSize, defaultViewportSize))
+
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+
+      act(() => {
+        flushRaf(2)
+      })
+
+      act(() => {
+        result.current.reset()
+      })
+
+      act(() => {
+        flushRaf(5)
+      })
+
+      // Should be at origin after reset, momentum should not have moved it
+      expect(result.current.camera).toEqual({ x: 0, y: 0 })
+    })
+
+    it('cancels momentum on unmount', () => {
+      const { result, unmount } = renderHook(() =>
+        useCamera(defaultContentSize, defaultViewportSize)
+      )
+
+      simulateFastSwipe(result.current.touchHandlers, 'up')
+
+      // Unmount should cancel the animation frame
+      unmount()
+
+      // Flushing should not throw (callbacks were cancelled)
+      expect(() => {
+        flushRaf(5)
+      }).not.toThrow()
+    })
+
+    it('exports momentum constants', () => {
+      expect(MOMENTUM_FRICTION).toBe(0.95)
+      expect(MOMENTUM_MIN_VELOCITY).toBe(0.5)
+      expect(AXIS_LOCK_THRESHOLD).toBe(5)
     })
   })
 })
