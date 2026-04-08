@@ -118,13 +118,17 @@ export function RunAgentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-[80vh] w-[80vw] flex-col overflow-hidden sm:h-[60vw] sm:w-[60vw]">
+      <DialogContent className="flex h-[80vh] w-[80vw] max-w-none flex-col overflow-hidden sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
           <DialogDescription>Configure and start an agent session</DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex flex-1 flex-col overflow-hidden"
+        >
           <TabsList variant="line">
             <TabsTrigger value="task">Task Agent</TabsTrigger>
             <TabsTrigger value="issues">Issues Agent</TabsTrigger>
@@ -135,7 +139,7 @@ export function RunAgentDialog({
             value="task"
             forceMount
             data-testid="task-tab-content"
-            className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
+            className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
           >
             <TaskAgentTabContent
               projectId={projectId}
@@ -150,7 +154,7 @@ export function RunAgentDialog({
             value="issues"
             forceMount
             data-testid="issues-tab-content"
-            className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
+            className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
           >
             <IssuesAgentTabContent
               projectId={projectId}
@@ -165,7 +169,7 @@ export function RunAgentDialog({
             value="workflow"
             forceMount
             data-testid="workflow-tab-content"
-            className="flex-1 overflow-y-auto data-[state=inactive]:hidden"
+            className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
           >
             <WorkflowTabContent
               projectId={projectId}
@@ -351,7 +355,7 @@ function TaskAgentTabContent({
   const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptName
 
   return (
-    <div className="space-y-4 py-4">
+    <div className="flex flex-1 flex-col gap-4 overflow-hidden py-4">
       {/* Loading state */}
       {(projectLoading || promptsLoading) && (
         <div className="flex items-center justify-center gap-2 py-8">
@@ -454,7 +458,7 @@ function TaskAgentTabContent({
             value={userInstructions}
             onChange={(e) => setUserInstructions(e.target.value)}
             disabled={isLoading}
-            className="min-h-[80px] resize-none"
+            className="flex-1 resize-none overflow-y-auto"
           />
 
           {/* Advanced settings */}
@@ -650,7 +654,7 @@ function IssuesAgentTabContent({
   ])
 
   return (
-    <div className="space-y-4 py-4">
+    <div className="flex flex-1 flex-col gap-4 overflow-hidden py-4">
       {/* Prompt selector */}
       <div className="space-y-2">
         {promptsLoading ? (
@@ -718,7 +722,7 @@ function IssuesAgentTabContent({
         value={userInstructions}
         onChange={(e) => setUserInstructions(e.target.value)}
         disabled={createSession.isPending}
-        className="min-h-[80px] resize-none"
+        className="flex-1 resize-none overflow-y-auto"
       />
 
       <p className="text-muted-foreground text-xs">
