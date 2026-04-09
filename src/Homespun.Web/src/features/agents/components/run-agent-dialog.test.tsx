@@ -806,4 +806,26 @@ describe('RunAgentDialog', () => {
       expect(textarea).toHaveValue('Task instructions')
     })
   })
+
+  it('applies responsive classes to start button for mobile layout', async () => {
+    mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockTaskPrompts))
+    mockUseWorkflows.mockReturnValue({
+      workflows: mockWorkflows,
+      isLoading: false,
+    })
+
+    render(<RunAgentDialog projectId="proj-1" open={true} onOpenChange={vi.fn()} />, {
+      wrapper: createWrapper(),
+    })
+
+    const taskTab = getTaskTab()
+
+    await waitFor(() => {
+      expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
+    })
+
+    const startButton = within(taskTab).getByRole('button', { name: /start agent/i })
+    expect(startButton.className).toMatch(/w-full/)
+    expect(startButton.className).toMatch(/sm:w-auto/)
+  })
 })

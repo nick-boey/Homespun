@@ -405,7 +405,7 @@ function TaskAgentTabContent({
       {!projectLoading && !promptsLoading && !isError && (
         <>
           {/* Main controls row */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Prompt selector */}
             <PromptSelector
               prompts={prompts}
@@ -441,7 +441,7 @@ function TaskAgentTabContent({
               size="sm"
               onClick={handleStart}
               disabled={isLoading || !isReady}
-              className="gap-1.5"
+              className="w-full gap-1.5 sm:w-auto"
             >
               {runAgent.isPending ? (
                 <Loader variant="circular" size="sm" />
@@ -663,7 +663,7 @@ function IssuesAgentTabContent({
             <span className="text-muted-foreground text-sm">Loading prompts...</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <PromptSelector
               prompts={prompts}
               effectivePromptName={effectivePromptName}
@@ -703,7 +703,7 @@ function IssuesAgentTabContent({
               size="sm"
               onClick={handleStart}
               disabled={createSession.isPending}
-              className="gap-1.5"
+              className="w-full gap-1.5 sm:w-auto"
             >
               {createSession.isPending ? (
                 <Loader variant="circular" size="sm" />
@@ -827,7 +827,7 @@ function WorkflowTabContent({ projectId, issueId, onOpenChange }: WorkflowTabCon
 
   return (
     <div className="space-y-4 py-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Select
           value={effectiveWorkflowId}
           onValueChange={setSelectedWorkflowId}
@@ -849,7 +849,7 @@ function WorkflowTabContent({ projectId, issueId, onOpenChange }: WorkflowTabCon
           size="sm"
           onClick={handleStart}
           disabled={executeWorkflow.isPending || !effectiveWorkflowId}
-          className="gap-1.5"
+          className="w-full gap-1.5 sm:w-auto"
         >
           {executeWorkflow.isPending ? (
             <Loader variant="circular" size="sm" />
