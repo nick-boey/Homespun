@@ -24,7 +24,7 @@ public interface IFleecePostMergeService
 /// Implementation of post-merge processing service.
 /// </summary>
 public class FleecePostMergeService(
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IBranchIdBackgroundService branchIdBackgroundService,
     ILogger<FleecePostMergeService> logger) : IFleecePostMergeService
 {

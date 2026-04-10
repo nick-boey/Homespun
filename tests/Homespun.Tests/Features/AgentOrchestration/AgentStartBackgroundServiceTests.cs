@@ -24,7 +24,7 @@ public class AgentStartBackgroundServiceTests
     private Mock<IGitCloneService> _mockCloneService = null!;
     private Mock<IClaudeSessionService> _mockSessionService = null!;
     private Mock<IAgentPromptService> _mockAgentPromptService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IFleeceIssuesSyncService> _mockIssuesSyncService = null!;
     private Mock<IBaseBranchResolver> _mockBaseBranchResolver = null!;
     private Mock<IHubContext<NotificationHub>> _mockHubContext = null!;
@@ -44,7 +44,7 @@ public class AgentStartBackgroundServiceTests
         _mockCloneService = new Mock<IGitCloneService>();
         _mockSessionService = new Mock<IClaudeSessionService>();
         _mockAgentPromptService = new Mock<IAgentPromptService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockIssuesSyncService = new Mock<IFleeceIssuesSyncService>();
         _mockBaseBranchResolver = new Mock<IBaseBranchResolver>();
         _mockWorkflowSessionCallback = new Mock<IWorkflowSessionCallback>();
@@ -62,7 +62,7 @@ public class AgentStartBackgroundServiceTests
             .Returns(_mockSessionService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IAgentPromptService)))
             .Returns(_mockAgentPromptService.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IFleeceService)))
+        scopedServiceProvider.Setup(x => x.GetService(typeof(IProjectFleeceService)))
             .Returns(_mockFleeceService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IFleeceIssuesSyncService)))
             .Returns(_mockIssuesSyncService.Object);

@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Git;
@@ -41,7 +40,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
 {
     private readonly IProjectService _projectService;
     private readonly IClaudeSessionService _sessionService;
-    private readonly IFleeceService _fleeceService;
+    private readonly IProjectFleeceService _fleeceService;
     private readonly IFleeceChangeDetectionService _changeDetectionService;
     private readonly IFleeceConflictDetectionService _conflictDetectionService;
     private readonly ILogger<FleeceChangeApplicationService> _logger;
@@ -53,7 +52,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     public FleeceChangeApplicationService(
         IProjectService projectService,
         IClaudeSessionService sessionService,
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         IFleeceChangeDetectionService changeDetectionService,
         IFleeceConflictDetectionService conflictDetectionService,
         ILogger<FleeceChangeApplicationService> logger)
@@ -586,10 +585,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             }
 
             // Save merged result to main branch
-            var serializer = new JsonlSerializer();
-            var schemaValidator = new SchemaValidator();
-            var storage = new JsonlStorageService(mainPath, serializer, schemaValidator);
-            await storage.SaveIssuesAsync(mergedIssues, cancellationToken);
+            await FleeceFileHelper.SaveIssuesAsync(mainPath, mergedIssues, cancellationToken);
 
             _logger.LogInformation("Saved {Count} merged issues to main branch", mergedIssues.Count);
 
@@ -630,10 +626,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
 
         try
         {
-            var serializer = new JsonlSerializer();
-            var schemaValidator = new SchemaValidator();
-            var storage = new JsonlStorageService(path, serializer, schemaValidator);
-            var issues = await storage.LoadIssuesAsync(cancellationToken);
+            var issues = await FleeceFileHelper.LoadIssuesAsync(path, cancellationToken);
             return issues.ToList();
         }
         catch (Exception ex)
@@ -771,13 +764,13 @@ public class FleeceConflictDetectionService : IFleeceConflictDetectionService
 {
     private readonly IProjectService _projectService;
     private readonly IClaudeSessionService _sessionService;
-    private readonly IFleeceService _fleeceService;
+    private readonly IProjectFleeceService _fleeceService;
     private readonly ILogger<FleeceConflictDetectionService> _logger;
 
     public FleeceConflictDetectionService(
         IProjectService projectService,
         IClaudeSessionService sessionService,
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         ILogger<FleeceConflictDetectionService> logger)
     {
         _projectService = projectService;

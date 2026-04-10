@@ -52,7 +52,7 @@ public class BranchIdBackgroundService(
     {
         using var scope = serviceProvider.CreateScope();
         var branchIdGenerator = scope.ServiceProvider.GetRequiredService<IBranchIdGeneratorService>();
-        var fleeceService = scope.ServiceProvider.GetRequiredService<IFleeceService>();
+        var fleeceService = scope.ServiceProvider.GetRequiredService<IProjectFleeceService>();
         var projectService = scope.ServiceProvider.GetRequiredService<IProjectService>();
         var hubContext =
             scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();

@@ -11,7 +11,7 @@ namespace Homespun.Tests.Features.AgentOrchestration;
 [TestFixture]
 public class QueueCoordinatorTests
 {
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IAgentStartBackgroundService> _mockAgentStartService = null!;
     private Mock<IHubContext<NotificationHub>> _mockNotificationHub = null!;
     private Mock<ILogger<QueueCoordinator>> _mockLogger = null!;
@@ -27,7 +27,7 @@ public class QueueCoordinatorTests
     [SetUp]
     public void SetUp()
     {
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockAgentStartService = new Mock<IAgentStartBackgroundService>();
         _mockNotificationHub = new Mock<IHubContext<NotificationHub>>();
         _mockLogger = new Mock<ILogger<QueueCoordinator>>();

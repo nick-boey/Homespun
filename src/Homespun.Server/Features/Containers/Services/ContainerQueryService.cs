@@ -15,14 +15,14 @@ public class ContainerQueryService : IContainerQueryService
 
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IProjectService _projectService;
-    private readonly IFleeceService _fleeceService;
+    private readonly IProjectFleeceService _fleeceService;
     private readonly IClaudeSessionService _sessionService;
     private readonly ILogger<ContainerQueryService> _logger;
 
     public ContainerQueryService(
         IAgentExecutionService agentExecutionService,
         IProjectService projectService,
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         IClaudeSessionService sessionService,
         ILogger<ContainerQueryService> logger)
     {

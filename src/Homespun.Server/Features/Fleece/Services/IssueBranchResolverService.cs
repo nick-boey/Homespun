@@ -11,7 +11,7 @@ namespace Homespun.Features.Fleece.Services;
 public class IssueBranchResolverService(
     IDataStore dataStore,
     IGitCloneService gitCloneService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     ILogger<IssueBranchResolverService> logger) : IIssueBranchResolverService
 {
     /// <inheritdoc />

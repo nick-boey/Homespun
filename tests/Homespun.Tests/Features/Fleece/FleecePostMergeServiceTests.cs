@@ -11,7 +11,7 @@ namespace Homespun.Tests.Features.Fleece;
 [TestFixture]
 public class FleecePostMergeServiceTests
 {
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IBranchIdBackgroundService> _branchIdBackgroundServiceMock = null!;
     private FleecePostMergeService _service = null!;
 
@@ -22,7 +22,7 @@ public class FleecePostMergeServiceTests
     [SetUp]
     public void SetUp()
     {
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _branchIdBackgroundServiceMock = new Mock<IBranchIdBackgroundService>();
 
         _service = new FleecePostMergeService(

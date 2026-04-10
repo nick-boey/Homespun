@@ -8,11 +8,11 @@ namespace Homespun.Features.GitHub;
 /// <summary>
 /// Service for linking Fleece issues to pull requests.
 /// Handles the link from PR.BeadsIssueId to the issue.
-/// Uses IFleeceService for direct file access.
+/// Uses IProjectFleeceService for direct file access.
 /// </summary>
 public class IssuePrLinkingService(
     IDataStore dataStore,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     ILogger<IssuePrLinkingService> logger)
     : IIssuePrLinkingService
 {

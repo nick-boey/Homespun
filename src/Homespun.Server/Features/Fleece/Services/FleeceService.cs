@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Shared.Requests;
@@ -9,66 +8,87 @@ using Homespun.Shared.Requests;
 namespace Homespun.Features.Fleece.Services;
 
 /// <summary>
-/// Project-aware implementation of IFleeceService.
+/// Project-aware implementation of IProjectFleeceService.
 /// Uses a write-through cache pattern: reads are served from an in-memory cache,
 /// while writes update the cache immediately and queue persistence to disk
 /// via the <see cref="IIssueSerializationQueue"/>.
 /// </summary>
-public sealed class FleeceService : IFleeceService, IDisposable
+public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
 {
-    private readonly ConcurrentDictionary<string, IIssueService> _issueServices = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, IDependencyService> _dependencyServices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, IFleeceService> _fleeceServices = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, Issue>> _issueCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
-    private readonly IJsonlSerializer _serializer;
-    private readonly IIdGenerator _idGenerator;
-    private readonly IGitConfigService _gitConfigService;
-    private readonly ITagService _tagService;
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly IIssueHistoryService _historyService;
-    private readonly ILogger<FleeceService> _logger;
+    private readonly ILogger<ProjectFleeceService> _logger;
     private bool _disposed;
 
-    public FleeceService(
+    public ProjectFleeceService(
         IIssueSerializationQueue serializationQueue,
         IIssueHistoryService historyService,
-        ILogger<FleeceService> logger)
+        ILogger<ProjectFleeceService> logger)
     {
         _serializationQueue = serializationQueue;
         _historyService = historyService;
         _logger = logger;
-        _serializer = new JsonlSerializer();
-        _idGenerator = new Sha256IdGenerator();
-        _gitConfigService = new GitConfigService();
-        _tagService = new TagService();
     }
 
-    private IIssueService GetOrCreateIssueService(string projectPath)
+    private IFleeceService GetOrCreateFleeceService(string projectPath)
     {
-        return _issueServices.GetOrAdd(projectPath, path =>
+        return _fleeceServices.GetOrAdd(projectPath, path =>
         {
-            _logger.LogDebug("Creating new IIssueService for project: {ProjectPath}", path);
-
-            var schemaValidator = new SchemaValidator();
-            var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
-            return new IssueService(storageService, _idGenerator, _gitConfigService, _tagService);
-        });
-    }
-
-    private IDependencyService GetOrCreateDependencyService(string projectPath)
-    {
-        return _dependencyServices.GetOrAdd(projectPath, _ =>
-        {
-            var issueService = GetOrCreateIssueService(projectPath);
-            var validationService = new ValidationService(issueService);
-            return new DependencyService(issueService, validationService);
+            _logger.LogDebug("Creating new IFleeceService for project: {ProjectPath}", path);
+            var filePath = ResolveJsonlFilePath(path);
+            var settingsService = new SettingsService(path);
+            var gitConfigService = new GitConfigService(settingsService);
+            return FleeceService.ForFile(filePath, settingsService, gitConfigService);
         });
     }
 
     /// <summary>
-    /// Ensures the in-memory cache for a project is populated from Fleece.Core (disk).
-    /// Only loads on first access; subsequent calls are no-ops.
+    /// Resolves the JSONL file path for a project, using a stable filename.
+    /// ForFile() with hash-patterned filenames (issues_*.jsonl) triggers internal hash-based
+    /// rename-on-save behavior that breaks subsequent reads. Using a stable name avoids this.
+    /// If existing hash-named files exist, consolidates them into the stable file.
     /// </summary>
+    private static readonly string StableFileName = "issues.jsonl";
+
+    private string ResolveJsonlFilePath(string projectPath)
+    {
+        var fleeceDir = Path.Combine(projectPath, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+
+        var stableFilePath = Path.Combine(fleeceDir, StableFileName);
+
+        // If stable file already exists and no other files, use it directly
+        var hashFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
+        if (hashFiles.Length == 0 && File.Exists(stableFilePath))
+            return stableFilePath;
+
+        if (hashFiles.Length > 0)
+        {
+            // Consolidate hash-named files into the stable file
+            _logger.LogDebug("Consolidating {Count} JSONL files into {StableFile} for project: {ProjectPath}",
+                hashFiles.Length, StableFileName, projectPath);
+            var issues = FleeceFileHelper.LoadIssuesAsync(projectPath).GetAwaiter().GetResult();
+
+            // Remove hash-named files
+            foreach (var file in hashFiles) File.Delete(file);
+
+            // Write consolidated content to stable file
+            var lines = issues.Select(issue =>
+                System.Text.Json.JsonSerializer.Serialize(issue, FleeceFileHelper.SerializerOptions));
+            File.WriteAllLines(stableFilePath, lines);
+        }
+        else if (!File.Exists(stableFilePath))
+        {
+            // No files at all — create empty stable file
+            File.WriteAllText(stableFilePath, "");
+        }
+
+        return stableFilePath;
+    }
+
     private async Task<ConcurrentDictionary<string, Issue>> EnsureCacheLoadedAsync(string projectPath, CancellationToken ct)
     {
         var cache = _issueCache.GetOrAdd(projectPath, _ => new ConcurrentDictionary<string, Issue>(StringComparer.OrdinalIgnoreCase));
@@ -76,14 +96,13 @@ public sealed class FleeceService : IFleeceService, IDisposable
         if (!_cacheInitialized.TryGetValue(projectPath, out var initialized) || !initialized)
         {
             _logger.LogDebug("Cache miss for project {ProjectPath}, loading from disk", projectPath);
-            var service = GetOrCreateIssueService(projectPath);
+            var service = GetOrCreateFleeceService(projectPath);
             var allIssues = await service.GetAllAsync(ct);
             foreach (var issue in allIssues)
             {
                 cache[issue.Id] = issue;
             }
             _cacheInitialized[projectPath] = true;
-
             _logger.LogDebug("Loaded {Count} issues into cache for project: {ProjectPath}", allIssues.Count, projectPath);
         }
         else
@@ -99,18 +118,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default)
     {
         _logger.LogDebug("Reloading issues from disk for project: {ProjectPath}", projectPath);
-
-        // Remove the cached services so fresh ones read current disk state
-        _issueServices.TryRemove(projectPath, out _);
-        _dependencyServices.TryRemove(projectPath, out _);
-
-        // Clear the cache initialized flag and existing cache
+        _fleeceServices.TryRemove(projectPath, out _);
         _cacheInitialized.TryRemove(projectPath, out _);
         _issueCache.TryRemove(projectPath, out _);
-
-        // Force re-read from disk
         await EnsureCacheLoadedAsync(projectPath, ct);
-
         _logger.LogInformation("Reloaded issues from disk for project: {ProjectPath}", projectPath);
     }
 
@@ -125,32 +136,15 @@ public sealed class FleeceService : IFleeceService, IDisposable
     }
 
     public async Task<IReadOnlyList<Issue>> ListIssuesAsync(
-        string projectPath,
-        IssueStatus? status = null,
-        IssueType? type = null,
-        int? priority = null,
-        CancellationToken ct = default)
+        string projectPath, IssueStatus? status = null, IssueType? type = null, int? priority = null, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
         IEnumerable<Issue> issues = cache.Values;
 
-        if (status.HasValue)
-        {
-            issues = issues.Where(i => i.Status == status.Value);
-        }
+        if (status.HasValue) issues = issues.Where(i => i.Status == status.Value);
+        if (type.HasValue) issues = issues.Where(i => i.Type == type.Value);
+        if (priority.HasValue) issues = issues.Where(i => i.Priority == priority.Value);
 
-        if (type.HasValue)
-        {
-            issues = issues.Where(i => i.Type == type.Value);
-        }
-
-        if (priority.HasValue)
-        {
-            issues = issues.Where(i => i.Priority == priority.Value);
-        }
-
-        // If no filters specified, exclude deleted/archived/closed/complete (matching original behavior)
         if (!status.HasValue && !type.HasValue && !priority.HasValue)
         {
             issues = issues.Where(i => i.Status is not (IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed or IssueStatus.Complete));
@@ -162,30 +156,18 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task<IReadOnlyList<Issue>> GetReadyIssuesAsync(string projectPath, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
         var allIssues = cache.Values.ToList();
         var openIssues = allIssues.Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review).ToList();
-
-        // Filter to issues that have no blocking parent issues (parents that are not Complete/Closed)
         var issueMap = allIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         return openIssues
             .Where(issue =>
             {
-                // If no parent issues, it's ready
-                if (issue.ParentIssues.Count == 0)
-                {
-                    return true;
-                }
-
-                // Check all parent issues - if all are Complete or Closed, this issue is ready
+                if (issue.ParentIssues.Count == 0) return true;
                 return issue.ParentIssues.All(parentRef =>
                 {
                     if (issueMap.TryGetValue(parentRef.ParentIssue, out var parent))
-                    {
                         return parent.Status is IssueStatus.Complete or IssueStatus.Closed;
-                    }
-                    // If parent doesn't exist, assume it's done
                     return true;
                 });
             })
@@ -195,100 +177,53 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task<Issue?> GetPriorSiblingAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        if (!cache.TryGetValue(issueId, out var issue)) return null;
+        if (issue.ParentIssues.Count == 0) return null;
 
-        // Get the target issue
-        if (!cache.TryGetValue(issueId, out var issue))
-        {
-            return null;
-        }
-
-        // If no parents, there can be no siblings
-        if (issue.ParentIssues.Count == 0)
-        {
-            return null;
-        }
-
-        // For each parent, find the immediate prior sibling
         foreach (var parentRef in issue.ParentIssues)
         {
             var parentId = parentRef.ParentIssue;
             var targetSortOrder = parentRef.SortOrder ?? "0";
-
-            // Find all siblings under the same parent
-            var siblings = cache.Values
+            var sibling = cache.Values
                 .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
-                .Select(i => new
-                {
-                    Issue = i,
-                    SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
-                })
+                .Select(i => new { Issue = i, SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0" })
                 .Where(s => string.Compare(s.SortOrder, targetSortOrder, StringComparison.Ordinal) < 0)
                 .OrderByDescending(s => s.SortOrder, StringComparer.Ordinal)
                 .FirstOrDefault();
-
-            if (siblings != null)
-            {
-                return siblings.Issue;
-            }
+            if (sibling != null) return sibling.Issue;
         }
-
         return null;
     }
 
     public async Task<IReadOnlyList<Issue>> GetChildrenAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Find all issues that have this issueId as a parent
-        var children = cache.Values
+        return cache.Values
             .Where(i => i.ParentIssues.Any(p => p.ParentIssue == issueId))
-            .Select(i => new
-            {
-                Issue = i,
-                SortOrder = i.ParentIssues.First(p => p.ParentIssue == issueId).SortOrder ?? "0"
-            })
+            .Select(i => new { Issue = i, SortOrder = i.ParentIssues.First(p => p.ParentIssue == issueId).SortOrder ?? "0" })
             .OrderBy(c => c.SortOrder, StringComparer.Ordinal)
             .Select(c => c.Issue)
             .ToList();
-
-        return children;
     }
 
     public async Task<BlockingIssuesResult> GetBlockingIssuesAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        if (!cache.TryGetValue(issueId, out var issue)) return new BlockingIssuesResult([], []);
 
-        // Get the target issue
-        if (!cache.TryGetValue(issueId, out var issue))
-        {
-            return new BlockingIssuesResult([], []);
-        }
+        bool IsOpenStatus(IssueStatus s) => s is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
 
-        // Define open statuses that would block
-        bool IsOpenStatus(IssueStatus status) =>
-            status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
-
-        // Get open children
         var children = await GetChildrenAsync(projectPath, issueId, ct);
         var openChildren = children.Where(c => IsOpenStatus(c.Status)).ToList();
-
-        // Get open prior siblings (only for parents with Series execution mode)
         var openPriorSiblings = new List<Issue>();
 
         foreach (var parentRef in issue.ParentIssues)
         {
             var parentId = parentRef.ParentIssue;
-
-            // Skip prior sibling check for parallel parents — parallel children can run concurrently
-            if (cache.TryGetValue(parentId, out var parentIssue)
-                && parentIssue.ExecutionMode == ExecutionMode.Parallel)
-            {
+            if (cache.TryGetValue(parentId, out var parentIssue) && parentIssue.ExecutionMode == ExecutionMode.Parallel)
                 continue;
-            }
 
             var targetSortOrder = parentRef.SortOrder ?? "0";
-
-            // Find all prior siblings under this parent
             var priorSiblings = cache.Values
                 .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
                 .Where(i =>
@@ -298,13 +233,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 })
                 .Where(i => IsOpenStatus(i.Status))
                 .ToList();
-
             openPriorSiblings.AddRange(priorSiblings);
         }
 
-        // Remove duplicates (in case issue has multiple parents with overlapping siblings)
         openPriorSiblings = openPriorSiblings.DistinctBy(i => i.Id).ToList();
-
         return new BlockingIssuesResult(openChildren, openPriorSiblings);
     }
 
@@ -313,143 +245,72 @@ public sealed class FleeceService : IFleeceService, IDisposable
     #region Write Operations
 
     public async Task<Issue> CreateIssueAsync(
-        string projectPath,
-        string title,
-        IssueType type,
-        string? description = null,
-        int? priority = null,
-        ExecutionMode? executionMode = null,
-        IssueStatus? status = null,
-        string? assignedTo = null,
-        CancellationToken ct = default)
+        string projectPath, string title, IssueType type, string? description = null,
+        int? priority = null, ExecutionMode? executionMode = null, IssueStatus? status = null,
+        string? assignedTo = null, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        var service = GetOrCreateFleeceService(projectPath);
+        var issue = await service.CreateAsync(title: title, type: type, description: description,
+            priority: priority, executionMode: executionMode, assignedTo: assignedTo, cancellationToken: ct);
 
-        // Use Fleece.Core to create the issue (this also persists to disk, but we'll
-        // rely on this for generating the ID and applying defaults)
-        var service = GetOrCreateIssueService(projectPath);
-        var issue = await service.CreateAsync(
-            title: title,
-            type: type,
-            description: description,
-            priority: priority,
-            executionMode: executionMode,
-            assignedTo: assignedTo,
-            cancellationToken: ct);
-
-        // If a specific status was requested (other than the default Open), update the issue
         if (status.HasValue && status.Value != IssueStatus.Open)
-        {
             issue = await service.UpdateAsync(issue.Id, status: status.Value, cancellationToken: ct);
-        }
 
-        // Update the in-memory cache immediately
         cache[issue.Id] = issue;
 
-        // Queue an async re-serialization to ensure consistency
         await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: issue.Id,
-            Type: WriteOperationType.Create,
+            ProjectPath: projectPath, IssueId: issue.Id, Type: WriteOperationType.Create,
             WriteAction: async (innerCt) =>
             {
-                // The issue is already persisted by the CreateAsync call above.
-                // This queue entry serves as a consistency checkpoint - if the initial
-                // write was interrupted, the background service ensures eventual persistence.
-                var svc = GetOrCreateIssueService(projectPath);
+                var svc = GetOrCreateFleeceService(projectPath);
                 var existing = await svc.GetByIdAsync(issue.Id, innerCt);
                 if (existing == null)
-                {
-                    // Re-create if the initial write was lost
-                    await svc.CreateAsync(
-                        title: issue.Title,
-                        type: issue.Type,
-                        description: issue.Description,
-                        priority: issue.Priority,
-                        executionMode: issue.ExecutionMode,
-                        cancellationToken: innerCt);
-                }
+                    await svc.CreateAsync(title: issue.Title, type: issue.Type, description: issue.Description,
+                        priority: issue.Priority, executionMode: issue.ExecutionMode, cancellationToken: innerCt);
             },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
+            QueuedAt: DateTimeOffset.UtcNow), ct);
 
-        _logger.LogInformation(
-            "Created issue '{IssueId}' ({Type}): {Title}{ExecutionMode}{Status}",
-            issue.Id,
-            type,
-            title,
+        _logger.LogInformation("Created issue '{IssueId}' ({Type}): {Title}{ExecutionMode}{Status}",
+            issue.Id, type, title,
             executionMode.HasValue ? $" [ExecutionMode: {executionMode}]" : "",
             status.HasValue && status.Value != IssueStatus.Open ? $" [Status: {status}]" : "");
 
-        // Record history snapshot after create
         await RecordHistorySnapshotAsync(projectPath, "Create", issue.Id, $"Created '{title}'", ct);
-
         return issue;
     }
 
     public async Task<Issue?> UpdateIssueAsync(
-        string projectPath,
-        string issueId,
-        string? title = null,
-        IssueStatus? status = null,
-        IssueType? type = null,
-        string? description = null,
-        int? priority = null,
-        ExecutionMode? executionMode = null,
-        string? workingBranchId = null,
-        string? assignedTo = null,
-        CancellationToken ct = default)
+        string projectPath, string issueId, string? title = null, IssueStatus? status = null,
+        IssueType? type = null, string? description = null, int? priority = null,
+        ExecutionMode? executionMode = null, string? workingBranchId = null,
+        string? assignedTo = null, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Check if the issue exists in cache
         if (!cache.TryGetValue(issueId, out _))
         {
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             return null;
         }
 
-        // Perform the update via Fleece.Core (synchronous I/O)
-        var service = GetOrCreateIssueService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
         try
         {
-            var issue = await service.UpdateAsync(
-                id: issueId,
-                title: title,
-                status: status,
-                type: type,
-                description: description,
-                priority: priority,
-                executionMode: executionMode,
-                workingBranchId: workingBranchId,
-                assignedTo: assignedTo,
-                cancellationToken: ct);
-
-            // Update the in-memory cache immediately
+            var issue = await service.UpdateAsync(id: issueId, title: title, status: status, type: type,
+                description: description, priority: priority, executionMode: executionMode,
+                workingBranchId: workingBranchId, assignedTo: assignedTo, cancellationToken: ct);
             cache[issueId] = issue;
 
-            // Queue a background persistence operation for consistency
             await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-                ProjectPath: projectPath,
-                IssueId: issueId,
-                Type: WriteOperationType.Update,
+                ProjectPath: projectPath, IssueId: issueId, Type: WriteOperationType.Update,
                 WriteAction: async (innerCt) =>
                 {
-                    var svc = GetOrCreateIssueService(projectPath);
-                    await svc.UpdateAsync(
-                        id: issueId,
-                        title: title,
-                        status: status,
-                        type: type,
-                        description: description,
-                        priority: priority,
-                        executionMode: executionMode,
-                        workingBranchId: workingBranchId,
-                        assignedTo: assignedTo,
-                        cancellationToken: innerCt);
+                    var svc = GetOrCreateFleeceService(projectPath);
+                    await svc.UpdateAsync(id: issueId, title: title, status: status, type: type,
+                        description: description, priority: priority, executionMode: executionMode,
+                        workingBranchId: workingBranchId, assignedTo: assignedTo, cancellationToken: innerCt);
                 },
-                QueuedAt: DateTimeOffset.UtcNow
-            ), ct);
+                QueuedAt: DateTimeOffset.UtcNow), ct);
 
             var changes = new List<string>();
             if (title != null) changes.Add($"title='{title}'");
@@ -461,20 +322,13 @@ public sealed class FleeceService : IFleeceService, IDisposable
             if (workingBranchId != null) changes.Add($"workingBranchId='{workingBranchId}'");
             if (assignedTo != null) changes.Add($"assignedTo='{assignedTo}'");
 
-            _logger.LogInformation(
-                "Updated issue '{IssueId}': {Changes}",
-                issueId,
-                string.Join(", ", changes));
-
-            // Record history snapshot after update
+            _logger.LogInformation("Updated issue '{IssueId}': {Changes}", issueId, string.Join(", ", changes));
             var historyDescription = changes.Count > 0 ? $"Updated: {string.Join(", ", changes)}" : "Updated issue";
             await RecordHistorySnapshotAsync(projectPath, "Update", issueId, historyDescription, ct);
-
             return issue;
         }
         catch (KeyNotFoundException)
         {
-            // Issue was in our cache but not in Fleece.Core - remove from cache
             cache.TryRemove(issueId, out _);
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             return null;
@@ -484,54 +338,35 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        var service = GetOrCreateIssueService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
         var deleted = await service.DeleteAsync(issueId, ct);
 
         if (deleted)
         {
-            // Update cache: get the updated issue (now marked as Deleted) from Fleece.Core
             var updatedIssue = await service.GetByIdAsync(issueId, ct);
-            if (updatedIssue != null)
-            {
-                cache[issueId] = updatedIssue;
-            }
-            else
-            {
-                cache.TryRemove(issueId, out _);
-            }
+            if (updatedIssue != null) cache[issueId] = updatedIssue;
+            else cache.TryRemove(issueId, out _);
 
-            // Queue background persistence for consistency
             await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-                ProjectPath: projectPath,
-                IssueId: issueId,
-                Type: WriteOperationType.Delete,
-                WriteAction: async (innerCt) =>
-                {
-                    var svc = GetOrCreateIssueService(projectPath);
-                    await svc.DeleteAsync(issueId, innerCt);
-                },
-                QueuedAt: DateTimeOffset.UtcNow
-            ), ct);
+                ProjectPath: projectPath, IssueId: issueId, Type: WriteOperationType.Delete,
+                WriteAction: async (innerCt) => { var svc = GetOrCreateFleeceService(projectPath); await svc.DeleteAsync(issueId, innerCt); },
+                QueuedAt: DateTimeOffset.UtcNow), ct);
 
             _logger.LogInformation("Deleted issue '{IssueId}'", issueId);
-
-            // Record history snapshot after delete
             await RecordHistorySnapshotAsync(projectPath, "Delete", issueId, $"Deleted issue '{issueId}'", ct);
         }
         else
         {
             _logger.LogWarning("Failed to delete issue '{IssueId}' - not found", issueId);
         }
-
         return deleted;
     }
 
-    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default)
+    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId,
+        string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        var depService = GetOrCreateDependencyService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
 
         DependencyPosition? position = null;
         if (!string.IsNullOrEmpty(siblingIssueId))
@@ -543,90 +378,58 @@ public sealed class FleeceService : IFleeceService, IDisposable
             };
         }
 
-        var issue = await depService.AddDependencyAsync(parentId, childId, position, ct: ct);
-
-        // Update the in-memory cache
+        var issue = await service.AddDependencyAsync(parentId, childId, position, cancellationToken: ct);
         cache[childId] = issue;
-
         _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
-
         await RecordHistorySnapshotAsync(projectPath, "AddParent", childId, $"Linked '{childId}' to parent '{parentId}'", ct);
-
         return issue;
     }
 
     public async Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        var depService = GetOrCreateDependencyService(projectPath);
-        var issue = await depService.RemoveDependencyAsync(parentId, childId, ct);
-
-        // Update the in-memory cache
+        var service = GetOrCreateFleeceService(projectPath);
+        var issue = await service.RemoveDependencyAsync(parentId, childId, ct);
         cache[childId] = issue;
-
         _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
-
         await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
-
         return issue;
     }
 
     public async Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Check if the issue exists in cache
         if (!cache.TryGetValue(issueId, out _))
         {
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             throw new KeyNotFoundException($"Issue '{issueId}' not found");
         }
 
-        // Perform the update via Fleece.Core with empty parent list
-        var service = GetOrCreateIssueService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
         var issue = await service.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: ct);
-
-        // Update the in-memory cache immediately
         cache[issueId] = issue;
 
-        // Queue a background persistence operation for consistency
         await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
-            ProjectPath: projectPath,
-            IssueId: issueId,
-            Type: WriteOperationType.Update,
+            ProjectPath: projectPath, IssueId: issueId, Type: WriteOperationType.Update,
             WriteAction: async (innerCt) =>
             {
-                var svc = GetOrCreateIssueService(projectPath);
+                var svc = GetOrCreateFleeceService(projectPath);
                 var currentIssue = await svc.GetByIdAsync(issueId, innerCt);
                 if (currentIssue != null)
-                {
                     await svc.UpdateAsync(issueId, parentIssues: new List<ParentIssueRef>(), cancellationToken: innerCt);
-                }
             },
-            QueuedAt: DateTimeOffset.UtcNow
-        ), ct);
+            QueuedAt: DateTimeOffset.UtcNow), ct);
 
         _logger.LogInformation("Removed all parents from issue '{IssueId}'", issueId);
-
-        // Record history snapshot after removing all parents
         await RecordHistorySnapshotAsync(projectPath, "RemoveAllParents", issueId, $"Removed all parents from '{issueId}'", ct);
-
         return issue;
     }
 
     public async Task<bool> WouldCreateCycleAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
     {
-        // Self-reference is always a cycle
-        if (string.Equals(childId, parentId, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
+        if (string.Equals(childId, parentId, StringComparison.OrdinalIgnoreCase)) return true;
 
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Use BFS to check if parentId is a descendant of childId
-        // If parentId is a descendant of childId, making parentId the parent of childId would create a cycle
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var queue = new Queue<string>();
         queue.Enqueue(parentId);
@@ -634,58 +437,34 @@ public sealed class FleeceService : IFleeceService, IDisposable
         while (queue.Count > 0)
         {
             var currentId = queue.Dequeue();
-
-            if (visited.Contains(currentId))
-                continue;
-
+            if (visited.Contains(currentId)) continue;
             visited.Add(currentId);
-
-            // If we reach childId by traversing from parentId, then childId is an ancestor of parentId
-            // This means making parentId the parent of childId would create a cycle
-            if (string.Equals(currentId, childId, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            // Add all parents of the current issue to the queue
+            if (string.Equals(currentId, childId, StringComparison.OrdinalIgnoreCase)) return true;
             if (cache.TryGetValue(currentId, out var issue))
             {
                 foreach (var parentRef in issue.ParentIssues)
-                {
                     if (!visited.Contains(parentRef.ParentIssue))
-                    {
                         queue.Enqueue(parentRef.ParentIssue);
-                    }
-                }
             }
         }
-
         return false;
     }
 
     public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        var depService = GetOrCreateDependencyService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
 
         try
         {
-            // replaceExisting is the inverse of addToExisting
-            var issue = await depService.AddDependencyAsync(parentId, childId, replaceExisting: !addToExisting, ct: ct);
-
-            // Update the in-memory cache
+            var issue = await service.AddDependencyAsync(parentId, childId, replaceExisting: !addToExisting, cancellationToken: ct);
             cache[childId] = issue;
 
-            _logger.LogInformation(
-                "Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})",
-                parentId, childId, addToExisting);
-
+            _logger.LogInformation("Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})", parentId, childId, addToExisting);
             var description = addToExisting
                 ? $"Added '{parentId}' as additional parent of '{childId}'"
                 : $"Set '{parentId}' as sole parent of '{childId}'";
             await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
-
             return issue;
         }
         catch (Exception ex) when (ex.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase)
@@ -699,58 +478,35 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Check if the issue exists
         if (!cache.TryGetValue(issueId, out var issue))
         {
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             throw new KeyNotFoundException($"Issue '{issueId}' not found");
         }
 
-        // Validate the issue has exactly one parent
         if (issue.ParentIssues.Count == 0)
-        {
             throw new InvalidOperationException($"Issue '{issueId}' has no parent. Cannot move siblings without a parent issue.");
-        }
-
         if (issue.ParentIssues.Count > 1)
-        {
             throw new InvalidOperationException($"Issue '{issueId}' has multiple parents. Move sibling operation requires exactly one parent.");
-        }
 
         var parentId = issue.ParentIssues[0].ParentIssue;
-
-        var depService = GetOrCreateDependencyService(projectPath);
+        var service = GetOrCreateFleeceService(projectPath);
         var result = direction == MoveDirection.Up
-            ? await depService.MoveUpAsync(parentId, issueId, ct)
-            : await depService.MoveDownAsync(parentId, issueId, ct);
+            ? await service.MoveUpAsync(parentId, issueId, ct)
+            : await service.MoveDownAsync(parentId, issueId, ct);
 
         if (result.Outcome == MoveOutcome.Invalid)
-        {
             throw new InvalidOperationException(result.Message ?? $"Cannot move issue '{issueId}' {direction.ToString().ToLower()}.");
-        }
 
-        // Refresh cache for the moved issue and its siblings
-        var issueService = GetOrCreateIssueService(projectPath);
-        var allIssues = await issueService.GetAllAsync(ct);
+        var allIssues = await service.GetAllAsync(ct);
         foreach (var refreshedIssue in allIssues.Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId)))
-        {
             cache[refreshedIssue.Id] = refreshedIssue;
-        }
 
-        // Also update the moved issue itself from the result
-        if (result.UpdatedIssue != null)
-        {
-            cache[issueId] = result.UpdatedIssue;
-        }
+        if (result.UpdatedIssue != null) cache[issueId] = result.UpdatedIssue;
 
-        _logger.LogInformation(
-            "Moved issue '{IssueId}' {Direction} under parent '{ParentId}'",
-            issueId, direction, parentId);
-
+        _logger.LogInformation("Moved issue '{IssueId}' {Direction} under parent '{ParentId}'", issueId, direction, parentId);
         await RecordHistorySnapshotAsync(projectPath, "MoveSeriesSibling", issueId,
             $"Moved '{issue.Title}' {direction.ToString().ToLower()} in sibling order", ct);
-
         return result.UpdatedIssue ?? issue;
     }
 
@@ -758,15 +514,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
     #region History Operations
 
-    /// <summary>
-    /// Records a history snapshot of the current issues state.
-    /// </summary>
-    private async Task RecordHistorySnapshotAsync(
-        string projectPath,
-        string operationType,
-        string? issueId,
-        string? description,
-        CancellationToken ct)
+    private async Task RecordHistorySnapshotAsync(string projectPath, string operationType, string? issueId, string? description, CancellationToken ct)
     {
         try
         {
@@ -776,38 +524,22 @@ public sealed class FleeceService : IFleeceService, IDisposable
         }
         catch (Exception ex)
         {
-            // Don't fail the main operation if history recording fails
             _logger.LogWarning(ex, "Failed to record history snapshot for {OperationType}", operationType);
         }
     }
 
-    /// <summary>
-    /// Applies issues from a history snapshot to the cache and persists to disk.
-    /// Used by undo/redo operations.
-    /// </summary>
     public async Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default)
     {
-        // Clear and repopulate cache with snapshot issues
         var cache = _issueCache.GetOrAdd(projectPath, _ => new ConcurrentDictionary<string, Issue>(StringComparer.OrdinalIgnoreCase));
         cache.Clear();
-        foreach (var issue in issues)
-        {
-            cache[issue.Id] = issue;
-        }
+        foreach (var issue in issues) cache[issue.Id] = issue;
         _cacheInitialized[projectPath] = true;
 
-        // Write the issues directly to the .fleece/ folder using the serializer
         var fleeceDir = Path.Combine(projectPath, ".fleece");
         Directory.CreateDirectory(fleeceDir);
-
-        // Find and delete existing issues file(s)
         var existingFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
-        foreach (var file in existingFiles)
-        {
-            File.Delete(file);
-        }
+        foreach (var file in existingFiles) File.Delete(file);
 
-        // Write new issues file with a deterministic name based on content hash
         var issuesFile = Path.Combine(fleeceDir, $"issues_{Guid.NewGuid().ToString()[..6]}.jsonl");
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         await using (var writer = new StreamWriter(issuesFile, false))
@@ -819,9 +551,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             }
         }
 
-        // Reset the issue service so it reloads from the new file
-        _issueServices.TryRemove(projectPath, out _);
-
+        _fleeceServices.TryRemove(projectPath, out _);
         _logger.LogInformation("Applied history snapshot with {Count} issues to project {ProjectPath}", issues.Count, projectPath);
     }
 
@@ -835,18 +565,11 @@ public sealed class FleeceService : IFleeceService, IDisposable
     }
 
     public async Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
-        string projectPath,
-        IEnumerable<string>? additionalIssueIds,
-        CancellationToken ct = default)
+        string projectPath, IEnumerable<string>? additionalIssueIds, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-
-        // Build a set of additional issue IDs for case-insensitive lookup
         var additionalIds = additionalIssueIds?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
-        // Get issues that are either:
-        // 1. In an open status (Open, Progress, Review)
-        // 2. OR in the additionalIssueIds set (regardless of status)
         var includedIssues = cache.Values
             .Where(i => i.Status is IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
                         || additionalIds.Contains(i.Id))
@@ -865,21 +588,12 @@ public sealed class FleeceService : IFleeceService, IDisposable
             includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
             projectPath);
 
-        // Create a temporary IssueService with only the included issues
-        // This allows Fleece.Core's BuildTaskGraphLayoutAsync to work correctly
-        var mockStorage = new InMemoryGraphStorageService(includedIssues);
-        var issueService = new global::Fleece.Core.Services.IssueService(
-            mockStorage,
-            _idGenerator,
-            _gitConfigService,
-            _tagService);
+        var service = GetOrCreateFleeceService(projectPath);
+        var issueIdSet = includedIssues.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var taskGraph = await service.BuildFilteredTaskGraphLayoutAsync(issueIdSet, cancellationToken: ct);
 
-        var taskGraph = await issueService.BuildTaskGraphLayoutAsync(cancellationToken: ct);
-
-        _logger.LogDebug(
-            "Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",
+        _logger.LogDebug("Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",
             taskGraph.Nodes.Count, taskGraph.TotalLanes, projectPath);
-
         return taskGraph;
     }
 
@@ -889,68 +603,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-
-        // Clear all caches
-        _issueServices.Clear();
-        _dependencyServices.Clear();
+        _fleeceServices.Clear();
         _issueCache.Clear();
         _cacheInitialized.Clear();
     }
-}
-
-/// <summary>
-/// In-memory storage service for building task graphs with a subset of issues.
-/// This allows us to create a temporary IssueService with only the issues we want
-/// to include in the graph, while using Fleece.Core's graph building logic.
-/// </summary>
-internal class InMemoryGraphStorageService : global::Fleece.Core.Services.Interfaces.IStorageService
-{
-    private readonly IReadOnlyList<Issue> _issues;
-
-    public InMemoryGraphStorageService(IReadOnlyList<Issue> issues)
-    {
-        _issues = issues;
-    }
-
-    public Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(_issues);
-
-    public Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task AppendIssueAsync(Issue issue, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task<IReadOnlyList<string>> GetAllIssueFilesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<string>>([]);
-
-    public Task<IReadOnlyList<Issue>> LoadIssuesFromFileAsync(string filePath, CancellationToken cancellationToken = default)
-        => Task.FromResult(_issues);
-
-    public Task DeleteIssueFileAsync(string filePath, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task<string> SaveIssuesWithHashAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
-        => Task.FromResult(string.Empty);
-
-    public Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult((false, string.Empty));
-
-    public Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(new LoadIssuesResult { Issues = _issues.ToList(), Diagnostics = [] });
-
-    public Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<Tombstone>>([]);
-
-    public Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyList<string>>([]);
 }

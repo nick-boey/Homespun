@@ -38,7 +38,7 @@ public interface IBaseBranchResolver
 /// 5. Otherwise (no prior sibling, or prior sibling's PR is merged/missing), use the default branch
 /// </remarks>
 public class BaseBranchResolver(
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IGitHubService gitHubService,
     ILogger<BaseBranchResolver> logger) : IBaseBranchResolver
 {

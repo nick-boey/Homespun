@@ -19,7 +19,7 @@ public class ContainerQueryServiceTests
 {
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private Mock<ILogger<ContainerQueryService>> _loggerMock = null!;
     private ContainerQueryService _service = null!;
@@ -29,7 +29,7 @@ public class ContainerQueryServiceTests
     {
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _projectServiceMock = new Mock<IProjectService>();
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
         _loggerMock = new Mock<ILogger<ContainerQueryService>>();
 

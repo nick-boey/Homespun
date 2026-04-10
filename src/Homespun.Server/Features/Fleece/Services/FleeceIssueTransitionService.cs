@@ -9,7 +9,7 @@ namespace Homespun.Features.Fleece.Services;
 /// Coordinates between Fleece updates, agent workflow, and SignalR notifications.
 /// </summary>
 public class FleeceIssueTransitionService(
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IDataStore dataStore,
     IHubContext<NotificationHub> hubContext,
     ILogger<FleeceIssueTransitionService> logger)

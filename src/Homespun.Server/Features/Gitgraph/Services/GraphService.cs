@@ -12,14 +12,14 @@ namespace Homespun.Features.Gitgraph.Services;
 
 /// <summary>
 /// Service for building graph data from Fleece Issues and PullRequests.
-/// Uses IFleeceService for fast issue access.
+/// Uses IProjectFleeceService for fast issue access.
 /// Supports caching of PR data to improve page load times.
 /// Cache is stored in JSONL files alongside the project data for fast startup.
 /// </summary>
 public class GraphService(
     IProjectService projectService,
     IGitHubService gitHubService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IClaudeSessionStore sessionStore,
     IDataStore dataStore,
     PullRequestWorkflowService workflowService,

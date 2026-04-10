@@ -69,7 +69,7 @@ public class AgentStartBackgroundService(
         var cloneService = scope.ServiceProvider.GetRequiredService<IGitCloneService>();
         var sessionService = scope.ServiceProvider.GetRequiredService<IClaudeSessionService>();
         var agentPromptService = scope.ServiceProvider.GetRequiredService<IAgentPromptService>();
-        var fleeceService = scope.ServiceProvider.GetRequiredService<IFleeceService>();
+        var fleeceService = scope.ServiceProvider.GetRequiredService<IProjectFleeceService>();
         var fleeceIssuesSyncService = scope.ServiceProvider.GetRequiredService<IFleeceIssuesSyncService>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
         var baseBranchResolver = scope.ServiceProvider.GetRequiredService<IBaseBranchResolver>();

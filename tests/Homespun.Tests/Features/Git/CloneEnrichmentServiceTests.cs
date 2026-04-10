@@ -14,7 +14,7 @@ namespace Homespun.Tests.Features.Git;
 public class CloneEnrichmentServiceTests
 {
     private Mock<IGitCloneService> _mockGitCloneService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IGraphCacheService> _mockGraphCacheService = null!;
     private Mock<ILogger<CloneEnrichmentService>> _mockLogger = null!;
     private CloneEnrichmentService _service = null!;
@@ -26,7 +26,7 @@ public class CloneEnrichmentServiceTests
     public void Setup()
     {
         _mockGitCloneService = new Mock<IGitCloneService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockGraphCacheService = new Mock<IGraphCacheService>();
         _mockLogger = new Mock<ILogger<CloneEnrichmentService>>();
 

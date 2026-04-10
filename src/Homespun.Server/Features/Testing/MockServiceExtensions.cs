@@ -60,11 +60,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
 
         // Register real FleeceService (reads/writes to temp .fleece directories)
-        services.AddSingleton<IFleeceService, FleeceService>();
-
-        // Fleece.Core DiffService and its dependency (for any service needing direct diff comparison)
-        services.AddSingleton<global::Fleece.Core.Serialization.IJsonlSerializer, global::Fleece.Core.Serialization.JsonlSerializer>();
-        services.AddSingleton<global::Fleece.Core.Services.Interfaces.IDiffService, global::Fleece.Core.Services.DiffService>();
+        services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
 
         // Core services
         services.AddSingleton<ICommandRunner, CommandRunner>();
@@ -103,7 +99,7 @@ public static class MockServiceExtensions
         services.AddScoped<IContainerQueryService, MockContainerQueryService>();
 
         // Fleece services
-        // Transition service depends on IFleeceService (now using real FleeceService)
+        // Transition service depends on IProjectFleeceService (now using real FleeceService)
         services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();

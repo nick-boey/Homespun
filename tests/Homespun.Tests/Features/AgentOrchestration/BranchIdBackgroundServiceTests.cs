@@ -17,7 +17,7 @@ public class BranchIdBackgroundServiceTests
     private Mock<IServiceScope> _mockServiceScope = null!;
     private Mock<IServiceScopeFactory> _mockServiceScopeFactory = null!;
     private Mock<IBranchIdGeneratorService> _mockBranchIdGenerator = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IProjectService> _mockProjectService = null!;
     private Mock<IHubContext<NotificationHub>> _mockHubContext = null!;
     private Mock<IHubClients> _mockHubClients = null!;
@@ -32,7 +32,7 @@ public class BranchIdBackgroundServiceTests
         _mockServiceScope = new Mock<IServiceScope>();
         _mockServiceScopeFactory = new Mock<IServiceScopeFactory>();
         _mockBranchIdGenerator = new Mock<IBranchIdGeneratorService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockProjectService = new Mock<IProjectService>();
         _mockHubContext = new Mock<IHubContext<NotificationHub>>();
         _mockHubClients = new Mock<IHubClients>();
@@ -43,7 +43,7 @@ public class BranchIdBackgroundServiceTests
         var scopedServiceProvider = new Mock<IServiceProvider>();
         scopedServiceProvider.Setup(x => x.GetService(typeof(IBranchIdGeneratorService)))
             .Returns(_mockBranchIdGenerator.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IFleeceService)))
+        scopedServiceProvider.Setup(x => x.GetService(typeof(IProjectFleeceService)))
             .Returns(_mockFleeceService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IProjectService)))
             .Returns(_mockProjectService.Object);

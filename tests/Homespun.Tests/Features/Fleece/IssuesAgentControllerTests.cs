@@ -22,7 +22,7 @@ namespace Homespun.Tests.Features.Fleece;
 public class IssuesAgentControllerTests
 {
     private Mock<IProjectService> _projectServiceMock = null!;
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<IFleeceChangeDetectionService> _changeDetectionServiceMock = null!;
     private Mock<IFleeceChangeApplicationService> _changeApplicationServiceMock = null!;
@@ -48,7 +48,7 @@ public class IssuesAgentControllerTests
     public void SetUp()
     {
         _projectServiceMock = new Mock<IProjectService>();
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _changeDetectionServiceMock = new Mock<IFleeceChangeDetectionService>();
         _changeApplicationServiceMock = new Mock<IFleeceChangeApplicationService>();

@@ -14,7 +14,7 @@ public class FullRefreshEndpointTests
 {
     private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IGitHubService> _gitHubServiceMock = null!;
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IGraphCacheService> _graphCacheServiceMock = null!;
     private Mock<PullRequestWorkflowService> _workflowServiceMock = null!;
     private PullRequestsController _controller = null!;
@@ -34,7 +34,7 @@ public class FullRefreshEndpointTests
     {
         _dataStoreMock = new Mock<IDataStore>();
         _gitHubServiceMock = new Mock<IGitHubService>();
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _graphCacheServiceMock = new Mock<IGraphCacheService>();
         _workflowServiceMock = new Mock<PullRequestWorkflowService>(
             MockBehavior.Loose, null!, null!, null!, null!, null!);
