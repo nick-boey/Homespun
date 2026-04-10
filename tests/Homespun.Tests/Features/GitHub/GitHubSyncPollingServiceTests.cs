@@ -27,7 +27,7 @@ public class GitHubSyncPollingServiceTests
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<IPRStatusResolver> _mockPRStatusResolver = null!;
     private Mock<IIssuePrLinkingService> _mockLinkingService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private MockDataStore _dataStore = null!;
 
     [SetUp]
@@ -37,7 +37,7 @@ public class GitHubSyncPollingServiceTests
         _mockGitHubService = new Mock<IGitHubService>();
         _mockPRStatusResolver = new Mock<IPRStatusResolver>();
         _mockLinkingService = new Mock<IIssuePrLinkingService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
 
         _mockScope = new Mock<IServiceScope>();
         _mockServiceProvider = new Mock<IServiceProvider>();
@@ -53,7 +53,7 @@ public class GitHubSyncPollingServiceTests
             .Returns(_mockPRStatusResolver.Object);
         _mockServiceProvider.Setup(sp => sp.GetService(typeof(IIssuePrLinkingService)))
             .Returns(_mockLinkingService.Object);
-        _mockServiceProvider.Setup(sp => sp.GetService(typeof(IFleeceService)))
+        _mockServiceProvider.Setup(sp => sp.GetService(typeof(IProjectFleeceService)))
             .Returns(_mockFleeceService.Object);
 
         _mockScope.Setup(s => s.ServiceProvider).Returns(_mockServiceProvider.Object);

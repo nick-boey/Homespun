@@ -10,10 +10,10 @@ namespace Homespun.Tests.Features.Fleece;
 public class FleeceServiceTests
 {
     private string _tempDir = null!;
-    private Mock<ILogger<FleeceService>> _mockLogger = null!;
+    private Mock<ILogger<ProjectFleeceService>> _mockLogger = null!;
     private Mock<IIssueSerializationQueue> _mockQueue = null!;
     private Mock<IIssueHistoryService> _mockHistoryService = null!;
-    private FleeceService _service = null!;
+    private ProjectFleeceService _service = null!;
 
     [SetUp]
     public void SetUp()
@@ -21,7 +21,7 @@ public class FleeceServiceTests
         _tempDir = Path.Combine(Path.GetTempPath(), $"fleece-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
 
-        _mockLogger = new Mock<ILogger<FleeceService>>();
+        _mockLogger = new Mock<ILogger<ProjectFleeceService>>();
         _mockQueue = new Mock<IIssueSerializationQueue>();
         _mockQueue
             .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
@@ -38,7 +38,7 @@ public class FleeceServiceTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        _service = new FleeceService(_mockQueue.Object, _mockHistoryService.Object, _mockLogger.Object);
+        _service = new ProjectFleeceService(_mockQueue.Object, _mockHistoryService.Object, _mockLogger.Object);
     }
 
     [TearDown]

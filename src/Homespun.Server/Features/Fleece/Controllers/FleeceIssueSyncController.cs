@@ -10,7 +10,7 @@ namespace Homespun.Features.Fleece.Controllers;
 [Produces("application/json")]
 public class FleeceIssueSyncController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IProjectService projectService) : ControllerBase
 {
     [HttpGet("{projectId}/branch-status")]

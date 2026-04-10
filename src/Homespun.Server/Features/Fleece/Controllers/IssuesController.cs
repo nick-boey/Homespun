@@ -23,7 +23,7 @@ namespace Homespun.Features.Fleece.Controllers;
 [Route("api")]
 [Produces("application/json")]
 public class IssuesController(
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IProjectService projectService,
     IDataStore dataStore,
     IHubContext<NotificationHub> notificationHub,

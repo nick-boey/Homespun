@@ -129,13 +129,11 @@ else
     builder.Services.AddScoped<ISearchablePrService, SearchablePrService>();
 
     // Fleece services (file-based issue tracking)
-    builder.Services.AddSingleton<Fleece.Core.Serialization.IJsonlSerializer, Fleece.Core.Serialization.JsonlSerializer>();
-    builder.Services.AddSingleton<Fleece.Core.Services.Interfaces.IDiffService, Fleece.Core.Services.DiffService>();
     builder.Services.AddSingleton<IssueSerializationQueueService>();
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
-    builder.Services.AddSingleton<IFleeceService, FleeceService>();
+    builder.Services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
     builder.Services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();

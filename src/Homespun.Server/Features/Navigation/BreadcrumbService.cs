@@ -10,7 +10,7 @@ namespace Homespun.Features.Navigation;
 public class BreadcrumbService : IBreadcrumbService
 {
     private readonly IProjectService _projectService;
-    private readonly IFleeceService _fleeceService;
+    private readonly IProjectFleeceService _fleeceService;
     private readonly List<BreadcrumbItem> _breadcrumbs = [];
 
     /// <summary>
@@ -24,7 +24,7 @@ public class BreadcrumbService : IBreadcrumbService
         { "Prompts", "/prompts" }
     };
 
-    public BreadcrumbService(IProjectService projectService, IFleeceService fleeceService)
+    public BreadcrumbService(IProjectService projectService, IProjectFleeceService fleeceService)
     {
         _projectService = projectService;
         _fleeceService = fleeceService;

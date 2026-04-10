@@ -17,7 +17,7 @@ namespace Homespun.Features.PullRequests.Controllers;
 public class PullRequestsController(
     IDataStore dataStore,
     IGitHubService gitHubService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IGraphCacheService graphCacheService,
     PullRequestWorkflowService workflowService) : ControllerBase
 {

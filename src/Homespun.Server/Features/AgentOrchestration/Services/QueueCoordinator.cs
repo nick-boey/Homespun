@@ -64,7 +64,7 @@ internal class SeriesContinuation
 /// </summary>
 public class QueueCoordinator : IQueueCoordinator
 {
-    private readonly IFleeceService _fleeceService;
+    private readonly IProjectFleeceService _fleeceService;
     private readonly IAgentStartBackgroundService _agentStartService;
     private readonly IWorkflowExecutionService? _workflowExecutionService;
     private readonly IHubContext<NotificationHub> _notificationHub;
@@ -78,7 +78,7 @@ public class QueueCoordinator : IQueueCoordinator
     /// DI-friendly constructor. Max concurrency defaults to 5.
     /// </summary>
     public QueueCoordinator(
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
         IHubContext<NotificationHub> notificationHub,
         ILogger<QueueCoordinator> logger,
@@ -88,7 +88,7 @@ public class QueueCoordinator : IQueueCoordinator
     }
 
     public QueueCoordinator(
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
         IHubContext<NotificationHub> notificationHub,
         ILogger<QueueCoordinator> logger,
@@ -99,7 +99,7 @@ public class QueueCoordinator : IQueueCoordinator
     }
 
     public QueueCoordinator(
-        IFleeceService fleeceService,
+        IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
         IWorkflowExecutionService? workflowExecutionService,
         IHubContext<NotificationHub> notificationHub,

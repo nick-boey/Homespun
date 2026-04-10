@@ -1,7 +1,4 @@
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
-using Fleece.Core.Services;
-using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -19,8 +16,7 @@ public class FleeceChangeDetectionServiceTests
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
-    private IDiffService _diffService = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<ILogger<FleeceChangeDetectionService>> _loggerMock = null!;
     private FleeceChangeDetectionService _service = null!;
     private string _tempDir = null!;
@@ -31,8 +27,7 @@ public class FleeceChangeDetectionServiceTests
         _projectServiceMock = new Mock<IProjectService>();
         _cloneServiceMock = new Mock<IGitCloneService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
-        _fleeceServiceMock = new Mock<IFleeceService>();
-        _diffService = new DiffService(new JsonlSerializer());
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _loggerMock = new Mock<ILogger<FleeceChangeDetectionService>>();
 
         _service = new FleeceChangeDetectionService(
@@ -40,7 +35,6 @@ public class FleeceChangeDetectionServiceTests
             _cloneServiceMock.Object,
             _sessionServiceMock.Object,
             _fleeceServiceMock.Object,
-            _diffService,
             _loggerMock.Object);
 
         _tempDir = Path.Combine(Path.GetTempPath(), $"fleece-detection-test-{Guid.NewGuid():N}");
@@ -78,19 +72,13 @@ public class FleeceChangeDetectionServiceTests
         await SaveIssuesAsync(basePath, [issue]);
     }
 
-    private async Task SaveIssuesAsync(string basePath, List<Issue> issues)
+    private static async Task SaveIssuesAsync(string basePath, List<Issue> issues)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storage = new JsonlStorageService(basePath, serializer, schemaValidator);
-
-        await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
-
         // Load existing issues and append the new ones
-        var existingIssues = await storage.LoadIssuesAsync(CancellationToken.None);
+        var existingIssues = await FleeceFileHelper.LoadIssuesAsync(basePath);
         var allIssues = existingIssues.ToList();
         allIssues.AddRange(issues);
-        await storage.SaveIssuesAsync(allIssues, CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(basePath, allIssues);
     }
 
     [Test]

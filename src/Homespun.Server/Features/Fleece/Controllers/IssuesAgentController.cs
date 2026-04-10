@@ -21,7 +21,7 @@ namespace Homespun.Features.Fleece.Controllers;
 [Produces("application/json")]
 public class IssuesAgentController(
     IProjectService projectService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IFleeceChangeDetectionService changeDetectionService,
     IFleeceChangeApplicationService changeApplicationService,

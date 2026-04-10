@@ -57,15 +57,4 @@ public class DependencyInjectionTests
             $"Failed to resolve {errors.Count} controller(s):\n{string.Join("\n", errors)}");
     }
 
-    [Test]
-    public void IDiffService_CanBeResolved()
-    {
-        using var scope = _factory.Services.CreateScope();
-
-        var diffService = scope.ServiceProvider
-            .GetRequiredService<Fleece.Core.Services.Interfaces.IDiffService>();
-
-        Assert.That(diffService, Is.Not.Null);
-    }
-
 }

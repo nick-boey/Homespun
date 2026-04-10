@@ -20,7 +20,7 @@ public class GraphServiceIncrementalRefreshTests
     private MockDataStore _dataStore = null!;
     private Mock<IProjectService> _mockProjectService = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IClaudeSessionStore> _mockSessionStore = null!;
     private Mock<PullRequestWorkflowService> _mockWorkflowService = null!;
     private Mock<IGraphCacheService> _mockCacheService = null!;
@@ -58,7 +58,7 @@ public class GraphServiceIncrementalRefreshTests
         _mockGitHubService.Setup(s => s.GetClosedPullRequestsAsync(_testProject.Id))
             .ReturnsAsync(new List<PullRequestInfo>());
 
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockFleeceService.Setup(s => s.ListIssuesAsync(_testProject.LocalPath, null, null, null, default))
             .ReturnsAsync(new List<Issue>());
 

@@ -13,7 +13,7 @@ namespace Homespun.Tests.Features.AgentOrchestration;
 [TestFixture]
 public class QueueCoordinatorWorkflowTests
 {
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IAgentStartBackgroundService> _mockAgentStartService = null!;
     private Mock<IWorkflowExecutionService> _mockWorkflowService = null!;
     private Mock<IHubContext<NotificationHub>> _mockNotificationHub = null!;
@@ -29,7 +29,7 @@ public class QueueCoordinatorWorkflowTests
     [SetUp]
     public void SetUp()
     {
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockAgentStartService = new Mock<IAgentStartBackgroundService>();
         _mockWorkflowService = new Mock<IWorkflowExecutionService>();
         _mockNotificationHub = new Mock<IHubContext<NotificationHub>>();

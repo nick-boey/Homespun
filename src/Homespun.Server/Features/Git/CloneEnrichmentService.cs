@@ -14,7 +14,7 @@ public interface ICloneEnrichmentService
 
 public class CloneEnrichmentService(
     IGitCloneService gitCloneService,
-    IFleeceService fleeceService,
+    IProjectFleeceService fleeceService,
     IGraphCacheService graphCacheService,
     ILogger<CloneEnrichmentService> logger) : ICloneEnrichmentService
 {

@@ -28,7 +28,7 @@ namespace Homespun.Tests.Features.Fleece;
 [TestFixture]
 public class IssuesControllerTests
 {
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
@@ -68,7 +68,7 @@ public class IssuesControllerTests
     [SetUp]
     public void SetUp()
     {
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _projectServiceMock = new Mock<IProjectService>();
         _dataStoreMock = new Mock<IDataStore>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();

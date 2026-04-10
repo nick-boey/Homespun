@@ -11,7 +11,7 @@ namespace Homespun.Tests.Features.AgentOrchestration;
 [TestFixture]
 public class BaseBranchResolutionTests
 {
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<ILogger<BaseBranchResolver>> _mockLogger = null!;
     private BaseBranchResolver _resolver = null!;
@@ -19,7 +19,7 @@ public class BaseBranchResolutionTests
     [SetUp]
     public void SetUp()
     {
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockGitHubService = new Mock<IGitHubService>();
         _mockLogger = new Mock<ILogger<BaseBranchResolver>>();
 

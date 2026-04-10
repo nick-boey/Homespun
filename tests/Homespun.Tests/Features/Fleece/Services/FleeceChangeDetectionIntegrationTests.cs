@@ -1,6 +1,4 @@
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
-using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
@@ -29,8 +27,7 @@ public class FleeceChangeDetectionIntegrationTests
     private GitCloneService _cloneService = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
-    private FleeceService _fleeceService = null!;
-    private IDiffService _diffService = null!;
+    private ProjectFleeceService _fleeceService = null!;
     private FleeceChangeDetectionService _changeDetectionService = null!;
 
     [SetUp]
@@ -42,16 +39,13 @@ public class FleeceChangeDetectionIntegrationTests
         _projectServiceMock = new Mock<IProjectService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
 
-        // Create a real FleeceService with actual disk operations
+        // Create a real ProjectFleeceService with actual disk operations
         var serializationQueueMock = new Mock<Homespun.Features.Fleece.Services.IIssueSerializationQueue>();
         var historyServiceMock = new Mock<Homespun.Features.Fleece.Services.IIssueHistoryService>();
-        _fleeceService = new FleeceService(
+        _fleeceService = new ProjectFleeceService(
             serializationQueueMock.Object,
             historyServiceMock.Object,
-            NullLogger<FleeceService>.Instance);
-
-        // Create real DiffService for integration tests
-        _diffService = new DiffService(new JsonlSerializer());
+            NullLogger<ProjectFleeceService>.Instance);
 
         // Create the change detection service with real dependencies
         _changeDetectionService = new FleeceChangeDetectionService(
@@ -59,7 +53,6 @@ public class FleeceChangeDetectionIntegrationTests
             _cloneService,
             _sessionServiceMock.Object,
             _fleeceService,
-            _diffService,
             NullLogger<FleeceChangeDetectionService>.Instance);
     }
 
@@ -97,16 +90,11 @@ public class FleeceChangeDetectionIntegrationTests
     }
 
     /// <summary>
-    /// Saves issues to disk using Fleece.Core serialization.
+    /// Saves issues to disk using FleeceFileHelper.
     /// </summary>
-    private async Task SaveIssuesAsync(string repoPath, List<Issue> issues)
+    private static async Task SaveIssuesAsync(string repoPath, List<Issue> issues)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storage = new JsonlStorageService(repoPath, serializer, schemaValidator);
-
-        await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
-        await storage.SaveIssuesAsync(issues, CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(repoPath, issues);
     }
 
     /// <summary>

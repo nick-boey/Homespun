@@ -12,7 +12,7 @@ namespace Homespun.Tests.Features.GitHub;
 public class IssuePrLinkingServiceTests
 {
     private MockDataStore _dataStore = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<ILogger<IssuePrLinkingService>> _mockLogger = null!;
     private IssuePrLinkingService _service = null!;
 
@@ -20,7 +20,7 @@ public class IssuePrLinkingServiceTests
     public void SetUp()
     {
         _dataStore = new MockDataStore();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockLogger = new Mock<ILogger<IssuePrLinkingService>>();
         _service = new IssuePrLinkingService(_dataStore, _mockFleeceService.Object, _mockLogger.Object);
     }

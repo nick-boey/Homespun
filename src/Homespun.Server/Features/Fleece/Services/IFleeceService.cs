@@ -5,9 +5,9 @@ namespace Homespun.Features.Fleece.Services;
 
 /// <summary>
 /// Project-aware service interface for Fleece issue tracking.
-/// Wraps Fleece.Core's IIssueService to provide project path context.
+/// Wraps Fleece.Core's IFleeceService to provide project path context.
 /// </summary>
-public interface IFleeceService
+public interface IProjectFleeceService
 {
     #region Read Operations
 

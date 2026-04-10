@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Fleece.Services;
@@ -329,12 +328,7 @@ public class FleeceIssueSyncIntegrationTests
 
     private async Task SaveAndCommitIssues(string repoPath, List<Issue> issues, string commitMessage)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storage = new JsonlStorageService(repoPath, serializer, schemaValidator);
-
-        await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
-        await storage.SaveIssuesAsync(issues, CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(repoPath, issues, CancellationToken.None);
 
         RunGitIn(repoPath, "add .fleece/");
         RunGitIn(repoPath, $"commit -m \"{commitMessage}\" --allow-empty");
@@ -349,23 +343,18 @@ public class FleeceIssueSyncIntegrationTests
     /// </summary>
     private async Task<List<Issue>> SimulateMergeFromRemote(string localRepoPath)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-
         // 1. Fetch from origin
         RunGitIn(localRepoPath, "fetch origin");
 
         // 2. Load local issues
-        var localStorage = new JsonlStorageService(localRepoPath, serializer, schemaValidator);
-        var localIssues = await localStorage.LoadIssuesAsync(CancellationToken.None);
+        var localIssues = await FleeceFileHelper.LoadIssuesAsync(localRepoPath, CancellationToken.None);
         var localMap = localIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // 3. Restore remote .fleece/ files
         RunGitIn(localRepoPath, "restore --source origin/main -- .fleece/");
 
         // 4. Load remote issues
-        var remoteStorage = new JsonlStorageService(localRepoPath, serializer, schemaValidator);
-        var remoteIssues = await remoteStorage.LoadIssuesAsync(CancellationToken.None);
+        var remoteIssues = await FleeceFileHelper.LoadIssuesAsync(localRepoPath, CancellationToken.None);
         var remoteMap = remoteIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // 5. Merge
@@ -394,8 +383,7 @@ public class FleeceIssueSyncIntegrationTests
         }
 
         // 6. Write merged result back
-        var mergedStorage = new JsonlStorageService(localRepoPath, serializer, schemaValidator);
-        await mergedStorage.SaveIssuesAsync(merged, CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(localRepoPath, merged, CancellationToken.None);
 
         return merged;
     }
@@ -494,10 +482,7 @@ public class FleeceIssueSyncIntegrationTests
 
         // Clone B creates a local issue (uncommitted - just saved to disk)
         var issueB = CreateIssue("BBBBBB", "Issue B from Clone B");
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        await storageB.SaveIssuesAsync([issueA, issueB], CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(_cloneBPath, [issueA, issueB], CancellationToken.None);
         // Don't commit - these are uncommitted local changes
 
         // Act: Run sync on Clone B using real service
@@ -509,8 +494,7 @@ public class FleeceIssueSyncIntegrationTests
         Assert.That(result.PushSucceeded, Is.True, "Push should succeed");
 
         // Verify all issues exist after sync
-        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+        var finalIssues = await FleeceFileHelper.LoadIssuesAsync(_cloneBPath, CancellationToken.None);
 
         Assert.That(finalIssues.Any(i => i.Id == "AAAAAA"), Is.True, "Issue A should exist");
         Assert.That(finalIssues.Any(i => i.Id == "AAAAAB"), Is.True, "Issue A2 should exist");
@@ -548,10 +532,7 @@ public class FleeceIssueSyncIntegrationTests
             StatusLastUpdate = statusModifiedTime,
             StatusModifiedBy = "user-b"
         };
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        await storageB.SaveIssuesAsync([modifiedByB], CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(_cloneBPath, [modifiedByB], CancellationToken.None);
 
         // Debug: Check state before sync - need to fetch first to get accurate rev-list
         RunGitIn(_cloneBPath, "fetch origin");
@@ -573,8 +554,7 @@ public class FleeceIssueSyncIntegrationTests
         Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
 
         // Verify both field changes are preserved
-        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+        var finalIssues = await FleeceFileHelper.LoadIssuesAsync(_cloneBPath, CancellationToken.None);
         var mergedIssue = finalIssues.First(i => i.Id == "CCCCCC");
 
         Assert.That(mergedIssue.Title, Is.EqualTo("Title Changed by A"), "Title from remote should be preserved");
@@ -599,10 +579,7 @@ public class FleeceIssueSyncIntegrationTests
         Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
 
         // Verify issue exists
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+        var finalIssues = await FleeceFileHelper.LoadIssuesAsync(_cloneBPath, CancellationToken.None);
 
         Assert.That(finalIssues.Any(i => i.Id == "FFFFFF"), Is.True, "Issue should exist after sync");
     }
@@ -618,10 +595,7 @@ public class FleeceIssueSyncIntegrationTests
 
         // Clone B creates local issue (uncommitted)
         var issueB = CreateIssue("HHHHHH", "Issue from Clone B");
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        await storageB.SaveIssuesAsync([issue, issueB], CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(_cloneBPath, [issue, issueB], CancellationToken.None);
 
         // Act: Run sync on Clone B
         var syncService = CreateSyncService();
@@ -653,10 +627,7 @@ public class FleeceIssueSyncIntegrationTests
         // Clone B creates issues Z and W (uncommitted)
         var issueZ = CreateIssue("ZZZZZZ", "Issue Z");
         var issueW = CreateIssue("WWWWWW", "Issue W");
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        await storageB.SaveIssuesAsync([issueZ, issueW], CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(_cloneBPath, [issueZ, issueW], CancellationToken.None);
 
         // Act: Run sync on Clone B
         var syncService = CreateSyncService();
@@ -665,8 +636,7 @@ public class FleeceIssueSyncIntegrationTests
         // Assert: Sync should succeed and all 4 issues should exist
         Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
 
-        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
-        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+        var finalIssues = await FleeceFileHelper.LoadIssuesAsync(_cloneBPath, CancellationToken.None);
 
         Assert.That(finalIssues.Count, Is.EqualTo(4), "Should have all 4 issues");
         Assert.That(finalIssues.Any(i => i.Id == "XXXXXX"), Is.True, "Issue X should exist");

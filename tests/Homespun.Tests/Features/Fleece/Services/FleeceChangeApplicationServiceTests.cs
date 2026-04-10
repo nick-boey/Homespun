@@ -1,6 +1,4 @@
 using Fleece.Core.Models;
-using Fleece.Core.Serialization;
-using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
@@ -16,7 +14,7 @@ public class FleeceChangeApplicationServiceTests
 {
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
-    private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private Mock<IProjectFleeceService> _fleeceServiceMock = null!;
     private Mock<IFleeceChangeDetectionService> _changeDetectionServiceMock = null!;
     private Mock<IFleeceConflictDetectionService> _conflictDetectionServiceMock = null!;
     private Mock<ILogger<FleeceChangeApplicationService>> _loggerMock = null!;
@@ -28,7 +26,7 @@ public class FleeceChangeApplicationServiceTests
     {
         _projectServiceMock = new Mock<IProjectService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
-        _fleeceServiceMock = new Mock<IFleeceService>();
+        _fleeceServiceMock = new Mock<IProjectFleeceService>();
         _changeDetectionServiceMock = new Mock<IFleeceChangeDetectionService>();
         _conflictDetectionServiceMock = new Mock<IFleeceConflictDetectionService>();
         _loggerMock = new Mock<ILogger<FleeceChangeApplicationService>>();
@@ -72,22 +70,14 @@ public class FleeceChangeApplicationServiceTests
             });
     }
 
-    private async Task SaveIssuesAsync(string basePath, List<Issue> issues)
+    private static async Task SaveIssuesAsync(string basePath, List<Issue> issues)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storage = new JsonlStorageService(basePath, serializer, schemaValidator);
-
-        await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
-        await storage.SaveIssuesAsync(issues, CancellationToken.None);
+        await FleeceFileHelper.SaveIssuesAsync(basePath, issues);
     }
 
-    private async Task<List<Issue>> LoadIssuesAsync(string basePath)
+    private static async Task<List<Issue>> LoadIssuesAsync(string basePath)
     {
-        var serializer = new JsonlSerializer();
-        var schemaValidator = new SchemaValidator();
-        var storage = new JsonlStorageService(basePath, serializer, schemaValidator);
-        return (await storage.LoadIssuesAsync(CancellationToken.None)).ToList();
+        return (await FleeceFileHelper.LoadIssuesAsync(basePath)).ToList();
     }
 
     [Test]

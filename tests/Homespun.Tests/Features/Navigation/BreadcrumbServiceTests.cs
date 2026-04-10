@@ -14,14 +14,14 @@ namespace Homespun.Tests.Features.Navigation;
 public class BreadcrumbServiceTests
 {
     private Mock<IProjectService> _mockProjectService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private BreadcrumbService _sut = null!;
 
     [SetUp]
     public void Setup()
     {
         _mockProjectService = new Mock<IProjectService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _sut = new BreadcrumbService(_mockProjectService.Object, _mockFleeceService.Object);
     }
 

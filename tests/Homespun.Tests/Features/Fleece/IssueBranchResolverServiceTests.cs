@@ -14,7 +14,7 @@ public class IssueBranchResolverServiceTests
 {
     private Mock<IDataStore> _mockDataStore = null!;
     private Mock<IGitCloneService> _mockGitCloneService = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
+    private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<ILogger<IssueBranchResolverService>> _mockLogger = null!;
     private IssueBranchResolverService _service = null!;
 
@@ -27,7 +27,7 @@ public class IssueBranchResolverServiceTests
     {
         _mockDataStore = new Mock<IDataStore>();
         _mockGitCloneService = new Mock<IGitCloneService>();
-        _mockFleeceService = new Mock<IFleeceService>();
+        _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockLogger = new Mock<ILogger<IssueBranchResolverService>>();
 
         // Setup default project
