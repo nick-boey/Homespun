@@ -8,7 +8,7 @@ namespace Homespun.Features.Settings.Controllers;
 /// API endpoints for managing user settings.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/settings")]
 [Produces("application/json")]
 public class SettingsController(IDataStore dataStore) : ControllerBase
 {

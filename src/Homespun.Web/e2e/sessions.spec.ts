@@ -21,7 +21,7 @@ test.describe('Sessions page', () => {
 
   test('shows empty state when no sessions exist', async ({ page }) => {
     // Mock the sessions API to return empty list
-    await page.route('**/api/Sessions', (route) =>
+    await page.route('**/api/sessions', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     )
 

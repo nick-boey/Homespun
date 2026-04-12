@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Homespun.Features.Observability;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/telemetry-config")]
 [Produces("application/json")]
 public class TelemetryConfigController(IConfiguration configuration) : ControllerBase
 {

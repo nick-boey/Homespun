@@ -3,12 +3,12 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { useEnrichedClones, enrichedClonesQueryKey } from './use-enriched-clones'
-import { Clones } from '@/api'
+import { ProjectClones } from '@/api'
 import { PullRequestStatus, type EnrichedCloneInfo } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
-  Clones: {
-    getApiClonesEnriched: vi.fn(),
+  ProjectClones: {
+    getApiProjectsByProjectIdClonesEnriched: vi.fn(),
   },
 }))
 
@@ -83,8 +83,8 @@ describe('useEnrichedClones', () => {
   })
 
   it('returns enriched clone data', async () => {
-    const mockGetApiClonesEnriched = Clones.getApiClonesEnriched as Mock
-    mockGetApiClonesEnriched.mockResolvedValueOnce({ data: mockEnrichedClones })
+    const mockGetEnriched = ProjectClones.getApiProjectsByProjectIdClonesEnriched as Mock
+    mockGetEnriched.mockResolvedValueOnce({ data: mockEnrichedClones })
 
     const { result } = renderHook(() => useEnrichedClones('project-1'), {
       wrapper: createWrapper(),
@@ -95,14 +95,14 @@ describe('useEnrichedClones', () => {
     })
 
     expect(result.current.data).toEqual(mockEnrichedClones)
-    expect(mockGetApiClonesEnriched).toHaveBeenCalledWith({
-      query: { projectId: 'project-1' },
+    expect(mockGetEnriched).toHaveBeenCalledWith({
+      path: { projectId: 'project-1' },
     })
   })
 
   it('handles loading state', () => {
-    const mockGetApiClonesEnriched = Clones.getApiClonesEnriched as Mock
-    mockGetApiClonesEnriched.mockReturnValue(new Promise(() => {}))
+    const mockGetEnriched = ProjectClones.getApiProjectsByProjectIdClonesEnriched as Mock
+    mockGetEnriched.mockReturnValue(new Promise(() => {}))
 
     const { result } = renderHook(() => useEnrichedClones('project-1'), {
       wrapper: createWrapper(),
@@ -113,8 +113,8 @@ describe('useEnrichedClones', () => {
   })
 
   it('handles error state', async () => {
-    const mockGetApiClonesEnriched = Clones.getApiClonesEnriched as Mock
-    mockGetApiClonesEnriched.mockResolvedValueOnce({
+    const mockGetEnriched = ProjectClones.getApiProjectsByProjectIdClonesEnriched as Mock
+    mockGetEnriched.mockResolvedValueOnce({
       error: { detail: 'Project not found' },
     })
 
@@ -130,13 +130,13 @@ describe('useEnrichedClones', () => {
   })
 
   it('does not fetch when projectId is empty', () => {
-    const mockGetApiClonesEnriched = Clones.getApiClonesEnriched as Mock
+    const mockGetEnriched = ProjectClones.getApiProjectsByProjectIdClonesEnriched as Mock
 
     const { result } = renderHook(() => useEnrichedClones(''), {
       wrapper: createWrapper(),
     })
 
     expect(result.current.isLoading).toBe(false)
-    expect(mockGetApiClonesEnriched).not.toHaveBeenCalled()
+    expect(mockGetEnriched).not.toHaveBeenCalled()
   })
 })

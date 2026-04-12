@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
-import { Clones, Issues } from '@/api'
+import { ProjectClones, Issues } from '@/api'
 
 interface UseEnsureCloneOptions {
   projectId: string
@@ -71,8 +71,9 @@ export function useEnsureClone({
     queryFn: async () => {
       if (!branchName) return null
 
-      const response = await Clones.getApiClonesExists({
-        query: { projectId, branchName },
+      const response = await ProjectClones.getApiProjectsByProjectIdClonesExists({
+        path: { projectId },
+        query: { branchName },
       })
 
       if (response.error) {
@@ -87,9 +88,9 @@ export function useEnsureClone({
   // Step 3: Mutation to create clone
   const createCloneMutation = useMutation({
     mutationFn: async (branchNameToCreate: string) => {
-      const response = await Clones.postApiClones({
+      const response = await ProjectClones.postApiProjectsByProjectIdClones({
+        path: { projectId },
         body: {
-          projectId,
           branchName: branchNameToCreate,
           createBranch: true,
           baseBranch: baseBranch || undefined,

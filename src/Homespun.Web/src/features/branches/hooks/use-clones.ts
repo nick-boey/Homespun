@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Clones, type CloneInfo, type CreateCloneRequest } from '@/api'
+import { Clones, ProjectClones, type CloneInfo, type CreateCloneRequest } from '@/api'
 
 export const clonesQueryKey = (projectId: string) => ['clones', projectId] as const
 
@@ -7,8 +7,8 @@ export function useClones(projectId: string) {
   return useQuery({
     queryKey: clonesQueryKey(projectId),
     queryFn: async () => {
-      const response = await Clones.getApiClones({
-        query: { projectId },
+      const response = await ProjectClones.getApiProjectsByProjectIdClones({
+        path: { projectId },
       })
       if (response.error) {
         throw new Error(response.error?.detail ?? 'Failed to fetch clones')
@@ -19,12 +19,13 @@ export function useClones(projectId: string) {
   })
 }
 
-export function useCreateClone() {
+export function useCreateClone(projectId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (request: CreateCloneRequest) => {
-      const response = await Clones.postApiClones({
+      const response = await ProjectClones.postApiProjectsByProjectIdClones({
+        path: { projectId },
         body: request,
       })
       if (response.error) {
@@ -32,8 +33,8 @@ export function useCreateClone() {
       }
       return response.data
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: clonesQueryKey(variables.projectId!) })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clonesQueryKey(projectId) })
     },
   })
 }
@@ -43,8 +44,9 @@ export function useDeleteClone() {
 
   return useMutation({
     mutationFn: async ({ projectId, clonePath }: { projectId: string; clonePath: string }) => {
-      const response = await Clones.deleteApiClones({
-        query: { projectId, clonePath },
+      const response = await ProjectClones.deleteApiProjectsByProjectIdClones({
+        path: { projectId },
+        query: { clonePath },
       })
       if (response.error) {
         throw new Error(response.error?.detail ?? 'Failed to delete clone')
@@ -85,8 +87,8 @@ export function usePruneClones() {
 
   return useMutation({
     mutationFn: async (projectId: string) => {
-      const response = await Clones.postApiClonesPrune({
-        query: { projectId },
+      const response = await ProjectClones.postApiProjectsByProjectIdClonesPrune({
+        path: { projectId },
       })
       if (response.error) {
         throw new Error(response.error?.detail ?? 'Failed to prune clones')

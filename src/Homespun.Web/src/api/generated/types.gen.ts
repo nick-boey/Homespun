@@ -256,7 +256,6 @@ export type CreateBranchSessionResponse = {
 }
 
 export type CreateCloneRequest = {
-  projectId: string | null
   branchName: string | null
   createBranch?: boolean
   baseBranch?: string | null
@@ -1852,7 +1851,7 @@ export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
   path?: never
   query?: never
-  url: '/api/ClientTelemetry'
+  url: '/api/client-telemetry'
 }
 
 export type PostApiClientTelemetryErrors = {
@@ -1872,214 +1871,13 @@ export type PostApiClientTelemetryResponses = {
   202: unknown
 }
 
-export type DeleteApiClonesData = {
-  body?: never
-  path?: never
-  query?: {
-    projectId?: string
-    clonePath?: string
-  }
-  url: '/api/Clones'
-}
-
-export type DeleteApiClonesErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type DeleteApiClonesError = DeleteApiClonesErrors[keyof DeleteApiClonesErrors]
-
-export type DeleteApiClonesResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type DeleteApiClonesResponse = DeleteApiClonesResponses[keyof DeleteApiClonesResponses]
-
-export type GetApiClonesData = {
-  body?: never
-  path?: never
-  query?: {
-    projectId?: string
-  }
-  url: '/api/Clones'
-}
-
-export type GetApiClonesErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiClonesError = GetApiClonesErrors[keyof GetApiClonesErrors]
-
-export type GetApiClonesResponses = {
-  /**
-   * OK
-   */
-  200: Array<CloneInfo>
-}
-
-export type GetApiClonesResponse = GetApiClonesResponses[keyof GetApiClonesResponses]
-
-export type PostApiClonesData = {
-  body?: CreateCloneRequest
-  path?: never
-  query?: never
-  url: '/api/Clones'
-}
-
-export type PostApiClonesErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiClonesError = PostApiClonesErrors[keyof PostApiClonesErrors]
-
-export type PostApiClonesResponses = {
-  /**
-   * Created
-   */
-  201: CreateCloneResponse
-}
-
-export type PostApiClonesResponse = PostApiClonesResponses[keyof PostApiClonesResponses]
-
-export type GetApiClonesEnrichedData = {
-  body?: never
-  path?: never
-  query?: {
-    projectId?: string
-  }
-  url: '/api/Clones/enriched'
-}
-
-export type GetApiClonesEnrichedErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiClonesEnrichedError = GetApiClonesEnrichedErrors[keyof GetApiClonesEnrichedErrors]
-
-export type GetApiClonesEnrichedResponses = {
-  /**
-   * OK
-   */
-  200: Array<EnrichedCloneInfo>
-}
-
-export type GetApiClonesEnrichedResponse =
-  GetApiClonesEnrichedResponses[keyof GetApiClonesEnrichedResponses]
-
-export type DeleteApiClonesBulkData = {
-  body?: BulkDeleteClonesRequest
-  path?: never
-  query?: {
-    projectId?: string
-  }
-  url: '/api/Clones/bulk'
-}
-
-export type DeleteApiClonesBulkErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type DeleteApiClonesBulkError = DeleteApiClonesBulkErrors[keyof DeleteApiClonesBulkErrors]
-
-export type DeleteApiClonesBulkResponses = {
-  /**
-   * OK
-   */
-  200: BulkDeleteClonesResponse
-}
-
-export type DeleteApiClonesBulkResponse =
-  DeleteApiClonesBulkResponses[keyof DeleteApiClonesBulkResponses]
-
-export type GetApiClonesExistsData = {
-  body?: never
-  path?: never
-  query?: {
-    projectId?: string
-    branchName?: string
-  }
-  url: '/api/Clones/exists'
-}
-
-export type GetApiClonesExistsErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiClonesExistsError = GetApiClonesExistsErrors[keyof GetApiClonesExistsErrors]
-
-export type GetApiClonesExistsResponses = {
-  /**
-   * OK
-   */
-  200: CloneExistsResponse
-}
-
-export type GetApiClonesExistsResponse =
-  GetApiClonesExistsResponses[keyof GetApiClonesExistsResponses]
-
-export type PostApiClonesPruneData = {
-  body?: never
-  path?: never
-  query?: {
-    projectId?: string
-  }
-  url: '/api/Clones/prune'
-}
-
-export type PostApiClonesPruneErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiClonesPruneError = PostApiClonesPruneErrors[keyof PostApiClonesPruneErrors]
-
-export type PostApiClonesPruneResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type PostApiClonesPruneResponse =
-  PostApiClonesPruneResponses[keyof PostApiClonesPruneResponses]
-
 export type GetApiClonesBranchesData = {
   body?: never
   path?: never
   query?: {
     repoPath?: string
   }
-  url: '/api/Clones/branches'
+  url: '/api/clones/branches'
 }
 
 export type GetApiClonesBranchesErrors = {
@@ -2108,7 +1906,7 @@ export type GetApiClonesChangedFilesData = {
     workingDirectory?: string
     targetBranch?: string
   }
-  url: '/api/Clones/changed-files'
+  url: '/api/clones/changed-files'
 }
 
 export type GetApiClonesChangedFilesResponses = {
@@ -2127,7 +1925,7 @@ export type PostApiClonesPullData = {
   query?: {
     clonePath?: string
   }
-  url: '/api/Clones/pull'
+  url: '/api/clones/pull'
 }
 
 export type PostApiClonesPullErrors = {
@@ -2154,7 +1952,7 @@ export type GetApiClonesSessionBranchInfoData = {
   query?: {
     workingDirectory?: string
   }
-  url: '/api/Clones/session-branch-info'
+  url: '/api/clones/session-branch-info'
 }
 
 export type GetApiClonesSessionBranchInfoErrors = {
@@ -2181,7 +1979,7 @@ export type PostApiClonesSessionData = {
   body?: CreateBranchSessionRequest
   path?: never
   query?: never
-  url: '/api/Clones/session'
+  url: '/api/clones/session'
 }
 
 export type PostApiClonesSessionErrors = {
@@ -2539,35 +2337,35 @@ export type GetApiGraphByProjectIdTaskgraphDataResponses = {
 export type GetApiGraphByProjectIdTaskgraphDataResponse =
   GetApiGraphByProjectIdTaskgraphDataResponses[keyof GetApiGraphByProjectIdTaskgraphDataResponses]
 
-export type GetApiIssuePrStatusByProjectIdByIssueIdData = {
+export type GetApiProjectsByProjectIdIssuesByIssueIdPrStatusData = {
   body?: never
   path: {
     projectId: string
     issueId: string
   }
   query?: never
-  url: '/api/issue-pr-status/{projectId}/{issueId}'
+  url: '/api/projects/{projectId}/issues/{issueId}/pr-status'
 }
 
-export type GetApiIssuePrStatusByProjectIdByIssueIdErrors = {
+export type GetApiProjectsByProjectIdIssuesByIssueIdPrStatusErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type GetApiIssuePrStatusByProjectIdByIssueIdError =
-  GetApiIssuePrStatusByProjectIdByIssueIdErrors[keyof GetApiIssuePrStatusByProjectIdByIssueIdErrors]
+export type GetApiProjectsByProjectIdIssuesByIssueIdPrStatusError =
+  GetApiProjectsByProjectIdIssuesByIssueIdPrStatusErrors[keyof GetApiProjectsByProjectIdIssuesByIssueIdPrStatusErrors]
 
-export type GetApiIssuePrStatusByProjectIdByIssueIdResponses = {
+export type GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponses = {
   /**
    * OK
    */
   200: IssuePullRequestStatus
 }
 
-export type GetApiIssuePrStatusByProjectIdByIssueIdResponse =
-  GetApiIssuePrStatusByProjectIdByIssueIdResponses[keyof GetApiIssuePrStatusByProjectIdByIssueIdResponses]
+export type GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponse =
+  GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponses[keyof GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponses]
 
 export type GetApiProjectsByProjectIdIssuesData = {
   body?: never
@@ -3290,7 +3088,7 @@ export type GetApiNotificationsData = {
   query?: {
     projectId?: string
   }
-  url: '/api/Notifications'
+  url: '/api/notifications'
 }
 
 export type GetApiNotificationsResponses = {
@@ -3307,7 +3105,7 @@ export type PostApiNotificationsData = {
   body?: CreateNotificationRequest
   path?: never
   query?: never
-  url: '/api/Notifications'
+  url: '/api/notifications'
 }
 
 export type PostApiNotificationsErrors = {
@@ -3335,7 +3133,7 @@ export type DeleteApiNotificationsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Notifications/{id}'
+  url: '/api/notifications/{id}'
 }
 
 export type DeleteApiNotificationsByIdResponses = {
@@ -3354,7 +3152,7 @@ export type DeleteApiNotificationsByKeyByKeyData = {
     key: string
   }
   query?: never
-  url: '/api/Notifications/by-key/{key}'
+  url: '/api/notifications/by-key/{key}'
 }
 
 export type DeleteApiNotificationsByKeyByKeyResponses = {
@@ -3400,7 +3198,7 @@ export type GetApiPlansData = {
   query?: {
     workingDirectory?: string
   }
-  url: '/api/Plans'
+  url: '/api/plans'
 }
 
 export type GetApiPlansErrors = {
@@ -3428,7 +3226,7 @@ export type GetApiPlansContentData = {
     workingDirectory?: string
     fileName?: string
   }
-  url: '/api/Plans/content'
+  url: '/api/plans/content'
 }
 
 export type GetApiPlansContentErrors = {
@@ -3454,11 +3252,226 @@ export type GetApiPlansContentResponses = {
 export type GetApiPlansContentResponse =
   GetApiPlansContentResponses[keyof GetApiPlansContentResponses]
 
+export type DeleteApiProjectsByProjectIdClonesData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: {
+    clonePath?: string
+  }
+  url: '/api/projects/{projectId}/clones'
+}
+
+export type DeleteApiProjectsByProjectIdClonesErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type DeleteApiProjectsByProjectIdClonesError =
+  DeleteApiProjectsByProjectIdClonesErrors[keyof DeleteApiProjectsByProjectIdClonesErrors]
+
+export type DeleteApiProjectsByProjectIdClonesResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type DeleteApiProjectsByProjectIdClonesResponse =
+  DeleteApiProjectsByProjectIdClonesResponses[keyof DeleteApiProjectsByProjectIdClonesResponses]
+
+export type GetApiProjectsByProjectIdClonesData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/clones'
+}
+
+export type GetApiProjectsByProjectIdClonesErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdClonesError =
+  GetApiProjectsByProjectIdClonesErrors[keyof GetApiProjectsByProjectIdClonesErrors]
+
+export type GetApiProjectsByProjectIdClonesResponses = {
+  /**
+   * OK
+   */
+  200: Array<CloneInfo>
+}
+
+export type GetApiProjectsByProjectIdClonesResponse =
+  GetApiProjectsByProjectIdClonesResponses[keyof GetApiProjectsByProjectIdClonesResponses]
+
+export type PostApiProjectsByProjectIdClonesData = {
+  body?: CreateCloneRequest
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/clones'
+}
+
+export type PostApiProjectsByProjectIdClonesErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiProjectsByProjectIdClonesError =
+  PostApiProjectsByProjectIdClonesErrors[keyof PostApiProjectsByProjectIdClonesErrors]
+
+export type PostApiProjectsByProjectIdClonesResponses = {
+  /**
+   * Created
+   */
+  201: CreateCloneResponse
+}
+
+export type PostApiProjectsByProjectIdClonesResponse =
+  PostApiProjectsByProjectIdClonesResponses[keyof PostApiProjectsByProjectIdClonesResponses]
+
+export type GetApiProjectsByProjectIdClonesEnrichedData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/clones/enriched'
+}
+
+export type GetApiProjectsByProjectIdClonesEnrichedErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdClonesEnrichedError =
+  GetApiProjectsByProjectIdClonesEnrichedErrors[keyof GetApiProjectsByProjectIdClonesEnrichedErrors]
+
+export type GetApiProjectsByProjectIdClonesEnrichedResponses = {
+  /**
+   * OK
+   */
+  200: Array<EnrichedCloneInfo>
+}
+
+export type GetApiProjectsByProjectIdClonesEnrichedResponse =
+  GetApiProjectsByProjectIdClonesEnrichedResponses[keyof GetApiProjectsByProjectIdClonesEnrichedResponses]
+
+export type DeleteApiProjectsByProjectIdClonesBulkData = {
+  body?: BulkDeleteClonesRequest
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/clones/bulk'
+}
+
+export type DeleteApiProjectsByProjectIdClonesBulkErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type DeleteApiProjectsByProjectIdClonesBulkError =
+  DeleteApiProjectsByProjectIdClonesBulkErrors[keyof DeleteApiProjectsByProjectIdClonesBulkErrors]
+
+export type DeleteApiProjectsByProjectIdClonesBulkResponses = {
+  /**
+   * OK
+   */
+  200: BulkDeleteClonesResponse
+}
+
+export type DeleteApiProjectsByProjectIdClonesBulkResponse =
+  DeleteApiProjectsByProjectIdClonesBulkResponses[keyof DeleteApiProjectsByProjectIdClonesBulkResponses]
+
+export type GetApiProjectsByProjectIdClonesExistsData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: {
+    branchName?: string
+  }
+  url: '/api/projects/{projectId}/clones/exists'
+}
+
+export type GetApiProjectsByProjectIdClonesExistsErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdClonesExistsError =
+  GetApiProjectsByProjectIdClonesExistsErrors[keyof GetApiProjectsByProjectIdClonesExistsErrors]
+
+export type GetApiProjectsByProjectIdClonesExistsResponses = {
+  /**
+   * OK
+   */
+  200: CloneExistsResponse
+}
+
+export type GetApiProjectsByProjectIdClonesExistsResponse =
+  GetApiProjectsByProjectIdClonesExistsResponses[keyof GetApiProjectsByProjectIdClonesExistsResponses]
+
+export type PostApiProjectsByProjectIdClonesPruneData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/clones/prune'
+}
+
+export type PostApiProjectsByProjectIdClonesPruneErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiProjectsByProjectIdClonesPruneError =
+  PostApiProjectsByProjectIdClonesPruneErrors[keyof PostApiProjectsByProjectIdClonesPruneErrors]
+
+export type PostApiProjectsByProjectIdClonesPruneResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type PostApiProjectsByProjectIdClonesPruneResponse =
+  PostApiProjectsByProjectIdClonesPruneResponses[keyof PostApiProjectsByProjectIdClonesPruneResponses]
+
 export type GetApiProjectsData = {
   body?: never
   path?: never
   query?: never
-  url: '/api/Projects'
+  url: '/api/projects'
 }
 
 export type GetApiProjectsResponses = {
@@ -3474,7 +3487,7 @@ export type PostApiProjectsData = {
   body?: CreateProjectRequest
   path?: never
   query?: never
-  url: '/api/Projects'
+  url: '/api/projects'
 }
 
 export type PostApiProjectsErrors = {
@@ -3501,7 +3514,7 @@ export type DeleteApiProjectsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Projects/{id}'
+  url: '/api/projects/{id}'
 }
 
 export type DeleteApiProjectsByIdErrors = {
@@ -3530,7 +3543,7 @@ export type GetApiProjectsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Projects/{id}'
+  url: '/api/projects/{id}'
 }
 
 export type GetApiProjectsByIdErrors = {
@@ -3558,7 +3571,7 @@ export type PutApiProjectsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Projects/{id}'
+  url: '/api/projects/{id}'
 }
 
 export type PutApiProjectsByIdErrors = {
@@ -4138,98 +4151,98 @@ export type PutApiProjectsByProjectIdSecretsByNameResponses = {
 export type PutApiProjectsByProjectIdSecretsByNameResponse =
   PutApiProjectsByProjectIdSecretsByNameResponses[keyof PutApiProjectsByProjectIdSecretsByNameResponses]
 
-export type GetApiSessionCacheBySessionIdMessagesData = {
+export type GetApiSessionsBySessionIdCacheMessagesData = {
   body?: never
   path: {
     sessionId: string
   }
   query?: never
-  url: '/api/session-cache/{sessionId}/messages'
+  url: '/api/sessions/{sessionId}/cache/messages'
 }
 
-export type GetApiSessionCacheBySessionIdMessagesResponses = {
+export type GetApiSessionsBySessionIdCacheMessagesResponses = {
   /**
    * OK
    */
   200: Array<ClaudeMessage>
 }
 
-export type GetApiSessionCacheBySessionIdMessagesResponse =
-  GetApiSessionCacheBySessionIdMessagesResponses[keyof GetApiSessionCacheBySessionIdMessagesResponses]
+export type GetApiSessionsBySessionIdCacheMessagesResponse =
+  GetApiSessionsBySessionIdCacheMessagesResponses[keyof GetApiSessionsBySessionIdCacheMessagesResponses]
 
-export type GetApiSessionCacheBySessionIdSummaryData = {
+export type GetApiSessionsBySessionIdCacheSummaryData = {
   body?: never
   path: {
     sessionId: string
   }
   query?: never
-  url: '/api/session-cache/{sessionId}/summary'
+  url: '/api/sessions/{sessionId}/cache/summary'
 }
 
-export type GetApiSessionCacheBySessionIdSummaryErrors = {
+export type GetApiSessionsBySessionIdCacheSummaryErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type GetApiSessionCacheBySessionIdSummaryError =
-  GetApiSessionCacheBySessionIdSummaryErrors[keyof GetApiSessionCacheBySessionIdSummaryErrors]
+export type GetApiSessionsBySessionIdCacheSummaryError =
+  GetApiSessionsBySessionIdCacheSummaryErrors[keyof GetApiSessionsBySessionIdCacheSummaryErrors]
 
-export type GetApiSessionCacheBySessionIdSummaryResponses = {
+export type GetApiSessionsBySessionIdCacheSummaryResponses = {
   /**
    * OK
    */
   200: SessionCacheSummary
 }
 
-export type GetApiSessionCacheBySessionIdSummaryResponse =
-  GetApiSessionCacheBySessionIdSummaryResponses[keyof GetApiSessionCacheBySessionIdSummaryResponses]
+export type GetApiSessionsBySessionIdCacheSummaryResponse =
+  GetApiSessionsBySessionIdCacheSummaryResponses[keyof GetApiSessionsBySessionIdCacheSummaryResponses]
 
-export type GetApiSessionCacheProjectByProjectIdData = {
+export type GetApiSessionsCacheProjectByProjectIdData = {
   body?: never
   path: {
     projectId: string
   }
   query?: never
-  url: '/api/session-cache/project/{projectId}'
+  url: '/api/sessions/cache/project/{projectId}'
 }
 
-export type GetApiSessionCacheProjectByProjectIdResponses = {
+export type GetApiSessionsCacheProjectByProjectIdResponses = {
   /**
    * OK
    */
   200: Array<SessionCacheSummary>
 }
 
-export type GetApiSessionCacheProjectByProjectIdResponse =
-  GetApiSessionCacheProjectByProjectIdResponses[keyof GetApiSessionCacheProjectByProjectIdResponses]
+export type GetApiSessionsCacheProjectByProjectIdResponse =
+  GetApiSessionsCacheProjectByProjectIdResponses[keyof GetApiSessionsCacheProjectByProjectIdResponses]
 
-export type GetApiSessionCacheEntityByProjectIdByEntityIdData = {
+export type GetApiSessionsCacheEntityByProjectIdByEntityIdData = {
   body?: never
   path: {
     projectId: string
     entityId: string
   }
   query?: never
-  url: '/api/session-cache/entity/{projectId}/{entityId}'
+  url: '/api/sessions/cache/entity/{projectId}/{entityId}'
 }
 
-export type GetApiSessionCacheEntityByProjectIdByEntityIdResponses = {
+export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponses = {
   /**
    * OK
    */
   200: Array<string>
 }
 
-export type GetApiSessionCacheEntityByProjectIdByEntityIdResponse =
-  GetApiSessionCacheEntityByProjectIdByEntityIdResponses[keyof GetApiSessionCacheEntityByProjectIdByEntityIdResponses]
+export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponse =
+  GetApiSessionsCacheEntityByProjectIdByEntityIdResponses[keyof GetApiSessionsCacheEntityByProjectIdByEntityIdResponses]
 
 export type GetApiSessionsData = {
   body?: never
   path?: never
   query?: never
-  url: '/api/Sessions'
+  url: '/api/sessions'
 }
 
 export type GetApiSessionsResponses = {
@@ -4245,7 +4258,7 @@ export type PostApiSessionsData = {
   body?: CreateSessionRequest
   path?: never
   query?: never
-  url: '/api/Sessions'
+  url: '/api/sessions'
 }
 
 export type PostApiSessionsErrors = {
@@ -4276,7 +4289,7 @@ export type DeleteApiSessionsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}'
+  url: '/api/sessions/{id}'
 }
 
 export type DeleteApiSessionsByIdErrors = {
@@ -4305,7 +4318,7 @@ export type GetApiSessionsByIdData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}'
+  url: '/api/sessions/{id}'
 }
 
 export type GetApiSessionsByIdErrors = {
@@ -4333,7 +4346,7 @@ export type DeleteApiSessionsEntityByEntityIdData = {
     entityId: string
   }
   query?: never
-  url: '/api/Sessions/entity/{entityId}'
+  url: '/api/sessions/entity/{entityId}'
 }
 
 export type DeleteApiSessionsEntityByEntityIdResponses = {
@@ -4352,7 +4365,7 @@ export type GetApiSessionsEntityByEntityIdData = {
     entityId: string
   }
   query?: never
-  url: '/api/Sessions/entity/{entityId}'
+  url: '/api/sessions/entity/{entityId}'
 }
 
 export type GetApiSessionsEntityByEntityIdErrors = {
@@ -4381,7 +4394,7 @@ export type GetApiSessionsProjectByProjectIdData = {
     projectId: string
   }
   query?: never
-  url: '/api/Sessions/project/{projectId}'
+  url: '/api/sessions/project/{projectId}'
 }
 
 export type GetApiSessionsProjectByProjectIdResponses = {
@@ -4402,7 +4415,7 @@ export type GetApiSessionsEntityByEntityIdResumableData = {
   query?: {
     workingDirectory?: string
   }
-  url: '/api/Sessions/entity/{entityId}/resumable'
+  url: '/api/sessions/entity/{entityId}/resumable'
 }
 
 export type GetApiSessionsEntityByEntityIdResumableResponses = {
@@ -4422,7 +4435,7 @@ export type GetApiSessionsHistoryByProjectIdByEntityIdData = {
     entityId: string
   }
   query?: never
-  url: '/api/Sessions/history/{projectId}/{entityId}'
+  url: '/api/sessions/history/{projectId}/{entityId}'
 }
 
 export type GetApiSessionsHistoryByProjectIdByEntityIdResponses = {
@@ -4441,7 +4454,7 @@ export type GetApiSessionsByIdCachedMessagesData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/cached-messages'
+  url: '/api/sessions/{id}/cached-messages'
 }
 
 export type GetApiSessionsByIdCachedMessagesResponses = {
@@ -4460,7 +4473,7 @@ export type PostApiSessionsByIdResumeData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/resume'
+  url: '/api/sessions/{id}/resume'
 }
 
 export type PostApiSessionsByIdResumeErrors = {
@@ -4489,7 +4502,7 @@ export type PostApiSessionsByIdMessagesData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/messages'
+  url: '/api/sessions/{id}/messages'
 }
 
 export type PostApiSessionsByIdMessagesErrors = {
@@ -4515,7 +4528,7 @@ export type PostApiSessionsByIdInterruptData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/interrupt'
+  url: '/api/sessions/{id}/interrupt'
 }
 
 export type PostApiSessionsByIdInterruptErrors = {
@@ -4544,7 +4557,7 @@ export type PostApiSessionsByIdAcceptIssueChangesData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/accept-issue-changes'
+  url: '/api/sessions/{id}/accept-issue-changes'
 }
 
 export type PostApiSessionsByIdAcceptIssueChangesErrors = {
@@ -4574,7 +4587,7 @@ export type PostApiSessionsByIdCancelIssueChangesData = {
     id: string
   }
   query?: never
-  url: '/api/Sessions/{id}/cancel-issue-changes'
+  url: '/api/sessions/{id}/cancel-issue-changes'
 }
 
 export type PostApiSessionsByIdCancelIssueChangesErrors = {
@@ -4602,7 +4615,7 @@ export type GetApiSettingsUserData = {
   body?: never
   path?: never
   query?: never
-  url: '/api/Settings/user'
+  url: '/api/settings/user'
 }
 
 export type GetApiSettingsUserResponses = {
@@ -4619,7 +4632,7 @@ export type PutApiSettingsUserEmailData = {
   body?: UpdateUserEmailRequest
   path?: never
   query?: never
-  url: '/api/Settings/user/email'
+  url: '/api/settings/user/email'
 }
 
 export type PutApiSettingsUserEmailErrors = {
@@ -4646,7 +4659,7 @@ export type GetApiTelemetryConfigData = {
   body?: never
   path?: never
   query?: never
-  url: '/api/TelemetryConfig'
+  url: '/api/telemetry-config'
 }
 
 export type GetApiTelemetryConfigResponses = {

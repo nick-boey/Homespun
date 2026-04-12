@@ -11,12 +11,6 @@ import type {
   DeleteApiAgentPromptsByNameByNameResponses,
   DeleteApiAgentPromptsProjectByProjectIdAllData,
   DeleteApiAgentPromptsProjectByProjectIdAllResponses,
-  DeleteApiClonesBulkData,
-  DeleteApiClonesBulkErrors,
-  DeleteApiClonesBulkResponses,
-  DeleteApiClonesData,
-  DeleteApiClonesErrors,
-  DeleteApiClonesResponses,
   DeleteApiContainersByContainerIdData,
   DeleteApiContainersByContainerIdResponses,
   DeleteApiIssuesByIssueIdData,
@@ -29,6 +23,12 @@ import type {
   DeleteApiProjectsByIdData,
   DeleteApiProjectsByIdErrors,
   DeleteApiProjectsByIdResponses,
+  DeleteApiProjectsByProjectIdClonesBulkData,
+  DeleteApiProjectsByProjectIdClonesBulkErrors,
+  DeleteApiProjectsByProjectIdClonesBulkResponses,
+  DeleteApiProjectsByProjectIdClonesData,
+  DeleteApiProjectsByProjectIdClonesErrors,
+  DeleteApiProjectsByProjectIdClonesResponses,
   DeleteApiProjectsByProjectIdSecretsByNameData,
   DeleteApiProjectsByProjectIdSecretsByNameErrors,
   DeleteApiProjectsByProjectIdSecretsByNameResponses,
@@ -61,15 +61,6 @@ import type {
   GetApiClonesBranchesResponses,
   GetApiClonesChangedFilesData,
   GetApiClonesChangedFilesResponses,
-  GetApiClonesData,
-  GetApiClonesEnrichedData,
-  GetApiClonesEnrichedErrors,
-  GetApiClonesEnrichedResponses,
-  GetApiClonesErrors,
-  GetApiClonesExistsData,
-  GetApiClonesExistsErrors,
-  GetApiClonesExistsResponses,
-  GetApiClonesResponses,
   GetApiClonesSessionBranchInfoData,
   GetApiClonesSessionBranchInfoErrors,
   GetApiClonesSessionBranchInfoResponses,
@@ -101,9 +92,6 @@ import type {
   GetApiGraphByProjectIdTaskgraphDataResponses,
   GetApiGraphByProjectIdTaskgraphErrors,
   GetApiGraphByProjectIdTaskgraphResponses,
-  GetApiIssuePrStatusByProjectIdByIssueIdData,
-  GetApiIssuePrStatusByProjectIdByIssueIdErrors,
-  GetApiIssuePrStatusByProjectIdByIssueIdResponses,
   GetApiIssuesAgentBySessionIdDiffData,
   GetApiIssuesAgentBySessionIdDiffErrors,
   GetApiIssuesAgentBySessionIdDiffResponses,
@@ -124,9 +112,21 @@ import type {
   GetApiProjectsByIdData,
   GetApiProjectsByIdErrors,
   GetApiProjectsByIdResponses,
+  GetApiProjectsByProjectIdClonesData,
+  GetApiProjectsByProjectIdClonesEnrichedData,
+  GetApiProjectsByProjectIdClonesEnrichedErrors,
+  GetApiProjectsByProjectIdClonesEnrichedResponses,
+  GetApiProjectsByProjectIdClonesErrors,
+  GetApiProjectsByProjectIdClonesExistsData,
+  GetApiProjectsByProjectIdClonesExistsErrors,
+  GetApiProjectsByProjectIdClonesExistsResponses,
+  GetApiProjectsByProjectIdClonesResponses,
   GetApiProjectsByProjectIdIssuesAssigneesData,
   GetApiProjectsByProjectIdIssuesAssigneesErrors,
   GetApiProjectsByProjectIdIssuesAssigneesResponses,
+  GetApiProjectsByProjectIdIssuesByIssueIdPrStatusData,
+  GetApiProjectsByProjectIdIssuesByIssueIdPrStatusErrors,
+  GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponses,
   GetApiProjectsByProjectIdIssuesData,
   GetApiProjectsByProjectIdIssuesErrors,
   GetApiProjectsByProjectIdIssuesHistoryStateData,
@@ -167,20 +167,20 @@ import type {
   GetApiPullRequestsByIdData,
   GetApiPullRequestsByIdErrors,
   GetApiPullRequestsByIdResponses,
-  GetApiSessionCacheBySessionIdMessagesData,
-  GetApiSessionCacheBySessionIdMessagesResponses,
-  GetApiSessionCacheBySessionIdSummaryData,
-  GetApiSessionCacheBySessionIdSummaryErrors,
-  GetApiSessionCacheBySessionIdSummaryResponses,
-  GetApiSessionCacheEntityByProjectIdByEntityIdData,
-  GetApiSessionCacheEntityByProjectIdByEntityIdResponses,
-  GetApiSessionCacheProjectByProjectIdData,
-  GetApiSessionCacheProjectByProjectIdResponses,
   GetApiSessionsByIdCachedMessagesData,
   GetApiSessionsByIdCachedMessagesResponses,
   GetApiSessionsByIdData,
   GetApiSessionsByIdErrors,
   GetApiSessionsByIdResponses,
+  GetApiSessionsBySessionIdCacheMessagesData,
+  GetApiSessionsBySessionIdCacheMessagesResponses,
+  GetApiSessionsBySessionIdCacheSummaryData,
+  GetApiSessionsBySessionIdCacheSummaryErrors,
+  GetApiSessionsBySessionIdCacheSummaryResponses,
+  GetApiSessionsCacheEntityByProjectIdByEntityIdData,
+  GetApiSessionsCacheEntityByProjectIdByEntityIdResponses,
+  GetApiSessionsCacheProjectByProjectIdData,
+  GetApiSessionsCacheProjectByProjectIdResponses,
   GetApiSessionsData,
   GetApiSessionsEntityByEntityIdData,
   GetApiSessionsEntityByEntityIdErrors,
@@ -217,15 +217,9 @@ import type {
   PostApiClientTelemetryData,
   PostApiClientTelemetryErrors,
   PostApiClientTelemetryResponses,
-  PostApiClonesData,
-  PostApiClonesErrors,
-  PostApiClonesPruneData,
-  PostApiClonesPruneErrors,
-  PostApiClonesPruneResponses,
   PostApiClonesPullData,
   PostApiClonesPullErrors,
   PostApiClonesPullResponses,
-  PostApiClonesResponses,
   PostApiClonesSessionData,
   PostApiClonesSessionErrors,
   PostApiClonesSessionResponses,
@@ -288,6 +282,12 @@ import type {
   PostApiOrchestrationGenerateBranchIdData,
   PostApiOrchestrationGenerateBranchIdErrors,
   PostApiOrchestrationGenerateBranchIdResponses,
+  PostApiProjectsByProjectIdClonesData,
+  PostApiProjectsByProjectIdClonesErrors,
+  PostApiProjectsByProjectIdClonesPruneData,
+  PostApiProjectsByProjectIdClonesPruneErrors,
+  PostApiProjectsByProjectIdClonesPruneResponses,
+  PostApiProjectsByProjectIdClonesResponses,
   PostApiProjectsByProjectIdFullRefreshData,
   PostApiProjectsByProjectIdFullRefreshErrors,
   PostApiProjectsByProjectIdFullRefreshResponses,
@@ -553,7 +553,7 @@ export class ClientTelemetry {
       PostApiClientTelemetryErrors,
       ThrowOnError
     >({
-      url: '/api/ClientTelemetry',
+      url: '/api/client-telemetry',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -564,88 +564,6 @@ export class ClientTelemetry {
 }
 
 export class Clones {
-  public static deleteApiClones<ThrowOnError extends boolean = false>(
-    options?: Options<DeleteApiClonesData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).delete<
-      DeleteApiClonesResponses,
-      DeleteApiClonesErrors,
-      ThrowOnError
-    >({ url: '/api/Clones', ...options })
-  }
-
-  public static getApiClones<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiClonesData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<GetApiClonesResponses, GetApiClonesErrors, ThrowOnError>(
-      { url: '/api/Clones', ...options }
-    )
-  }
-
-  public static postApiClones<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiClonesData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiClonesResponses,
-      PostApiClonesErrors,
-      ThrowOnError
-    >({
-      url: '/api/Clones',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static getApiClonesEnriched<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiClonesEnrichedData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetApiClonesEnrichedResponses,
-      GetApiClonesEnrichedErrors,
-      ThrowOnError
-    >({ url: '/api/Clones/enriched', ...options })
-  }
-
-  public static deleteApiClonesBulk<ThrowOnError extends boolean = false>(
-    options?: Options<DeleteApiClonesBulkData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).delete<
-      DeleteApiClonesBulkResponses,
-      DeleteApiClonesBulkErrors,
-      ThrowOnError
-    >({
-      url: '/api/Clones/bulk',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static getApiClonesExists<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiClonesExistsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetApiClonesExistsResponses,
-      GetApiClonesExistsErrors,
-      ThrowOnError
-    >({ url: '/api/Clones/exists', ...options })
-  }
-
-  public static postApiClonesPrune<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiClonesPruneData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiClonesPruneResponses,
-      PostApiClonesPruneErrors,
-      ThrowOnError
-    >({ url: '/api/Clones/prune', ...options })
-  }
-
   public static getApiClonesBranches<ThrowOnError extends boolean = false>(
     options?: Options<GetApiClonesBranchesData, ThrowOnError>
   ) {
@@ -653,7 +571,7 @@ export class Clones {
       GetApiClonesBranchesResponses,
       GetApiClonesBranchesErrors,
       ThrowOnError
-    >({ url: '/api/Clones/branches', ...options })
+    >({ url: '/api/clones/branches', ...options })
   }
 
   public static getApiClonesChangedFiles<ThrowOnError extends boolean = false>(
@@ -663,7 +581,7 @@ export class Clones {
       GetApiClonesChangedFilesResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Clones/changed-files', ...options })
+    >({ url: '/api/clones/changed-files', ...options })
   }
 
   public static postApiClonesPull<ThrowOnError extends boolean = false>(
@@ -673,7 +591,7 @@ export class Clones {
       PostApiClonesPullResponses,
       PostApiClonesPullErrors,
       ThrowOnError
-    >({ url: '/api/Clones/pull', ...options })
+    >({ url: '/api/clones/pull', ...options })
   }
 
   public static getApiClonesSessionBranchInfo<ThrowOnError extends boolean = false>(
@@ -683,7 +601,7 @@ export class Clones {
       GetApiClonesSessionBranchInfoResponses,
       GetApiClonesSessionBranchInfoErrors,
       ThrowOnError
-    >({ url: '/api/Clones/session-branch-info', ...options })
+    >({ url: '/api/clones/session-branch-info', ...options })
   }
 
   public static postApiClonesSession<ThrowOnError extends boolean = false>(
@@ -694,7 +612,7 @@ export class Clones {
       PostApiClonesSessionErrors,
       ThrowOnError
     >({
-      url: '/api/Clones/session',
+      url: '/api/clones/session',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -848,14 +766,14 @@ export class Graph {
 }
 
 export class IssuePrStatus {
-  public static getApiIssuePrStatusByProjectIdByIssueId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiIssuePrStatusByProjectIdByIssueIdData, ThrowOnError>
-  ) {
+  public static getApiProjectsByProjectIdIssuesByIssueIdPrStatus<
+    ThrowOnError extends boolean = false,
+  >(options: Options<GetApiProjectsByProjectIdIssuesByIssueIdPrStatusData, ThrowOnError>) {
     return (options.client ?? client).get<
-      GetApiIssuePrStatusByProjectIdByIssueIdResponses,
-      GetApiIssuePrStatusByProjectIdByIssueIdErrors,
+      GetApiProjectsByProjectIdIssuesByIssueIdPrStatusResponses,
+      GetApiProjectsByProjectIdIssuesByIssueIdPrStatusErrors,
       ThrowOnError
-    >({ url: '/api/issue-pr-status/{projectId}/{issueId}', ...options })
+    >({ url: '/api/projects/{projectId}/issues/{issueId}/pr-status', ...options })
   }
 }
 
@@ -1168,7 +1086,7 @@ export class Notifications {
     options?: Options<GetApiNotificationsData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiNotificationsResponses, unknown, ThrowOnError>({
-      url: '/api/Notifications',
+      url: '/api/notifications',
       ...options,
     })
   }
@@ -1181,7 +1099,7 @@ export class Notifications {
       PostApiNotificationsErrors,
       ThrowOnError
     >({
-      url: '/api/Notifications',
+      url: '/api/notifications',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1197,7 +1115,7 @@ export class Notifications {
       DeleteApiNotificationsByIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Notifications/{id}', ...options })
+    >({ url: '/api/notifications/{id}', ...options })
   }
 
   public static deleteApiNotificationsByKeyByKey<ThrowOnError extends boolean = false>(
@@ -1207,7 +1125,7 @@ export class Notifications {
       DeleteApiNotificationsByKeyByKeyResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Notifications/by-key/{key}', ...options })
+    >({ url: '/api/notifications/by-key/{key}', ...options })
   }
 }
 
@@ -1235,7 +1153,7 @@ export class Plans {
     options?: Options<GetApiPlansData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiPlansResponses, GetApiPlansErrors, ThrowOnError>({
-      url: '/api/Plans',
+      url: '/api/plans',
       ...options,
     })
   }
@@ -1247,7 +1165,93 @@ export class Plans {
       GetApiPlansContentResponses,
       GetApiPlansContentErrors,
       ThrowOnError
-    >({ url: '/api/Plans/content', ...options })
+    >({ url: '/api/plans/content', ...options })
+  }
+}
+
+export class ProjectClones {
+  public static deleteApiProjectsByProjectIdClones<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiProjectsByProjectIdClonesData, ThrowOnError>
+  ) {
+    return (options.client ?? client).delete<
+      DeleteApiProjectsByProjectIdClonesResponses,
+      DeleteApiProjectsByProjectIdClonesErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/clones', ...options })
+  }
+
+  public static getApiProjectsByProjectIdClones<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdClonesData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdClonesResponses,
+      GetApiProjectsByProjectIdClonesErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/clones', ...options })
+  }
+
+  public static postApiProjectsByProjectIdClones<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdClonesData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdClonesResponses,
+      PostApiProjectsByProjectIdClonesErrors,
+      ThrowOnError
+    >({
+      url: '/api/projects/{projectId}/clones',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static getApiProjectsByProjectIdClonesEnriched<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdClonesEnrichedData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdClonesEnrichedResponses,
+      GetApiProjectsByProjectIdClonesEnrichedErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/clones/enriched', ...options })
+  }
+
+  public static deleteApiProjectsByProjectIdClonesBulk<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiProjectsByProjectIdClonesBulkData, ThrowOnError>
+  ) {
+    return (options.client ?? client).delete<
+      DeleteApiProjectsByProjectIdClonesBulkResponses,
+      DeleteApiProjectsByProjectIdClonesBulkErrors,
+      ThrowOnError
+    >({
+      url: '/api/projects/{projectId}/clones/bulk',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static getApiProjectsByProjectIdClonesExists<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdClonesExistsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdClonesExistsResponses,
+      GetApiProjectsByProjectIdClonesExistsErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/clones/exists', ...options })
+  }
+
+  public static postApiProjectsByProjectIdClonesPrune<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdClonesPruneData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdClonesPruneResponses,
+      PostApiProjectsByProjectIdClonesPruneErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/clones/prune', ...options })
   }
 }
 
@@ -1256,7 +1260,7 @@ export class Projects {
     options?: Options<GetApiProjectsData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiProjectsResponses, unknown, ThrowOnError>({
-      url: '/api/Projects',
+      url: '/api/projects',
       ...options,
     })
   }
@@ -1269,7 +1273,7 @@ export class Projects {
       PostApiProjectsErrors,
       ThrowOnError
     >({
-      url: '/api/Projects',
+      url: '/api/projects',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1285,7 +1289,7 @@ export class Projects {
       DeleteApiProjectsByIdResponses,
       DeleteApiProjectsByIdErrors,
       ThrowOnError
-    >({ url: '/api/Projects/{id}', ...options })
+    >({ url: '/api/projects/{id}', ...options })
   }
 
   public static getApiProjectsById<ThrowOnError extends boolean = false>(
@@ -1295,7 +1299,7 @@ export class Projects {
       GetApiProjectsByIdResponses,
       GetApiProjectsByIdErrors,
       ThrowOnError
-    >({ url: '/api/Projects/{id}', ...options })
+    >({ url: '/api/projects/{id}', ...options })
   }
 
   public static putApiProjectsById<ThrowOnError extends boolean = false>(
@@ -1306,7 +1310,7 @@ export class Projects {
       PutApiProjectsByIdErrors,
       ThrowOnError
     >({
-      url: '/api/Projects/{id}',
+      url: '/api/projects/{id}',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1550,44 +1554,44 @@ export class Secrets {
 }
 
 export class SessionCache {
-  public static getApiSessionCacheBySessionIdMessages<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionCacheBySessionIdMessagesData, ThrowOnError>
+  public static getApiSessionsBySessionIdCacheMessages<ThrowOnError extends boolean = false>(
+    options: Options<GetApiSessionsBySessionIdCacheMessagesData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiSessionCacheBySessionIdMessagesResponses,
+      GetApiSessionsBySessionIdCacheMessagesResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/session-cache/{sessionId}/messages', ...options })
+    >({ url: '/api/sessions/{sessionId}/cache/messages', ...options })
   }
 
-  public static getApiSessionCacheBySessionIdSummary<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionCacheBySessionIdSummaryData, ThrowOnError>
+  public static getApiSessionsBySessionIdCacheSummary<ThrowOnError extends boolean = false>(
+    options: Options<GetApiSessionsBySessionIdCacheSummaryData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiSessionCacheBySessionIdSummaryResponses,
-      GetApiSessionCacheBySessionIdSummaryErrors,
+      GetApiSessionsBySessionIdCacheSummaryResponses,
+      GetApiSessionsBySessionIdCacheSummaryErrors,
       ThrowOnError
-    >({ url: '/api/session-cache/{sessionId}/summary', ...options })
+    >({ url: '/api/sessions/{sessionId}/cache/summary', ...options })
   }
 
-  public static getApiSessionCacheProjectByProjectId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionCacheProjectByProjectIdData, ThrowOnError>
+  public static getApiSessionsCacheProjectByProjectId<ThrowOnError extends boolean = false>(
+    options: Options<GetApiSessionsCacheProjectByProjectIdData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiSessionCacheProjectByProjectIdResponses,
+      GetApiSessionsCacheProjectByProjectIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/session-cache/project/{projectId}', ...options })
+    >({ url: '/api/sessions/cache/project/{projectId}', ...options })
   }
 
-  public static getApiSessionCacheEntityByProjectIdByEntityId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionCacheEntityByProjectIdByEntityIdData, ThrowOnError>
-  ) {
+  public static getApiSessionsCacheEntityByProjectIdByEntityId<
+    ThrowOnError extends boolean = false,
+  >(options: Options<GetApiSessionsCacheEntityByProjectIdByEntityIdData, ThrowOnError>) {
     return (options.client ?? client).get<
-      GetApiSessionCacheEntityByProjectIdByEntityIdResponses,
+      GetApiSessionsCacheEntityByProjectIdByEntityIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/session-cache/entity/{projectId}/{entityId}', ...options })
+    >({ url: '/api/sessions/cache/entity/{projectId}/{entityId}', ...options })
   }
 }
 
@@ -1596,7 +1600,7 @@ export class Sessions {
     options?: Options<GetApiSessionsData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiSessionsResponses, unknown, ThrowOnError>({
-      url: '/api/Sessions',
+      url: '/api/sessions',
       ...options,
     })
   }
@@ -1609,7 +1613,7 @@ export class Sessions {
       PostApiSessionsErrors,
       ThrowOnError
     >({
-      url: '/api/Sessions',
+      url: '/api/sessions',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1625,7 +1629,7 @@ export class Sessions {
       DeleteApiSessionsByIdResponses,
       DeleteApiSessionsByIdErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}', ...options })
+    >({ url: '/api/sessions/{id}', ...options })
   }
 
   public static getApiSessionsById<ThrowOnError extends boolean = false>(
@@ -1635,7 +1639,7 @@ export class Sessions {
       GetApiSessionsByIdResponses,
       GetApiSessionsByIdErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}', ...options })
+    >({ url: '/api/sessions/{id}', ...options })
   }
 
   public static deleteApiSessionsEntityByEntityId<ThrowOnError extends boolean = false>(
@@ -1645,7 +1649,7 @@ export class Sessions {
       DeleteApiSessionsEntityByEntityIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Sessions/entity/{entityId}', ...options })
+    >({ url: '/api/sessions/entity/{entityId}', ...options })
   }
 
   public static getApiSessionsEntityByEntityId<ThrowOnError extends boolean = false>(
@@ -1655,7 +1659,7 @@ export class Sessions {
       GetApiSessionsEntityByEntityIdResponses,
       GetApiSessionsEntityByEntityIdErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/entity/{entityId}', ...options })
+    >({ url: '/api/sessions/entity/{entityId}', ...options })
   }
 
   public static getApiSessionsProjectByProjectId<ThrowOnError extends boolean = false>(
@@ -1665,7 +1669,7 @@ export class Sessions {
       GetApiSessionsProjectByProjectIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Sessions/project/{projectId}', ...options })
+    >({ url: '/api/sessions/project/{projectId}', ...options })
   }
 
   public static getApiSessionsEntityByEntityIdResumable<ThrowOnError extends boolean = false>(
@@ -1675,7 +1679,7 @@ export class Sessions {
       GetApiSessionsEntityByEntityIdResumableResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Sessions/entity/{entityId}/resumable', ...options })
+    >({ url: '/api/sessions/entity/{entityId}/resumable', ...options })
   }
 
   public static getApiSessionsHistoryByProjectIdByEntityId<ThrowOnError extends boolean = false>(
@@ -1685,7 +1689,7 @@ export class Sessions {
       GetApiSessionsHistoryByProjectIdByEntityIdResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Sessions/history/{projectId}/{entityId}', ...options })
+    >({ url: '/api/sessions/history/{projectId}/{entityId}', ...options })
   }
 
   public static getApiSessionsByIdCachedMessages<ThrowOnError extends boolean = false>(
@@ -1695,7 +1699,7 @@ export class Sessions {
       GetApiSessionsByIdCachedMessagesResponses,
       unknown,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}/cached-messages', ...options })
+    >({ url: '/api/sessions/{id}/cached-messages', ...options })
   }
 
   public static postApiSessionsByIdResume<ThrowOnError extends boolean = false>(
@@ -1706,7 +1710,7 @@ export class Sessions {
       PostApiSessionsByIdResumeErrors,
       ThrowOnError
     >({
-      url: '/api/Sessions/{id}/resume',
+      url: '/api/sessions/{id}/resume',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1723,7 +1727,7 @@ export class Sessions {
       PostApiSessionsByIdMessagesErrors,
       ThrowOnError
     >({
-      url: '/api/Sessions/{id}/messages',
+      url: '/api/sessions/{id}/messages',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1739,7 +1743,7 @@ export class Sessions {
       PostApiSessionsByIdInterruptResponses,
       PostApiSessionsByIdInterruptErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}/interrupt', ...options })
+    >({ url: '/api/sessions/{id}/interrupt', ...options })
   }
 
   public static postApiSessionsByIdAcceptIssueChanges<ThrowOnError extends boolean = false>(
@@ -1749,7 +1753,7 @@ export class Sessions {
       PostApiSessionsByIdAcceptIssueChangesResponses,
       PostApiSessionsByIdAcceptIssueChangesErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}/accept-issue-changes', ...options })
+    >({ url: '/api/sessions/{id}/accept-issue-changes', ...options })
   }
 
   public static postApiSessionsByIdCancelIssueChanges<ThrowOnError extends boolean = false>(
@@ -1759,7 +1763,7 @@ export class Sessions {
       PostApiSessionsByIdCancelIssueChangesResponses,
       PostApiSessionsByIdCancelIssueChangesErrors,
       ThrowOnError
-    >({ url: '/api/Sessions/{id}/cancel-issue-changes', ...options })
+    >({ url: '/api/sessions/{id}/cancel-issue-changes', ...options })
   }
 }
 
@@ -1768,7 +1772,7 @@ export class Settings {
     options?: Options<GetApiSettingsUserData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiSettingsUserResponses, unknown, ThrowOnError>({
-      url: '/api/Settings/user',
+      url: '/api/settings/user',
       ...options,
     })
   }
@@ -1781,7 +1785,7 @@ export class Settings {
       PutApiSettingsUserEmailErrors,
       ThrowOnError
     >({
-      url: '/api/Settings/user/email',
+      url: '/api/settings/user/email',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1796,7 +1800,7 @@ export class TelemetryConfig {
     options?: Options<GetApiTelemetryConfigData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<GetApiTelemetryConfigResponses, unknown, ThrowOnError>({
-      url: '/api/TelemetryConfig',
+      url: '/api/telemetry-config',
       ...options,
     })
   }

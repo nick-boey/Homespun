@@ -6,7 +6,7 @@ namespace Homespun.Features.Notifications.Controllers;
 /// API endpoints for managing notifications.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/notifications")]
 [Produces("application/json")]
 public class NotificationsController(INotificationService notificationService) : ControllerBase
 {

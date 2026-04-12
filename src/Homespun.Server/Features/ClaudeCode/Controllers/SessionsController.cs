@@ -12,7 +12,7 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 /// API endpoints for managing Claude Code sessions.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/sessions")]
 [Produces("application/json")]
 public class SessionsController(
     IClaudeSessionService sessionService,

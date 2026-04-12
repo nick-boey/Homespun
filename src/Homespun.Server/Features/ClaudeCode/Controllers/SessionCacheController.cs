@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace Homespun.Features.ClaudeCode.Controllers;
 
 [ApiController]
-[Route("api/session-cache")]
+[Route("api/sessions")]
 [Produces("application/json")]
 public class SessionCacheController(IMessageCacheStore messageCacheStore) : ControllerBase
 {
-    [HttpGet("{sessionId}/messages")]
+    [HttpGet("{sessionId}/cache/messages")]
     [ProducesResponseType<IReadOnlyList<ClaudeMessage>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<ClaudeMessage>>> GetMessages(string sessionId, CancellationToken ct)
     {
@@ -16,7 +16,7 @@ public class SessionCacheController(IMessageCacheStore messageCacheStore) : Cont
         return Ok(messages);
     }
 
-    [HttpGet("{sessionId}/summary")]
+    [HttpGet("{sessionId}/cache/summary")]
     [ProducesResponseType<SessionCacheSummary>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SessionCacheSummary>> GetSummary(string sessionId, CancellationToken ct)
@@ -29,7 +29,7 @@ public class SessionCacheController(IMessageCacheStore messageCacheStore) : Cont
         return Ok(summary);
     }
 
-    [HttpGet("project/{projectId}")]
+    [HttpGet("cache/project/{projectId}")]
     [ProducesResponseType<IReadOnlyList<SessionCacheSummary>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<SessionCacheSummary>>> ListSessions(string projectId, CancellationToken ct)
     {
@@ -37,7 +37,7 @@ public class SessionCacheController(IMessageCacheStore messageCacheStore) : Cont
         return Ok(sessions);
     }
 
-    [HttpGet("entity/{projectId}/{entityId}")]
+    [HttpGet("cache/entity/{projectId}/{entityId}")]
     [ProducesResponseType<IReadOnlyList<string>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<string>>> GetEntitySessionIds(
         string projectId,
