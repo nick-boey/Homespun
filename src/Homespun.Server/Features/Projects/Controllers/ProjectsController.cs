@@ -6,7 +6,7 @@ namespace Homespun.Features.Projects.Controllers;
 /// API endpoints for managing projects.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/projects")]
 [Produces("application/json")]
 public class ProjectsController(IProjectService projectService) : ControllerBase
 {

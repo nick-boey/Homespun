@@ -10,7 +10,7 @@ namespace Homespun.Features.Observability;
 /// Events are logged to stdout as JSON where Promtail can collect them for Loki.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/client-telemetry")]
 [Produces("application/json")]
 public class ClientTelemetryController : ControllerBase
 {

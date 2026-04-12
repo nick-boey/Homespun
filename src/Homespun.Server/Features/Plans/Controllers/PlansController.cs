@@ -8,7 +8,7 @@ namespace Homespun.Features.Plans.Controllers;
 /// API endpoints for accessing Claude Code plan files.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/plans")]
 [Produces("application/json")]
 public class PlansController(IPlansService plansService) : ControllerBase
 {

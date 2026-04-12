@@ -14,7 +14,7 @@ export function useIssuePrStatus(session: ClaudeSession | undefined) {
         return null
       }
 
-      const response = await IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId({
+      const response = await IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus({
         path: {
           projectId,
           issueId,

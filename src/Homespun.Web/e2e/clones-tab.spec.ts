@@ -14,7 +14,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('displays empty state when no clones exist', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -27,7 +27,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('displays Feature Clones section', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -58,7 +58,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('displays Issues Agent Clones section separately', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -83,7 +83,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('shows delete button on deletable clones', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -115,7 +115,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('shows Delete All Stale button with count', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -144,7 +144,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('opens confirmation dialog on Delete All click', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -166,7 +166,7 @@ test.describe('Clones Tab', () => {
   test('deletes clones on confirmation', async ({ page }) => {
     let deleteApiCalled = false
 
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -180,7 +180,7 @@ test.describe('Clones Tab', () => {
       })
     })
 
-    await page.route('**/api/Clones/bulk**', async (route) => {
+    await page.route('**/api/projects/*/clones/bulk**', async (route) => {
       deleteApiCalled = true
       await route.fulfill({
         status: 200,
@@ -197,7 +197,7 @@ test.describe('Clones Tab', () => {
   })
 
   test('displays linked PR with status badge', async ({ page }) => {
-    await page.route('**/api/Clones/enriched**', async (route) => {
+    await page.route('**/api/projects/*/clones/enriched**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -6,11 +6,6 @@ namespace Homespun.Shared.Requests;
 public class CreateCloneRequest
 {
     /// <summary>
-    /// The project ID.
-    /// </summary>
-    public required string ProjectId { get; set; }
-
-    /// <summary>
     /// The branch name.
     /// </summary>
     public required string BranchName { get; set; }

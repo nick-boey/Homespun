@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEnsureClone } from './use-ensure-clone'
-import { Clones, Issues } from '@/api'
+import { ProjectClones, Issues } from '@/api'
 import type { ReactNode } from 'react'
 import type {
   CloneExistsResponse,
@@ -14,9 +14,9 @@ vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
   return {
     ...actual,
-    Clones: {
-      getApiClonesExists: vi.fn(),
-      postApiClones: vi.fn(),
+    ProjectClones: {
+      getApiProjectsByProjectIdClonesExists: vi.fn(),
+      postApiProjectsByProjectIdClones: vi.fn(),
     },
     Issues: {
       getApiIssuesByIssueIdResolvedBranch: vi.fn(),
@@ -24,8 +24,8 @@ vi.mock('@/api', async (importOriginal) => {
   }
 })
 
-const mockGetApiClonesExists = vi.mocked(Clones.getApiClonesExists)
-const mockPostApiClones = vi.mocked(Clones.postApiClones)
+const mockGetApiClonesExists = vi.mocked(ProjectClones.getApiProjectsByProjectIdClonesExists)
+const mockPostApiClones = vi.mocked(ProjectClones.postApiProjectsByProjectIdClones)
 const mockGetResolvedBranch = vi.mocked(Issues.getApiIssuesByIssueIdResolvedBranch)
 
 // Helper to create mock API response
@@ -88,7 +88,8 @@ describe('useEnsureClone', () => {
       query: { projectId: 'project-1' },
     })
     expect(mockGetApiClonesExists).toHaveBeenCalledWith({
-      query: { projectId: 'project-1', branchName: 'feature/test-123' },
+      path: { projectId: 'project-1' },
+      query: { branchName: 'feature/test-123' },
     })
     expect(result.current.branchName).toBe('feature/test-123')
     expect(result.current.cloneExists).toBe(true)
@@ -141,8 +142,8 @@ describe('useEnsureClone', () => {
     const clonePath = await result.current.ensureClone()
 
     expect(mockPostApiClones).toHaveBeenCalledWith({
+      path: { projectId: 'project-1' },
       body: {
-        projectId: 'project-1',
         branchName: 'feature/new-branch',
         createBranch: true,
       },

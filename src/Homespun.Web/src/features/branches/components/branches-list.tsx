@@ -39,7 +39,7 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
 
   const deleteClone = useDeleteClone()
   const pullClone = usePullClone()
-  const createClone = useCreateClone()
+  const createClone = useCreateClone(projectId)
 
   const [pullingClones, setPullingClones] = useState<Set<string>>(new Set())
   const [deletingClones, setDeletingClones] = useState<Set<string>>(new Set())
@@ -107,7 +107,6 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
     setCreatingBranches((prev) => new Set(prev).add(branch.shortName!))
     try {
       await createClone.mutateAsync({
-        projectId,
         branchName: branch.shortName,
         createBranch: false,
       })

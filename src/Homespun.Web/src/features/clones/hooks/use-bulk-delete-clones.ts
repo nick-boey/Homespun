@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Clones, type BulkDeleteClonesResponse } from '@/api'
+import { ProjectClones, type BulkDeleteClonesResponse } from '@/api'
 import { enrichedClonesQueryKey } from './use-enriched-clones'
 
 export function useBulkDeleteClones() {
@@ -7,8 +7,8 @@ export function useBulkDeleteClones() {
 
   return useMutation({
     mutationFn: async ({ projectId, clonePaths }: { projectId: string; clonePaths: string[] }) => {
-      const response = await Clones.deleteApiClonesBulk({
-        query: { projectId },
+      const response = await ProjectClones.deleteApiProjectsByProjectIdClonesBulk({
+        path: { projectId },
         body: { clonePaths },
       })
       if (response.error) {

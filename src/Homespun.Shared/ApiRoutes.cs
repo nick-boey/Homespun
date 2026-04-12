@@ -13,4 +13,8 @@ public static class ApiRoutes
     public const string Orchestration = "api/orchestration";
     public const string Containers = "api/containers";
     public const string Plans = "api/plans";
+    public const string Notifications = "api/notifications";
+    public const string Settings = "api/settings";
+    public const string ClientTelemetry = "api/client-telemetry";
+    public const string TelemetryConfig = "api/telemetry-config";
 }

@@ -9,16 +9,18 @@ import {
   usePullClone,
   usePruneClones,
 } from './use-clones'
-import { Clones } from '@/api'
+import { Clones, ProjectClones } from '@/api'
 import type { CloneInfo } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
   Clones: {
-    getApiClones: vi.fn(),
-    postApiClones: vi.fn(),
-    deleteApiClones: vi.fn(),
     postApiClonesPull: vi.fn(),
-    postApiClonesPrune: vi.fn(),
+  },
+  ProjectClones: {
+    getApiProjectsByProjectIdClones: vi.fn(),
+    postApiProjectsByProjectIdClones: vi.fn(),
+    deleteApiProjectsByProjectIdClones: vi.fn(),
+    postApiProjectsByProjectIdClonesPrune: vi.fn(),
   },
 }))
 
@@ -60,7 +62,7 @@ describe('useClones', () => {
   })
 
   it('fetches clones successfully', async () => {
-    const mockGetApiClones = Clones.getApiClones as Mock
+    const mockGetApiClones = ProjectClones.getApiProjectsByProjectIdClones as Mock
     mockGetApiClones.mockResolvedValueOnce({ data: mockClones })
 
     const { result } = renderHook(() => useClones('project-1'), {
@@ -75,12 +77,12 @@ describe('useClones', () => {
 
     expect(result.current.data).toEqual(mockClones)
     expect(mockGetApiClones).toHaveBeenCalledWith({
-      query: { projectId: 'project-1' },
+      path: { projectId: 'project-1' },
     })
   })
 
   it('returns loading state initially', () => {
-    const mockGetApiClones = Clones.getApiClones as Mock
+    const mockGetApiClones = ProjectClones.getApiProjectsByProjectIdClones as Mock
     mockGetApiClones.mockReturnValue(new Promise(() => {}))
 
     const { result } = renderHook(() => useClones('project-1'), {
@@ -92,7 +94,7 @@ describe('useClones', () => {
   })
 
   it('does not fetch when projectId is empty', () => {
-    const mockGetApiClones = Clones.getApiClones as Mock
+    const mockGetApiClones = ProjectClones.getApiProjectsByProjectIdClones as Mock
 
     const { result } = renderHook(() => useClones(''), {
       wrapper: createWrapper(),
@@ -103,7 +105,7 @@ describe('useClones', () => {
   })
 
   it('handles error response', async () => {
-    const mockGetApiClones = Clones.getApiClones as Mock
+    const mockGetApiClones = ProjectClones.getApiProjectsByProjectIdClones as Mock
     mockGetApiClones.mockResolvedValueOnce({
       error: { detail: 'Project not found' },
     })
@@ -126,17 +128,16 @@ describe('useCreateClone', () => {
   })
 
   it('creates a clone successfully', async () => {
-    const mockPostApiClones = Clones.postApiClones as Mock
+    const mockPostApiClones = ProjectClones.postApiProjectsByProjectIdClones as Mock
     mockPostApiClones.mockResolvedValueOnce({
       data: { path: '/repos/.clones/new-branch', branchName: 'new-branch' },
     })
 
-    const { result } = renderHook(() => useCreateClone(), {
+    const { result } = renderHook(() => useCreateClone('project-1'), {
       wrapper: createWrapper(),
     })
 
     result.current.mutate({
-      projectId: 'project-1',
       branchName: 'new-branch',
       createBranch: true,
     })
@@ -146,8 +147,8 @@ describe('useCreateClone', () => {
     })
 
     expect(mockPostApiClones).toHaveBeenCalledWith({
+      path: { projectId: 'project-1' },
       body: {
-        projectId: 'project-1',
         branchName: 'new-branch',
         createBranch: true,
       },
@@ -155,17 +156,16 @@ describe('useCreateClone', () => {
   })
 
   it('handles creation error', async () => {
-    const mockPostApiClones = Clones.postApiClones as Mock
+    const mockPostApiClones = ProjectClones.postApiProjectsByProjectIdClones as Mock
     mockPostApiClones.mockResolvedValueOnce({
       error: { detail: 'Branch already exists' },
     })
 
-    const { result } = renderHook(() => useCreateClone(), {
+    const { result } = renderHook(() => useCreateClone('project-1'), {
       wrapper: createWrapper(),
     })
 
     result.current.mutate({
-      projectId: 'project-1',
       branchName: 'existing-branch',
     })
 
@@ -183,7 +183,7 @@ describe('useDeleteClone', () => {
   })
 
   it('deletes a clone successfully', async () => {
-    const mockDeleteApiClones = Clones.deleteApiClones as Mock
+    const mockDeleteApiClones = ProjectClones.deleteApiProjectsByProjectIdClones as Mock
     mockDeleteApiClones.mockResolvedValueOnce({})
 
     const { result } = renderHook(() => useDeleteClone(), {
@@ -200,15 +200,15 @@ describe('useDeleteClone', () => {
     })
 
     expect(mockDeleteApiClones).toHaveBeenCalledWith({
+      path: { projectId: 'project-1' },
       query: {
-        projectId: 'project-1',
         clonePath: '/repos/.clones/feature+test',
       },
     })
   })
 
   it('handles deletion error', async () => {
-    const mockDeleteApiClones = Clones.deleteApiClones as Mock
+    const mockDeleteApiClones = ProjectClones.deleteApiProjectsByProjectIdClones as Mock
     mockDeleteApiClones.mockResolvedValueOnce({
       error: { detail: 'Clone not found' },
     })
@@ -286,7 +286,7 @@ describe('usePruneClones', () => {
   })
 
   it('prunes stale clones successfully', async () => {
-    const mockPostApiClonesPrune = Clones.postApiClonesPrune as Mock
+    const mockPostApiClonesPrune = ProjectClones.postApiProjectsByProjectIdClonesPrune as Mock
     mockPostApiClonesPrune.mockResolvedValueOnce({})
 
     const { result } = renderHook(() => usePruneClones(), {
@@ -300,7 +300,7 @@ describe('usePruneClones', () => {
     })
 
     expect(mockPostApiClonesPrune).toHaveBeenCalledWith({
-      query: { projectId: 'project-1' },
+      path: { projectId: 'project-1' },
     })
   })
 })

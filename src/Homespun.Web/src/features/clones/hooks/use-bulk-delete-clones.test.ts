@@ -3,12 +3,12 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { useBulkDeleteClones } from './use-bulk-delete-clones'
-import { Clones } from '@/api'
+import { ProjectClones } from '@/api'
 import type { BulkDeleteClonesResponse } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
-  Clones: {
-    deleteApiClonesBulk: vi.fn(),
+  ProjectClones: {
+    deleteApiProjectsByProjectIdClonesBulk: vi.fn(),
   },
 }))
 
@@ -36,8 +36,8 @@ describe('useBulkDeleteClones', () => {
   })
 
   it('calls API with correct parameters', async () => {
-    const mockDeleteApiClonesBulk = Clones.deleteApiClonesBulk as Mock
-    mockDeleteApiClonesBulk.mockResolvedValueOnce({ data: mockBulkDeleteResponse })
+    const mockDeleteBulk = ProjectClones.deleteApiProjectsByProjectIdClonesBulk as Mock
+    mockDeleteBulk.mockResolvedValueOnce({ data: mockBulkDeleteResponse })
 
     const { result } = renderHook(() => useBulkDeleteClones(), {
       wrapper: createWrapper(),
@@ -52,16 +52,16 @@ describe('useBulkDeleteClones', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(mockDeleteApiClonesBulk).toHaveBeenCalledWith({
-      query: { projectId: 'project-1' },
+    expect(mockDeleteBulk).toHaveBeenCalledWith({
+      path: { projectId: 'project-1' },
       body: { clonePaths: ['/repos/.clones/feature+test-1', '/repos/.clones/feature+test-2'] },
     })
     expect(result.current.data).toEqual(mockBulkDeleteResponse)
   })
 
   it('invalidates queries on success', async () => {
-    const mockDeleteApiClonesBulk = Clones.deleteApiClonesBulk as Mock
-    mockDeleteApiClonesBulk.mockResolvedValueOnce({ data: mockBulkDeleteResponse })
+    const mockDeleteBulk = ProjectClones.deleteApiProjectsByProjectIdClonesBulk as Mock
+    mockDeleteBulk.mockResolvedValueOnce({ data: mockBulkDeleteResponse })
 
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -94,8 +94,8 @@ describe('useBulkDeleteClones', () => {
   })
 
   it('handles errors', async () => {
-    const mockDeleteApiClonesBulk = Clones.deleteApiClonesBulk as Mock
-    mockDeleteApiClonesBulk.mockResolvedValueOnce({
+    const mockDeleteBulk = ProjectClones.deleteApiProjectsByProjectIdClonesBulk as Mock
+    mockDeleteBulk.mockResolvedValueOnce({
       error: { detail: 'Project not found' },
     })
 

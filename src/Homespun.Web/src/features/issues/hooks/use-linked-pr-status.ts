@@ -7,7 +7,7 @@ export function useLinkedPrStatus(projectId: string, issueId: string | undefined
     queryFn: async () => {
       if (!issueId) return null
 
-      const response = await IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId({
+      const response = await IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus({
         path: { projectId, issueId },
       })
 

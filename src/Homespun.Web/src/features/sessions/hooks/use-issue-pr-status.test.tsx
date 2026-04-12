@@ -9,7 +9,7 @@ import { createMockSession } from '@/test/test-utils'
 
 vi.mock('@/api', () => ({
   IssuePrStatus: {
-    getApiIssuePrStatusByProjectIdByIssueId: vi.fn(),
+    getApiProjectsByProjectIdIssuesByIssueIdPrStatus: vi.fn(),
   },
 }))
 
@@ -63,12 +63,12 @@ describe('useIssuePrStatus', () => {
       hasConflicts: false,
     }
 
-    vi.mocked(IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
+    vi.mocked(IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus).mockResolvedValue({
       data: mockPrStatus,
       response: new Response(),
       request: new Request('http://test'),
       error: undefined,
-    } as Awaited<ReturnType<typeof IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId>>)
+    } as Awaited<ReturnType<typeof IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus>>)
 
     const session = createMockSession({
       entityId: 'clone:issue-123',
@@ -83,7 +83,7 @@ describe('useIssuePrStatus', () => {
     })
 
     expect(result.current.data).toEqual(mockPrStatus)
-    expect(IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenCalledWith({
+    expect(IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus).toHaveBeenCalledWith({
       path: {
         projectId: 'project-1',
         issueId: 'issue-123',
@@ -92,7 +92,7 @@ describe('useIssuePrStatus', () => {
   })
 
   it('handles API errors gracefully', async () => {
-    vi.mocked(IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockRejectedValue(
+    vi.mocked(IssuePrStatus.getApiProjectsByProjectIdIssuesByIssueIdPrStatus).mockRejectedValue(
       new Error('API Error')
     )
 
