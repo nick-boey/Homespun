@@ -6,7 +6,7 @@
 .DESCRIPTION
     This script:
     - Validates Docker is running
-    - Reads GitHub token from environment variables or .NET user secrets
+    - Reads credentials from the .env file at the repo root (copy .env.example to .env)
     - Creates the ~/.homespun-container/data directory
     - Uses pre-built GHCR images by default
     - Use -Local for development to build images locally
@@ -60,10 +60,11 @@
     Port: 8080 (or via Tailscale HTTPS)
     Data directory: ~/.homespun-container/data
 
-    Environment Variables (checked in order, with .env file fallback):
-    - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
-    - HSP_TAILSCALE_AUTH_KEY / TAILSCALE_AUTH_KEY - Tailscale auth key
-    - HSP_EXTERNAL_HOSTNAME - External hostname for agent URLs
+    Configuration (set in .env at the repo root):
+    - GITHUB_TOKEN              - GitHub personal access token
+    - CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token
+    - TAILSCALE_AUTH_KEY        - Tailscale auth key (optional)
+    - HSP_EXTERNAL_HOSTNAME     - External hostname for agent URLs (optional)
 
     Volume Mounts:
     - Claude Code config (~/.claude) is automatically mounted for OAuth authentication
@@ -140,39 +141,43 @@ $ScriptDir = $PSScriptRoot
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 
 # Constants
-$UserSecretsId = "2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 $EnvFilePath = Join-Path $RepoRoot ".env"
 
 # ============================================================================
 # Functions
 # ============================================================================
 
-function Get-EnvFileValue {
-    param(
-        [string]$Key,
-        [string]$EnvFilePath
-    )
+function Import-DotEnv {
+    <#
+    .SYNOPSIS
+        Loads KEY=value pairs from a .env file into process environment variables.
+        Pre-existing environment variables are preserved (not overwritten).
+    #>
+    param([string]$Path)
 
-    if (-not (Test-Path $EnvFilePath)) {
-        return $null
+    if (-not (Test-Path $Path)) {
+        return $false
     }
 
-    try {
-        $content = Get-Content $EnvFilePath -Raw
-        # Match KEY=value, handling optional quotes
-        if ($content -match "(?m)^$Key=([`"']?)(.+?)\1\s*$") {
-            return $Matches[2]
+    foreach ($line in Get-Content $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith('#')) {
+            continue
         }
-        # Also try without quotes for simple values
-        if ($content -match "(?m)^$Key=(.+?)\s*$") {
-            $value = $Matches[1] -replace '^["'']|["'']$', ''
-            return $value
+        if ($trimmed -match '^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+            $key = $Matches[1]
+            $value = $Matches[2]
+            # Strip surrounding single or double quotes
+            if ($value -match '^"(.*)"$' -or $value -match "^'(.*)'$") {
+                $value = $Matches[1]
+            }
+            # Do not overwrite env vars already set in the process
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($key))) {
+                [Environment]::SetEnvironmentVariable($key, $value)
+            }
         }
-        return $null
     }
-    catch {
-        return $null
-    }
+    return $true
 }
 
 function Test-DockerRunning {
@@ -201,100 +206,6 @@ function Test-DockerImageExists {
     return $images -contains $ImageName
 }
 
-function Get-GitHubToken {
-    param(
-        [string]$UserSecretsId,
-        [string]$EnvFilePath
-    )
-
-    # Check environment variables first (HSP_GITHUB_TOKEN takes precedence)
-    $token = $env:HSP_GITHUB_TOKEN
-    if (-not [string]::IsNullOrWhiteSpace($token)) {
-        return $token
-    }
-
-    $token = $env:GITHUB_TOKEN
-    if (-not [string]::IsNullOrWhiteSpace($token)) {
-        return $token
-    }
-
-    # Fall back to .NET user secrets
-    $secretsPath = Join-Path $env:APPDATA "Microsoft\UserSecrets\$UserSecretsId\secrets.json"
-
-    if (Test-Path $secretsPath) {
-        try {
-            $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
-            $token = $secrets.'GitHub:Token'
-            if (-not [string]::IsNullOrWhiteSpace($token)) {
-                return $token
-            }
-        }
-        catch {
-            # Continue to next fallback
-        }
-    }
-
-    # Fall back to .env file
-    $token = Get-EnvFileValue -Key "GITHUB_TOKEN" -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($token)) {
-        return $token
-    }
-
-    return $null
-}
-
-function Get-TailscaleAuthKey {
-    param(
-        [string]$ParamValue,
-        [string]$EnvFilePath
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
-        return $ParamValue
-    }
-
-    $key = $env:HSP_TAILSCALE_AUTH_KEY
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    $key = $env:TAILSCALE_AUTH_KEY
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    # Fall back to .env file
-    $key = Get-EnvFileValue -Key "TAILSCALE_AUTH_KEY" -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    return $null
-}
-
-function Get-ExternalHostname {
-    param(
-        [string]$ParamValue,
-        [string]$EnvFilePath
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
-        return $ParamValue
-    }
-
-    $hostname = $env:HSP_EXTERNAL_HOSTNAME
-    if (-not [string]::IsNullOrWhiteSpace($hostname)) {
-        return $hostname
-    }
-
-    # Fall back to .env file
-    $hostname = Get-EnvFileValue -Key "HSP_EXTERNAL_HOSTNAME" -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($hostname)) {
-        return $hostname
-    }
-
-    return $null
-}
 
 # ============================================================================
 # Main Script
@@ -391,34 +302,48 @@ try {
         Write-Host "      Using GHCR worker: $WorkerImage" -ForegroundColor Green
     }
 
-    # Step 3: Read GitHub token
-    Write-Host "[3/5] Reading GitHub token..." -ForegroundColor Cyan
-    $githubToken = Get-GitHubToken -UserSecretsId $UserSecretsId -EnvFilePath $EnvFilePath
+    # Step 3: Read credentials from .env
+    Write-Host "[3/5] Reading credentials from .env..." -ForegroundColor Cyan
+    if (Import-DotEnv -Path $EnvFilePath) {
+        Write-Host "      Loaded $EnvFilePath" -ForegroundColor Green
+    }
+    else {
+        Write-Warning "      $EnvFilePath not found."
+        Write-Warning "      Create it with: Copy-Item .env.example .env"
+    }
 
+    $githubToken = $env:GITHUB_TOKEN
     if ([string]::IsNullOrWhiteSpace($githubToken)) {
-        Write-Warning "      GitHub token not found."
-        Write-Warning "      Set HSP_GITHUB_TOKEN or GITHUB_TOKEN environment variable."
+        Write-Warning "      GitHub token not found. Set GITHUB_TOKEN in .env."
     }
     else {
         $maskedToken = $githubToken.Substring(0, [Math]::Min(10, $githubToken.Length)) + "..."
         Write-Host "      GitHub token found: $maskedToken" -ForegroundColor Green
     }
 
-    # Read Tailscale auth key (unless -NoTailscale)
+    $claudeCodeOAuthToken = $env:CLAUDE_CODE_OAUTH_TOKEN
+    if ([string]::IsNullOrWhiteSpace($claudeCodeOAuthToken)) {
+        Write-Warning "      Claude Code OAuth token not found. Set CLAUDE_CODE_OAUTH_TOKEN in .env."
+    }
+    else {
+        $maskedCcToken = $claudeCodeOAuthToken.Substring(0, [Math]::Min(15, $claudeCodeOAuthToken.Length)) + "..."
+        Write-Host "      Claude Code OAuth token found: $maskedCcToken" -ForegroundColor Green
+    }
+
     $tailscaleKey = $null
     if ($NoTailscale) {
         Write-Host "      Tailscale disabled (-NoTailscale flag)" -ForegroundColor Cyan
     }
     else {
-        $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
+        $tailscaleKey = if (-not [string]::IsNullOrWhiteSpace($TailscaleAuthKey)) { $TailscaleAuthKey } else { $env:TAILSCALE_AUTH_KEY }
         if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
             $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
             Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
         }
     }
 
-    # Read external hostname
-    $externalHostnameValue = Get-ExternalHostname -ParamValue $ExternalHostname -EnvFilePath $EnvFilePath
+    # External hostname: CLI flag takes precedence, otherwise use HSP_EXTERNAL_HOSTNAME from .env
+    $externalHostnameValue = if (-not [string]::IsNullOrWhiteSpace($ExternalHostname)) { $ExternalHostname } else { $env:HSP_EXTERNAL_HOSTNAME }
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
         Write-Host "      External hostname: $externalHostnameValue" -ForegroundColor Green
     }
@@ -599,7 +524,7 @@ AGENT_MODE=$agentMode
 
 # Credentials
 GITHUB_TOKEN=$githubToken
-CLAUDE_CODE_OAUTH_TOKEN=
+CLAUDE_CODE_OAUTH_TOKEN=$claudeCodeOAuthToken
 TAILSCALE_AUTH_KEY=$tailscaleKey
 TS_HOSTNAME=$TailscaleHostname
 HSP_EXTERNAL_HOSTNAME=$externalHostnameValue

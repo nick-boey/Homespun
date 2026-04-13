@@ -22,9 +22,9 @@ set -e
 #   -it               Run in foreground (interactive mode)
 #   -d, --detach      Run in background (default)
 #
-# Environment Variables:
-#   HSP_TAILSCALE_AUTH_KEY    Tailscale auth key (preferred for VM secrets)
-#   TAILSCALE_AUTH_KEY        Tailscale auth key (fallback)
+# Configuration:
+#   Reads TAILSCALE_AUTH_KEY from .env at the repo root
+#   (copy .env.example to .env).
 #
 # Prerequisites:
 #   - Run ./scripts/install-komodo.sh first
@@ -135,24 +135,18 @@ if [ "$NO_TAILSCALE" = true ]; then
     TAILSCALE_AUTH_KEY=""
     log_info "      Tailscale disabled (--no-tailscale flag)"
 else
-    # Source ~/.homespun/env if it exists
-    HOMESPUN_ENV_FILE="$HOME/.homespun/env"
-    if [ -f "$HOMESPUN_ENV_FILE" ]; then
-        source "$HOMESPUN_ENV_FILE"
+    # Source .env at repo root if it exists
+    DOTENV_FILE="$REPO_ROOT/.env"
+    if [ -f "$DOTENV_FILE" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$DOTENV_FILE"
+        set +a
     fi
 
-    # 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
-    # 2. TAILSCALE_AUTH_KEY (standard)
-    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
-
-    # Try reading from .env file in repo root
-    if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
-        TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-    fi
-
-    if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+    if [ -z "${TAILSCALE_AUTH_KEY:-}" ]; then
         log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
-        log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+        log_warn "      Set TAILSCALE_AUTH_KEY in .env for VPN access."
     else
         # Check if the shared Tailscale sidecar is already running
         if docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then

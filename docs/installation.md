@@ -58,17 +58,7 @@ GITHUB_TOKEN=ghp_your_token_here
 CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
 ```
 
-**Alternative: credential file.** Instead of `.env`, you can place credentials in `~/.homespun/env`:
-
-```bash
-mkdir -p ~/.homespun
-cat > ~/.homespun/env << 'EOF'
-export GITHUB_TOKEN=ghp_...
-export CLAUDE_CODE_OAUTH_TOKEN=...
-EOF
-```
-
-The `run.sh` script sources this file automatically.
+`.env` at the repo root is the sole credential source for every deployment path (`run.sh`, `run.ps1`, `run-komodo.sh`, `deploy-infra.sh`, and the Azure VM cloud-init).
 
 ### 3. Create the Docker network
 
@@ -234,15 +224,7 @@ Access Grafana at [http://localhost:3000](http://localhost:3000) (default creden
 | `GRAFANA_PORT` | No | `3000` | Grafana dashboard port |
 | `GRAFANA_ADMIN_PASSWORD` | No | `admin` | Grafana admin password |
 
-### VM secrets (Azure deployments)
-
-For Azure VM deployments, the following prefixed variables take priority:
-
-| VM Secret | Overrides |
-|---|---|
-| `HSP_GITHUB_TOKEN` | `GITHUB_TOKEN` |
-| `HSP_CLAUDE_CODE_OAUTH_TOKEN` | `CLAUDE_CODE_OAUTH_TOKEN` |
-| `HSP_TAILSCALE_AUTH_KEY` | `TAILSCALE_AUTH_KEY` |
+For Azure VM deployments, the same `.env` is written onto the VM at `/opt/homespun/repo/.env` by cloud-init — no additional configuration mechanism. See [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md).
 
 ## Troubleshooting
 

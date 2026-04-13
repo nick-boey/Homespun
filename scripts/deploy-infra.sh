@@ -20,16 +20,29 @@ set -euo pipefail
 #
 # Environment Variables:
 #   HOMESPUN_SSH_PUBLIC_KEY       - SSH public key (required, or use --ssh-key)
-#   HSP_GITHUB_TOKEN              - GitHub personal access token
-#   HSP_CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token
-#   HSP_TAILSCALE_AUTH_KEY        - Tailscale auth key
-#   HOMESPUN_DOMAIN_NAME          - Domain name for SSL
+#   HOMESPUN_DOMAIN_NAME          - Domain name for SSL (optional)
+#
+# Application credentials are read from .env at the repo root
+# (copy .env.example to .env). The following are passed to the Azure VM:
+#   GITHUB_TOKEN
+#   CLAUDE_CODE_OAUTH_TOKEN
+#   TAILSCALE_AUTH_KEY (optional)
 #
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INFRA_DIR="$REPO_ROOT/infra"
+
+# Load credentials from .env at repo root so bicepparam's
+# readEnvironmentVariable() calls can pick them up.
+DOTENV_FILE="$REPO_ROOT/.env"
+if [ -f "$DOTENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$DOTENV_FILE"
+    set +a
+fi
 
 # Default values
 RESOURCE_GROUP="rg-homespun"
@@ -138,9 +151,9 @@ echo "  Location:        $LOCATION"
 echo "  VM Size:         $VM_SIZE"
 echo "  Admin User:      $ADMIN_USERNAME"
 echo "  Base Name:       $BASE_NAME"
-echo "  GitHub Token:    ${HSP_GITHUB_TOKEN:+configured}${HSP_GITHUB_TOKEN:-not set}"
-echo "  Claude Token:    ${HSP_CLAUDE_CODE_OAUTH_TOKEN:+configured}${HSP_CLAUDE_CODE_OAUTH_TOKEN:-not set}"
-echo "  Tailscale Key:   ${HSP_TAILSCALE_AUTH_KEY:+configured}${HSP_TAILSCALE_AUTH_KEY:-not set}"
+echo "  GitHub Token:    ${GITHUB_TOKEN:+configured}${GITHUB_TOKEN:-not set}"
+echo "  Claude Token:    ${CLAUDE_CODE_OAUTH_TOKEN:+configured}${CLAUDE_CODE_OAUTH_TOKEN:-not set}"
+echo "  Tailscale Key:   ${TAILSCALE_AUTH_KEY:+configured}${TAILSCALE_AUTH_KEY:-not set}"
 echo "  Domain:          ${HOMESPUN_DOMAIN_NAME:-not set}"
 log_info "======================================"
 echo
