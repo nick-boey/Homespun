@@ -57,9 +57,6 @@ internal class MockIssueServiceAdapter : IFleeceService
         ExecutionMode? executionMode = null, CancellationToken cancellationToken = default)
         => _innerService.UpdateAsync(id, title, description, status, type, priority, linkedPr, linkedIssues, parentIssues, assignedTo, tags, workingBranchId, executionMode, cancellationToken);
 
-    public Task<Issue> UpdateQuestionsAsync(string id, IReadOnlyList<Question> questions, CancellationToken cancellationToken = default)
-        => _innerService.UpdateQuestionsAsync(id, questions, cancellationToken);
-
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
         => _innerService.DeleteAsync(id, cancellationToken);
 
