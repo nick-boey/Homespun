@@ -197,8 +197,8 @@ describe('computeLayout', () => {
     })
   })
 
-  describe('merged PRs rendering', () => {
-    it('adds load more line when hasMorePastPrs is true', () => {
+  describe('merged PRs handling', () => {
+    it('skips merged PRs in tree view', () => {
       const taskGraph: TaskGraphResponse = {
         nodes: [],
         mergedPrs: [
@@ -217,37 +217,11 @@ describe('computeLayout', () => {
 
       const result = computeLayout(taskGraph)
 
-      expect(result[0].type).toBe('loadMore')
+      // Tree view skips PRs entirely - no nodes means empty result
+      expect(result).toHaveLength(0)
     })
 
-    it('renders merged PRs with correct flags', () => {
-      const taskGraph: TaskGraphResponse = {
-        nodes: [],
-        mergedPrs: [
-          { number: 1, title: 'PR 1', url: null, isMerged: true, hasDescription: false },
-          { number: 2, title: 'PR 2', url: null, isMerged: false, hasDescription: true },
-        ],
-        hasMorePastPrs: false,
-        agentStatuses: {},
-        linkedPrs: {},
-      }
-
-      const result = computeLayout(taskGraph)
-
-      expect(result).toHaveLength(2)
-
-      const pr1 = result[0] as TaskGraphPrRenderLine
-      expect(pr1.prNumber).toBe(1)
-      expect(pr1.drawTopLine).toBe(false) // First PR has no top line
-      expect(pr1.drawBottomLine).toBe(true) // Not last, has bottom line
-
-      const pr2 = result[1] as TaskGraphPrRenderLine
-      expect(pr2.prNumber).toBe(2)
-      expect(pr2.drawTopLine).toBe(true) // Not first, has top line
-      expect(pr2.drawBottomLine).toBe(false) // Last PR, no issues below
-    })
-
-    it('adds separator between PRs and issues', () => {
+    it('does not add separator or offset lanes when PRs exist', () => {
       const issue = createIssue()
       const taskGraph: TaskGraphResponse = {
         nodes: [createNode(issue, 0, 0)],
@@ -259,32 +233,16 @@ describe('computeLayout', () => {
 
       const result = computeLayout(taskGraph)
 
-      // Should be: PR, Separator, Issue
-      expect(result).toHaveLength(3)
-      expect(result[0].type).toBe('pr')
-      expect(result[1].type).toBe('separator')
-      expect(result[2].type).toBe('issue')
-    })
-
-    it('offsets issue lanes by 1 when PRs exist', () => {
-      const issue = createIssue()
-      const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(issue, 0, 0)],
-        mergedPrs: [{ number: 1, title: 'PR', url: null, isMerged: true, hasDescription: false }],
-        hasMorePastPrs: false,
-        agentStatuses: {},
-        linkedPrs: {},
-      }
-
-      const result = computeLayout(taskGraph)
-      const issueLine = result[2] as TaskGraphIssueRenderLine
-
-      expect(issueLine.lane).toBe(1) // Lane 0 + offset 1
+      // Tree view: only the issue, no PR or separator
+      expect(result).toHaveLength(1)
+      expect(result[0].type).toBe('issue')
+      const issueLine = result[0] as TaskGraphIssueRenderLine
+      expect(issueLine.lane).toBe(0) // No lane offset in tree view
     })
   })
 
   describe('parent-child relationships', () => {
-    it('renders parent-child with correct lanes and parentLane', () => {
+    it('renders parent-child with correct lanes and parentLane (tree view)', () => {
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
@@ -300,11 +258,16 @@ describe('computeLayout', () => {
 
       expect(result).toHaveLength(2)
 
+      // In tree view: parent at lane 0, child at lane 1
+      const parentLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'parent'
+      ) as TaskGraphIssueRenderLine
       const childLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
       ) as TaskGraphIssueRenderLine
-      expect(childLine.lane).toBe(0)
-      expect(childLine.parentLane).toBe(1)
+      expect(parentLine.lane).toBe(0)
+      expect(childLine.lane).toBe(1)
+      expect(childLine.parentLane).toBe(0)
       expect(childLine.isSeriesChild).toBe(false)
     })
 
@@ -329,13 +292,13 @@ describe('computeLayout', () => {
       expect(childLine.parentIssues).toEqual(parentIssues)
     })
 
-    it('renders series children with correct flags', () => {
+    it('renders series children with correct flags (tree view)', () => {
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.SERIES })
       const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
       const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
 
       const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(parent, 1, 0), createNode(child1, 0, 1), createNode(child2, 0, 2)],
+        nodes: [createNode(parent, 0, 0), createNode(child1, 1, 1), createNode(child2, 1, 2)],
         mergedPrs: [],
         hasMorePastPrs: false,
         agentStatuses: {},
@@ -361,7 +324,7 @@ describe('computeLayout', () => {
   })
 
   describe('depth filtering', () => {
-    it('filters nodes beyond maxDepth', () => {
+    it('filters nodes beyond maxDepth in tree view', () => {
       const parent = createIssue({ id: 'parent' })
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
       const grandchild = createIssue({
@@ -370,191 +333,73 @@ describe('computeLayout', () => {
       })
 
       const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(parent, 2, 0), createNode(child, 1, 1), createNode(grandchild, 0, 2)],
+        nodes: [createNode(parent, 0, 0), createNode(child, 1, 1), createNode(grandchild, 2, 2)],
         mergedPrs: [],
         hasMorePastPrs: false,
         agentStatuses: {},
         linkedPrs: {},
       }
 
-      // maxDepth = 1 means show lanes 0 and 1 (relative to min lane in group)
+      // maxDepth = 1 means show lanes 0 and 1 from root
       const result = computeLayout(taskGraph, 1)
 
-      // grandchild at lane 0 should be shown (depth 0)
-      // child at lane 1 should be shown (depth 1)
-      // parent at lane 2 should be filtered (depth 2 > maxDepth 1)
+      // parent at lane 0, child at lane 1 (shown)
+      // grandchild at lane 2 filtered (depth 2 > maxDepth 1)
       expect(result).toHaveLength(2)
       const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
-      expect(issueIds).toContain('grandchild')
+      expect(issueIds).toContain('parent')
       expect(issueIds).toContain('child')
-      expect(issueIds).not.toContain('parent')
+      expect(issueIds).not.toContain('grandchild')
     })
 
-    it('marks hidden parent indicator when parent is filtered', () => {
+    it('marks hidden parent indicator when child is at depth boundary', () => {
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+      const grandchild = createIssue({
+        id: 'grandchild',
+        parentIssues: [{ parentIssue: 'child' }],
+      })
 
       const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        nodes: [createNode(parent, 0, 0), createNode(child, 1, 1), createNode(grandchild, 2, 2)],
         mergedPrs: [],
         hasMorePastPrs: false,
         agentStatuses: {},
         linkedPrs: {},
       }
 
-      // maxDepth = 0 means only show lane 0 (relative)
+      // maxDepth = 0 means only show lane 0 (root)
       const result = computeLayout(taskGraph, 0)
 
       expect(result).toHaveLength(1)
-      const childLine = result[0] as TaskGraphIssueRenderLine
-      expect(childLine.issueId).toBe('child')
-      expect(childLine.hasHiddenParent).toBe(true)
-      expect(childLine.hiddenParentIsSeriesMode).toBe(false) // Parent is parallel
+      const parentLine = result[0] as TaskGraphIssueRenderLine
+      expect(parentLine.issueId).toBe('parent')
     })
 
-    it('sets drawTopLine/drawBottomLine for 2 series siblings when parent is hidden', () => {
+    it('shows hidden parent info when grandchild exceeds depth', () => {
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.SERIES })
-      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
-      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+      const grandchild = createIssue({
+        id: 'grandchild',
+        parentIssues: [{ parentIssue: 'child' }],
+      })
 
       const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(parent, 1, 0), createNode(child1, 0, 1), createNode(child2, 0, 2)],
+        nodes: [createNode(parent, 0, 0), createNode(child, 1, 1), createNode(grandchild, 2, 2)],
         mergedPrs: [],
         hasMorePastPrs: false,
         agentStatuses: {},
         linkedPrs: {},
       }
 
-      // maxDepth = 0 filters out parent at lane 1
-      const result = computeLayout(taskGraph, 0)
+      // maxDepth = 1: root (lane 0) and children (lane 1) visible
+      // grandchild at lane 2 is filtered out
+      const result = computeLayout(taskGraph, 1)
 
-      const child1Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
-      ) as TaskGraphIssueRenderLine
-      const child2Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
-      ) as TaskGraphIssueRenderLine
-
-      expect(child1Line).toBeDefined()
-      expect(child2Line).toBeDefined()
-
-      // child1 should draw bottom line to connect to child2
-      expect(child1Line.drawBottomLine).toBe(true)
-      // child2 should draw top line to connect from child1
-      expect(child2Line.drawTopLine).toBe(true)
-      // Hidden parent indicator: child1 has drawBottomLine so indicator is suppressed
-      // Only the last sibling (child2) shows the hidden parent indicator
-      expect(child1Line.hasHiddenParent).toBe(false)
-      expect(child2Line.hasHiddenParent).toBe(true)
-      expect(child2Line.hiddenParentIsSeriesMode).toBe(true)
-    })
-
-    it('sets continuous vertical lines for 3 series siblings when parent is hidden', () => {
-      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.SERIES })
-      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
-      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
-      const child3 = createIssue({ id: 'child3', parentIssues: [{ parentIssue: 'parent' }] })
-
-      const taskGraph: TaskGraphResponse = {
-        nodes: [
-          createNode(parent, 1, 0),
-          createNode(child1, 0, 1),
-          createNode(child2, 0, 2),
-          createNode(child3, 0, 3),
-        ],
-        mergedPrs: [],
-        hasMorePastPrs: false,
-        agentStatuses: {},
-        linkedPrs: {},
-      }
-
-      const result = computeLayout(taskGraph, 0)
-
-      const child1Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
-      ) as TaskGraphIssueRenderLine
-      const child2Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
-      ) as TaskGraphIssueRenderLine
-      const child3Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child3'
-      ) as TaskGraphIssueRenderLine
-
-      // child1: bottom line (connects to child2), no top line (first sibling)
-      expect(child1Line.drawBottomLine).toBe(true)
-      expect(child1Line.drawTopLine).toBe(false)
-
-      // child2: both top and bottom lines (middle sibling)
-      expect(child2Line.drawTopLine).toBe(true)
-      expect(child2Line.drawBottomLine).toBe(true)
-
-      // child3: top line (connects from child2), no bottom line (last sibling)
-      expect(child3Line.drawTopLine).toBe(true)
-      expect(child3Line.drawBottomLine).toBe(false)
-    })
-
-    it('sets drawTopLine for non-adjacent series siblings with hidden parent', () => {
-      // Grandparent → parent (SERIES, hidden) → child1, child2
-      // Grandparent → cousin (visible, between child1 and child2 in row order)
-      const grandparent = createIssue({
-        id: 'grandparent',
-        executionMode: ExecutionMode.PARALLEL,
-      })
-      const parent = createIssue({
-        id: 'parent',
-        executionMode: ExecutionMode.SERIES,
-        parentIssues: [{ parentIssue: 'grandparent' }],
-      })
-      const child1 = createIssue({
-        id: 'child1',
-        parentIssues: [{ parentIssue: 'parent' }],
-      })
-      const cousin = createIssue({
-        id: 'cousin',
-        parentIssues: [{ parentIssue: 'grandparent' }],
-      })
-      const child2 = createIssue({
-        id: 'child2',
-        parentIssues: [{ parentIssue: 'parent' }],
-      })
-
-      const taskGraph: TaskGraphResponse = {
-        nodes: [
-          createNode(grandparent, 2, 0),
-          createNode(parent, 1, 1),
-          createNode(child1, 0, 2),
-          createNode(cousin, 0, 3),
-          createNode(child2, 0, 4),
-        ],
-        mergedPrs: [],
-        hasMorePastPrs: false,
-        agentStatuses: {},
-        linkedPrs: {},
-      }
-
-      // maxDepth = 0: only lane 0 visible (child1, cousin, child2)
-      // parent at lane 1 and grandparent at lane 2 are hidden
-      const result = computeLayout(taskGraph, 0)
-
-      const child1Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
-      ) as TaskGraphIssueRenderLine
-      const cousinLine = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'cousin'
-      ) as TaskGraphIssueRenderLine
-      const child2Line = result.find(
-        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
-      ) as TaskGraphIssueRenderLine
-
-      expect(child1Line).toBeDefined()
-      expect(cousinLine).toBeDefined()
-      expect(child2Line).toBeDefined()
-
-      // child1 should have drawBottomLine (connects toward child2)
-      expect(child1Line.drawBottomLine).toBe(true)
-
-      // child2 should have drawTopLine even though cousin is between them
-      expect(child2Line.drawTopLine).toBe(true)
+      const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
+      expect(issueIds).toContain('parent')
+      expect(issueIds).toContain('child')
+      expect(issueIds).not.toContain('grandchild')
     })
   })
 
@@ -579,8 +424,8 @@ describe('computeLayout', () => {
     })
   })
 
-  describe('lane 0 connectors', () => {
-    it('adds lane 0 connectors when PRs exist', () => {
+  describe('lane 0 connectors (not used in tree view)', () => {
+    it('does not set lane 0 connectors in tree view', () => {
       const issue = createIssue()
       const taskGraph: TaskGraphResponse = {
         nodes: [createNode(issue, 0, 0)],
@@ -593,34 +438,9 @@ describe('computeLayout', () => {
       const result = computeLayout(taskGraph)
       const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
 
-      expect(issueLine.lane).toBe(1) // Offset by 1
-      expect(issueLine.drawLane0Connector).toBe(true)
-      expect(issueLine.isLastLane0Connector).toBe(true) // Only issue, so it's the last
-    })
-
-    it('marks last lane 0 connector correctly with multiple issues', () => {
-      const issue1 = createIssue({ id: 'issue1' })
-      const issue2 = createIssue({ id: 'issue2' })
-
-      const taskGraph: TaskGraphResponse = {
-        nodes: [createNode(issue1, 0, 0), createNode(issue2, 0, 1)],
-        mergedPrs: [{ number: 1, title: 'PR', url: null, isMerged: true, hasDescription: false }],
-        hasMorePastPrs: false,
-        agentStatuses: {},
-        linkedPrs: {},
-      }
-
-      const result = computeLayout(taskGraph)
-      const issueLines = result.filter(isIssueRenderLine)
-
-      const issue1Line = issueLines.find((l) => l.issueId === 'issue1')!
-      const issue2Line = issueLines.find((l) => l.issueId === 'issue2')!
-
-      expect(issue1Line.drawLane0Connector).toBe(true)
-      expect(issue1Line.isLastLane0Connector).toBe(false)
-
-      expect(issue2Line.drawLane0Connector).toBe(true)
-      expect(issue2Line.isLastLane0Connector).toBe(true)
+      expect(issueLine.lane).toBe(0) // No lane offset in tree view
+      expect(issueLine.drawLane0Connector).toBe(false)
+      expect(issueLine.drawLane0PassThrough).toBe(false)
     })
   })
 
@@ -1006,7 +826,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       expect(result).toHaveLength(1)
       const rootLine = result[0] as TaskGraphIssueRenderLine
@@ -1026,7 +846,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const parentLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'parent'
@@ -1050,7 +870,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       // Should not have PR lines or separator
       const prLines = result.filter(isPrRenderLine)
@@ -1073,7 +893,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const loadMoreLines = result.filter(isLoadMoreRenderLine)
       expect(loadMoreLines).toHaveLength(0)
@@ -1100,7 +920,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const grandparentLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'grandparent'
@@ -1131,7 +951,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const issueLines = result.filter(isIssueRenderLine)
       expect(issueLines).toHaveLength(3)
@@ -1154,7 +974,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       expect(result).toHaveLength(2)
       const root1Line = result.find(
@@ -1190,7 +1010,7 @@ describe('computeLayout', () => {
       }
 
       // maxDepth=1 means show lanes 0 and 1 (parent and child, not grandchild)
-      const result = computeLayout(taskGraph, 1, 'tree')
+      const result = computeLayout(taskGraph, 1)
 
       const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
       expect(issueIds).toContain('parent')
@@ -1229,7 +1049,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       // The shared child should appear twice (once per parent)
       const sharedLines = result.filter(
@@ -1282,7 +1102,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const sharedLines = result.filter(
         (l) => isIssueRenderLine(l) && l.issueId === 'shared'
@@ -1312,14 +1132,14 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3, 'tree')
+      const result = computeLayout(taskGraph, 3)
 
       const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
       expect(issueLine.drawLane0Connector).toBe(false)
       expect(issueLine.drawLane0PassThrough).toBe(false)
     })
 
-    it('defaults to next view mode when no viewMode specified', () => {
+    it('uses tree view layout (parent at lane 0, child at lane 1)', () => {
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
@@ -1331,7 +1151,6 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      // No viewMode specified - should default to 'next' (child at lane 0, parent at lane 1)
       const result = computeLayout(taskGraph, 3)
 
       const parentLine = result.find(
@@ -1341,9 +1160,9 @@ describe('computeLayout', () => {
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
       ) as TaskGraphIssueRenderLine
 
-      // In next view, original lanes are preserved
-      expect(childLine.lane).toBe(0)
-      expect(parentLine.lane).toBe(1)
+      // In tree view, parent is at lane 0, child at lane 1
+      expect(parentLine.lane).toBe(0)
+      expect(childLine.lane).toBe(1)
     })
   })
 

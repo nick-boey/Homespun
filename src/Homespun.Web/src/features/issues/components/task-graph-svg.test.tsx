@@ -251,25 +251,24 @@ describe('TaskGraphNodeSvg', () => {
   })
 
   describe('connector rendering based on isSeriesChild', () => {
-    it('renders parallel connector (horizontal) when isSeriesChild=false and parentLane > lane', () => {
+    it('renders parallel connector (horizontal leftward) when isSeriesChild=false and parentLane < lane', () => {
       const line = createMockLine({
         isSeriesChild: false,
-        lane: 0,
-        parentLane: 1,
+        lane: 1,
+        parentLane: 0,
         isFirstChild: true,
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
 
-      // Should have a path for parallel connector (from cx + NODE_RADIUS + 2)
+      // Should have a path for parallel connector (from cx - NODE_RADIUS - 2)
       const paths = container.querySelectorAll('path')
       expect(paths.length).toBeGreaterThan(0)
 
-      // Find the path with horizontal component (M x y L x2 y ... which is the parallel connector)
+      // Find the path with horizontal component going leftward
+      // For lane 1, cx = 36 (LANE_WIDTH / 2 + 1 * LANE_WIDTH), so start x = 36 - 6 - 2 = 28
       const parallelPath = Array.from(paths).find((p) => {
         const d = p.getAttribute('d') || ''
-        // Parallel connector starts from right edge of node: cx + NODE_RADIUS + 2
-        // For lane 0, cx = 12 (LANE_WIDTH / 2 + 0 * LANE_WIDTH), so start x = 12 + 6 + 2 = 20
-        return d.includes('M 20 20') // cx + NODE_RADIUS + 2, cy
+        return d.includes('M 28 20') // cx - NODE_RADIUS - 2, cy
       })
       expect(parallelPath).toBeDefined()
     })
@@ -277,18 +276,18 @@ describe('TaskGraphNodeSvg', () => {
     it('does NOT render parallel connector when isSeriesChild=true', () => {
       const line = createMockLine({
         isSeriesChild: true,
-        lane: 0,
-        parentLane: 1,
+        lane: 1,
+        parentLane: 0,
         isFirstChild: true,
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
 
-      // Should NOT have a horizontal path from cx + NODE_RADIUS + 2
+      // Should NOT have a horizontal path from cx - NODE_RADIUS - 2
       const paths = container.querySelectorAll('path')
       const parallelPath = Array.from(paths).find((p) => {
         const d = p.getAttribute('d') || ''
-        // Parallel connector starts from right edge of node: M (cx + NODE_RADIUS + 2) cy
-        return d.startsWith('M 20 20') // This is the parallel connector start
+        // Parallel connector starts from left edge of node: M (cx - NODE_RADIUS - 2) cy
+        return d.startsWith('M 28 20') // This is the parallel connector start
       })
       expect(parallelPath).toBeUndefined()
     })

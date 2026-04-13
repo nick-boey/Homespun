@@ -40,7 +40,6 @@ import {
   KeyboardEditMode,
   EditCursorPosition,
   MoveOperationType,
-  ViewMode,
   type PendingNewIssue,
   type InlineEditState,
 } from '../types'
@@ -76,8 +75,6 @@ export interface TaskGraphViewProps {
   appliedFilter?: ParsedFilter | null
   /** Called when filter match count changes */
   onFilterMatchCountChange?: (count: number) => void
-  /** View mode for the task graph (next or tree) */
-  viewMode?: ViewMode
   className?: string
 }
 
@@ -117,7 +114,6 @@ export const TaskGraphView = memo(
       onMoveCancel,
       appliedFilter,
       onFilterMatchCountChange,
-      viewMode = ViewMode.Next,
       className,
     },
     ref
@@ -159,8 +155,8 @@ export const TaskGraphView = memo(
     // Compute render lines from task graph
     const unfilteredRenderLines = useMemo(() => {
       if (!taskGraph) return []
-      return computeLayout(taskGraph, depth, viewMode)
-    }, [taskGraph, depth, viewMode])
+      return computeLayout(taskGraph, depth)
+    }, [taskGraph, depth])
 
     // Build a lookup of issue IDs to their full issue data for filtering
     const issueDataMap = useMemo(() => {

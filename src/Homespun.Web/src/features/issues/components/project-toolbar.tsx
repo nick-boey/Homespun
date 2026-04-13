@@ -21,10 +21,6 @@ import {
   X,
   SquareUser,
   ListTodo,
-  ListTree,
-  Network,
-  Layers,
-  Box,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -34,7 +30,6 @@ import { useIssueHistory } from '../hooks/use-issue-history'
 import { FilterHelpPopover } from './filter-help-popover'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks'
-import { ViewMode, RenderMode } from '../types'
 
 export interface ProjectToolbarProps {
   projectId: string
@@ -92,14 +87,6 @@ export interface ProjectToolbarProps {
   onApplyDefaultFilter?: () => void
   /** Whether the default filter (My Tasks) is currently active */
   defaultFilterActive?: boolean
-  /** Current view mode (next or tree) */
-  viewMode?: ViewMode
-  /** Called when view mode changes */
-  onViewModeChange?: (mode: ViewMode) => void
-  /** Current render mode (svg or canvas) */
-  renderMode?: RenderMode
-  /** Called when render mode changes */
-  onRenderModeChange?: (mode: RenderMode) => void
 }
 
 export function ProjectToolbar({
@@ -137,10 +124,6 @@ export function ProjectToolbar({
   filterInputRef,
   onApplyDefaultFilter,
   defaultFilterActive = false,
-  viewMode = ViewMode.Next,
-  onViewModeChange,
-  renderMode = RenderMode.Svg,
-  onRenderModeChange,
 }: ProjectToolbarProps) {
   const { canUndo, canRedo, undoDescription, redoDescription, undo, redo, isUndoing, isRedoing } =
     useIssueHistory(projectId)
@@ -436,50 +419,6 @@ export function ProjectToolbar({
 
       {/* Spacer */}
       <div className="flex-1" />
-
-      {/* View mode and render mode toggles */}
-      <ButtonGroup>
-        <Button
-          variant="outline"
-          size={buttonSize}
-          onClick={() =>
-            onViewModeChange?.(viewMode === ViewMode.Next ? ViewMode.Tree : ViewMode.Next)
-          }
-          aria-label={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
-          title={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
-          data-testid="toolbar-view-mode-toggle"
-        >
-          {viewMode === ViewMode.Next ? (
-            <ListTree className="h-4 w-4" />
-          ) : (
-            <Network className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size={buttonSize}
-          onClick={() =>
-            onRenderModeChange?.(renderMode === RenderMode.Svg ? RenderMode.Canvas : RenderMode.Svg)
-          }
-          aria-label={
-            renderMode === RenderMode.Svg ? 'Switch to canvas view' : 'Switch to list view'
-          }
-          title={
-            renderMode === RenderMode.Svg
-              ? 'Switch to canvas view (experimental)'
-              : 'Switch to list view'
-          }
-          data-testid="toolbar-render-mode-toggle"
-        >
-          {renderMode === RenderMode.Svg ? (
-            <Box className="h-4 w-4" />
-          ) : (
-            <Layers className="h-4 w-4" />
-          )}
-        </Button>
-      </ButtonGroup>
-
-      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Depth controls (right side) */}
       <ButtonGroup>

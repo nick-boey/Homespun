@@ -148,27 +148,3 @@ export function getNextIssueType(currentType: number): number {
  * Type cycling debounce duration in milliseconds (3 seconds).
  */
 export const TYPE_CYCLE_DEBOUNCE_MS = 3000
-
-/**
- * View mode for the task graph display.
- */
-export const ViewMode = {
-  /** Next view - shows actionable issues at root with parents as leaves. */
-  Next: 'next',
-  /** Tree view - traditional hierarchy with parents at left, children progressing right. */
-  Tree: 'tree',
-} as const
-
-export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode]
-
-/**
- * Render mode for the task graph visualization.
- */
-export const RenderMode = {
-  /** SVG render mode - traditional row-by-row SVG rendering. */
-  Svg: 'svg',
-  /** Canvas render mode - Konva canvas with full edge paths. */
-  Canvas: 'canvas',
-} as const
-
-export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode]

@@ -148,22 +148,22 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
         </>
       )}
 
-      {/* Parent connector (parallel mode) */}
-      {!line.isSeriesChild && line.parentLane != null && line.parentLane > line.lane && (
+      {/* Parent connector (parallel mode - tree view: parent is LEFT of child) */}
+      {!line.isSeriesChild && line.parentLane != null && line.parentLane < line.lane && (
         <>
           {line.isFirstChild ? (
-            // Merged horizontal + arc elbow + vertical down
+            // Horizontal left from child to parent lane + arc down + vertical to bottom
             <path
-              d={`M ${cx + NODE_RADIUS + 2} ${cy} L ${getLaneCenterX(line.parentLane) - NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 1 ${getLaneCenterX(line.parentLane)} ${cy + NODE_RADIUS} L ${getLaneCenterX(line.parentLane)} ${ROW_HEIGHT}`}
+              d={`M ${cx - NODE_RADIUS - 2} ${cy} L ${getLaneCenterX(line.parentLane) + NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(line.parentLane)} ${cy + NODE_RADIUS} L ${getLaneCenterX(line.parentLane)} ${ROW_HEIGHT}`}
               stroke={nodeColor}
               strokeWidth={LINE_STROKE_WIDTH}
               fill="none"
             />
           ) : (
-            // Horizontal line from circle right edge to parent lane center + full-height vertical
+            // Horizontal line from circle left edge to parent lane center + full-height vertical
             <>
               <path
-                d={`M ${cx + NODE_RADIUS + 2} ${cy} L ${getLaneCenterX(line.parentLane)} ${cy}`}
+                d={`M ${cx - NODE_RADIUS - 2} ${cy} L ${getLaneCenterX(line.parentLane)} ${cy}`}
                 stroke={nodeColor}
                 strokeWidth={LINE_STROKE_WIDTH}
                 fill="none"
@@ -179,10 +179,10 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
         </>
       )}
 
-      {/* Series connector from children (L-shaped) */}
+      {/* Series connector to children (L-shaped, rightward in tree view) */}
       {line.seriesConnectorFromLane != null && (
         <path
-          d={`M ${getLaneCenterX(line.seriesConnectorFromLane)} 0 L ${getLaneCenterX(line.seriesConnectorFromLane)} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(line.seriesConnectorFromLane) + NODE_RADIUS} ${cy} L ${cx - NODE_RADIUS - 2} ${cy}`}
+          d={`M ${getLaneCenterX(line.seriesConnectorFromLane)} 0 L ${getLaneCenterX(line.seriesConnectorFromLane)} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(line.seriesConnectorFromLane) - NODE_RADIUS} ${cy} L ${cx + NODE_RADIUS + 2} ${cy}`}
           stroke={nodeColor}
           strokeWidth={LINE_STROKE_WIDTH}
           fill="none"
@@ -288,14 +288,14 @@ function HiddenParentIndicator({ cx, cy, nodeColor, isSeriesMode }: HiddenParent
       </>
     )
   } else {
-    // Parallel: dots to the right of the node (horizontal arrangement)
-    const startX = cx + NODE_RADIUS + 6
+    // Parallel: dots to the left of the node (hidden parent is to the left in tree view)
+    const startX = cx - NODE_RADIUS - 6
     return (
       <>
         {[0, 1, 2].map((i) => (
           <circle
             key={i}
-            cx={startX + i * dotSpacing}
+            cx={startX - i * dotSpacing}
             cy={cy}
             r={dotRadius}
             fill={nodeColor}
