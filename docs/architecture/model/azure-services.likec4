@@ -1,18 +1,22 @@
 model {
 
   entra_id = external 'Microsoft Entra ID' {
+    #aca
     description 'OIDC identity provider for authentication'
   }
 
   azure_container_registry = external 'Azure Container Registry' {
+    #aca
     description 'Private container image registry'
   }
 
   azure_files = external 'Azure Files' {
+    #aca
     description 'SMB/NFS file share for persistent storage'
   }
 
   log_analytics = external 'Log Analytics Workspace' {
+    #aca
     description 'Azure Monitor log aggregation and querying'
   }
 

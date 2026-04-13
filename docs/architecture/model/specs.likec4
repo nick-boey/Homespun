@@ -58,6 +58,9 @@ specification {
     color green
   }
 
+  tag vm
+  tag aca
+
   deploymentNode environment
   deploymentNode vm
   deploymentNode orchestrator

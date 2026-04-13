@@ -13,6 +13,7 @@ model {
   }
 
   docker_engine = external 'Docker Engine' {
+    #vm
     description 'Docker Engine via socket (DooD pattern)'
   }
 
