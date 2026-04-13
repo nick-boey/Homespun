@@ -8,8 +8,8 @@ model {
     }
 
     web = container 'React Frontend' {
-      description 'Vite-based React SPA (port 3001)'
-      technology 'React / TypeScript / Vite'
+      description 'Nginx container serving the built React SPA (port 3001)'
+      technology 'React / TypeScript / Nginx'
     }
 
     worker = container 'TypeScript Worker' {
@@ -18,16 +18,19 @@ model {
     }
 
     loki = container 'Loki' {
+      #vm
       description 'Log aggregation service'
       technology 'Grafana Loki'
     }
 
     promtail = container 'Promtail' {
+      #vm
       description 'Log collector agent'
       technology 'Grafana Promtail'
     }
 
     grafana = container 'Grafana' {
+      #vm
       description 'Observability dashboards'
       technology 'Grafana'
     }
@@ -54,10 +57,5 @@ model {
   promtail -> loki 'Pushes logs'
   grafana -> loki 'Queries logs'
   developer -> web 'Browser'
-
-  // ACA-mode relationships (target state)
-  web -> entra_id 'MSAL authentication'
-  server -> entra_id 'Token validation'
-  server -> azure_files 'Reads/writes data (ACA mode)'
 
 }

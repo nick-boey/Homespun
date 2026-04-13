@@ -1,11 +1,11 @@
 views {
 
-  view systemContext of homespun {
+  view systemContext {
     title 'Homespun - System Context'
-    description 'Top-level view showing Homespun and its external dependencies'
+    description 'Top-level view: Homespun system and its external dependencies'
 
     include
-      *,
+      homespun,
       developer,
       github,
       claude_api,
@@ -17,7 +17,7 @@ views {
     description 'Docker Compose services, data stores, and external integrations'
 
     include
-      *,
+      * where tag is not #aca,
       developer,
       github,
       claude_api,
@@ -29,11 +29,12 @@ views {
     description 'ASP.NET Server feature slices and their interactions'
 
     include
-      *,
+      * where tag is not #aca,
       homespun.web,
       homespun.worker,
       homespun.data_volume,
-      homespun.fleece_store
+      homespun.fleece_store,
+      docker_engine
   }
 
   deployment view deploymentView {

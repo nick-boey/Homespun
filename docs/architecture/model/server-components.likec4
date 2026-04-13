@@ -14,6 +14,11 @@ model {
       description 'Shell command execution abstraction'
     }
 
+    containers_feat = component 'Containers' {
+      #vm
+      description 'Docker container discovery, query, and recovery for agent execution'
+    }
+
     fleece = component 'Fleece' {
       description 'Fleece issue tracking integration'
     }
@@ -34,6 +39,10 @@ model {
       description 'PR workflow, feature management, and data entities'
     }
 
+    workflows = component 'Workflows' {
+      description 'Workflow template execution, step executors, WorkflowHub'
+    }
+
     signalr_hubs = component 'SignalR Hubs' {
       description 'ClaudeCodeHub, NotificationHub, WorkflowHub'
     }
@@ -46,11 +55,16 @@ model {
 
   // Server component relationships
   agent_orchestration -> claude_code 'Manages agent sessions'
-  claude_code -> homespun.worker 'Delegates lightweight tasks'
+  agent_orchestration -> containers_feat 'Runs agents in Docker containers'
+  agent_orchestration -> homespun.worker 'Delegates mini-prompt tasks'
+  agent_orchestration -> fleece 'Resolves issue branches'
+  containers_feat -> docker_engine 'Manages agent containers (DooD)'
   claude_code -> signalr_hubs 'Streams session output'
   git -> commands 'Executes git CLI'
-  github_feature -> git 'Clones and syncs repos'
+  git -> github_feature 'Uses for PR data / clone URLs'
   pull_requests -> github_feature 'Syncs PR data'
+  workflows -> agent_orchestration 'Launches agents for workflow steps'
+  workflows -> signalr_hubs 'Streams workflow progress'
   signalr_hubs -> homespun.web 'Real-time updates'
   notifications -> signalr_hubs 'Sends toast notifications'
   projects -> homespun.data_volume 'Persists project data'

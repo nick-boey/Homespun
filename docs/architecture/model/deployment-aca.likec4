@@ -19,19 +19,19 @@ deployment {
         description 'Shared Azure Container Apps environment'
 
         containerApp server_app 'Server Container App' {
-          description 'ASP.NET backend running as a container app'
+          description 'ASP.NET backend hosting API + SignalR hubs'
           instanceOf homespun.server
         }
 
         containerApp worker_app 'Worker Container App' {
-          description 'TypeScript worker with revision-based scaling'
+          description 'TypeScript worker (Container App, optional ACA scale rules)'
           instanceOf homespun.worker
         }
-      }
 
-      cloudService static_web_app 'Static Web Apps' {
-        description 'Managed hosting for React SPA'
-        instanceOf homespun.web
+        containerApp web_app 'Web Container App' {
+          description 'React SPA served by Nginx (Container App, not Static Web Apps)'
+          instanceOf homespun.web
+        }
       }
 
       cloudService azure_files_share 'Azure Files Share' {

@@ -2,31 +2,33 @@ views {
 
   view acaContainerDiagram of homespun {
     title 'Homespun - Container Diagram (ACA Target State)'
-    description 'Container diagram showing Azure Container Apps services and Azure integrations'
+    description 'Container Apps services and Azure integrations under the ACA deployment'
 
     include
-      *,
+      * where tag is not #vm,
       developer,
       github,
       claude_api,
       entra_id,
       azure_files,
-      azure_container_registry
+      azure_container_registry,
+      log_analytics
   }
 
   view acaServerComponents of homespun.server {
     title 'Homespun Server - Components (ACA Target State)'
-    description 'Server components including ACA-specific execution, authentication, and storage'
+    description 'Server feature slices under the ACA execution + auth + storage path'
 
     include
-      *,
+      * where tag is not #vm,
       homespun.web,
       homespun.worker,
       homespun.data_volume,
       homespun.fleece_store,
       entra_id,
       azure_files,
-      azure_container_registry
+      azure_container_registry,
+      log_analytics
   }
 
   deployment view acaDeploymentView {
