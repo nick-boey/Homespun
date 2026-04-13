@@ -10,6 +10,7 @@ import {
   getRowY,
   ROW_HEIGHT,
   EXPANDED_DETAIL_HEIGHT,
+  getLaneCenterX,
 } from './task-graph-svg'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
@@ -438,5 +439,86 @@ describe('getRowY', () => {
 
   it('handles empty expanded set', () => {
     expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
+  })
+})
+
+describe('connector directions', () => {
+  const createMockLine = (
+    overrides?: Partial<TaskGraphIssueRenderLine>
+  ): TaskGraphIssueRenderLine => ({
+    type: 'issue',
+    issueId: 'test-id',
+    issueType: IssueType.TASK,
+    status: IssueStatus.OPEN,
+    title: 'Test Issue',
+    description: null,
+    branchName: null,
+    hasDescription: true,
+    lane: 1,
+    parentLane: null,
+    isFirstChild: false,
+    drawTopLine: false,
+    drawBottomLine: false,
+    isSeriesChild: false,
+    seriesConnectorFromLane: null,
+    drawLane0Connector: false,
+    isLastLane0Connector: false,
+    drawLane0PassThrough: false,
+    lane0Color: null,
+    hasHiddenParent: false,
+    hiddenParentIsSeriesMode: false,
+    marker: TaskGraphMarkerType.Open,
+    linkedPr: null,
+    agentStatus: null,
+    assignedTo: null,
+    executionMode: ExecutionMode.SERIES,
+    parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
+    ...overrides,
+  })
+
+  it('first-child parallel connector arcs upward toward parent', () => {
+    const line = createMockLine({
+      lane: 1,
+      parentLane: 0,
+      isFirstChild: true,
+      isSeriesChild: false,
+    })
+    const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+    const paths = container.querySelectorAll('path')
+    const firstChildPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes('A') && d.includes(`${getLaneCenterX(0)}`)
+    })
+
+    expect(firstChildPath).toBeDefined()
+    const d = firstChildPath!.getAttribute('d')!
+    // Should arc upward: sweep flag 0 0 1, vertical line ends at 0
+    expect(d).toContain('0 0 1')
+    expect(d).toMatch(/L \d+ 0$/)
+  })
+
+  it('series connector starts from bottom of row', () => {
+    const line = createMockLine({
+      lane: 2,
+      seriesConnectorFromLane: 1,
+      isSeriesChild: false,
+    })
+    const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={3} />)
+
+    const paths = container.querySelectorAll('path')
+    const seriesPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes(`${getLaneCenterX(1)}`) && d.includes('A')
+    })
+
+    expect(seriesPath).toBeDefined()
+    const d = seriesPath!.getAttribute('d')!
+    // Should start from ROW_HEIGHT (bottom of row)
+    expect(d).toMatch(new RegExp(`^M ${getLaneCenterX(1)} ${ROW_HEIGHT}`))
+    // Should use sweep flag 0 0 1
+    expect(d).toContain('0 0 1')
   })
 })

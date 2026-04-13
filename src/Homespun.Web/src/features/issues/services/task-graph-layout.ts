@@ -348,7 +348,7 @@ function computeTreeViewLayout(
     parentCountInGroup.set(node.issue.id.toLowerCase(), count)
   }
 
-  // BFS from roots to assign lanes
+  // DFS from roots to assign lanes
   const result: TreeViewNode[] = []
   const enqueueCount = new Map<string, number>()
   const queue: Array<{
@@ -385,10 +385,11 @@ function computeTreeViewLayout(
       parentNode,
     })
 
-    // Add children to queue
+    // Add children to front of queue (DFS) sorted by sortOrder
     const nodeId = node.issue?.id?.toLowerCase()
     if (nodeId) {
       const children = childrenByParent.get(nodeId) ?? []
+      const childEntries: typeof queue = []
       for (const child of children) {
         if (!child.issue?.id) continue
         const childId = child.issue.id.toLowerCase()
@@ -397,10 +398,21 @@ function computeTreeViewLayout(
 
         // Allow multi-parent nodes to be enqueued once per parent
         if (timesEnqueued < totalParents) {
-          queue.push({ node: child, lane: lane + 1, parentNode: node })
+          childEntries.push({ node: child, lane: lane + 1, parentNode: node })
           enqueueCount.set(childId, timesEnqueued + 1)
         }
       }
+      // Sort children by sortOrder from parentIssues reference
+      childEntries.sort((a, b) => {
+        const aSortOrder =
+          a.node.issue?.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === nodeId)
+            ?.sortOrder ?? ''
+        const bSortOrder =
+          b.node.issue?.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === nodeId)
+            ?.sortOrder ?? ''
+        return aSortOrder.localeCompare(bSortOrder)
+      })
+      queue.unshift(...childEntries)
     }
   }
 

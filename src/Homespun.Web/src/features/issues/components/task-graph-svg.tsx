@@ -154,7 +154,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           {line.isFirstChild ? (
             // Horizontal left from child to parent lane + arc down + vertical to bottom
             <path
-              d={`M ${cx - NODE_RADIUS - 2} ${cy} L ${getLaneCenterX(line.parentLane) + NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(line.parentLane)} ${cy + NODE_RADIUS} L ${getLaneCenterX(line.parentLane)} ${ROW_HEIGHT}`}
+              d={`M ${cx - NODE_RADIUS - 2} ${cy} L ${getLaneCenterX(line.parentLane) + NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 1 ${getLaneCenterX(line.parentLane)} ${cy - NODE_RADIUS} L ${getLaneCenterX(line.parentLane)} 0`}
               stroke={nodeColor}
               strokeWidth={LINE_STROKE_WIDTH}
               fill="none"
@@ -182,7 +182,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
       {/* Series connector to children (L-shaped, rightward in tree view) */}
       {line.seriesConnectorFromLane != null && (
         <path
-          d={`M ${getLaneCenterX(line.seriesConnectorFromLane)} 0 L ${getLaneCenterX(line.seriesConnectorFromLane)} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(line.seriesConnectorFromLane) - NODE_RADIUS} ${cy} L ${cx + NODE_RADIUS + 2} ${cy}`}
+          d={`M ${getLaneCenterX(line.seriesConnectorFromLane)} ${ROW_HEIGHT} L ${getLaneCenterX(line.seriesConnectorFromLane)} ${cy + NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 1 ${getLaneCenterX(line.seriesConnectorFromLane) - NODE_RADIUS} ${cy} L ${cx + NODE_RADIUS + 2} ${cy}`}
           stroke={nodeColor}
           strokeWidth={LINE_STROKE_WIDTH}
           fill="none"

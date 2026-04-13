@@ -937,7 +937,7 @@ describe('computeLayout', () => {
       expect(childLine.lane).toBe(2)
     })
 
-    it('renders nodes in tree traversal order (BFS from roots)', () => {
+    it('renders nodes in tree traversal order (DFS from roots)', () => {
       // Parent with two children - children should come after parent
       const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
       const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
@@ -959,6 +959,54 @@ describe('computeLayout', () => {
       // Children should come after parent (order between siblings may vary)
       expect(['child1', 'child2']).toContain(issueLines[1].issueId)
       expect(['child1', 'child2']).toContain(issueLines[2].issueId)
+    })
+
+    it('renders grandchildren in DFS order (children before siblings)', () => {
+      // A -> [B -> [D, E], C -> [F]]
+      // DFS should produce: A, B, D, E, C, F (not A, B, C, D, E, F)
+      const a = createIssue({ id: 'a', executionMode: ExecutionMode.PARALLEL })
+      const b = createIssue({
+        id: 'b',
+        executionMode: ExecutionMode.PARALLEL,
+        parentIssues: [{ parentIssue: 'a', sortOrder: 'a' }],
+      })
+      const c = createIssue({
+        id: 'c',
+        executionMode: ExecutionMode.PARALLEL,
+        parentIssues: [{ parentIssue: 'a', sortOrder: 'b' }],
+      })
+      const d = createIssue({
+        id: 'd',
+        parentIssues: [{ parentIssue: 'b', sortOrder: 'a' }],
+      })
+      const e = createIssue({
+        id: 'e',
+        parentIssues: [{ parentIssue: 'b', sortOrder: 'b' }],
+      })
+      const f = createIssue({
+        id: 'f',
+        parentIssues: [{ parentIssue: 'c', sortOrder: 'a' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(a, 0, 0),
+          createNode(b, 1, 1),
+          createNode(c, 1, 2),
+          createNode(d, 2, 3),
+          createNode(e, 2, 4),
+          createNode(f, 2, 5),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3)
+      const issueLines = result.filter(isIssueRenderLine)
+
+      expect(issueLines.map((l) => l.issueId)).toEqual(['a', 'b', 'd', 'e', 'c', 'f'])
     })
 
     it('handles multiple root nodes in tree view', () => {
