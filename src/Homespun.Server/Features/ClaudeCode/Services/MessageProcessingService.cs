@@ -478,6 +478,34 @@ public class MessageProcessingService : IMessageProcessingService
                 var content = ConvertSdkContentBlock(sessionId, block);
                 context.CurrentAssistantMessage.Content.Add(content);
 
+                // Broadcast AG-UI events for complete assistant message blocks
+                // (streaming path handles its own broadcasting via ProcessStreamEventAsync)
+                if (content.Type == ClaudeContentType.Text || content.Type == ClaudeContentType.Thinking)
+                {
+                    var msgId = context.CurrentAssistantMessage.Id;
+                    _ = _hubContext.BroadcastAGUITextMessageStart(sessionId,
+                        AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant"));
+                    if (!string.IsNullOrEmpty(content.Text))
+                    {
+                        _ = _hubContext.BroadcastAGUITextMessageContent(sessionId,
+                            AGUIEvents.AGUIEventFactory.CreateTextMessageContent(msgId, content.Text));
+                    }
+                    _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId,
+                        AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(msgId));
+                }
+                else if (content.Type == ClaudeContentType.ToolUse && content.ToolUseId != null)
+                {
+                    _ = _hubContext.BroadcastAGUIToolCallStart(sessionId,
+                        AGUIEvents.AGUIEventFactory.CreateToolCallStart(content.ToolUseId, content.ToolName ?? "unknown", context.CurrentAssistantMessage.Id));
+                    if (!string.IsNullOrEmpty(content.ToolInput))
+                    {
+                        _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId,
+                            AGUIEvents.AGUIEventFactory.CreateToolCallArgs(content.ToolUseId, content.ToolInput));
+                    }
+                    _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId,
+                        AGUIEvents.AGUIEventFactory.CreateToolCallEnd(content.ToolUseId));
+                }
+
                 if (content.Type == ClaudeContentType.ToolUse &&
                     content.ToolName == "AskUserQuestion" &&
                     !string.IsNullOrEmpty(content.ToolInput))

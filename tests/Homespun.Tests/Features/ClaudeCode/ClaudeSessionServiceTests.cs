@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
@@ -3959,6 +3960,187 @@ public class ClaudeSessionServiceStatusBroadcastTests
         // Assert - Status should transition to WaitingForInput after message processing
         Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput),
             "Status should be WaitingForInput after successful message processing");
+    }
+
+    #endregion
+
+    #region Assistant Message AG-UI Broadcasting
+
+    [Test]
+    public async Task SendMessageAsync_AssistantMessageWithTextBlock_BroadcastsAGUITextEvents()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+        _broadcastCalls.Clear();
+
+        var textBlock = new SdkTextBlock("Hello from assistant");
+        var apiMessage = new SdkApiMessage("assistant", new List<SdkContentBlock> { textBlock });
+        var assistantMsg = new SdkAssistantMessage("agent-1", null, apiMessage, null);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                assistantMsg,
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have TextMessageStart, TextMessageContent, TextMessageEnd
+        var aguiMethods = _broadcastCalls.Select(c => c.Method).ToList();
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageStart"),
+            "Should broadcast AGUI TextMessageStart for text block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageContent"),
+            "Should broadcast AGUI TextMessageContent for text block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageEnd"),
+            "Should broadcast AGUI TextMessageEnd for text block");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_AssistantMessageWithThinkingBlock_BroadcastsAGUITextEvents()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+        _broadcastCalls.Clear();
+
+        var thinkingBlock = new SdkThinkingBlock("Let me think about this...");
+        var apiMessage = new SdkApiMessage("assistant", new List<SdkContentBlock> { thinkingBlock });
+        var assistantMsg = new SdkAssistantMessage("agent-1", null, apiMessage, null);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                assistantMsg,
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have TextMessageStart, TextMessageContent, TextMessageEnd for thinking block
+        var aguiMethods = _broadcastCalls.Select(c => c.Method).ToList();
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageStart"),
+            "Should broadcast AGUI TextMessageStart for thinking block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageContent"),
+            "Should broadcast AGUI TextMessageContent for thinking block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageEnd"),
+            "Should broadcast AGUI TextMessageEnd for thinking block");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_AssistantMessageWithToolUseBlock_BroadcastsAGUIToolCallEvents()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+        _broadcastCalls.Clear();
+
+        var toolInput = JsonSerializer.Deserialize<JsonElement>("{\"query\": \"test\"}");
+        var toolBlock = new SdkToolUseBlock("tool-123", "Grep", toolInput);
+        var apiMessage = new SdkApiMessage("assistant", new List<SdkContentBlock> { toolBlock });
+        var assistantMsg = new SdkAssistantMessage("agent-1", null, apiMessage, null);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                assistantMsg,
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have ToolCallStart, ToolCallArgs, ToolCallEnd
+        var aguiMethods = _broadcastCalls.Select(c => c.Method).ToList();
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_ToolCallStart"),
+            "Should broadcast AGUI ToolCallStart for tool_use block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_ToolCallArgs"),
+            "Should broadcast AGUI ToolCallArgs for tool_use block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_ToolCallEnd"),
+            "Should broadcast AGUI ToolCallEnd for tool_use block");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_AssistantMessageWithMixedBlocks_BroadcastsAllAGUIEvents()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+        _broadcastCalls.Clear();
+
+        var textBlock = new SdkTextBlock("I'll search for that");
+        var toolInput = JsonSerializer.Deserialize<JsonElement>("{\"pattern\": \"foo\"}");
+        var toolBlock = new SdkToolUseBlock("tool-456", "Grep", toolInput);
+        var apiMessage = new SdkApiMessage("assistant", new List<SdkContentBlock> { textBlock, toolBlock });
+        var assistantMsg = new SdkAssistantMessage("agent-1", null, apiMessage, null);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                assistantMsg,
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have both text and tool call events
+        var aguiMethods = _broadcastCalls.Select(c => c.Method).ToList();
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageStart"),
+            "Should broadcast text start for text block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_TextMessageEnd"),
+            "Should broadcast text end for text block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_ToolCallStart"),
+            "Should broadcast tool call start for tool_use block");
+        Assert.That(aguiMethods, Has.Some.EqualTo("AGUI_ToolCallEnd"),
+            "Should broadcast tool call end for tool_use block");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_StreamedThenAssistantMessage_DoesNotDoubleEmitAGUIEvents()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+        _broadcastCalls.Clear();
+
+        // Simulate streaming events that populate content, followed by an assistant message
+        var contentBlockStartJson = JsonSerializer.Deserialize<JsonElement>(
+            """{"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}""");
+        var contentBlockDeltaJson = JsonSerializer.Deserialize<JsonElement>(
+            """{"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hello streamed"}}""");
+        var contentBlockStopJson = JsonSerializer.Deserialize<JsonElement>(
+            """{"type": "content_block_stop", "index": 0}""");
+
+        var streamStart = new SdkStreamEvent("agent-1", null, contentBlockStartJson, null);
+        var streamDelta = new SdkStreamEvent("agent-1", null, contentBlockDeltaJson, null);
+        var streamStop = new SdkStreamEvent("agent-1", null, contentBlockStopJson, null);
+
+        // The assistant message arrives after streaming already populated content
+        var textBlock = new SdkTextBlock("Hello streamed");
+        var apiMessage = new SdkApiMessage("assistant", new List<SdkContentBlock> { textBlock });
+        var assistantMsg = new SdkAssistantMessage("agent-1", null, apiMessage, null);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                streamStart, streamDelta, streamStop,
+                assistantMsg,
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - TextMessageStart should appear only from the streaming path,
+        // not re-emitted by the assistant message path (Content.Count > 0 guard prevents it).
+        // Streaming broadcasts once per event (to the session group).
+        var textStartCount = _broadcastCalls.Count(c => c.Method == "AGUI_TextMessageStart");
+        Assert.That(textStartCount, Is.EqualTo(1),
+            "TextMessageStart should appear only once (from streaming), not re-emitted by assistant message");
     }
 
     #endregion
