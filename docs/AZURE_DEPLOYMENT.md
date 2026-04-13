@@ -9,6 +9,7 @@ Deploy Homespun to an Azure VM using Bicep Infrastructure as Code templates. Thi
 - [Parameters](#parameters)
 - [What gets deployed](#what-gets-deployed)
 - [Post-deployment](#post-deployment)
+- [Komodo variables](#komodo-variables)
 - [Multi-user setup](#multi-user-setup)
 - [SSL and domain setup](#ssl-and-domain-setup)
 - [Teardown](#teardown)
@@ -218,6 +219,77 @@ cd /opt/homespun/repo
 ./scripts/run-komodo.sh --stop
 ./scripts/run-komodo.sh            # restart with the same config
 ./scripts/install-komodo.sh --clean  # wipe MongoDB volumes and re-provision
+```
+
+## Komodo variables
+
+When you click **Deploy** in the Komodo UI, Komodo reads `config/komodo/resources.toml` from the GitHub repo to learn how to run the Homespun stack. Some values in that file are host-specific — they aren't known at author time, so the TOML references them as `[[PLACEHOLDER]]` entries resolved from Komodo's Variable store.
+
+The host-specific values are:
+
+| Variable | Purpose | How it's detected |
+|---|---|---|
+| `HOMESPUN_HOME` | Admin user's home directory — used as the base for `DATA_DIR`, `SSH_DIR`, and `CLAUDE_CREDENTIALS` bind mounts | `getent passwd $ADMIN_USERNAME` |
+| `HOST_UID` | Admin user's UID — the Homespun container runs as this user | `id -u $ADMIN_USERNAME` |
+| `HOST_GID` | Admin user's primary GID | `id -g $ADMIN_USERNAME` |
+| `DOCKER_GID` | GID of the host `/var/run/docker.sock` group — added to the Homespun container's supplementary groups so it can spawn agent containers (DooD) | `stat -c '%g' /var/run/docker.sock` |
+
+If `DATA_DIR` points at a directory that doesn't exist on the host, Docker auto-creates it as `root:root`, and the Homespun container (running as `HOST_UID`) fails with `UnauthorizedAccessException: Access to the path '/data/DataProtection-Keys' is denied` on startup. Keeping these four variables accurate prevents that.
+
+### Automatic sync
+
+On every VM deploy, cloud-init runs `scripts/install-komodo.sh`, which detects the correct values and writes them to `/etc/komodo/homespun-vars.env`. Then `scripts/run-komodo.sh` invokes `scripts/sync-komodo-vars.sh` after starting Komodo Core — this logs in as the admin user and pushes the four values into Komodo via its write API.
+
+You don't normally need to do anything manually.
+
+### Re-syncing after a change
+
+If you change the admin user or the VM's Docker group GID shifts (rare, but possible after a Docker package upgrade), re-sync the variables:
+
+```bash
+ssh homespun@<public-ip>
+sudo /opt/homespun/repo/scripts/install-komodo.sh   # re-detects values into homespun-vars.env
+sudo /opt/homespun/repo/scripts/sync-komodo-vars.sh # pushes them to Komodo
+```
+
+To force a specific admin user (e.g., after changing `--admin-username`):
+
+```bash
+sudo ADMIN_USERNAME=alice /opt/homespun/repo/scripts/install-komodo.sh
+sudo /opt/homespun/repo/scripts/sync-komodo-vars.sh
+```
+
+Then click **Deploy** again on the `homespun` stack in the Komodo UI.
+
+### Manual fallback
+
+If the automatic sync fails (Komodo Core unreachable, admin password changed, etc.), `sync-komodo-vars.sh` prints the values and exits 0 so Komodo itself still comes up. Set the variables manually via the Komodo UI:
+
+1. Log in to Komodo and open **Settings → Variables**.
+2. Create or update these four entries. Use the values printed by `sudo cat /etc/komodo/homespun-vars.env` on the VM:
+   - `HOMESPUN_HOME`
+   - `HOST_UID`
+   - `HOST_GID`
+   - `DOCKER_GID`
+3. Open the **homespun** stack and click **Deploy**.
+
+Or push them via `curl` directly:
+
+```bash
+ssh homespun@<public-ip>
+# Source values + admin credentials
+sudo cat /etc/komodo/homespun-vars.env
+sudo grep KOMODO_INIT_ADMIN /etc/komodo/compose.env
+
+# Then from anywhere with access to port 9120:
+JWT=$(curl -sX POST http://localhost:9120/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"LoginLocalUser","params":{"username":"admin","password":"<admin-pass>"}}' \
+  | jq -r .data.jwt)
+
+curl -X POST http://localhost:9120/write/UpdateVariableValue \
+  -H "Authorization: $JWT" -H 'Content-Type: application/json' \
+  -d '{"name":"DOCKER_GID","value":"999"}'
 ```
 
 ## Multi-user setup

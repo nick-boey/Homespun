@@ -192,6 +192,18 @@ if [ "$DETACHED" = true ]; then
         fi
     fi
 
+    # Push host-specific Komodo Variables so stack redeploys from the UI can
+    # resolve [[HOMESPUN_HOME]], [[HOST_UID]], [[HOST_GID]], [[DOCKER_GID]].
+    # Non-fatal: if Core isn't healthy in time, the sync script logs manual-
+    # repair steps and exits 0 without blocking Komodo from running.
+    SYNC_SCRIPT="$SCRIPT_DIR/sync-komodo-vars.sh"
+    if [ -x "$SYNC_SCRIPT" ]; then
+        log_info "Syncing host-specific Komodo Variables..."
+        "$SYNC_SCRIPT" || log_warn "Variable sync returned non-zero (continuing)."
+    else
+        log_warn "$SYNC_SCRIPT not found or not executable; skipping variable sync."
+    fi
+
     echo
     log_success "Komodo started successfully!"
     echo

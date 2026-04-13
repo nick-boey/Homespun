@@ -20,6 +20,12 @@
 #   - HOMESPUN_TAG controls which image tag to deploy:
 #       "latest" = stable releases, "alpha" = latest alpha build,
 #       or a specific version like "0.5.2-alpha.0.4.1.1.1.1"
+#   - Host-specific Komodo variables set (auto-populated by scripts/sync-komodo-vars.sh
+#     on VM deploys; see docs/deployment/komodo-variables.md for manual setup):
+#       HOMESPUN_HOME - admin user's home directory (e.g. /home/homespun)
+#       HOST_UID      - admin user's UID (e.g. 1000)
+#       HOST_GID      - admin user's primary GID (e.g. 1000)
+#       DOCKER_GID    - host /var/run/docker.sock group GID (e.g. 999)
 
 ## ── Resource Sync (self-referential) ─────────────────────────────────
 # After the one-time manual setup, this entry keeps the sync self-managing.
@@ -55,12 +61,12 @@ WEB_IMAGE=ghcr.io/nick-boey/homespun-web:[[HOMESPUN_TAG]]
 COMPOSE_PROFILES=plg
 CONTAINER_NAME=homespun
 HOST_PORT=8080
-HOST_UID=1000
-HOST_GID=1000
-DOCKER_GID=987
-DATA_DIR=/home/azureuser/.homespun-container/data
-SSH_DIR=/home/azureuser/.ssh
-CLAUDE_CREDENTIALS=/home/azureuser/.claude/.credentials.json
+HOST_UID=[[HOST_UID]]
+HOST_GID=[[HOST_GID]]
+DOCKER_GID=[[DOCKER_GID]]
+DATA_DIR=[[HOMESPUN_HOME]]/.homespun-container/data
+SSH_DIR=[[HOMESPUN_HOME]]/.ssh
+CLAUDE_CREDENTIALS=[[HOMESPUN_HOME]]/.claude/.credentials.json
 ASPNETCORE_ENVIRONMENT=Production
 AGENT_MODE=Docker
 GITHUB_TOKEN=[[GITHUB_TOKEN]]
