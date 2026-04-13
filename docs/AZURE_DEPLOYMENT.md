@@ -116,7 +116,7 @@ The `infra/main.bicepparam` file contains defaults. Override at deploy time:
 | `githubToken` | — | GitHub PAT (secure) |
 | `claudeCodeOAuthToken` | — | Claude OAuth token (secure) |
 | `tailscaleAuthKey` | — | Tailscale auth key (secure) |
-| `osDiskSizeGb` | `64` | OS disk size (30-1024 GB) |
+| `osDiskSizeGb` | `256` | OS disk size (30-1024 GB) |
 | `baseName` | `homespun` | Resource name prefix |
 
 ### Allowed VM sizes

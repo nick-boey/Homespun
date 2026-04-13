@@ -5,7 +5,7 @@ param location = 'australiaeast'
 param vmSize = 'Standard_D4s_v3'
 param adminUsername = 'homespun'
 param baseName = 'homespun'
-param osDiskSizeGb = 64
+param osDiskSizeGb = 256
 
 // Required: Set these before deploying
 param adminSshPublicKey = readEnvironmentVariable('HOMESPUN_SSH_PUBLIC_KEY', '')

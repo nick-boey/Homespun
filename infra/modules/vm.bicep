@@ -32,7 +32,7 @@ param customData string = ''
 @description('OS disk size in GB')
 @minValue(30)
 @maxValue(1024)
-param osDiskSizeGb int = 64
+param osDiskSizeGb int = 256
 
 @description('Tags to apply to all VM resources')
 param tags object = {}
