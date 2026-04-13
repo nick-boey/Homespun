@@ -223,28 +223,46 @@ cd /opt/homespun/repo
 
 ## Komodo variables
 
-When you click **Deploy** in the Komodo UI, Komodo reads `config/komodo/resources.toml` from the GitHub repo to learn how to run the Homespun stack. Some values in that file are host-specific — they aren't known at author time, so the TOML references them as `[[PLACEHOLDER]]` entries resolved from Komodo's Variable store.
+When you click **Deploy** in the Komodo UI, Komodo reads `config/komodo/resources.toml` from the GitHub repo to learn how to run the Homespun stack. That file references several values as `[[PLACEHOLDER]]` entries resolved from Komodo's **Variable store**. **Every variable below must be defined before the first deploy** — any missing variable is written out as a literal `[[VAR]]` string, which breaks `docker compose pull` with errors like `service "homespun" refers to undefined volume [[HOMESPUN_HOME]]/.homespun-container/data: invalid compose project`.
 
-The host-specific values are:
+### Required variables
 
-| Variable | Purpose | How it's detected |
+All seven live in **Settings → Variables** in the Komodo UI.
+
+**Secrets** (one-off values that don't depend on the host):
+
+| Variable | Purpose |
+|---|---|
+| `GITHUB_TOKEN` | GitHub PAT with `repo` scope. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token — copy from `~/.claude/.credentials.json` after `claude login`. |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password for the bundled PLG dashboard. |
+
+**Release knob:**
+
+| Variable | Purpose |
+|---|---|
+| `HOMESPUN_TAG` | Image tag — `latest`, `alpha`, or a specific version such as `0.5.2`. Note the singular name. |
+
+**Host-specific** (one set per server running the Komodo Periphery that hosts this stack):
+
+| Variable | Purpose | How to derive on the host |
 |---|---|---|
-| `HOMESPUN_HOME` | Admin user's home directory — used as the base for `DATA_DIR`, `SSH_DIR`, and `CLAUDE_CREDENTIALS` bind mounts | `getent passwd $ADMIN_USERNAME` |
-| `HOST_UID` | Admin user's UID — the Homespun container runs as this user | `id -u $ADMIN_USERNAME` |
-| `HOST_GID` | Admin user's primary GID | `id -g $ADMIN_USERNAME` |
-| `DOCKER_GID` | GID of the host `/var/run/docker.sock` group — added to the Homespun container's supplementary groups so it can spawn agent containers (DooD) | `stat -c '%g' /var/run/docker.sock` |
+| `HOMESPUN_HOME` | Admin user's home directory — base for `DATA_DIR`, `SSH_DIR`, `CLAUDE_CREDENTIALS` bind mounts. | `getent passwd $ADMIN_USERNAME \| cut -d: -f6` (or `echo $HOME` as the admin user). |
+| `HOST_UID` | Admin user's UID — the Homespun container runs as this user. | `id -u $ADMIN_USERNAME` |
+| `HOST_GID` | Admin user's primary GID. | `id -g $ADMIN_USERNAME` |
+| `DOCKER_GID` | GID of `/var/run/docker.sock` — added to the container's supplementary groups so it can spawn agent containers (Docker-out-of-Docker). Varies by distro. | `stat -c '%g' /var/run/docker.sock` |
 
-If `DATA_DIR` points at a directory that doesn't exist on the host, Docker auto-creates it as `root:root`, and the Homespun container (running as `HOST_UID`) fails with `UnauthorizedAccessException: Access to the path '/data/DataProtection-Keys' is denied` on startup. Keeping these four variables accurate prevents that.
+If `DATA_DIR` points at a directory that doesn't exist on the host, Docker auto-creates it as `root:root`, and the Homespun container (running as `HOST_UID`) fails with `UnauthorizedAccessException: Access to the path '/data/DataProtection-Keys' is denied` on startup. Keeping the four host-specific variables accurate prevents that.
 
-### Automatic sync
+### Automatic sync (bundled installer)
 
-On every VM deploy, cloud-init runs `scripts/install-komodo.sh`, which detects the correct values and writes them to `/etc/komodo/homespun-vars.env`. Then `scripts/run-komodo.sh` invokes `scripts/sync-komodo-vars.sh` after starting Komodo Core — this logs in as the admin user and pushes the four values into Komodo via its write API.
+On an Azure VM provisioned via this repo's cloud-init, `scripts/install-komodo.sh` runs automatically. It detects the four host-specific values and writes them to `/etc/komodo/homespun-vars.env`. Then `scripts/run-komodo.sh` invokes `scripts/sync-komodo-vars.sh` after Komodo Core becomes healthy, which logs in as the admin user and pushes the values into Komodo via its write API.
 
-You don't normally need to do anything manually.
+For this path you don't normally need to do anything manually beyond setting the three secrets and `HOMESPUN_TAG` in the Komodo UI.
 
-### Re-syncing after a change
+#### Re-syncing after a change
 
-If you change the admin user or the VM's Docker group GID shifts (rare, but possible after a Docker package upgrade), re-sync the variables:
+If you change the admin user or the VM's Docker group GID shifts (rare, but possible after a Docker package upgrade), re-sync:
 
 ```bash
 ssh homespun@<public-ip>
@@ -261,27 +279,31 @@ sudo /opt/homespun/repo/scripts/sync-komodo-vars.sh
 
 Then click **Deploy** again on the `homespun` stack in the Komodo UI.
 
-### Manual fallback
+### Manual install (existing Komodo instance, no bundled scripts)
 
-If the automatic sync fails (Komodo Core unreachable, admin password changed, etc.), `sync-komodo-vars.sh` prints the values and exits 0 so Komodo itself still comes up. Set the variables manually via the Komodo UI:
-
-1. Log in to Komodo and open **Settings → Variables**.
-2. Create or update these four entries. Use the values printed by `sudo cat /etc/komodo/homespun-vars.env` on the VM:
-   - `HOMESPUN_HOME`
-   - `HOST_UID`
-   - `HOST_GID`
-   - `DOCKER_GID`
-3. Open the **homespun** stack and click **Deploy**.
-
-Or push them via `curl` directly:
+If you're hooking the stack up to a Komodo instance you installed outside this repo's scripts — or the automatic sync failed — create all seven variables by hand. On the host where Komodo will deploy Homespun, as the admin user:
 
 ```bash
-ssh homespun@<public-ip>
-# Source values + admin credentials
-sudo cat /etc/komodo/homespun-vars.env
+echo "HOMESPUN_HOME=$HOME"
+echo "HOST_UID=$(id -u)"
+echo "HOST_GID=$(id -g)"
+echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)"
+```
+
+Then in the Komodo UI → **Settings → Variables**, create each variable listed in the tables above, using these host-derived values plus your three secrets and a valid `HOMESPUN_TAG`. Finally, open the **homespun** stack and click **Deploy**.
+
+Verify the substitution worked — no `[[...]]` should remain:
+
+```bash
+sudo cat /etc/komodo/stacks/homespun/.env
+```
+
+#### Push via curl instead of the UI
+
+```bash
+# On the Komodo Core host, grab admin credentials + values:
 sudo grep KOMODO_INIT_ADMIN /etc/komodo/compose.env
 
-# Then from anywhere with access to port 9120:
 JWT=$(curl -sX POST http://localhost:9120/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"type":"LoginLocalUser","params":{"username":"admin","password":"<admin-pass>"}}' \

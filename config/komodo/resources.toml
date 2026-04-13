@@ -13,19 +13,12 @@
 #   After this, the resource_sync below keeps itself up-to-date automatically.
 #
 # Prerequisites:
-#   - Komodo installed and running (scripts/install-komodo.sh + scripts/run-komodo.sh)
-#   - Git account "nick-boey" configured in Komodo with GitHub repo read access
-#   - Komodo variables/secrets set: GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN,
-#     TAILSCALE_AUTH_KEY, GRAFANA_ADMIN_PASSWORD, HOMESPUN_TAG
-#   - HOMESPUN_TAG controls which image tag to deploy:
-#       "latest" = stable releases, "alpha" = latest alpha build,
-#       or a specific version like "0.5.2-alpha.0.4.1.1.1.1"
-#   - Host-specific Komodo variables set (auto-populated by scripts/sync-komodo-vars.sh
-#     on VM deploys; see docs/deployment/komodo-variables.md for manual setup):
-#       HOMESPUN_HOME - admin user's home directory (e.g. /home/homespun)
-#       HOST_UID      - admin user's UID (e.g. 1000)
-#       HOST_GID      - admin user's primary GID (e.g. 1000)
-#       DOCKER_GID    - host /var/run/docker.sock group GID (e.g. 999)
+#   - Komodo installed and running (scripts/install-komodo.sh + scripts/run-komodo.sh,
+#     or any other route).
+#   - Git account "nick-boey" configured in Komodo with GitHub repo read access.
+#   - All Komodo Variables the stack references are set in Settings → Variables.
+#     Full list and derivation instructions live in the [[stack]].description
+#     field below, and in docs/AZURE_DEPLOYMENT.md#komodo-variables.
 
 ## ── Resource Sync (self-referential) ─────────────────────────────────
 # After the one-time manual setup, this entry keeps the sync self-managing.
@@ -44,7 +37,38 @@ resource_path = ["config/komodo/resources.toml"]
 
 [[stack]]
 name = "homespun"
-description = "Homespun - React web app for managing development features and AI agents"
+description = """
+Homespun - React web app for managing development features and AI agents.
+
+This stack reads the following Komodo Variables — deploys will fail with
+"undefined volume [[HOMESPUN_HOME]]/..." until every row below is defined in
+Settings → Variables. See docs/AZURE_DEPLOYMENT.md#komodo-variables for
+details (including how to derive each host-specific value).
+
+Secrets (set once per Komodo instance):
+  GITHUB_TOKEN             GitHub PAT with `repo` scope.
+  CLAUDE_CODE_OAUTH_TOKEN  Copy from ~/.claude/.credentials.json after `claude login`.
+  GRAFANA_ADMIN_PASSWORD   Grafana admin password for the bundled dashboard.
+
+Release knob:
+  HOMESPUN_TAG             Image tag — `latest`, `alpha`, or a specific version.
+
+Host-specific (per server running the Komodo Periphery that hosts this stack):
+  HOMESPUN_HOME  Admin user's home dir, e.g. /home/azureuser. Used as the
+                 base for DATA_DIR, SSH_DIR, CLAUDE_CREDENTIALS bind mounts.
+                 Derive: `echo $HOME` on the host as the admin user.
+  HOST_UID       Admin user's UID. Derive: `id -u`.
+  HOST_GID       Admin user's primary GID. Derive: `id -g`.
+  DOCKER_GID     GID of /var/run/docker.sock — the Homespun container needs
+                 this group to spawn agent containers (Docker-out-of-Docker).
+                 Derive: `stat -c '%g' /var/run/docker.sock`. Varies by
+                 distro (e.g. Ubuntu 22.04 ships docker-ce with GID 987).
+
+On VMs provisioned via scripts/install-komodo.sh the four host-specific
+values are auto-synced by scripts/sync-komodo-vars.sh. On any other install
+(existing Komodo instance, manual install, non-Azure host) create them by
+hand in the Komodo UI before the first deploy.
+"""
 tags = ["homespun"]
 
 [stack.config]
@@ -54,6 +78,12 @@ branch = "main"
 file_paths = ["docker-compose.yml"]
 auto_update = true
 poll_for_updates = true
+# [[VAR]] placeholders below are resolved against Komodo's Variable store when
+# Komodo writes the stack's .env. Any unset Variable is emitted as a literal
+# [[VAR]] string, which breaks `docker compose pull` with "undefined volume"
+# (compose parses `[[HOMESPUN_HOME]]/...` as a named-volume reference).
+# If you hit that error: create the missing Variables in Settings → Variables.
+# Full variable reference: see the stack description field above.
 environment = """
 HOMESPUN_IMAGE=ghcr.io/nick-boey/homespun:[[HOMESPUN_TAG]]
 WORKER_IMAGE=ghcr.io/nick-boey/homespun-worker:[[HOMESPUN_TAG]]
