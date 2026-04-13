@@ -222,6 +222,55 @@ EOF
 sudo chmod 600 "$KOMODO_DIR/compose.env"
 log_success "      Generated configuration at $KOMODO_DIR/compose.env"
 
+# Step 3b: Detect and persist host-specific values for Komodo Variables.
+# These are consumed by scripts/sync-komodo-vars.sh (run by run-komodo.sh once
+# Komodo Core is healthy) to populate the [[HOMESPUN_HOME]], [[HOST_UID]],
+# [[HOST_GID]], [[DOCKER_GID]] placeholders referenced in
+# config/komodo/resources.toml.
+log_info "      Detecting host-specific values..."
+
+# Admin username: set by cloud-init; falls back to the current invoker when
+# run manually on an existing VM.
+DETECTED_ADMIN_USERNAME="${ADMIN_USERNAME:-${SUDO_USER:-$(id -un)}}"
+
+if ! id -u "$DETECTED_ADMIN_USERNAME" &>/dev/null; then
+    log_error "      Admin user '$DETECTED_ADMIN_USERNAME' does not exist."
+    log_error "      Set ADMIN_USERNAME=<user> and re-run this script."
+    exit 1
+fi
+
+DETECTED_HOMESPUN_HOME="$(getent passwd "$DETECTED_ADMIN_USERNAME" | cut -d: -f6)"
+DETECTED_HOST_UID="$(id -u "$DETECTED_ADMIN_USERNAME")"
+DETECTED_HOST_GID="$(id -g "$DETECTED_ADMIN_USERNAME")"
+
+if [ -S /var/run/docker.sock ]; then
+    DETECTED_DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
+else
+    log_warn "      /var/run/docker.sock not found; falling back to docker group GID."
+    DETECTED_DOCKER_GID="$(getent group docker | cut -d: -f3 || echo 999)"
+fi
+
+log_success "      ADMIN_USERNAME=$DETECTED_ADMIN_USERNAME"
+log_success "      HOMESPUN_HOME=$DETECTED_HOMESPUN_HOME"
+log_success "      HOST_UID=$DETECTED_HOST_UID"
+log_success "      HOST_GID=$DETECTED_HOST_GID"
+log_success "      DOCKER_GID=$DETECTED_DOCKER_GID"
+
+# Persist for sync-komodo-vars.sh. These are NOT secrets (UIDs and a path),
+# but we keep the file mode tight to match the rest of $KOMODO_DIR.
+sudo tee "$KOMODO_DIR/homespun-vars.env" > /dev/null << EOF
+# Host-specific values pushed into Komodo Variables by sync-komodo-vars.sh.
+# Regenerated every time install-komodo.sh runs. Safe to edit manually and
+# re-run sync-komodo-vars.sh to push updates.
+ADMIN_USERNAME=$DETECTED_ADMIN_USERNAME
+HOMESPUN_HOME=$DETECTED_HOMESPUN_HOME
+HOST_UID=$DETECTED_HOST_UID
+HOST_GID=$DETECTED_HOST_GID
+DOCKER_GID=$DETECTED_DOCKER_GID
+EOF
+sudo chmod 644 "$KOMODO_DIR/homespun-vars.env"
+log_success "      Persisted to $KOMODO_DIR/homespun-vars.env"
+
 # Step 4: Copy compose files
 log_info "[4/4] Installing compose files..."
 

@@ -43,6 +43,11 @@ write_files:
 
       echo "=== Homespun Setup Started: $(date) ==="
 
+      # Admin username is substituted by main.bicep from the adminUsername param.
+      # Cloud-init runs as root; all user-facing resources are owned by this user.
+      ADMIN_USERNAME="__ADMIN_USERNAME__"
+      ADMIN_HOME="/home/$ADMIN_USERNAME"
+
       # Install Docker
       echo "Installing Docker..."
       curl -fsSL https://get.docker.com | sh
@@ -50,11 +55,12 @@ write_files:
       echo "Docker version: $(docker --version)"
       echo "Docker Compose version: $(docker compose version)"
 
-      # Create homespun user if not exists
-      if ! id -u homespun &>/dev/null; then
-        useradd --create-home --shell /bin/bash homespun
+      # Ensure admin user exists (Azure provisioning already creates it, but
+      # fall back to useradd so the script works on non-Azure hosts too).
+      if ! id -u "$ADMIN_USERNAME" &>/dev/null; then
+        useradd --create-home --shell /bin/bash "$ADMIN_USERNAME"
       fi
-      usermod -aG docker homespun
+      usermod -aG docker "$ADMIN_USERNAME"
 
       # Clone repository
       echo "Cloning Homespun repository..."
@@ -64,20 +70,35 @@ write_files:
       else
         cd "$REPO_DIR" && git pull
       fi
-      chown -R homespun:homespun "$REPO_DIR"
+      chown -R "$ADMIN_USERNAME:$ADMIN_USERNAME" "$REPO_DIR"
 
       # Materialize the repo .env from the template written by cloud-init.
       # This is the single configuration source for run.sh on the VM.
-      install -o homespun -g homespun -m 600 \
+      install -o "$ADMIN_USERNAME" -g "$ADMIN_USERNAME" -m 600 \
         /opt/homespun/.env-template \
         "$REPO_DIR/.env"
 
       # Create Docker network
       docker network create homespun-net 2>/dev/null || true
 
-      # Create data directories
-      mkdir -p /home/homespun/.homespun-container/data
-      chown -R homespun:homespun /home/homespun/.homespun-container
+      # Pre-create all host paths that docker-compose.yml bind-mounts into the
+      # Homespun container, owned by the admin user. This is critical for
+      # Komodo-triggered redeploys: Komodo reads DATA_DIR/SSH_DIR/CLAUDE_CREDENTIALS
+      # from Komodo Variables and mounts them. If a path doesn't exist,
+      # Docker creates it as root:root and the container (running as the
+      # admin user's UID) cannot write to it.
+      install -d -o "$ADMIN_USERNAME" -g "$ADMIN_USERNAME" -m 755 \
+        "$ADMIN_HOME/.homespun-container" \
+        "$ADMIN_HOME/.homespun-container/data"
+      install -d -o "$ADMIN_USERNAME" -g "$ADMIN_USERNAME" -m 700 \
+        "$ADMIN_HOME/.ssh" \
+        "$ADMIN_HOME/.claude"
+      # Touch a placeholder credentials file so the :ro bind mount attaches
+      # to a real file. Replace the contents later if using Claude OAuth.
+      if [ ! -e "$ADMIN_HOME/.claude/.credentials.json" ]; then
+        install -o "$ADMIN_USERNAME" -g "$ADMIN_USERNAME" -m 600 /dev/null \
+          "$ADMIN_HOME/.claude/.credentials.json"
+      fi
 
       # Set up SSL with Let's Encrypt if domain is configured
       DOMAIN_NAME="__DOMAIN_NAME__"
@@ -96,12 +117,15 @@ write_files:
       # Start Homespun using run.sh - it reads $REPO_DIR/.env itself
       echo "Starting Homespun..."
       cd "$REPO_DIR"
-      sudo -u homespun HOME=/home/homespun ./scripts/run.sh --pull
+      sudo -u "$ADMIN_USERNAME" HOME="$ADMIN_HOME" ./scripts/run.sh --pull
 
       # Install and start Komodo for container management.
+      # ADMIN_USERNAME is exported so install-komodo.sh can detect the correct
+      # HOMESPUN_HOME / HOST_UID / HOST_GID for the Komodo-driven redeploys.
       # Failures here are non-fatal so a broken Komodo install doesn't take
       # down the Homespun deployment.
       echo "Installing Komodo..."
+      export ADMIN_USERNAME
       if ./scripts/install-komodo.sh; then
         echo "Starting Komodo..."
         if ./scripts/run-komodo.sh; then
@@ -130,7 +154,7 @@ write_files:
       [Service]
       Type=oneshot
       RemainAfterExit=yes
-      User=homespun
+      User=__ADMIN_USERNAME__
       WorkingDirectory=/opt/homespun/repo
       ExecStart=/opt/homespun/repo/scripts/run.sh --pull
       ExecStop=/opt/homespun/repo/scripts/run.sh --stop

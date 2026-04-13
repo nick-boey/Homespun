@@ -79,10 +79,12 @@ var cloudInitConfig = loadTextContent('cloud-init.yaml')
 var cloudInitWithSecrets = replace(
   replace(
     replace(
-      replace(cloudInitConfig, '__GITHUB_TOKEN__', githubToken),
-      '__CLAUDE_CODE_OAUTH_TOKEN__', claudeCodeOAuthToken),
-    '__TAILSCALE_AUTH_KEY__', tailscaleAuthKey),
-  '__DOMAIN_NAME__', domainName)
+      replace(
+        replace(cloudInitConfig, '__GITHUB_TOKEN__', githubToken),
+        '__CLAUDE_CODE_OAUTH_TOKEN__', claudeCodeOAuthToken),
+      '__TAILSCALE_AUTH_KEY__', tailscaleAuthKey),
+    '__DOMAIN_NAME__', domainName),
+  '__ADMIN_USERNAME__', adminUsername)
 
 // Virtual Machine
 module vm 'modules/vm.bicep' = {
