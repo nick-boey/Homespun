@@ -390,9 +390,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
         var service = GetOrCreateFleeceService(projectPath);
         var issue = await service.RemoveDependencyAsync(parentId, childId, ct);
-        // Fleece.Core v2.1.0 soft-deletes parents (Active=false) instead of removing them.
-        // Filter to only active parents so the rest of the codebase sees a clean state.
-        issue = issue with { ParentIssues = issue.ParentIssues.Where(p => p.Active).ToList() };
         cache[childId] = issue;
         _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
         await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
