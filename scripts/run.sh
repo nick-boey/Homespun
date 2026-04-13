@@ -34,20 +34,13 @@ set -e
 #   --no-tailscale              Disable Tailscale (do not load auth key)
 #   --no-plg                    Disable PLG logging stack (Promtail, Loki, Grafana)
 #
-# Environment Variables:
-#   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
-#   HSP_CLAUDE_CODE_OAUTH_TOKEN Claude Code OAuth token (preferred for VM secrets)
-#   HSP_TAILSCALE_AUTH_KEY      Tailscale auth key (preferred for VM secrets)
-#   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
-#   GITHUB_TOKEN                GitHub token (fallback)
-#   CLAUDE_CODE_OAUTH_TOKEN     Claude Code OAuth token (fallback)
-#   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
-#
-# Configuration File:
-#   Place credentials in ~/.homespun/env to auto-load them:
-#     export GITHUB_TOKEN=ghp_...
-#     export CLAUDE_CODE_OAUTH_TOKEN=...
-#     export TAILSCALE_AUTH_KEY=tskey-auth-...
+# Configuration:
+#   Credentials are read from a .env file at the repo root. Copy .env.example
+#   to .env and fill in the values:
+#     GITHUB_TOKEN=ghp_...
+#     CLAUDE_CODE_OAUTH_TOKEN=...
+#     TAILSCALE_AUTH_KEY=tskey-auth-...
+#     HSP_EXTERNAL_HOSTNAME=homespun.example.com   # optional
 #
 # Volume Mounts:
 #   SSH directory (~/.ssh) is mounted read-only for git operations
@@ -72,7 +65,6 @@ DATA_DIR_PARAM=""
 CONTAINER_NAME="homespun"
 HOST_PORT="8080"
 GRAFANA_PORT="3000"
-USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
 CYAN='\033[0;36m'
@@ -209,81 +201,42 @@ else
     log_success "      Using GHCR worker: $WORKER_IMAGE"
 fi
 
-# Step 3: Read credentials
-log_info "[3/5] Reading credentials..."
+# Step 3: Read credentials from .env
+log_info "[3/5] Reading credentials from .env..."
 
-# Source ~/.homespun/env if it exists (recommended location for credentials)
-HOMESPUN_ENV_FILE="$HOME/.homespun/env"
-if [ -f "$HOMESPUN_ENV_FILE" ]; then
-    log_info "      Loading credentials from $HOMESPUN_ENV_FILE"
-    source "$HOMESPUN_ENV_FILE"
+DOTENV_FILE="$REPO_ROOT/.env"
+if [ -f "$DOTENV_FILE" ]; then
+    log_info "      Loading $DOTENV_FILE"
+    set -a
+    # shellcheck disable=SC1090
+    source "$DOTENV_FILE"
+    set +a
+else
+    log_warn "      $DOTENV_FILE not found."
+    log_warn "      Create it with: cp .env.example .env"
 fi
 
-# GitHub Token: Check environment variables in order of preference
-# 1. HSP_GITHUB_TOKEN (for VM secrets)
-# 2. GITHUB_TOKEN (standard)
-GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-
-# If not in environment, try reading from .NET user secrets JSON
-if [ -z "$GITHUB_TOKEN" ]; then
-    SECRETS_PATH="$HOME/.microsoft/usersecrets/$USER_SECRETS_ID/secrets.json"
-    if [ -f "$SECRETS_PATH" ]; then
-        if command -v python3 &>/dev/null; then
-            GITHUB_TOKEN=$(python3 -c "import json, sys; print(json.load(open('$SECRETS_PATH')).get('GitHub:Token', ''))" 2>/dev/null)
-        elif command -v jq &>/dev/null; then
-            GITHUB_TOKEN=$(jq -r '."GitHub:Token" // empty' "$SECRETS_PATH")
-        fi
-    fi
-fi
-
-# Try reading from .env file
-if [ -z "$GITHUB_TOKEN" ] && [ -f "$REPO_ROOT/.env" ]; then
-    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
-if [ -z "$GITHUB_TOKEN" ]; then
-    log_warn "      GitHub token not found."
-    log_warn "      Set GITHUB_TOKEN in ~/.homespun/env or environment."
+if [ -z "${GITHUB_TOKEN:-}" ]; then
+    log_warn "      GitHub token not found. Set GITHUB_TOKEN in .env."
 else
     MASKED_TOKEN="${GITHUB_TOKEN:0:10}..."
     log_success "      GitHub token found: $MASKED_TOKEN"
 fi
 
-# Claude Code OAuth Token: Check environment variables
-# 1. HSP_CLAUDE_CODE_OAUTH_TOKEN (for VM secrets)
-# 2. CLAUDE_CODE_OAUTH_TOKEN (standard)
-CLAUDE_CODE_OAUTH_TOKEN="${HSP_CLAUDE_CODE_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"
-
-# Try reading from .env file
-if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -f "$REPO_ROOT/.env" ]; then
-    CLAUDE_CODE_OAUTH_TOKEN=$(grep -E "^CLAUDE_CODE_OAUTH_TOKEN=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
-if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-    log_warn "      Claude Code OAuth token not found."
-    log_warn "      Set CLAUDE_CODE_OAUTH_TOKEN in ~/.homespun/env or environment."
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+    log_warn "      Claude Code OAuth token not found. Set CLAUDE_CODE_OAUTH_TOKEN in .env."
 else
     MASKED_CC_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:0:15}..."
     log_success "      Claude Code OAuth token found: $MASKED_CC_TOKEN"
 fi
 
-# Tailscale Auth Key: Check environment variables (unless --no-tailscale)
 if [ "$NO_TAILSCALE" = true ]; then
     TAILSCALE_AUTH_KEY=""
     log_info "      Tailscale disabled (--no-tailscale flag)"
 else
-    # 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
-    # 2. TAILSCALE_AUTH_KEY (standard)
-    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
-
-    # Try reading from .env file
-    if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
-        TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-    fi
-
-    if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+    if [ -z "${TAILSCALE_AUTH_KEY:-}" ]; then
         log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
-        log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+        log_warn "      Set TAILSCALE_AUTH_KEY in .env for VPN access."
     else
         MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
         log_success "      Tailscale auth key found: $MASKED_TS_KEY"
@@ -364,14 +317,9 @@ else
     log_warn "      Run 'claude login' to authenticate, or set CLAUDE_CODE_OAUTH_TOKEN"
 fi
 
-# Read external hostname
+# External hostname: CLI flag takes precedence, otherwise use HSP_EXTERNAL_HOSTNAME from .env
 if [ -z "$EXTERNAL_HOSTNAME" ]; then
     EXTERNAL_HOSTNAME="${HSP_EXTERNAL_HOSTNAME:-}"
-fi
-
-# Try reading external hostname from .env file if not set
-if [ -z "$EXTERNAL_HOSTNAME" ] && [ -f "$REPO_ROOT/.env" ]; then
-    EXTERNAL_HOSTNAME=$(grep -E "^HSP_EXTERNAL_HOSTNAME=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
 # Step 5: Generate .env.compose and start containers

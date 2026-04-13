@@ -78,7 +78,7 @@ ss -tlnp | grep 8080
 | `GITHUB_TOKEN` | [Create a PAT](https://github.com/settings/tokens) with `repo` scope |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Run `claude login`, then copy from `~/.claude/.credentials.json` |
 
-Set these in `.env` at the repo root or in `~/.homespun/env` (auto-sourced by `run.sh`).
+Set these in `.env` at the repo root (see `.env.example`). `run.sh` reads this file on startup.
 
 Verify variables are set inside the container:
 
@@ -183,7 +183,7 @@ If agent sessions fail with authentication errors:
 
 1. Run `claude login` on your host machine
 2. Copy the new token from `~/.claude/.credentials.json`
-3. Update `CLAUDE_CODE_OAUTH_TOKEN` in your `.env` or `~/.homespun/env`
+3. Update `CLAUDE_CODE_OAUTH_TOKEN` in your `.env`
 4. Restart the server container: `docker compose restart homespun`
 
 ## GitHub integration issues

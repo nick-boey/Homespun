@@ -34,9 +34,16 @@ az login
 
 ### 2. Set your credentials
 
+Populate `.env` at the repo root (this is the same file used for local development):
+
 ```bash
-export HSP_GITHUB_TOKEN="ghp_your_token_here"
-export HSP_CLAUDE_CODE_OAUTH_TOKEN="your_oauth_token_here"
+cp .env.example .env
+# edit .env and set GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, and (optionally) TAILSCALE_AUTH_KEY
+```
+
+Then export the SSH key — the deploy script reads `.env` for you:
+
+```bash
 export HOMESPUN_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)"
 ```
 
@@ -77,13 +84,22 @@ Access the application at `http://<public-ip>:3001` (web UI) or `http://<public-
 
 ### Environment variables
 
+Deploy-time inputs (exported in your shell before running `deploy-infra.sh`):
+
 | Variable | Required | Description |
 |---|---|---|
 | `HOMESPUN_SSH_PUBLIC_KEY` | Yes (or `--ssh-key`) | SSH public key for VM access |
-| `HSP_GITHUB_TOKEN` | Recommended | GitHub PAT for repository operations |
-| `HSP_CLAUDE_CODE_OAUTH_TOKEN` | Recommended | Claude Code OAuth token for AI agents |
-| `HSP_TAILSCALE_AUTH_KEY` | Optional | Tailscale auth key for VPN access |
 | `HOMESPUN_DOMAIN_NAME` | Optional | Domain name for Let's Encrypt SSL |
+
+Application credentials read from `.env` at the repo root (see `.env.example`):
+
+| Variable | Required | Description |
+|---|---|---|
+| `GITHUB_TOKEN` | Recommended | GitHub PAT for repository operations |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Recommended | Claude Code OAuth token for AI agents |
+| `TAILSCALE_AUTH_KEY` | Optional | Tailscale auth key for VPN access |
+
+`deploy-infra.sh` sources `.env` before invoking bicep, and cloud-init writes the same values into `/opt/homespun/repo/.env` on the VM.
 
 ### Bicep parameters
 
@@ -159,13 +175,13 @@ cat /var/log/homespun-setup.log
 
 ### Update credentials after deployment
 
-SSH into the VM and edit the credentials file:
+SSH into the VM and edit `/opt/homespun/repo/.env` (the same `.env` the VM was deployed with):
 
 ```bash
 ssh homespun@<public-ip>
-nano ~/.homespun/env
-# Edit tokens, then restart:
 cd /opt/homespun/repo
+nano .env
+# Edit tokens, then restart:
 ./scripts/run.sh --stop
 ./scripts/run.sh --pull
 ```
@@ -182,16 +198,16 @@ git pull
 
 ## Multi-user setup
 
-Each user needs their own Homespun instance. On a single VM, run multiple instances on different ports:
+Each user needs their own Homespun instance. On a single VM, give each user their own clone of the repo (each with its own `.env`) and run on different ports:
 
 ```bash
-# User: alice (port 8080/3001)
-source ~/.homespun/alice/env
+# User: alice — clone to ~/homespun-alice with its own .env
+cd ~/homespun-alice
 ./scripts/run.sh --port 8080 --container-name homespun-alice \
   --data-dir ~/.homespun-container/alice/data
 
-# User: bob (port 8081/3002)
-source ~/.homespun/bob/env
+# User: bob — clone to ~/homespun-bob with its own .env
+cd ~/homespun-bob
 ./scripts/run.sh --port 8081 --container-name homespun-bob \
   --data-dir ~/.homespun-container/bob/data
 ```
@@ -220,10 +236,9 @@ After deployment, create a DNS A record pointing your domain to the VM's public 
 
 ### Without a domain
 
-The application is accessible over HTTP on the VM's public IP. For secure access without a domain, use Tailscale:
+The application is accessible over HTTP on the VM's public IP. For secure access without a domain, use Tailscale — set `TAILSCALE_AUTH_KEY` in `.env`, then run:
 
 ```bash
-export HSP_TAILSCALE_AUTH_KEY="tskey-auth-..."
 ./scripts/deploy-infra.sh
 ```
 
@@ -262,9 +277,8 @@ cat /var/log/homespun-setup.log
 systemctl status docker
 docker ps -a
 
-# Manually start Homespun
+# Manually start Homespun (run.sh reads /opt/homespun/repo/.env automatically)
 cd /opt/homespun/repo
-source ~/.homespun/env
 ./scripts/run.sh --pull
 ```
 

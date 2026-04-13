@@ -11,7 +11,9 @@ param osDiskSizeGb = 64
 param adminSshPublicKey = readEnvironmentVariable('HOMESPUN_SSH_PUBLIC_KEY', '')
 
 // Optional: Secrets passed via environment variables
-param githubToken = readEnvironmentVariable('HSP_GITHUB_TOKEN', '')
-param claudeCodeOAuthToken = readEnvironmentVariable('HSP_CLAUDE_CODE_OAUTH_TOKEN', '')
-param tailscaleAuthKey = readEnvironmentVariable('HSP_TAILSCALE_AUTH_KEY', '')
+// deploy-infra.sh sources .env at the repo root so these pick up the values
+// defined in .env (copied from .env.example).
+param githubToken = readEnvironmentVariable('GITHUB_TOKEN', '')
+param claudeCodeOAuthToken = readEnvironmentVariable('CLAUDE_CODE_OAUTH_TOKEN', '')
+param tailscaleAuthKey = readEnvironmentVariable('TAILSCALE_AUTH_KEY', '')
 param domainName = readEnvironmentVariable('HOMESPUN_DOMAIN_NAME', '')

@@ -22,19 +22,13 @@ Each Homespun instance uses three forms of identity:
 
 ### GitHub token resolution
 
-The server resolves the GitHub token from the first available source:
+`run.sh` (and `run.ps1`) read every credential from a single source: the `.env` file at the repo root (copy `.env.example` to `.env`). The token is then passed into the container, where the server reads it via:
 
-1. .NET User Secrets (`GitHub:Token` key)
+1. .NET User Secrets (`GitHub:Token` key) — for local `dotnet run` workflows
 2. Configuration / environment variable (`GITHUB_TOKEN`)
 3. System environment variable (`GITHUB_TOKEN`)
 
-At the host level, `run.sh` resolves the token before passing it to the container:
-
-1. `~/.homespun/env` file (sourced at startup)
-2. `HSP_GITHUB_TOKEN` environment variable (VM secrets, highest priority)
-3. `GITHUB_TOKEN` environment variable
-4. .NET User Secrets JSON file
-5. `.env` file in the repository root
+In container deployments only step 3 applies, because `run.sh` writes `GITHUB_TOKEN` into the container's environment from `.env`.
 
 ### Git author identity
 
@@ -51,44 +45,40 @@ These are set at container startup and apply to all git operations within that i
 
 Each user needs their own Homespun instance with separate credentials, ports, and data directories.
 
-### 1. Create per-user credential files
+### 1. Clone the repo once per user
 
-For each user, create a credential file:
+Each instance is a separate clone of the repo with its own `.env`. The `.env` at the root of that clone is the per-user credential store:
 
 ```bash
 # User: alice
-mkdir -p ~/.homespun/alice
-cat > ~/.homespun/alice/env << 'EOF'
-export GITHUB_TOKEN=ghp_alice_token_here
-export CLAUDE_CODE_OAUTH_TOKEN=alice_oauth_token_here
-export GIT_AUTHOR_NAME="Alice Smith"
-export GIT_AUTHOR_EMAIL="alice@example.com"
-EOF
+git clone https://github.com/nick-boey/Homespun.git ~/homespun-alice
+cp ~/homespun-alice/.env.example ~/homespun-alice/.env
+# edit ~/homespun-alice/.env and set:
+#   GITHUB_TOKEN=ghp_alice_token_here
+#   CLAUDE_CODE_OAUTH_TOKEN=alice_oauth_token_here
+#   GIT_AUTHOR_NAME=Alice Smith
+#   GIT_AUTHOR_EMAIL=alice@example.com
 
 # User: bob
-mkdir -p ~/.homespun/bob
-cat > ~/.homespun/bob/env << 'EOF'
-export GITHUB_TOKEN=ghp_bob_token_here
-export CLAUDE_CODE_OAUTH_TOKEN=bob_oauth_token_here
-export GIT_AUTHOR_NAME="Bob Jones"
-export GIT_AUTHOR_EMAIL="bob@example.com"
-EOF
+git clone https://github.com/nick-boey/Homespun.git ~/homespun-bob
+cp ~/homespun-bob/.env.example ~/homespun-bob/.env
+# edit with bob's credentials
 ```
 
 ### 2. Launch separate instances
 
-Use `run.sh` with `--port`, `--data-dir`, and `--container-name` to isolate each instance:
+Each clone's `run.sh` reads its own `.env`. Use `--port`, `--data-dir`, and `--container-name` to isolate each instance:
 
 ```bash
 # Alice's instance — port 8080
-source ~/.homespun/alice/env
+cd ~/homespun-alice
 ./scripts/run.sh \
   --port 8080 \
   --data-dir ~/.homespun-container/alice/data \
   --container-name homespun-alice
 
 # Bob's instance — port 8081
-source ~/.homespun/bob/env
+cd ~/homespun-bob
 ./scripts/run.sh \
   --port 8081 \
   --data-dir ~/.homespun-container/bob/data \
@@ -129,7 +119,7 @@ Classic PATs work out of the box. Fine-grained PATs need repository-level permis
 
 1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
 2. Generate a **classic** token with `repo` scope
-3. Add the token to the user's credential file (see above)
+3. Add the token to the user's `.env` file (see above)
 
 ### How tokens are used
 

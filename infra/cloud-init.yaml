@@ -1,7 +1,10 @@
 #cloud-config
 
 # Homespun VM cloud-init configuration
-# Installs Docker, clones the repository, and starts Homespun containers
+# Installs Docker, clones the repository, and starts Homespun containers.
+#
+# Placeholders (__XXX__) are replaced by main.bicep at deploy time with values
+# from .env (via deploy-infra.sh) before the template is base64-encoded.
 
 package_update: true
 package_upgrade: true
@@ -17,13 +20,15 @@ packages:
   - unzip
 
 write_files:
-  - path: /etc/homespun/env
+  # Repo .env template. After the repo is cloned this is copied to
+  # <repo>/.env, which is the sole credential source read by run.sh.
+  - path: /opt/homespun/.env-template
     permissions: "0600"
     content: |
-      export HSP_GITHUB_TOKEN=__GITHUB_TOKEN__
-      export HSP_CLAUDE_CODE_OAUTH_TOKEN=__CLAUDE_CODE_OAUTH_TOKEN__
-      export HSP_TAILSCALE_AUTH_KEY=__TAILSCALE_AUTH_KEY__
-      export HOMESPUN_DOMAIN_NAME=__DOMAIN_NAME__
+      GITHUB_TOKEN=__GITHUB_TOKEN__
+      CLAUDE_CODE_OAUTH_TOKEN=__CLAUDE_CODE_OAUTH_TOKEN__
+      TAILSCALE_AUTH_KEY=__TAILSCALE_AUTH_KEY__
+      HSP_EXTERNAL_HOSTNAME=__DOMAIN_NAME__
 
   - path: /opt/homespun/setup.sh
     permissions: "0755"
@@ -36,33 +41,18 @@ write_files:
 
       echo "=== Homespun Setup Started: $(date) ==="
 
-      # Source secrets
-      source /etc/homespun/env
-
       # Install Docker
       echo "Installing Docker..."
       curl -fsSL https://get.docker.com | sh
-      usermod -aG docker homespun
 
-      # Install Docker Compose plugin (included with Docker, but ensure latest)
       echo "Docker version: $(docker --version)"
       echo "Docker Compose version: $(docker compose version)"
 
       # Create homespun user if not exists
       if ! id -u homespun &>/dev/null; then
         useradd --create-home --shell /bin/bash homespun
-        usermod -aG docker homespun
       fi
-
-      # Set up credentials directory
-      mkdir -p /home/homespun/.homespun
-      cat > /home/homespun/.homespun/env << EOF
-      export GITHUB_TOKEN=${HSP_GITHUB_TOKEN}
-      export CLAUDE_CODE_OAUTH_TOKEN=${HSP_CLAUDE_CODE_OAUTH_TOKEN}
-      export TAILSCALE_AUTH_KEY=${HSP_TAILSCALE_AUTH_KEY}
-      EOF
-      chmod 600 /home/homespun/.homespun/env
-      chown -R homespun:homespun /home/homespun/.homespun
+      usermod -aG docker homespun
 
       # Clone repository
       echo "Cloning Homespun repository..."
@@ -74,6 +64,12 @@ write_files:
       fi
       chown -R homespun:homespun "$REPO_DIR"
 
+      # Materialize the repo .env from the template written by cloud-init.
+      # This is the single configuration source for run.sh on the VM.
+      install -o homespun -g homespun -m 600 \
+        /opt/homespun/.env-template \
+        "$REPO_DIR/.env"
+
       # Create Docker network
       docker network create homespun-net 2>/dev/null || true
 
@@ -82,7 +78,7 @@ write_files:
       chown -R homespun:homespun /home/homespun/.homespun-container
 
       # Set up SSL with Let's Encrypt if domain is configured
-      DOMAIN_NAME="${HOMESPUN_DOMAIN_NAME:-}"
+      DOMAIN_NAME="__DOMAIN_NAME__"
       if [ -n "$DOMAIN_NAME" ] && [ "$DOMAIN_NAME" != "__DOMAIN_NAME__" ]; then
         echo "Setting up SSL for $DOMAIN_NAME..."
         apt-get install -y certbot
@@ -95,19 +91,10 @@ write_files:
         systemctl start certbot.timer
       fi
 
-      # Configure environment for run.sh
-      export HOME=/home/homespun
-      export HSP_EXTERNAL_HOSTNAME="${DOMAIN_NAME:-}"
-
-      # Start Homespun using run.sh
+      # Start Homespun using run.sh - it reads $REPO_DIR/.env itself
       echo "Starting Homespun..."
       cd "$REPO_DIR"
-      sudo -u homespun bash -c "
-        source /home/homespun/.homespun/env
-        export HOME=/home/homespun
-        export HSP_EXTERNAL_HOSTNAME='${DOMAIN_NAME:-}'
-        ./scripts/run.sh --pull
-      "
+      sudo -u homespun HOME=/home/homespun ./scripts/run.sh --pull
 
       echo "=== Homespun Setup Complete: $(date) ==="
       echo "Access Homespun at http://\$(curl -s ifconfig.me):8080"
@@ -124,10 +111,9 @@ write_files:
       Type=oneshot
       RemainAfterExit=yes
       User=homespun
-      EnvironmentFile=/etc/homespun/env
       WorkingDirectory=/opt/homespun/repo
-      ExecStart=/bin/bash -c 'source /home/homespun/.homespun/env && ./scripts/run.sh --pull'
-      ExecStop=/bin/bash -c './scripts/run.sh --stop'
+      ExecStart=/opt/homespun/repo/scripts/run.sh --pull
+      ExecStop=/opt/homespun/repo/scripts/run.sh --stop
 
       [Install]
       WantedBy=multi-user.target
