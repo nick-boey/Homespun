@@ -6,7 +6,8 @@ set -euo pipefail
 # ============================================================================
 #
 # Deploys Homespun infrastructure to Azure using Bicep templates.
-# Creates a resource group with a VM pre-configured to run Homespun.
+# Creates a resource group with a VM pre-configured to run Homespun and
+# Komodo (container management UI) side-by-side on the same Docker network.
 #
 # Prerequisites:
 #   - Azure CLI installed and logged in (az login)
