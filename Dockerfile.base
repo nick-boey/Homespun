@@ -3,8 +3,8 @@
 # Shared Base Image for Homespun Containers
 # =============================================================================
 # Contains all common runtime tooling shared between the main app and worker:
-#   .NET 10 SDK, Node.js, gh CLI, Claude Code, Playwright MCP + Chromium,
-#   Fleece CLI, Docker CLI
+#   .NET 10 SDK, Node.js, gh CLI, Claude Code, OpenSpec CLI,
+#   Playwright MCP + Chromium, Fleece CLI, Docker CLI
 #
 # Build: DOCKER_BUILDKIT=1 docker build -t homespun-base:local -f Dockerfile.base .
 # =============================================================================
@@ -36,6 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Claude Code globally (with BuildKit cache mount for npm)
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g @anthropic-ai/claude-code
+
+# Install OpenSpec CLI for structured change management
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @fission-ai/openspec@latest
 
 # Install Blazor Blueprint MCP for Claude Code
 RUN claude mcp add blazorblueprint --transport stdio -- npx -y @blazorblueprint/mcp@latest --scope user
