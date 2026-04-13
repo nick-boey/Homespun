@@ -1,7 +1,8 @@
 #cloud-config
 
 # Homespun VM cloud-init configuration
-# Installs Docker, clones the repository, and starts Homespun containers.
+# Installs Docker, clones the repository, and starts Homespun + Komodo
+# containers.
 #
 # Placeholders (__XXX__) are replaced by main.bicep at deploy time with values
 # from .env (via deploy-infra.sh) before the template is base64-encoded.
@@ -18,6 +19,7 @@ packages:
   - git
   - jq
   - unzip
+  - openssl  # used by install-komodo.sh to generate secrets
 
 write_files:
   # Repo .env template. After the repo is cloned this is copied to
@@ -96,8 +98,26 @@ write_files:
       cd "$REPO_DIR"
       sudo -u homespun HOME=/home/homespun ./scripts/run.sh --pull
 
+      # Install and start Komodo for container management.
+      # Failures here are non-fatal so a broken Komodo install doesn't take
+      # down the Homespun deployment.
+      echo "Installing Komodo..."
+      if ./scripts/install-komodo.sh; then
+        echo "Starting Komodo..."
+        if ./scripts/run-komodo.sh; then
+          echo "Komodo started. Admin credentials are in /etc/komodo/compose.env"
+          echo "Retrieve the generated admin password with:"
+          echo "  sudo grep KOMODO_INIT_ADMIN /etc/komodo/compose.env"
+        else
+          echo "WARNING: run-komodo.sh failed - Komodo is not running."
+        fi
+      else
+        echo "WARNING: install-komodo.sh failed - Komodo will not be available."
+      fi
+
       echo "=== Homespun Setup Complete: $(date) ==="
       echo "Access Homespun at http://\$(curl -s ifconfig.me):8080"
+      echo "Access Komodo (via Tailscale) at https://<tailscale-hostname>:3500"
 
   - path: /etc/systemd/system/homespun.service
     permissions: "0644"

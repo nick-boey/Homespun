@@ -116,7 +116,7 @@ The `infra/main.bicepparam` file contains defaults. Override at deploy time:
 | `githubToken` | — | GitHub PAT (secure) |
 | `claudeCodeOAuthToken` | — | Claude OAuth token (secure) |
 | `tailscaleAuthKey` | — | Tailscale auth key (secure) |
-| `osDiskSizeGb` | `64` | OS disk size (30-1024 GB) |
+| `osDiskSizeGb` | `256` | OS disk size (30-1024 GB) |
 | `baseName` | `homespun` | Resource name prefix |
 
 ### Allowed VM sizes
@@ -150,7 +150,10 @@ On first boot, the VM automatically:
 4. Configures credentials from Bicep parameters
 5. Sets up Let's Encrypt SSL (if domain provided)
 6. Starts Homespun containers via `run.sh`
-7. Enables a systemd service for auto-restart on reboot
+7. Installs Komodo via `install-komodo.sh` and starts it via `run-komodo.sh`
+8. Enables a systemd service for auto-restart on reboot
+
+Komodo and Homespun share the `homespun-net` Docker network and the single Tailscale sidecar (when a Tailscale auth key is configured). Komodo failures during cloud-init are logged as warnings but do not abort the Homespun deployment — inspect `/var/log/homespun-setup.log` on the VM to see what happened.
 
 ## Post-deployment
 
@@ -194,6 +197,27 @@ cd /opt/homespun/repo
 git pull
 ./scripts/run.sh --stop
 ./scripts/run.sh --pull
+```
+
+### Access Komodo
+
+Komodo is installed alongside Homespun by cloud-init. The admin password is generated on the VM — retrieve it with:
+
+```bash
+ssh homespun@<public-ip>
+sudo grep KOMODO_INIT_ADMIN /etc/komodo/compose.env
+```
+
+Komodo's Core API listens on port `9120` (local only — not exposed in the NSG by default). To reach the Komodo UI from another host, use the Tailscale sidecar at `https://<tailscale-hostname>:3500`.
+
+To restart, update, or reinstall Komodo:
+
+```bash
+ssh homespun@<public-ip>
+cd /opt/homespun/repo
+./scripts/run-komodo.sh --stop
+./scripts/run-komodo.sh            # restart with the same config
+./scripts/install-komodo.sh --clean  # wipe MongoDB volumes and re-provision
 ```
 
 ## Multi-user setup

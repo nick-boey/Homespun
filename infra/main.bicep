@@ -45,7 +45,7 @@ param tailscaleAuthKey string = ''
 @description('OS disk size in GB')
 @minValue(30)
 @maxValue(1024)
-param osDiskSizeGb int = 64
+param osDiskSizeGb int = 256
 
 @description('Base name prefix for all resources')
 @minLength(1)
