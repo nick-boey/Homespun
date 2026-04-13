@@ -256,6 +256,9 @@ else
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
 
+    // Initialize default agent prompts on startup
+    builder.Services.AddHostedService<DefaultPromptsInitializationService>();
+
     // Workflow services
     builder.Services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
     builder.Services.AddScoped<IWorkflowService, WorkflowService>();
