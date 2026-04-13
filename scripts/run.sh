@@ -131,8 +131,8 @@ if [ "$ACTION" = "stop" ]; then
     docker compose -f "$TAILSCALE_COMPOSE_FILE" down 2>/dev/null || true
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
-    docker stop homespun-worker homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
-    docker rm homespun-worker homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
+    docker stop homespun-worker homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
+    docker rm homespun-worker homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
