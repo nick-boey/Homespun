@@ -5,6 +5,17 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# coverage-gate posts/updates a PR comment via thollander/actions-comment-pull-request.
+permissions:
+  contents: read
+  pull-requests: write
+
+# Cancel superseded runs on the same ref (PR branches): saves minutes, keeps
+# the latest push authoritative for the coverage comment.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Build and Test
@@ -23,16 +34,60 @@ jobs:
       with:
         node-version: 22
 
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
     - name: Restore dependencies
       run: dotnet restore
+
+    - name: Restore local tools
+      run: dotnet tool restore
 
     - name: Build
       run: dotnet build --no-restore --configuration Release
 
-    - name: Test
-      run: dotnet test --no-build --configuration Release --verbosity normal
+    # AppHost tests run without coverage collection — Aspire orchestration is
+    # excluded from Constitution §V's coverage denominator. They still run so
+    # we keep behaviour parity with the previous single-dotnet-test invocation.
+    - name: Test (AppHost, no coverage)
+      run: dotnet test tests/Homespun.AppHost.Tests --no-build --configuration Release --verbosity normal
       env:
         E2E_CONFIGURATION: Release
+
+    - name: Test with coverage
+      run: |
+        dotnet test \
+          tests/Homespun.Tests \
+          tests/Homespun.Api.Tests \
+          --no-build \
+          --configuration Release \
+          --verbosity normal \
+          --settings coverlet.runsettings \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults
+      env:
+        E2E_CONFIGURATION: Release
+
+    - name: Merge coverage reports
+      run: |
+        mkdir -p artifacts/coverage/server
+        dotnet reportgenerator \
+          -reports:"TestResults/**/coverage.cobertura.xml" \
+          -targetdir:artifacts/coverage/server \
+          -reporttypes:Cobertura
+
+    - name: Upload server coverage
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: coverage-server
+        path: artifacts/coverage/server/Cobertura.xml
+        retention-days: 7
 
   worker-build:
     name: Build and Test Worker
@@ -45,6 +100,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22
+        cache: npm
+        cache-dependency-path: src/Homespun.Worker/package-lock.json
 
     - name: Install dependencies
       run: cd src/Homespun.Worker && npm ci
@@ -52,8 +109,16 @@ jobs:
     - name: Build
       run: cd src/Homespun.Worker && npm run build
 
-    - name: Test
-      run: cd src/Homespun.Worker && npm test
+    - name: Test with coverage
+      run: cd src/Homespun.Worker && npm run test:coverage
+
+    - name: Upload worker coverage
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: coverage-worker
+        path: src/Homespun.Worker/coverage/cobertura-coverage.xml
+        retention-days: 7
 
   web-build:
     name: Build and Test Web Client
@@ -66,6 +131,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22
+        cache: npm
+        cache-dependency-path: src/Homespun.Web/package-lock.json
 
     - name: Install dependencies
       run: cd src/Homespun.Web && npm ci
@@ -73,11 +140,19 @@ jobs:
     - name: Type check
       run: cd src/Homespun.Web && npm run typecheck
 
-    - name: Test
-      run: cd src/Homespun.Web && npm test
+    - name: Test with coverage
+      run: cd src/Homespun.Web && npm run test:coverage
 
     - name: Build
       run: cd src/Homespun.Web && npm run build
+
+    - name: Upload web coverage
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: coverage-web
+        path: src/Homespun.Web/coverage/cobertura-coverage.xml
+        retention-days: 7
 
   web-e2e:
     name: E2E Tests (Web Client)
@@ -96,6 +171,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22
+        cache: npm
+        cache-dependency-path: src/Homespun.Web/package-lock.json
 
     - name: Install Node dependencies
       run: cd src/Homespun.Web && npm ci
@@ -121,3 +198,63 @@ jobs:
         name: playwright-report
         path: src/Homespun.Web/playwright-report/
         retention-days: 30
+
+  coverage-gate:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    needs: [build-and-test, worker-build, web-build]
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # diff-cover needs the merge base with origin/main; shallow clone
+        # would hide it. fetch-depth: 0 is the safe default.
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install diff-cover
+      run: pipx install 'diff-cover==9.*'
+
+    - name: Download coverage artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: coverage-*
+        path: artifacts
+
+    # Each push to main writes a new cache entry keyed by commit SHA (cache
+    # entries are immutable per-key, so we can't reuse a single stable key).
+    # The primary key here is a sentinel that never exact-matches — the
+    # action falls through to restore-keys and picks the most recent cache
+    # whose key starts with the prefix.
+    - name: Restore coverage floors
+      uses: actions/cache/restore@v4
+      with:
+        path: floors.json
+        key: coverage-floors-v1-main-read-${{ github.run_id }}
+        restore-keys: |
+          coverage-floors-v1-main-
+
+    # Advisory rollout: the gate computes results and posts the PR comment,
+    # but does not fail the job. Flip continue-on-error to false in a
+    # follow-up PR once 3–5 real PRs have confirmed the wiring is stable.
+    - name: Run coverage gate
+      id: gate
+      continue-on-error: true
+      run: ./scripts/coverage-gate.sh
+      env:
+        ARTIFACTS_DIR: artifacts
+        FLOORS_FILE: floors.json
+        REPORTS_DIR: reports
+        COMPARE_BRANCH: origin/main
+
+    - name: Post coverage comment
+      if: ${{ always() && hashFiles('reports/coverage-comment.md') != '' }}
+      uses: thollander/actions-comment-pull-request@v3
+      with:
+        comment-tag: coverage-report
+        file-path: reports/coverage-comment.md
