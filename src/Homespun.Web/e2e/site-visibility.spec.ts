@@ -3,8 +3,7 @@ import { clearIssueFilter } from './utils/test-helpers'
 
 /**
  * End-to-end tests verifying that page content is not clipped by the layout.
- * Regression tests for the overflow-hidden clipping bug introduced by the
- * Konva task graph sizing fix (commit c56fefcd).
+ * Regression tests for the overflow-hidden clipping bug (commit c56fefcd).
  */
 test.describe('Site Visibility', () => {
   test('issue edit page buttons are visible and scrollable', async ({ page }) => {

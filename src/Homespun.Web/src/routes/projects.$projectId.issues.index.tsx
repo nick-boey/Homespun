@@ -10,11 +10,7 @@ import {
   useDefaultFilter,
   type TaskGraphViewRef,
 } from '@/features/issues'
-import {
-  TaskGraphKonvaView,
-  type TaskGraphKonvaViewRef,
-} from '@/features/issues/components/task-graph-konva'
-import { MoveOperationType, RenderMode } from '@/features/issues/types'
+import { MoveOperationType } from '@/features/issues/types'
 import { MoveDirection } from '@/api/generated/types.gen'
 import { useAppStore } from '@/stores/app-store'
 import { parseFilterQuery, type ParsedFilter } from '@/features/issues/services'
@@ -34,12 +30,11 @@ function IssuesList() {
   // Get default filter configuration
   const { defaultFilterQuery, userEmail } = useDefaultFilter()
 
-  // View mode and render mode from app store
-  const { issuesViewMode, setIssuesViewMode, issuesRenderMode, setIssuesRenderMode } = useAppStore()
+  // View mode from app store
+  const { issuesViewMode, setIssuesViewMode } = useAppStore()
 
   // Ref to TaskGraphView for imperative actions
   const taskGraphRef = useRef<TaskGraphViewRef>(null)
-  const taskGraphKonvaRef = useRef<TaskGraphKonvaViewRef>(null)
 
   // Ref to filter input for focus management
   const filterInputRef = useRef<HTMLInputElement>(null)
@@ -182,20 +177,12 @@ function IssuesList() {
   )
 
   const handleCreateAbove = useCallback(() => {
-    if (issuesRenderMode === RenderMode.Canvas) {
-      taskGraphKonvaRef.current?.createAbove()
-    } else {
-      taskGraphRef.current?.createAbove()
-    }
-  }, [issuesRenderMode])
+    taskGraphRef.current?.createAbove()
+  }, [])
 
   const handleCreateBelow = useCallback(() => {
-    if (issuesRenderMode === RenderMode.Canvas) {
-      taskGraphKonvaRef.current?.createBelow()
-    } else {
-      taskGraphRef.current?.createBelow()
-    }
-  }, [issuesRenderMode])
+    taskGraphRef.current?.createBelow()
+  }, [])
 
   const handleMoveUp = useCallback(() => {
     if (selectedIssueId && canMoveUp) {
@@ -465,52 +452,28 @@ function IssuesList() {
         defaultFilterActive={isDefaultFilterActive}
         viewMode={issuesViewMode}
         onViewModeChange={setIssuesViewMode}
-        renderMode={issuesRenderMode}
-        onRenderModeChange={setIssuesRenderMode}
       />
 
       {/* Task Graph View */}
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        {issuesRenderMode === RenderMode.Canvas ? (
-          <TaskGraphKonvaView
-            ref={taskGraphKonvaRef}
-            projectId={projectId}
-            depth={depth}
-            searchQuery={searchQuery}
-            selectedIssueId={selectedIssueId}
-            onSelectIssue={setSelectedIssueId}
-            onEditIssue={handleEditIssue}
-            onRunAgent={handleRunAgent}
-            onOpenSession={handleOpenSession}
-            moveOperation={moveOperation}
-            moveSourceIssueId={moveSourceIssueId}
-            onMoveComplete={handleMoveComplete}
-            onMoveCancel={handleMoveCancel}
-            appliedFilter={appliedFilter}
-            onFilterMatchCountChange={setFilterMatchCount}
-            viewMode={issuesViewMode}
-            className="h-full"
-          />
-        ) : (
-          <TaskGraphView
-            ref={taskGraphRef}
-            projectId={projectId}
-            depth={depth}
-            searchQuery={searchQuery}
-            selectedIssueId={selectedIssueId}
-            onSelectIssue={setSelectedIssueId}
-            onEditIssue={handleEditIssue}
-            onRunAgent={handleRunAgent}
-            onOpenSession={handleOpenSession}
-            moveOperation={moveOperation}
-            moveSourceIssueId={moveSourceIssueId}
-            onMoveComplete={handleMoveComplete}
-            onMoveCancel={handleMoveCancel}
-            appliedFilter={appliedFilter}
-            onFilterMatchCountChange={setFilterMatchCount}
-            viewMode={issuesViewMode}
-          />
-        )}
+        <TaskGraphView
+          ref={taskGraphRef}
+          projectId={projectId}
+          depth={depth}
+          searchQuery={searchQuery}
+          selectedIssueId={selectedIssueId}
+          onSelectIssue={setSelectedIssueId}
+          onEditIssue={handleEditIssue}
+          onRunAgent={handleRunAgent}
+          onOpenSession={handleOpenSession}
+          moveOperation={moveOperation}
+          moveSourceIssueId={moveSourceIssueId}
+          onMoveComplete={handleMoveComplete}
+          onMoveCancel={handleMoveCancel}
+          appliedFilter={appliedFilter}
+          onFilterMatchCountChange={setFilterMatchCount}
+          viewMode={issuesViewMode}
+        />
       </div>
 
       {/* Run Agent Dialog (Task Agent + Issues Agent) */}

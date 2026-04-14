@@ -60,6 +60,10 @@ export interface TaskGraphIssueRenderLine {
   parentIssues: Array<{ parentIssue?: string | null; sortOrder?: string | null }> | null
   multiParentIndex: number | null
   multiParentTotal: number | null
+  isLastChild: boolean
+  hasParallelChildren: boolean
+  parentIssueId: string | null
+  parentLaneReservations: Array<{ lane: number; issueType: IssueTypeEnum }>
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -123,13 +127,13 @@ export function getRenderKey(line: TaskGraphIssueRenderLine): string {
  * @param maxDepth - Maximum depth (lane) to display. Default is 3 (shows lanes 0-3).
  *                   Use Infinity to show all levels.
  * @param viewMode - View mode: 'next' (actionable at root) or 'tree' (traditional hierarchy).
- *                   Default is 'next'.
+ *                   Default is 'tree'.
  * @returns List of render lines for the task graph view
  */
 export function computeLayout(
   taskGraph: TaskGraphResponse | null | undefined,
   maxDepth = 3,
-  viewMode: ViewMode = ViewMode.Next
+  viewMode: ViewMode = ViewMode.Tree
 ): TaskGraphRenderLine[] {
   if (!taskGraph) {
     return []
@@ -162,9 +166,6 @@ export function computeLayout(
       const isFirstPr = prIdx === 0
       const isLastPr = prIdx === mergedPrs.length - 1
 
-      // First PR: no top line (nothing above it)
-      // Last PR: has bottom line only if there are issues below
-      // Middle PRs: both top and bottom lines
       const drawTopLine = !isFirstPr
       const drawBottomLine = !isLastPr || (isLastPr && hasIssues)
 
@@ -217,7 +218,6 @@ export function computeLayout(
       renderGroupTreeView(result, treeViewNodes, agentStatuses, linkedPrs, hiddenParentInfo)
     } else {
       // Filter nodes by maxDepth within each group
-      // First compute minLane for this group to normalize lanes
       const minLane = Math.min(...group.map((n) => n.lane ?? 0))
       const visibleNodes = group.filter((n) => (n.lane ?? 0) - minLane <= maxDepth)
 
@@ -256,8 +256,6 @@ export function computeLayout(
     }
 
     if (firstIdx >= 0) {
-      // First pass: find the last issue that actually gets a connector
-      // (blocked series siblings don't get connectors)
       let lastConnectorIdx = -1
       for (let i = firstIdx; i <= lastIdx; i++) {
         const line = result[i]
@@ -269,7 +267,6 @@ export function computeLayout(
         }
       }
 
-      // Second pass: apply the flags
       for (let i = firstIdx; i <= lastIdx; i++) {
         const line = result[i]
         if (isIssueRenderLine(line)) {
@@ -314,6 +311,95 @@ export function computeLayout(
     }
   }
 
+  // Post-process: compute parentLaneReservations (tree view only)
+  if (isTreeView) {
+    // For each parallel parent, find its children's index range and add reservation lines
+    const parallelParents = new Map<string, { lane: number; issueType: IssueTypeEnum }>()
+    for (const line of result) {
+      if (isIssueRenderLine(line) && line.hasParallelChildren) {
+        parallelParents.set(line.issueId.toLowerCase(), {
+          lane: line.lane,
+          issueType: line.issueType,
+        })
+      }
+    }
+    if (parallelParents.size > 0) {
+      // Find first and last child indices for each parallel parent
+      const childRanges = new Map<string, { firstIdx: number; lastIdx: number }>()
+      for (let i = 0; i < result.length; i++) {
+        const line = result[i]
+        if (!isIssueRenderLine(line) || !line.parentIssueId) continue
+        const pid = line.parentIssueId.toLowerCase()
+        if (!parallelParents.has(pid)) continue
+        const range = childRanges.get(pid)
+        if (!range) {
+          childRanges.set(pid, { firstIdx: i, lastIdx: i })
+        } else {
+          range.lastIdx = i
+        }
+      }
+      // Add reservations to all rows between first and last child (exclusive of last —
+      // the last child's connector already draws the correct shortened vertical line)
+      for (const [pid, range] of childRanges) {
+        const parent = parallelParents.get(pid)!
+        for (let i = range.firstIdx; i < range.lastIdx; i++) {
+          const line = result[i]
+          if (isIssueRenderLine(line)) {
+            result[i] = {
+              ...line,
+              parentLaneReservations: [
+                ...line.parentLaneReservations,
+                { lane: parent.lane, issueType: parent.issueType },
+              ],
+            }
+          }
+        }
+      }
+    }
+
+    // Post-process: compute parentLaneReservations for series parent children
+    // For each series parent, find its children's index range and add reservation lines
+    const seriesParents = new Map<string, { lane: number; issueType: IssueTypeEnum }>()
+    for (const line of result) {
+      if (isIssueRenderLine(line) && line.seriesConnectorFromLane != null) {
+        seriesParents.set(line.issueId.toLowerCase(), {
+          lane: line.seriesConnectorFromLane,
+          issueType: line.issueType,
+        })
+      }
+    }
+    if (seriesParents.size > 0) {
+      const seriesChildRanges = new Map<string, { firstIdx: number; lastIdx: number }>()
+      for (let i = 0; i < result.length; i++) {
+        const line = result[i]
+        if (!isIssueRenderLine(line) || !line.parentIssueId) continue
+        const pid = line.parentIssueId.toLowerCase()
+        if (!seriesParents.has(pid)) continue
+        const range = seriesChildRanges.get(pid)
+        if (!range) {
+          seriesChildRanges.set(pid, { firstIdx: i, lastIdx: i })
+        } else {
+          range.lastIdx = i
+        }
+      }
+      for (const [pid, range] of seriesChildRanges) {
+        const parent = seriesParents.get(pid)!
+        for (let i = range.firstIdx; i < range.lastIdx; i++) {
+          const line = result[i]
+          if (isIssueRenderLine(line)) {
+            result[i] = {
+              ...line,
+              parentLaneReservations: [
+                ...line.parentLaneReservations,
+                { lane: parent.lane, issueType: parent.issueType },
+              ],
+            }
+          }
+        }
+      }
+    }
+  } // end isTreeView reservation post-processing
+
   return result
 }
 
@@ -336,21 +422,17 @@ function computeHiddenParentInfo(
     let hasHiddenParent = false
     let hiddenParentIsSeriesMode = false
 
-    // Check each parent reference
     for (const parentRef of node.issue.parentIssues ?? []) {
       if (!parentRef.parentIssue) continue
 
-      // Find the parent node in all nodes (not just visible)
       const parentNode = allNodesByIssueId.get(parentRef.parentIssue.toLowerCase())
 
       if (parentNode) {
-        // Check if parent is in this group and was filtered out
         const parentInGroup = allGroupNodes.some(
           (n) => n.issue?.id?.toLowerCase() === parentRef.parentIssue?.toLowerCase()
         )
 
         if (parentInGroup && !visibleIds.has(parentRef.parentIssue.toLowerCase())) {
-          // Parent was filtered out
           hasHiddenParent = true
           hiddenParentIsSeriesMode = parentNode.issue?.executionMode === ExecutionMode.SERIES
         }
@@ -500,7 +582,6 @@ function renderGroup(
     for (const parentRef of node.issue.parentIssues ?? []) {
       if (!parentRef.parentIssue) continue
 
-      // Find parent in allGroupNodes that is NOT in visible nodes
       const hiddenParent = allGroupNodes.find(
         (n) =>
           n.issue?.id?.toLowerCase() === parentRef.parentIssue?.toLowerCase() &&
@@ -509,13 +590,12 @@ function renderGroup(
 
       if (hiddenParent) {
         hiddenParentByNode.set(node.issue.id.toLowerCase(), hiddenParent)
-        break // Use first found hidden parent
+        break
       }
     }
   }
 
-  // Pre-compute series child lane by parent: for parents with Series execution mode
-  // Store the original (non-offset) lanes for internal calculations
+  // Pre-compute series child lane by parent
   const seriesChildLaneByParent = new Map<string, number>()
 
   for (const node of group) {
@@ -535,7 +615,7 @@ function renderGroup(
 
     const nodeId = node.issue.id.toLowerCase()
     const baseLane = (node.lane ?? 0) - minLane
-    const lane = baseLane + laneOffset // Apply lane offset for final position
+    const lane = baseLane + laneOffset
     const marker = getMarker(node)
 
     const parentNode = parentByNode.get(nodeId)
@@ -550,15 +630,13 @@ function renderGroup(
       isFirstChild = count === 1
     }
 
-    // Determine if this is a series child (parent has Series execution mode)
-    // Also check hidden parent for nodes whose visible parent was filtered out
     const seriesHiddenParent = hiddenParentByNode.get(nodeId)
     const isSeriesChild =
       (parentNode != null && parentNode.issue?.executionMode === ExecutionMode.SERIES) ||
       (seriesHiddenParent != null &&
         seriesHiddenParent.issue?.executionMode === ExecutionMode.SERIES)
 
-    // Compute DrawTopLine (uses base lanes for calculations)
+    // Compute DrawTopLine
     let drawTopLine = false
     if (i > 0) {
       const prevNode = group[i - 1]
@@ -575,7 +653,6 @@ function renderGroup(
           (prevHiddenParentCheck != null &&
             prevHiddenParentCheck.issue?.executionMode === ExecutionMode.SERIES)
 
-        // Previous node is a parallel child whose junction is at this node's lane
         if (
           !prevIsSeriesChild &&
           prevBaseParentLane != null &&
@@ -585,7 +662,6 @@ function renderGroup(
           drawTopLine = true
         }
 
-        // Previous node is a series sibling of the same parent (vertical continuity)
         if (
           isSeriesChild &&
           prevIsSeriesChild &&
@@ -596,9 +672,6 @@ function renderGroup(
           drawTopLine = true
         }
 
-        // Check for series siblings with same hidden parent (when visible parent is filtered out)
-        // Scan backwards through all previous nodes (not just i-1) because non-sibling nodes
-        // may appear between siblings in the render line array
         if (!drawTopLine) {
           const currentHiddenParent = hiddenParentByNode.get(nodeId)
           if (currentHiddenParent?.issue?.executionMode === ExecutionMode.SERIES) {
@@ -620,18 +693,13 @@ function renderGroup(
       }
     }
 
-    // Compute DrawBottomLine:
-    // - For nodes with visible series parent: always true (connects to the visible parent)
-    // - For nodes with hidden series parent: true only if there's a next sibling with same hidden parent
     const hasVisibleSeriesParent =
       parentNode != null && parentNode.issue?.executionMode === ExecutionMode.SERIES
     let drawBottomLine = hasVisibleSeriesParent
 
-    // For nodes with hidden series parent, check if there's a next sibling
     if (!drawBottomLine) {
       const bottomLineHiddenParent = hiddenParentByNode.get(nodeId)
       if (bottomLineHiddenParent?.issue?.executionMode === ExecutionMode.SERIES) {
-        // Check if there's a next sibling with same hidden parent
         for (let j = i + 1; j < group.length; j++) {
           const nextHiddenParent = hiddenParentByNode.get(group[j].issue?.id?.toLowerCase() ?? '')
           if (
@@ -647,13 +715,9 @@ function renderGroup(
       }
     }
 
-    // Compute SeriesConnectorFromLane: set when this node is a parent receiving series children
-    // Apply lane offset to the series connector lane as well
     const childLane = seriesChildLaneByParent.get(nodeId)
     const seriesConnectorFromLane = childLane != null ? childLane + laneOffset : null
 
-    // Get linked PR and agent status for this issue
-    // Use case-insensitive lookup to match server-side behavior
     const linkedPr =
       linkedPrs[node.issue.id] ??
       linkedPrs[node.issue.id.toLowerCase()] ??
@@ -665,7 +729,6 @@ function renderGroup(
       agentStatuses[node.issue.id.toUpperCase()] ??
       null
 
-    // Get hidden parent info (defaults to false if not provided)
     let hasHiddenParent = false
     let hiddenParentIsSeriesMode = false
 
@@ -675,15 +738,12 @@ function renderGroup(
         hasHiddenParent = info.hasHiddenParent
         hiddenParentIsSeriesMode = info.hiddenParentIsSeriesMode
 
-        // For series siblings with hidden parent, only show indicator on last sibling
-        // (the one without a connection to the next sibling)
         if (hasHiddenParent && hiddenParentIsSeriesMode && drawBottomLine) {
           hasHiddenParent = false
         }
       }
     }
 
-    // Generate branch name for the issue
     const branchName = generateBranchName(node.issue)
 
     result.push({
@@ -696,6 +756,7 @@ function renderGroup(
       marker,
       parentLane,
       isFirstChild,
+      isLastChild: false,
       isSeriesChild,
       drawTopLine,
       drawBottomLine,
@@ -716,6 +777,9 @@ function renderGroup(
       parentIssues: node.issue.parentIssues ?? null,
       multiParentIndex: null,
       multiParentTotal: null,
+      hasParallelChildren: false,
+      parentIssueId: null,
+      parentLaneReservations: [],
     })
   }
 }
@@ -800,7 +864,7 @@ function computeTreeViewLayout(
     parentCountInGroup.set(node.issue.id.toLowerCase(), count)
   }
 
-  // BFS from roots to assign lanes
+  // DFS from roots to assign lanes
   const result: TreeViewNode[] = []
   const enqueueCount = new Map<string, number>()
   const queue: Array<{
@@ -837,10 +901,11 @@ function computeTreeViewLayout(
       parentNode,
     })
 
-    // Add children to queue
+    // Add children to front of queue (DFS) sorted by sortOrder
     const nodeId = node.issue?.id?.toLowerCase()
     if (nodeId) {
       const children = childrenByParent.get(nodeId) ?? []
+      const childEntries: typeof queue = []
       for (const child of children) {
         if (!child.issue?.id) continue
         const childId = child.issue.id.toLowerCase()
@@ -849,10 +914,21 @@ function computeTreeViewLayout(
 
         // Allow multi-parent nodes to be enqueued once per parent
         if (timesEnqueued < totalParents) {
-          queue.push({ node: child, lane: lane + 1, parentNode: node })
+          childEntries.push({ node: child, lane: lane + 1, parentNode: node })
           enqueueCount.set(childId, timesEnqueued + 1)
         }
       }
+      // Sort children by sortOrder from parentIssues reference
+      childEntries.sort((a, b) => {
+        const aSortOrder =
+          a.node.issue?.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === nodeId)
+            ?.sortOrder ?? ''
+        const bSortOrder =
+          b.node.issue?.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === nodeId)
+            ?.sortOrder ?? ''
+        return aSortOrder.localeCompare(bSortOrder)
+      })
+      queue.unshift(...childEntries)
     }
   }
 
@@ -947,11 +1023,13 @@ function renderGroupTreeView(
     const parentLane = treeNode.parentLane
 
     let isFirstChild = false
+    let isLastChild = false
     if (parentNode?.issue?.id && parentLane !== null && parentLane < lane) {
       const parentId = parentNode.issue.id.toLowerCase()
       const count = (childrenRendered.get(parentId) ?? 0) + 1
       childrenRendered.set(parentId, count)
       isFirstChild = count === 1
+      isLastChild = count === (childrenCountByParent.get(parentId) ?? 0)
     }
 
     // Determine if this is a series child
@@ -964,6 +1042,10 @@ function renderGroupTreeView(
 
     if (isSeriesChild && parentNode?.issue?.id) {
       // For series children, connect vertically
+      // First series child connects to parent above
+      if (isFirstChild) {
+        drawTopLine = true
+      }
       // Check if there's a sibling series child above
       if (i > 0) {
         const prevTreeNode = treeViewNodes[i - 1]
@@ -1021,6 +1103,12 @@ function renderGroupTreeView(
     // Generate branch name
     const branchName = generateBranchName(node.issue)
 
+    // Compute hasParallelChildren
+    const childCount = childrenCountByParent.get(nodeId) ?? 0
+    const hasParallelChildren =
+      childCount > 0 &&
+      (node.issue.executionMode ?? ExecutionMode.SERIES) === ExecutionMode.PARALLEL
+
     result.push({
       type: 'issue',
       issueId: node.issue.id,
@@ -1031,6 +1119,7 @@ function renderGroupTreeView(
       marker,
       parentLane,
       isFirstChild,
+      isLastChild,
       isSeriesChild,
       drawTopLine,
       drawBottomLine,
@@ -1051,6 +1140,9 @@ function renderGroupTreeView(
       parentIssues: node.issue.parentIssues ?? null,
       multiParentIndex: null,
       multiParentTotal: null,
+      hasParallelChildren,
+      parentIssueId: parentNode?.issue?.id ?? null,
+      parentLaneReservations: [],
     })
   }
 }

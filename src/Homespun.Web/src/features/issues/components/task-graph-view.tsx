@@ -117,7 +117,7 @@ export const TaskGraphView = memo(
       onMoveCancel,
       appliedFilter,
       onFilterMatchCountChange,
-      viewMode = ViewMode.Next,
+      viewMode = ViewMode.Tree,
       className,
     },
     ref

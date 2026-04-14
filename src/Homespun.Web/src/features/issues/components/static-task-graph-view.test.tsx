@@ -38,6 +38,13 @@ vi.mock('../services', async (importOriginal) => {
         hasHiddenParent: false,
         hiddenParentIsSeriesMode: false,
         executionMode: ExecutionMode.SERIES,
+        parentIssues: null,
+        multiParentIndex: null,
+        multiParentTotal: null,
+        isLastChild: false,
+        hasParallelChildren: false,
+        parentIssueId: null,
+        parentLaneReservations: [],
       }))
     }),
   }

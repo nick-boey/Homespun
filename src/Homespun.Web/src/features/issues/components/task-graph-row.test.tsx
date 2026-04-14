@@ -80,6 +80,10 @@ describe('TaskGraphIssueRow', () => {
     parentIssues: null,
     multiParentIndex: null,
     multiParentTotal: null,
+    isLastChild: false,
+    hasParallelChildren: false,
+    parentIssueId: null,
+    parentLaneReservations: [],
   }
 
   const defaultProps = {

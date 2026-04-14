@@ -20,7 +20,6 @@ import {
   getRenderKey,
   type TaskGraphIssueRenderLine,
 } from '../services'
-import { ViewMode } from '../types'
 import { TaskGraphNodeSvg, ROW_HEIGHT, getTypeColor } from './task-graph-svg'
 
 export type ChangeType = 'created' | 'updated' | 'deleted'
@@ -37,8 +36,6 @@ export interface StaticTaskGraphViewProps {
   filterIssueIds?: FilteredIssue[]
   /** Maximum depth to display */
   depth?: number
-  /** View mode for the task graph */
-  viewMode?: ViewMode
   /** Additional CSS classes */
   className?: string
   /** Currently selected issue ID */
@@ -55,7 +52,6 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
   data,
   filterIssueIds,
   depth = 10,
-  viewMode = ViewMode.Next,
   className,
   selectedIssueId,
   onSelectIssue,
@@ -63,8 +59,8 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
   // Compute render lines from task graph data
   const renderLines = useMemo(() => {
     if (!data) return []
-    return computeLayout(data, depth, viewMode)
-  }, [data, depth, viewMode])
+    return computeLayout(data, depth)
+  }, [data, depth])
 
   // Filter to only issue render lines
   const issueRenderLines = useMemo(() => {

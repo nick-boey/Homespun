@@ -24,7 +24,6 @@ export {
   EditCursorPosition,
   MoveDirection,
   ViewMode,
-  RenderMode,
   TYPE_CYCLE_ORDER,
   TYPE_CYCLE_DEBOUNCE_MS,
   getNextIssueType,

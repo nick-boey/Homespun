@@ -160,15 +160,3 @@ export const ViewMode = {
 } as const
 
 export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode]
-
-/**
- * Render mode for the task graph visualization.
- */
-export const RenderMode = {
-  /** SVG render mode - traditional row-by-row SVG rendering. */
-  Svg: 'svg',
-  /** Canvas render mode - Konva canvas with full edge paths. */
-  Canvas: 'canvas',
-} as const
-
-export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode]
