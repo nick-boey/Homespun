@@ -39,7 +39,7 @@ No server, web, shared, or infra paths are touched by this feature (confirmed in
 - [X] T001 Create the Fleece issue backing this feature: `fleece create -t "Worker skills & plugins logging" -y feature -d "Emit info-level structured inventory log per session create/resume/boot, listing skills, plugins, commands, agents, hooks, mcpServers; see specs/001-worker-skills-logging/"` and capture the returned id → **SFq3pB**
 - [X] T002 Move the Fleece issue to `progress`: `fleece edit SFq3pB -s progress`
 - [X] T003 Rename the working branch to a Constitution §VII-compliant prefix that preserves the Fleece id suffix: `git branch -m 001-worker-skills-logging feat/worker-skills-logging+SFq3pB`
-- [ ] T004 [P] Confirm the mock stack is usable for manual verification later: `./scripts/mock.sh` — do **not** kill the `mock.sh` shell or any `dotnet` process (Constitution §X) — deferred to T038
+- [X] T004 [P] Confirm the mock stack is usable for manual verification later — **superseded**: verified directly against the live worker process (see T038). `mock.sh` spawns no TypeScript worker; all three inventory events (create/resume/boot) confirmed by running `npm run dev` with a real Claude SDK backend.
 
 ---
 
