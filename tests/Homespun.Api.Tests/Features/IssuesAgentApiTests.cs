@@ -150,4 +150,52 @@ public class IssuesAgentApiTests
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
+
+    // --- GET /api/issues-agent/{sessionId}/diff ---
+
+    [Test]
+    public async Task GetDiff_ReturnsNotFound_WhenSessionDoesNotExist()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/issues-agent/non-existent-session/diff");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    // --- POST /api/issues-agent/{sessionId}/accept ---
+
+    [Test]
+    public async Task AcceptChanges_ReturnsNotFound_WhenSessionDoesNotExist()
+    {
+        // Act
+        var response = await _client.PostAsync("/api/issues-agent/non-existent-session/accept", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    // --- POST /api/issues-agent/{sessionId}/cancel ---
+
+    [Test]
+    public async Task CancelSession_ReturnsNotFound_WhenSessionDoesNotExist()
+    {
+        // Act
+        var response = await _client.PostAsync("/api/issues-agent/non-existent-session/cancel", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    // --- POST /api/issues-agent/{sessionId}/refresh-diff ---
+
+    [Test]
+    public async Task RefreshDiff_ReturnsNotFound_WhenSessionDoesNotExist()
+    {
+        // Act
+        var response = await _client.PostAsync("/api/issues-agent/non-existent-session/refresh-diff", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
 }
