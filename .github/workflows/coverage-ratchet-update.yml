@@ -1,0 +1,140 @@
+name: Update coverage ratchet
+
+# Rebuilds the per-module coverage floor after every merge to main and writes
+# it to the coverage-floors-v1-main-<sha> cache that ci.yml's coverage-gate
+# reads. Monotone: floors only go up (see scripts/coverage-ratchet-update.sh).
+#
+# A weekly cron serves as a safety net — GitHub Actions cache entries evict
+# after 7 days of no reads, and active PRs normally keep the floor warm, but
+# quiet repos would otherwise lose the baseline.
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialise main pushes so two rapid merges don't race on the same cache key.
+# Monotone max in the script also guards against stale reads.
+concurrency:
+  group: coverage-ratchet-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Recompute and store coverage floors
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    # --- Server coverage -------------------------------------------------
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore .NET + local tools
+      run: |
+        dotnet restore
+        dotnet tool restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    # .NET 10's `dotnet test` doesn't accept multiple positional project paths;
+    # run each covered project separately. See ci.yml for the same fix.
+    - name: Test Homespun.Tests with coverage
+      run: |
+        dotnet test tests/Homespun.Tests \
+          --no-build \
+          --configuration Release \
+          --settings coverlet.runsettings \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults
+
+    - name: Test Homespun.Api.Tests with coverage
+      run: |
+        dotnet test tests/Homespun.Api.Tests \
+          --no-build \
+          --configuration Release \
+          --settings coverlet.runsettings \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults
+
+    - name: Merge server coverage reports
+      run: |
+        mkdir -p artifacts/coverage-server
+        dotnet reportgenerator \
+          -reports:"TestResults/**/coverage.cobertura.xml" \
+          -targetdir:artifacts/coverage-server \
+          -reporttypes:Cobertura
+
+    # --- Web coverage ----------------------------------------------------
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install web + run coverage
+      run: |
+        cd src/Homespun.Web
+        npm ci
+        npm run test:coverage
+
+    - name: Stage web coverage
+      run: |
+        mkdir -p artifacts/coverage-web
+        cp src/Homespun.Web/coverage/cobertura-coverage.xml artifacts/coverage-web/
+
+    # --- Worker coverage -------------------------------------------------
+    - name: Install worker + run coverage
+      run: |
+        cd src/Homespun.Worker
+        npm ci
+        npm run test:coverage
+
+    - name: Stage worker coverage
+      run: |
+        mkdir -p artifacts/coverage-worker
+        cp src/Homespun.Worker/coverage/cobertura-coverage.xml artifacts/coverage-worker/
+
+    # --- Ratchet ---------------------------------------------------------
+    - name: Restore previous floors
+      uses: actions/cache/restore@v4
+      with:
+        path: floors.json
+        key: coverage-floors-v1-main-restore-${{ github.run_id }}
+        restore-keys: |
+          coverage-floors-v1-main-
+
+    - name: Update floors (monotone max)
+      run: ./scripts/coverage-ratchet-update.sh
+      env:
+        ARTIFACTS_DIR: artifacts
+        FLOORS_FILE: floors.json
+        COMMIT_SHA: ${{ github.sha }}
+
+    - name: Upload floors artifact (audit trail)
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-floors-${{ github.sha }}
+        path: floors.json
+        retention-days: 90
+
+    - name: Save floors cache
+      uses: actions/cache/save@v4
+      with:
+        path: floors.json
+        key: coverage-floors-v1-main-${{ github.sha }}

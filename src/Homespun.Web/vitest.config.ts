@@ -11,9 +11,19 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      // Cobertura + lcov feed diff-cover / the coverage-gate CI job; text/html
+      // stay for local inspection. See Constitution §V.
+      reporter: ['text', 'json', 'html', 'lcov', 'cobertura'],
+      reportsDirectory: './coverage',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/routeTree.gen.ts'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/routeTree.gen.ts',
+        // OpenAPI-generated client (Constitution §III — never hand-edited,
+        // and must not count toward coverage).
+        'src/api/generated/**',
+      ],
     },
   },
   resolve: {

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverage collection settings for Homespun.Server module (Constitution §V).
+  Used by the CI build-and-test job to produce Cobertura reports from
+  Homespun.Tests and Homespun.Api.Tests. The AppHost test project runs
+  separately without coverage (Aspire orchestration is excluded).
+  Local reproduction commands live in scripts/coverage-gate.sh and in the
+  Fleece 0J8Mfz notes; avoid CLI flag text here because XML forbids a
+  double-hyphen inside comments.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <DeterministicReport>true</DeterministicReport>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <!--
+            Exclude test projects (they reference coverlet themselves),
+            Aspire orchestration (declarative config, low-value coverage),
+            and shared DTOs (record types; would inflate the denominator).
+          -->
+          <Exclude>[*.Tests]*,[Homespun.AppHost]*,[Homespun.Shared]*</Exclude>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <ExcludeByFile>**/obj/**,**/Migrations/*.cs</ExcludeByFile>
+          <UseSourceLink>true</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
