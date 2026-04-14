@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Coverage collection settings for Homespun.Server module (Constitution §V).
-
-  Used by the CI `build-and-test` job to produce Cobertura reports from
+  Used by the CI build-and-test job to produce Cobertura reports from
   Homespun.Tests and Homespun.Api.Tests. The AppHost test project runs
   separately without coverage (Aspire orchestration is excluded).
-
-  Locally reproduce with:
-    dotnet test tests/Homespun.Tests tests/Homespun.Api.Tests \
-      --settings coverlet.runsettings \
-      --collect:"XPlat Code Coverage" \
-      --results-directory ./TestResults
+  Local reproduction commands live in scripts/coverage-gate.sh and in the
+  Fleece 0J8Mfz notes; avoid CLI flag text here because XML forbids a
+  double-hyphen inside comments.
 -->
 <RunSettings>
   <DataCollectionRunSettings>
