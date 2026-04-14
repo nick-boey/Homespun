@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MessageList } from './message-list'
 import type { ClaudeMessage } from '@/types/signalr'
 import { ClaudeContentType, ClaudeMessageRole } from '@/api'
@@ -122,8 +121,7 @@ describe('MessageList', () => {
     expect(screen.getByTestId('streaming-indicator')).toBeInTheDocument()
   })
 
-  it('shows timestamp on hover', async () => {
-    const user = userEvent.setup()
+  it('always shows timestamp', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
@@ -135,10 +133,6 @@ describe('MessageList', () => {
 
     render(<MessageList messages={messages} />)
 
-    const messageElement = screen.getByTestId('message-msg-1')
-    await user.hover(messageElement)
-
-    // Timestamp should be visible on hover
     expect(screen.getByTestId('timestamp-msg-1')).toBeInTheDocument()
   })
 
