@@ -135,8 +135,11 @@ type(scope?): short imperative summary (#NN)
 
 Permitted types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `revert`.
 Branch names MUST match one of: `feature/*`, `feat/*`, `fix/*`, `bug/*`,
-`task/*`, `chore/*`, `docs/*`. Fleece-linked branches keep the trailing
-`+<fleece-id>` slug.
+`task/*`, `chore/*`, `docs/*`, `verify/*`, `revert/*` (or GitHub's
+auto-generated `revert-<pr>-*` form). `verify/*` is reserved for branches
+backing Fleece `verify`-type issues; `revert/*` is reserved for revert
+branches (usually created by GitHub). Fleece-linked branches keep the
+trailing `+<fleece-id>` slug.
 
 ### VIII. Naming Conventions
 
@@ -210,4 +213,4 @@ Amendments require:
 3. Updates to dependent templates in `.specify/templates/` where the change
    affects required sections or gates.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-14 | **Last Amended**: 2026-04-14
+**Version**: 1.1.0 | **Ratified**: 2026-04-14 | **Last Amended**: 2026-04-14

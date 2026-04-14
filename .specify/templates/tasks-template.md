@@ -58,7 +58,7 @@ implemented, tested, and reviewed independently.
 **Purpose**: Repo-level prep that every story needs
 
 - [ ] T001 Move the Fleece issue to `progress`: `fleece edit <id> -s progress`
-- [ ] T002 Create branch using an allowed prefix (`feat/`, `fix/`, `task/`, `bug/`, `chore/`, `docs/`); keep the Fleece `+<id>` suffix if applicable
+- [ ] T002 Create branch using an allowed prefix (`feat/`, `feature/`, `fix/`, `task/`, `bug/`, `chore/`, `docs/`, `verify/`, `revert/`); keep the Fleece `+<id>` suffix if applicable
 - [ ] T003 [P] Confirm Aspire/mock environment runs: `./scripts/mock.sh` (do **not** kill `homespun*` containers or `mock.sh` shells — Constitution §X)
 - [ ] T004 [P] Add or update `.env.example` for any new env var introduced by this feature
 
