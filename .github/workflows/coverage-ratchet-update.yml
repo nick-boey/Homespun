@@ -53,11 +53,20 @@ jobs:
     - name: Build
       run: dotnet build --no-restore --configuration Release
 
-    - name: Test with coverage
+    # .NET 10's `dotnet test` doesn't accept multiple positional project paths;
+    # run each covered project separately. See ci.yml for the same fix.
+    - name: Test Homespun.Tests with coverage
       run: |
-        dotnet test \
-          tests/Homespun.Tests \
-          tests/Homespun.Api.Tests \
+        dotnet test tests/Homespun.Tests \
+          --no-build \
+          --configuration Release \
+          --settings coverlet.runsettings \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults
+
+    - name: Test Homespun.Api.Tests with coverage
+      run: |
+        dotnet test tests/Homespun.Api.Tests \
           --no-build \
           --configuration Release \
           --settings coverlet.runsettings \

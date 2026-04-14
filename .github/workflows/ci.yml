@@ -59,11 +59,24 @@ jobs:
       env:
         E2E_CONFIGURATION: Release
 
-    - name: Test with coverage
+    # .NET 10's `dotnet test` CLI no longer accepts multiple positional project
+    # paths (MSB1008). Run each covered project separately; ReportGenerator
+    # merges the individual Cobertura reports in the next step.
+    - name: Test Homespun.Tests with coverage
       run: |
-        dotnet test \
-          tests/Homespun.Tests \
-          tests/Homespun.Api.Tests \
+        dotnet test tests/Homespun.Tests \
+          --no-build \
+          --configuration Release \
+          --verbosity normal \
+          --settings coverlet.runsettings \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults
+      env:
+        E2E_CONFIGURATION: Release
+
+    - name: Test Homespun.Api.Tests with coverage
+      run: |
+        dotnet test tests/Homespun.Api.Tests \
           --no-build \
           --configuration Release \
           --verbosity normal \
