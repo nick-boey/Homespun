@@ -391,12 +391,22 @@ export async function emitBootInventory(
 ): Promise<void> {
   try {
     const options = deps.buildOptions();
-    // Empty prompt generator — we just want the SDK's init message.
-    async function* emptyPrompt(): AsyncGenerator<unknown> {
-      // Intentionally never yields; the SDK still emits system/init first.
+    // The SDK's Claude CLI subprocess doesn't emit `system/init` until it sees
+    // a prompt arrive on stdin. Yield a single minimal user message so init
+    // fires; we `interrupt()` before the CLI ever runs a turn, so this costs
+    // effectively zero beyond spinning the CLI up.
+    async function* minimalPrompt(): AsyncGenerator<unknown> {
+      yield {
+        type: "user",
+        session_id: "",
+        message: { role: "user", content: [{ type: "text", text: "." }] },
+        parent_tool_use_id: null,
+      };
+      // Then block until aborted.
+      await new Promise(() => {});
     }
     const q = deps.query({
-      prompt: emptyPrompt(),
+      prompt: minimalPrompt(),
       options: options as Record<string, unknown>,
     });
 
