@@ -28,6 +28,11 @@
 
 .NOTES
     Mock data includes demo projects, features, and issues.
+
+    WARNING: This script runs long-lived server processes. If running as a
+    background shell in Claude Code, do NOT use KillShell on this process.
+    Killing this shell may terminate your entire session. Instead, use
+    Stop-Process with the process PIDs directly.
 #>
 
 #Requires -Version 7.0
@@ -63,6 +68,7 @@ if ($Port -ne 0) {
 if ($Foreground) {
     Write-Host "=== Homespun Mock Mode (foreground) ===" -ForegroundColor Cyan
     Write-Host "Running backend only with output to terminal..." -ForegroundColor Cyan
+    Write-Host "WARNING: Do not use KillShell on this process - use 'Stop-Process -Name dotnet' instead" -ForegroundColor Yellow
     Write-Host ""
     & dotnet @dotnetArgs
     return
@@ -71,6 +77,7 @@ if ($Foreground) {
 # Background mode: run both backend and frontend with logs captured to files
 Write-Host "=== Homespun Mock Mode ===" -ForegroundColor Cyan
 Write-Host "Starting backend and frontend servers..." -ForegroundColor Cyan
+Write-Host "WARNING: Do not use KillShell on this process - use 'Stop-Process -Id <pid>' instead" -ForegroundColor Yellow
 Write-Host ""
 
 # Set up log directory
@@ -83,12 +90,12 @@ $FrontendLog = Join-Path $LogDir "mock-frontend.log"
 
 # Start backend
 Write-Host "Starting backend server..." -ForegroundColor Cyan
-$backendProcess = Start-Process -FilePath "dotnet" -ArgumentList $dotnetArgs -RedirectStandardOutput $BackendLog -RedirectStandardError (Join-Path $LogDir "mock-backend-error.log") -PassThru -NoNewWindow:$false -WindowStyle Hidden
+$backendProcess = Start-Process -FilePath "dotnet" -ArgumentList $dotnetArgs -RedirectStandardOutput $BackendLog -RedirectStandardError (Join-Path $LogDir "mock-backend-error.log") -PassThru -NoNewWindow
 Write-Host "Backend started (PID: $($backendProcess.Id))" -ForegroundColor Green
 
 # Start frontend
 Write-Host "Starting frontend dev server..." -ForegroundColor Cyan
-$frontendProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $WebDir -RedirectStandardOutput $FrontendLog -RedirectStandardError (Join-Path $LogDir "mock-frontend-error.log") -PassThru -NoNewWindow:$false -WindowStyle Hidden
+$frontendProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm run dev" -WorkingDirectory $WebDir -RedirectStandardOutput $FrontendLog -RedirectStandardError (Join-Path $LogDir "mock-frontend-error.log") -PassThru -NoNewWindow
 Write-Host "Frontend started (PID: $($frontendProcess.Id))" -ForegroundColor Green
 
 Write-Host ""
