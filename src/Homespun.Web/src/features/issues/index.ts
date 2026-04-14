@@ -23,6 +23,7 @@ export {
   MoveOperationType,
   EditCursorPosition,
   MoveDirection,
+  ViewMode,
   TYPE_CYCLE_ORDER,
   TYPE_CYCLE_DEBOUNCE_MS,
   getNextIssueType,

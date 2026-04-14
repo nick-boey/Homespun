@@ -269,11 +269,11 @@ describe('TaskGraphNodeSvg', () => {
       const paths = container.querySelectorAll('path')
       expect(paths.length).toBeGreaterThan(0)
 
-      // Find the path with horizontal component going leftward
-      // For lane 1, cx = 36 (LANE_WIDTH / 2 + 1 * LANE_WIDTH), so start x = 36 - 6 - 2 = 28
+      // Find the path with arc+horizontal component ending at child node
+      // For lane 1, cx = 36 (LANE_WIDTH / 2 + 1 * LANE_WIDTH), so end x = 36 - 6 - 2 = 28
       const parallelPath = Array.from(paths).find((p) => {
         const d = p.getAttribute('d') || ''
-        return d.includes('M 28 20') // cx - NODE_RADIUS - 2, cy
+        return d.includes('L 28 20') // ends at cx - NODE_RADIUS - 2, cy
       })
       expect(parallelPath).toBeDefined()
     })
@@ -489,7 +489,7 @@ describe('connector directions', () => {
     ...overrides,
   })
 
-  it('first-child parallel connector arcs downward and extends to bottom', () => {
+  it('first-child parallel connector has vertical line and arc branch (same as non-first)', () => {
     const line = createMockLine({
       lane: 1,
       parentLane: 0,
@@ -499,17 +499,22 @@ describe('connector directions', () => {
     })
     const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
 
+    const parentX = getLaneCenterX(0)
     const paths = container.querySelectorAll('path')
-    const firstChildPath = Array.from(paths).find((p) => {
-      const d = p.getAttribute('d') ?? ''
-      return d.includes('A') && d.includes(`${getLaneCenterX(0)}`)
-    })
 
-    expect(firstChildPath).toBeDefined()
-    const d = firstChildPath!.getAttribute('d')!
-    // Should arc downward: sweep flag 0 0 1, vertical line ends at ROW_HEIGHT
-    expect(d).toContain('0 0 1')
-    expect(d).toMatch(/L \d+ 40$/)
+    // Should have a vertical line from 0 to ROW_HEIGHT at parentX
+    const verticalPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes(`M ${parentX} 0`) && d.includes(`L ${parentX} ${ROW_HEIGHT}`)
+    })
+    expect(verticalPath).toBeDefined()
+
+    // Should have an arc path with 0 0 0 sweep (same as non-first children)
+    const arcPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes('A') && d.includes('0 0 0') && d.includes(`${parentX}`)
+    })
+    expect(arcPath).toBeDefined()
   })
 
   it('middle parallel child has continuous vertical and curved branch', () => {
@@ -562,7 +567,36 @@ describe('connector directions', () => {
     expect(verticalPath).toBeDefined()
   })
 
-  it('series connector goes from parent node rightward then arcs down', () => {
+  it('series connector goes from parent node rightward then arcs down (tree view)', () => {
+    const line = createMockLine({
+      lane: 1,
+      seriesConnectorFromLane: 2,
+      isSeriesChild: false,
+    })
+    const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={3} />)
+
+    const cx = getLaneCenterX(1)
+    const childLaneX = getLaneCenterX(2)
+    const cy = ROW_HEIGHT / 2
+    const R = 6
+
+    const paths = container.querySelectorAll('path')
+    const seriesPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes(`${childLaneX}`) && d.includes('A')
+    })
+
+    expect(seriesPath).toBeDefined()
+    const d = seriesPath!.getAttribute('d')!
+    // Should start from parent node right edge
+    expect(d).toMatch(new RegExp(`^M ${cx + R + 2} ${cy}`))
+    // Should arc clockwise (0 0 1)
+    expect(d).toContain('0 0 1')
+    // Should end at ROW_HEIGHT
+    expect(d).toMatch(new RegExp(`L ${childLaneX} ${ROW_HEIGHT}$`))
+  })
+
+  it('series connector goes leftward from above into node (next view)', () => {
     const line = createMockLine({
       lane: 2,
       seriesConnectorFromLane: 1,
@@ -583,11 +617,11 @@ describe('connector directions', () => {
 
     expect(seriesPath).toBeDefined()
     const d = seriesPath!.getAttribute('d')!
-    // Should start from parent node right edge
-    expect(d).toMatch(new RegExp(`^M ${cx + R + 2} ${cy}`))
-    // Should arc clockwise (0 0 1)
-    expect(d).toContain('0 0 1')
-    // Should end at ROW_HEIGHT
-    expect(d).toMatch(new RegExp(`L ${childLaneX} ${ROW_HEIGHT}$`))
+    // Should start from top of child lane
+    expect(d).toMatch(new RegExp(`^M ${childLaneX} 0`))
+    // Should arc counter-clockwise (0 0 0)
+    expect(d).toContain('0 0 0')
+    // Should end at node left edge
+    expect(d).toMatch(new RegExp(`L ${cx - R - 2} ${cy}$`))
   })
 })

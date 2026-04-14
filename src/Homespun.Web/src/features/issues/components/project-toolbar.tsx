@@ -21,6 +21,8 @@ import {
   X,
   SquareUser,
   ListTodo,
+  ListTree,
+  Network,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -30,6 +32,7 @@ import { useIssueHistory } from '../hooks/use-issue-history'
 import { FilterHelpPopover } from './filter-help-popover'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks'
+import { ViewMode } from '../types'
 
 export interface ProjectToolbarProps {
   projectId: string
@@ -87,6 +90,10 @@ export interface ProjectToolbarProps {
   onApplyDefaultFilter?: () => void
   /** Whether the default filter (My Tasks) is currently active */
   defaultFilterActive?: boolean
+  /** Current view mode (next or tree) */
+  viewMode?: ViewMode
+  /** Called when view mode changes */
+  onViewModeChange?: (mode: ViewMode) => void
 }
 
 export function ProjectToolbar({
@@ -124,6 +131,8 @@ export function ProjectToolbar({
   filterInputRef,
   onApplyDefaultFilter,
   defaultFilterActive = false,
+  viewMode = ViewMode.Tree,
+  onViewModeChange,
 }: ProjectToolbarProps) {
   const { canUndo, canRedo, undoDescription, redoDescription, undo, redo, isUndoing, isRedoing } =
     useIssueHistory(projectId)
@@ -419,6 +428,26 @@ export function ProjectToolbar({
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* View mode toggle */}
+      <Button
+        variant="outline"
+        size={buttonSize}
+        onClick={() =>
+          onViewModeChange?.(viewMode === ViewMode.Next ? ViewMode.Tree : ViewMode.Next)
+        }
+        aria-label={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
+        title={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
+        data-testid="toolbar-view-mode-toggle"
+      >
+        {viewMode === ViewMode.Next ? (
+          <ListTree className="h-4 w-4" />
+        ) : (
+          <Network className="h-4 w-4" />
+        )}
+      </Button>
+
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Depth controls (right side) */}
       <ButtonGroup>

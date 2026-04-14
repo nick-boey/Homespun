@@ -175,16 +175,21 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           return (
             <>
               {line.isFirstChild ? (
-                // First child: horizontal + arc curving into downward vertical
-                <path
-                  d={
-                    `M ${cx - R - 2} ${cy} L ${parentX + R} ${cy} A ${R} ${R} 0 0 1 ${parentX} ${cy + R}` +
-                    (!line.isLastChild ? ` L ${parentX} ${ROW_HEIGHT}` : '')
-                  }
-                  stroke={nodeColor}
-                  strokeWidth={LINE_STROKE_WIDTH}
-                  fill="none"
-                />
+                // First child: vertical from top + arc curving into horizontal (same as non-first)
+                <>
+                  <path
+                    d={`M ${parentX} 0 L ${parentX} ${line.isLastChild ? cy : ROW_HEIGHT}`}
+                    stroke={nodeColor}
+                    strokeWidth={LINE_STROKE_WIDTH}
+                    fill="none"
+                  />
+                  <path
+                    d={`M ${parentX} ${cy - R} A ${R} ${R} 0 0 0 ${parentX + R} ${cy} L ${cx - R - 2} ${cy}`}
+                    stroke={nodeColor}
+                    strokeWidth={LINE_STROKE_WIDTH}
+                    fill="none"
+                  />
+                </>
               ) : (
                 // Non-first child: continuous vertical + branch arc into horizontal
                 <>
@@ -206,13 +211,59 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           )
         })()}
 
-      {/* Series connector to children (L-shaped, rightward in tree view) */}
+      {/* Parent connector (parallel mode - next view: parent is RIGHT of child) */}
+      {!line.isSeriesChild &&
+        line.parentLane != null &&
+        line.parentLane > line.lane &&
+        (() => {
+          const parentX = getLaneCenterX(line.parentLane!)
+          const R = NODE_RADIUS
+          return (
+            <>
+              {line.isFirstChild ? (
+                <path
+                  d={`M ${cx + R + 2} ${cy} L ${parentX - R} ${cy} A ${R} ${R} 0 0 1 ${parentX} ${cy + R} L ${parentX} ${ROW_HEIGHT}`}
+                  stroke={nodeColor}
+                  strokeWidth={LINE_STROKE_WIDTH}
+                  fill="none"
+                />
+              ) : (
+                <>
+                  <path
+                    d={`M ${cx + R + 2} ${cy} L ${parentX} ${cy}`}
+                    stroke={nodeColor}
+                    strokeWidth={LINE_STROKE_WIDTH}
+                    fill="none"
+                  />
+                  <path
+                    d={`M ${parentX} 0 L ${parentX} ${ROW_HEIGHT}`}
+                    stroke={nodeColor}
+                    strokeWidth={LINE_STROKE_WIDTH}
+                    fill="none"
+                  />
+                </>
+              )}
+            </>
+          )
+        })()}
+
+      {/* Series connector to children (L-shaped) */}
       {line.seriesConnectorFromLane != null &&
         (() => {
           const childLaneX = getLaneCenterX(line.seriesConnectorFromLane)
-          return (
+          const isRightward = line.seriesConnectorFromLane > line.lane
+          return isRightward ? (
+            // Tree view: rightward L-shape
             <path
               d={`M ${cx + NODE_RADIUS + 2} ${cy} L ${childLaneX - NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 1 ${childLaneX} ${cy + NODE_RADIUS} L ${childLaneX} ${ROW_HEIGHT}`}
+              stroke={nodeColor}
+              strokeWidth={LINE_STROKE_WIDTH}
+              fill="none"
+            />
+          ) : (
+            // Next view: leftward L-shape (from above into node)
+            <path
+              d={`M ${childLaneX} 0 L ${childLaneX} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${childLaneX + NODE_RADIUS} ${cy} L ${cx - NODE_RADIUS - 2} ${cy}`}
               stroke={nodeColor}
               strokeWidth={LINE_STROKE_WIDTH}
               fill="none"

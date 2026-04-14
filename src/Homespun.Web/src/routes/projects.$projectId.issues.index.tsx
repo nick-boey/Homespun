@@ -12,6 +12,7 @@ import {
 } from '@/features/issues'
 import { MoveOperationType } from '@/features/issues/types'
 import { MoveDirection } from '@/api/generated/types.gen'
+import { useAppStore } from '@/stores/app-store'
 import { parseFilterQuery, type ParsedFilter } from '@/features/issues/services'
 import { RunAgentDialog } from '@/features/agents'
 import { AssignIssueDialog } from '@/features/issues/components/assign-issue-popover'
@@ -28,6 +29,9 @@ function IssuesList() {
 
   // Get default filter configuration
   const { defaultFilterQuery, userEmail } = useDefaultFilter()
+
+  // View mode from app store
+  const { issuesViewMode, setIssuesViewMode } = useAppStore()
 
   // Ref to TaskGraphView for imperative actions
   const taskGraphRef = useRef<TaskGraphViewRef>(null)
@@ -446,6 +450,8 @@ function IssuesList() {
         filterInputRef={filterInputRef}
         onApplyDefaultFilter={handleApplyDefaultFilter}
         defaultFilterActive={isDefaultFilterActive}
+        viewMode={issuesViewMode}
+        onViewModeChange={setIssuesViewMode}
       />
 
       {/* Task Graph View */}
@@ -466,6 +472,7 @@ function IssuesList() {
           onMoveCancel={handleMoveCancel}
           appliedFilter={appliedFilter}
           onFilterMatchCountChange={setFilterMatchCount}
+          viewMode={issuesViewMode}
         />
       </div>
 
