@@ -13,7 +13,7 @@ import type {
   PendingQuestion,
 } from '@/types/signalr'
 import { ClaudeContentType as ContentTypeEnum, ClaudeMessageRole as RoleEnum } from '@/api'
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { groupToolExecutions } from '../utils/tool-execution-grouper'
 import { convertSignalRMessages } from '../utils/signalr-message-adapter'
 import { ToolExecutionGroupDisplay } from './tool-execution-group'
@@ -157,7 +157,6 @@ function isAssistantSideMessage(message: ClaudeMessage): boolean {
 }
 
 function MessageItem({ message }: MessageItemProps) {
-  const [isHovered, setIsHovered] = useState(false)
   const isAssistant = isAssistantSideMessage(message)
 
   // Filter out tool-related content and empty text/thinking blocks
@@ -178,8 +177,6 @@ function MessageItem({ message }: MessageItemProps) {
     <div
       data-testid={`message-${message.id}`}
       className={cn('flex w-full min-w-0 gap-3', isAssistant ? 'justify-start' : 'justify-end')}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <div
         className={cn(
@@ -206,11 +203,9 @@ function MessageItem({ message }: MessageItemProps) {
             />
           )}
         </div>
-        {isHovered && (
-          <span data-testid={`timestamp-${message.id}`} className="text-muted-foreground text-xs">
-            {formatTimestamp(message.createdAt)}
-          </span>
-        )}
+        <span data-testid={`timestamp-${message.id}`} className="text-muted-foreground text-xs">
+          {formatTimestamp(message.createdAt)}
+        </span>
       </div>
     </div>
   )
