@@ -1,6 +1,7 @@
 import { vi, beforeEach, describe, it, expect, type Mock } from 'vitest';
 import { createMockQuery, setMockQueryMessages } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
+import { createSdkInitMessage } from '../helpers/sdk-init-fixture.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 import { isControlEvent } from '../../../src/Homespun.Worker/src/services/session-manager.js';
 
@@ -391,6 +392,128 @@ describe('SessionManager Logging', () => {
       expect(info).toHaveBeenCalledWith(
         expect.stringContaining('Query processing completed (sessionId: test-session-123, messageCount: 3,')
       );
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Feature 001: Worker Skills & Plugins Logging
+  //   — US1 integration tests (T014, T015)
+  //   — US2 integration test  (T025)
+  // -----------------------------------------------------------------------
+  describe('Inventory logging (Feature 001)', () => {
+    it("T014: emits `inventory event=create sessionId=<id>` info log exactly once when SDK yields system/init", async () => {
+      // Arrange — prepend an init message so the forwarder sniffs it.
+      setMockQueryMessages(mockQueryInstance, [
+        createSdkInitMessage({ session_id: 'test-session-123', cwd: '/workdir' }),
+        createAssistantMessage('Hello'),
+        createResultMessage(),
+      ]);
+
+      // Act
+      await sessionManager.create({
+        prompt: 'Test prompt',
+        model: 'opus',
+        mode: 'Build',
+      });
+
+      // Drain the stream so the forwarder actually runs.
+      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
+
+      // Assert — exactly one inventory-event=create line for this session.
+      const invCalls = (info as unknown as Mock).mock.calls.filter(
+        ([msg]: [unknown]) =>
+          typeof msg === 'string' &&
+          msg.startsWith('inventory event=create sessionId=test-session-123 payload={'),
+      );
+      expect(invCalls).toHaveLength(1);
+    });
+
+    it('T015: emits `inventory event=resume` on the resume code path', async () => {
+      // Arrange — create a session, then push a result so the forwarder completes.
+      setMockQueryMessages(mockQueryInstance, [
+        createSdkInitMessage({ session_id: 'test-session-123' }),
+        createAssistantMessage('Hi'),
+        createResultMessage(),
+      ]);
+      await sessionManager.create({
+        prompt: 'Test prompt',
+        model: 'opus',
+        mode: 'Build',
+      });
+      // Drain to mark resultReceived=true so the next send() takes the
+      // resume-with-new-query branch.
+      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
+
+      // Set conversationId so resume path has something to resume.
+      const ws = (sessionManager as unknown as { sessions: Map<string, { conversationId?: string }> }).sessions.get(
+        'test-session-123',
+      );
+      if (ws) ws.conversationId = 'conv-abc';
+
+      // New mock query for the resume send.
+      const resumeMock = createMockQuery();
+      setMockQueryMessages(resumeMock, [
+        createSdkInitMessage({ session_id: 'test-session-123' }),
+        createAssistantMessage('resumed'),
+        createResultMessage(),
+      ]);
+      setMockQuery(resumeMock);
+
+      // Clear captured logs so we only count the resume-side emission.
+      vi.clearAllMocks();
+
+      // Act
+      await sessionManager.send('test-session-123', 'follow-up');
+      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
+
+      // Assert
+      const invCalls = (info as unknown as Mock).mock.calls.filter(
+        ([msg]: [unknown]) =>
+          typeof msg === 'string' &&
+          msg.startsWith('inventory event=resume sessionId=test-session-123 payload={'),
+      );
+      expect(invCalls).toHaveLength(1);
+    });
+
+    it('T025: canUseTool info log includes origin= field (builtin + mcp)', async () => {
+      setMockQueryMessages(mockQueryInstance, [
+        createSdkInitMessage({ session_id: 'test-session-123' }),
+        createAssistantMessage('Doing work'),
+        createResultMessage(),
+      ]);
+      await sessionManager.create({
+        prompt: 'Test prompt',
+        model: 'opus',
+        mode: 'Build',
+      });
+
+      // Drive the forwarder so init is captured onto session.init.
+      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
+
+      const canUseTool = getCapturedCanUseTool();
+      expect(canUseTool).toBeDefined();
+      vi.clearAllMocks();
+
+      // Builtin case
+      await canUseTool!('Read', { path: '/tmp/x' });
+      // MCP case (server 'playwright' is in the init fixture)
+      await canUseTool!('mcp__playwright__browser_click', { element: 'x' });
+
+      const infoCalls = (info as unknown as Mock).mock.calls.map(
+        ([m]: [unknown]) => String(m),
+      );
+      expect(
+        infoCalls.some((m) =>
+          m.includes("canUseTool - tool='Read'") && m.endsWith('origin=builtin'),
+        ),
+      ).toBe(true);
+      expect(
+        infoCalls.some(
+          (m) =>
+            m.includes("canUseTool - tool='mcp__playwright__browser_click'") &&
+            m.endsWith('origin=mcp:playwright'),
+        ),
+      ).toBe(true);
     });
   });
 

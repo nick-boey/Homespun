@@ -24,6 +24,12 @@ import {
 import { randomUUID } from "node:crypto";
 import { info, error, warn, debug } from "../utils/logger.js";
 import {
+  buildInventoryFromInit,
+  emitInventoryLog,
+  resolveToolOrigin,
+  type SdkInitMessageLike,
+} from "./session-inventory.js";
+import {
   captureDebugInfo,
   FileMonitor,
   type DebugInfo,
@@ -206,6 +212,17 @@ interface WorkerSession {
   workingDirectory?: string;
   /** Workflow context when running as part of a workflow execution */
   workflowContext?: WorkflowSessionContext;
+  /**
+   * First `system`/`init` message observed on this session. Used by
+   * `canUseTool` to resolve tool origin without re-awaiting the SDK.
+   * Not part of any shared DTO — internal to the worker.
+   */
+  init?: SdkInitMessageLike;
+  /**
+   * Whether an `inventory event=...` log has already been emitted for the
+   * current session lifecycle phase. Guard against the SDK replaying init.
+   */
+  inventoryEmitted?: boolean;
 }
 
 /**
@@ -511,7 +528,13 @@ export class SessionManager {
       toolName: string,
       input: Record<string, unknown>,
     ): Promise<PermissionResult> => {
-      info(`canUseTool - tool='${toolName}', sessionId='${sessionId}'`);
+      const origin = resolveToolOrigin(
+        toolName,
+        this.sessions.get(sessionId)?.init,
+      );
+      info(
+        `canUseTool - tool='${toolName}', sessionId='${sessionId}' origin=${origin}`,
+      );
 
       if (toolName === "AskUserQuestion") {
         const questionInput = input as unknown as AskUserQuestionInput;
@@ -738,12 +761,44 @@ export class SessionManager {
     debugMonitor: FileMonitor,
     debugLogPath: string,
     debugLogWatcher: any,
+    inventoryEvent: "create" | "resume" = "create",
   ): void {
     (async () => {
       try {
         info(`Query processing started (sessionId: ${session.id})`);
         let messageCount = 0;
+        // Reset inventory-emitted guard for this lifecycle phase.
+        session.inventoryEmitted = false;
         for await (const msg of q) {
+          // Sniff the first system/init message for inventory logging (FR-001,
+          // FR-005) and for per-tool origin attribution (US2). Never disrupts
+          // the event stream — the message is still pushed to OutputChannel.
+          if (
+            !session.inventoryEmitted &&
+            msg.type === "system" &&
+            (msg as { subtype?: string }).subtype === "init"
+          ) {
+            session.inventoryEmitted = true;
+            const initLike = msg as unknown as SdkInitMessageLike;
+            session.init = initLike;
+            try {
+              const record = await buildInventoryFromInit(
+                initLike,
+                sessionOptions,
+                inventoryEvent,
+                session.id,
+              );
+              emitInventoryLog(record);
+            } catch (err) {
+              // FR-006: never fail the session for inventory errors.
+              warn(
+                `inventory emission failed for session '${session.id}': ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            }
+          }
+
           outputChannel.push(msg);
           messageCount++;
 
@@ -1154,6 +1209,7 @@ export class SessionManager {
         debugMonitor,
         debugLogPath,
         debugLogWatcher,
+        "resume",
       );
     } else {
       // CLI process still running — send via input controller
