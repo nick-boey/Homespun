@@ -49,6 +49,10 @@ describe('TaskGraphNodeSvg', () => {
     parentIssues: null,
     multiParentIndex: null,
     multiParentTotal: null,
+    isLastChild: false,
+    hasParallelChildren: false,
+    parentIssueId: null,
+    parentLaneReservations: [],
     ...overrides,
   })
 
@@ -359,9 +363,12 @@ describe('TaskGraphNodeSvg', () => {
       const line = createMockLine()
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
-      const lines = container.querySelectorAll('line')
+      // Filter out guide lines (which have opacity="0.3") and reservation lines
+      const diagonalLines = Array.from(container.querySelectorAll('line')).filter(
+        (l) => l.getAttribute('opacity') !== '0.3' && !l.getAttribute('key')?.startsWith('res-')
+      )
       // No multi-parent diagonal lines when index is null
-      expect(lines).toHaveLength(0)
+      expect(diagonalLines).toHaveLength(0)
     })
 
     it('renders down-right diagonal for first multi-parent instance', () => {
@@ -475,14 +482,19 @@ describe('connector directions', () => {
     parentIssues: null,
     multiParentIndex: null,
     multiParentTotal: null,
+    isLastChild: false,
+    hasParallelChildren: false,
+    parentIssueId: null,
+    parentLaneReservations: [],
     ...overrides,
   })
 
-  it('first-child parallel connector arcs upward toward parent', () => {
+  it('first-child parallel connector arcs downward and extends to bottom', () => {
     const line = createMockLine({
       lane: 1,
       parentLane: 0,
       isFirstChild: true,
+      isLastChild: false,
       isSeriesChild: false,
     })
     const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
@@ -495,12 +507,62 @@ describe('connector directions', () => {
 
     expect(firstChildPath).toBeDefined()
     const d = firstChildPath!.getAttribute('d')!
-    // Should arc upward: sweep flag 0 0 1, vertical line ends at 0
+    // Should arc downward: sweep flag 0 0 1, vertical line ends at ROW_HEIGHT
     expect(d).toContain('0 0 1')
-    expect(d).toMatch(/L \d+ 0$/)
+    expect(d).toMatch(/L \d+ 40$/)
   })
 
-  it('series connector starts from bottom of row', () => {
+  it('middle parallel child has continuous vertical and curved branch', () => {
+    const line = createMockLine({
+      lane: 1,
+      parentLane: 0,
+      isFirstChild: false,
+      isLastChild: false,
+      isSeriesChild: false,
+    })
+    const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+    const paths = container.querySelectorAll('path')
+    const parentX = getLaneCenterX(0)
+
+    // Should have a full vertical from 0 to ROW_HEIGHT
+    const verticalPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d === `M ${parentX} 0 L ${parentX} ${ROW_HEIGHT}`
+    })
+    expect(verticalPath).toBeDefined()
+
+    // Should have a curved branch arc
+    const branchPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d.includes('A') && d.startsWith(`M ${parentX}`)
+    })
+    expect(branchPath).toBeDefined()
+  })
+
+  it('last parallel child vertical stops at junction height', () => {
+    const line = createMockLine({
+      lane: 1,
+      parentLane: 0,
+      isFirstChild: false,
+      isLastChild: true,
+      isSeriesChild: false,
+    })
+    const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+    const paths = container.querySelectorAll('path')
+    const parentX = getLaneCenterX(0)
+    const cy = ROW_HEIGHT / 2
+
+    // Vertical should stop at cy, not extend to ROW_HEIGHT
+    const verticalPath = Array.from(paths).find((p) => {
+      const d = p.getAttribute('d') ?? ''
+      return d === `M ${parentX} 0 L ${parentX} ${cy}`
+    })
+    expect(verticalPath).toBeDefined()
+  })
+
+  it('series connector goes from parent node rightward then arcs down', () => {
     const line = createMockLine({
       lane: 2,
       seriesConnectorFromLane: 1,
@@ -508,17 +570,24 @@ describe('connector directions', () => {
     })
     const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={3} />)
 
+    const cx = getLaneCenterX(2)
+    const childLaneX = getLaneCenterX(1)
+    const cy = ROW_HEIGHT / 2
+    const R = 6
+
     const paths = container.querySelectorAll('path')
     const seriesPath = Array.from(paths).find((p) => {
       const d = p.getAttribute('d') ?? ''
-      return d.includes(`${getLaneCenterX(1)}`) && d.includes('A')
+      return d.includes(`${childLaneX}`) && d.includes('A')
     })
 
     expect(seriesPath).toBeDefined()
     const d = seriesPath!.getAttribute('d')!
-    // Should start from ROW_HEIGHT (bottom of row)
-    expect(d).toMatch(new RegExp(`^M ${getLaneCenterX(1)} ${ROW_HEIGHT}`))
-    // Should use sweep flag 0 0 1
+    // Should start from parent node right edge
+    expect(d).toMatch(new RegExp(`^M ${cx + R + 2} ${cy}`))
+    // Should arc clockwise (0 0 1)
     expect(d).toContain('0 0 1')
+    // Should end at ROW_HEIGHT
+    expect(d).toMatch(new RegExp(`L ${childLaneX} ${ROW_HEIGHT}$`))
   })
 })

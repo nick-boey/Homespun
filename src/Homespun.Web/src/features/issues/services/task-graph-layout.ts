@@ -58,6 +58,10 @@ export interface TaskGraphIssueRenderLine {
   parentIssues: Array<{ parentIssue?: string | null; sortOrder?: string | null }> | null
   multiParentIndex: number | null
   multiParentTotal: number | null
+  isLastChild: boolean
+  hasParallelChildren: boolean
+  parentIssueId: string | null
+  parentLaneReservations: Array<{ lane: number; issueType: IssueTypeEnum }>
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -185,6 +189,50 @@ export function computeLayout(
         const idx = mpIdx.get(id) ?? 0
         mpIdx.set(id, idx + 1)
         result[i] = { ...line, multiParentIndex: idx, multiParentTotal: total }
+      }
+    }
+  }
+
+  // Post-process: compute parentLaneReservations for parallel parent children
+  // For each parallel parent, find its children's index range and add reservation lines
+  const parallelParents = new Map<string, { lane: number; issueType: IssueTypeEnum }>()
+  for (const line of result) {
+    if (isIssueRenderLine(line) && line.hasParallelChildren) {
+      parallelParents.set(line.issueId.toLowerCase(), {
+        lane: line.lane,
+        issueType: line.issueType,
+      })
+    }
+  }
+  if (parallelParents.size > 0) {
+    // Find first and last child indices for each parallel parent
+    const childRanges = new Map<string, { firstIdx: number; lastIdx: number }>()
+    for (let i = 0; i < result.length; i++) {
+      const line = result[i]
+      if (!isIssueRenderLine(line) || !line.parentIssueId) continue
+      const pid = line.parentIssueId.toLowerCase()
+      if (!parallelParents.has(pid)) continue
+      const range = childRanges.get(pid)
+      if (!range) {
+        childRanges.set(pid, { firstIdx: i, lastIdx: i })
+      } else {
+        range.lastIdx = i
+      }
+    }
+    // Add reservations to all rows between first and last child (inclusive)
+    for (const [pid, range] of childRanges) {
+      const parent = parallelParents.get(pid)!
+      for (let i = range.firstIdx; i <= range.lastIdx; i++) {
+        const line = result[i]
+        if (isIssueRenderLine(line)) {
+          result[i] = {
+            ...line,
+            parentLaneReservations: [
+              ...line.parentLaneReservations,
+              { lane: parent.lane, issueType: parent.issueType },
+            ],
+          }
+        }
       }
     }
   }
@@ -507,11 +555,13 @@ function renderGroupTreeView(
     const parentLane = treeNode.parentLane
 
     let isFirstChild = false
+    let isLastChild = false
     if (parentNode?.issue?.id && parentLane !== null && parentLane < lane) {
       const parentId = parentNode.issue.id.toLowerCase()
       const count = (childrenRendered.get(parentId) ?? 0) + 1
       childrenRendered.set(parentId, count)
       isFirstChild = count === 1
+      isLastChild = count === (childrenCountByParent.get(parentId) ?? 0)
     }
 
     // Determine if this is a series child
@@ -524,6 +574,10 @@ function renderGroupTreeView(
 
     if (isSeriesChild && parentNode?.issue?.id) {
       // For series children, connect vertically
+      // First series child connects to parent above
+      if (isFirstChild) {
+        drawTopLine = true
+      }
       // Check if there's a sibling series child above
       if (i > 0) {
         const prevTreeNode = treeViewNodes[i - 1]
@@ -581,6 +635,12 @@ function renderGroupTreeView(
     // Generate branch name
     const branchName = generateBranchName(node.issue)
 
+    // Compute hasParallelChildren
+    const childCount = childrenCountByParent.get(nodeId) ?? 0
+    const hasParallelChildren =
+      childCount > 0 &&
+      (node.issue.executionMode ?? ExecutionMode.SERIES) === ExecutionMode.PARALLEL
+
     result.push({
       type: 'issue',
       issueId: node.issue.id,
@@ -591,6 +651,7 @@ function renderGroupTreeView(
       marker,
       parentLane,
       isFirstChild,
+      isLastChild,
       isSeriesChild,
       drawTopLine,
       drawBottomLine,
@@ -611,6 +672,9 @@ function renderGroupTreeView(
       parentIssues: node.issue.parentIssues ?? null,
       multiParentIndex: null,
       multiParentTotal: null,
+      hasParallelChildren,
+      parentIssueId: parentNode?.issue?.id ?? null,
+      parentLaneReservations: [],
     })
   }
 }

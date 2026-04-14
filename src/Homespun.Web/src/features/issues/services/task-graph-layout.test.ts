@@ -72,6 +72,10 @@ describe('computeLayout', () => {
         parentIssues: null,
         multiParentIndex: null,
         multiParentTotal: null,
+        isLastChild: false,
+        hasParallelChildren: false,
+        parentIssueId: null,
+        parentLaneReservations: [],
       }
       expect(isIssueRenderLine(line)).toBe(true)
       expect(isPrRenderLine(line)).toBe(false)
@@ -1336,6 +1340,10 @@ describe('getRenderKey', () => {
       parentIssues: null,
       multiParentIndex: null,
       multiParentTotal: null,
+      isLastChild: false,
+      hasParallelChildren: false,
+      parentIssueId: null,
+      parentLaneReservations: [],
     }
     expect(getRenderKey(line)).toBe('abc123')
   })
@@ -1371,6 +1379,10 @@ describe('getRenderKey', () => {
       parentIssues: null,
       multiParentIndex: 0,
       multiParentTotal: 3,
+      isLastChild: false,
+      hasParallelChildren: false,
+      parentIssueId: null,
+      parentLaneReservations: [],
     }
     expect(getRenderKey(line)).toBe('abc123:0')
   })
@@ -1405,6 +1417,10 @@ describe('getRenderKey', () => {
       executionMode: ExecutionMode.SERIES,
       parentIssues: null,
       multiParentTotal: 2,
+      isLastChild: false,
+      hasParallelChildren: false,
+      parentIssueId: null,
+      parentLaneReservations: [],
     }
     const line0: TaskGraphIssueRenderLine = { ...base, multiParentIndex: 0 }
     const line1: TaskGraphIssueRenderLine = { ...base, multiParentIndex: 1 }

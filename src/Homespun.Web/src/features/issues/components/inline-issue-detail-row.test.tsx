@@ -40,6 +40,10 @@ function createRenderLine(
     parentIssues: null,
     multiParentIndex: null,
     multiParentTotal: null,
+    isLastChild: false,
+    hasParallelChildren: false,
+    parentIssueId: null,
+    parentLaneReservations: [],
     ...overrides,
   }
 }
