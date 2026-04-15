@@ -74,10 +74,6 @@ public class BaseBranchResolutionTests
         // Arrange
         var request = CreateTestRequest();
 
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
-
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Issue?)null);
@@ -100,10 +96,6 @@ public class BaseBranchResolutionTests
         // Arrange
         var request = CreateTestRequest();
         var priorSibling = CreateIssue("prior123", "Prior Issue", IssueStatus.Review);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
 
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
@@ -137,10 +129,6 @@ public class BaseBranchResolutionTests
         // Prior sibling is complete (its PR was merged), so the PR has been removed from local tracking
         var priorSibling = CreateIssue("prior123", "Prior Issue", IssueStatus.Complete);
 
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
-
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(priorSibling);
@@ -165,10 +153,6 @@ public class BaseBranchResolutionTests
         var request = CreateTestRequest();
         var priorSibling = CreateIssue("prior123", "Prior Issue", IssueStatus.Progress);
 
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
-
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(priorSibling);
@@ -187,71 +171,6 @@ public class BaseBranchResolutionTests
 
     #endregion
 
-    #region Blocking Issues Tests
-
-    [Test]
-    public async Task ResolveBaseBranchAsync_IssueWithOpenChildren_ReturnsError()
-    {
-        // Arrange
-        var request = CreateTestRequest();
-        var openChild = CreateIssue("child123", "Child Issue", IssueStatus.Open);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([openChild], []));
-
-        // Act
-        var result = await _resolver.ResolveBaseBranchAsync(request);
-
-        // Assert
-        Assert.That(result.BaseBranch, Is.Null);
-        Assert.That(result.Error, Does.Contain("blocked by open issues"));
-        Assert.That(result.Error, Does.Contain("child123"));
-    }
-
-    [Test]
-    public async Task ResolveBaseBranchAsync_IssueWithOpenPriorSiblings_ReturnsError()
-    {
-        // Arrange
-        var request = CreateTestRequest();
-        var openPriorSibling = CreateIssue("sibling123", "Sibling Issue", IssueStatus.Progress);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], [openPriorSibling]));
-
-        // Act
-        var result = await _resolver.ResolveBaseBranchAsync(request);
-
-        // Assert
-        Assert.That(result.BaseBranch, Is.Null);
-        Assert.That(result.Error, Does.Contain("blocked by open issues"));
-        Assert.That(result.Error, Does.Contain("sibling123"));
-    }
-
-    [Test]
-    public async Task ResolveBaseBranchAsync_IssueWithMultipleBlockingIssues_ListsAllInError()
-    {
-        // Arrange
-        var request = CreateTestRequest();
-        var openChild = CreateIssue("child123", "Child Issue", IssueStatus.Open);
-        var openSibling = CreateIssue("sibling123", "Sibling Issue", IssueStatus.Progress);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([openChild], [openSibling]));
-
-        // Act
-        var result = await _resolver.ResolveBaseBranchAsync(request);
-
-        // Assert
-        Assert.That(result.BaseBranch, Is.Null);
-        Assert.That(result.Error, Does.Contain("child123"));
-        Assert.That(result.Error, Does.Contain("sibling123"));
-    }
-
-    #endregion
-
     #region Explicit BaseBranch Tests
 
     [Test]
@@ -259,10 +178,6 @@ public class BaseBranchResolutionTests
     {
         // Arrange
         var request = CreateTestRequest(baseBranch: "feature/custom-base");
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
 
         // Act
         var result = await _resolver.ResolveBaseBranchAsync(request);
@@ -276,25 +191,6 @@ public class BaseBranchResolutionTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Test]
-    public async Task ResolveBaseBranchAsync_ExplicitBaseBranch_StillChecksBlockingIssues()
-    {
-        // Arrange
-        var request = CreateTestRequest(baseBranch: "feature/custom-base");
-        var openChild = CreateIssue("child123", "Child Issue", IssueStatus.Open);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([openChild], []));
-
-        // Act
-        var result = await _resolver.ResolveBaseBranchAsync(request);
-
-        // Assert - Even with explicit base branch, blocking issues should block
-        Assert.That(result.BaseBranch, Is.Null);
-        Assert.That(result.Error, Does.Contain("blocked by open issues"));
-    }
-
     #endregion
 
     #region Prior Sibling with Open PR but InDevelopment Status Tests
@@ -305,10 +201,6 @@ public class BaseBranchResolutionTests
         // Arrange
         var request = CreateTestRequest();
         var priorSibling = CreateIssue("prior123", "Prior Issue", IssueStatus.Progress);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
 
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
@@ -340,10 +232,6 @@ public class BaseBranchResolutionTests
         // Arrange
         var request = CreateTestRequest();
         var priorSibling = CreateIssue("prior123", "Prior Issue", IssueStatus.Review);
-
-        _mockFleeceService.Setup(x => x.GetBlockingIssuesAsync(
-                request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BlockingIssuesResult([], []));
 
         _mockFleeceService.Setup(x => x.GetPriorSiblingAsync(
                 request.ProjectLocalPath, request.IssueId, It.IsAny<CancellationToken>()))

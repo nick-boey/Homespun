@@ -206,40 +206,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             .ToList();
     }
 
-    public async Task<BlockingIssuesResult> GetBlockingIssuesAsync(string projectPath, string issueId, CancellationToken ct = default)
-    {
-        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-        if (!cache.TryGetValue(issueId, out var issue)) return new BlockingIssuesResult([], []);
-
-        bool IsOpenStatus(IssueStatus s) => s is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
-
-        var children = await GetChildrenAsync(projectPath, issueId, ct);
-        var openChildren = children.Where(c => IsOpenStatus(c.Status)).ToList();
-        var openPriorSiblings = new List<Issue>();
-
-        foreach (var parentRef in issue.ParentIssues)
-        {
-            var parentId = parentRef.ParentIssue;
-            if (cache.TryGetValue(parentId, out var parentIssue) && parentIssue.ExecutionMode == ExecutionMode.Parallel)
-                continue;
-
-            var targetSortOrder = parentRef.SortOrder ?? "0";
-            var priorSiblings = cache.Values
-                .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
-                .Where(i =>
-                {
-                    var sibSortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0";
-                    return string.Compare(sibSortOrder, targetSortOrder, StringComparison.Ordinal) < 0;
-                })
-                .Where(i => IsOpenStatus(i.Status))
-                .ToList();
-            openPriorSiblings.AddRange(priorSiblings);
-        }
-
-        openPriorSiblings = openPriorSiblings.DistinctBy(i => i.Id).ToList();
-        return new BlockingIssuesResult(openChildren, openPriorSiblings);
-    }
-
     #endregion
 
     #region Write Operations
