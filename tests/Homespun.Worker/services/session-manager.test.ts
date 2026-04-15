@@ -1,10 +1,7 @@
-import { vi, type Mock } from 'vitest';
+import { vi } from 'vitest';
 import { createMockQuery, createBlockingMockQuery, setMockQueryMessages, type MockQuery } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage, createSystemMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
-
-// Track the canUseTool callback that gets passed to query()
-let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<any>) | undefined;
 
 // Use vi.hoisted to ensure variables are available during vi.mock factory execution
 const { mockQuery, mockRandomUUID, getMockQuery, setMockQuery, getCapturedCanUseTool, setCapturedCanUseTool } = vi.hoisted(() => {
@@ -12,7 +9,6 @@ const { mockQuery, mockRandomUUID, getMockQuery, setMockQuery, getCapturedCanUse
   let _capturedCanUseTool: any = undefined;
   return {
     mockQuery: vi.fn((...args: any[]) => {
-      // Capture the canUseTool callback from options
       const options = args[0]?.options;
       if (options?.canUseTool) {
         _capturedCanUseTool = options.canUseTool;
@@ -110,7 +106,7 @@ describe('SessionManager', () => {
       expect(opts.permissionMode).toBe('plan');
       expect(opts.allowedTools).toEqual([
         'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
-        'Task', 'AskUserQuestion', 'ExitPlanMode',
+        'Task', 'AskUserQuestion', 'ExitPlanMode', 'Skill',
       ]);
     });
 
@@ -121,6 +117,41 @@ describe('SessionManager', () => {
       const opts = args.options as Record<string, unknown>;
       expect(opts.permissionMode).toBe('bypassPermissions');
       expect(opts.allowDangerouslySkipPermissions).toBe(true);
+    });
+
+    it('includes "Skill" in allowedTools for build mode so Agent Skills are enabled', async () => {
+      await manager.create({ ...baseOpts, mode: 'Build' });
+
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
+      expect(opts.allowedTools).toContain('Skill');
+    });
+
+    it('build mode allowedTools is a superset of plan mode allowedTools', async () => {
+      // Build mode bypasses permissions via allowDangerouslySkipPermissions +
+      // canUseTool, but it should still expose at least everything plan mode
+      // exposes so the model has consistent tool visibility across modes.
+      await manager.create(baseOpts);
+      const planOpts = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const planAllowed = (planOpts.options as { allowedTools: string[] }).allowedTools;
+
+      mockQuery.mockClear();
+      mockRandomUUID.mockReturnValueOnce('build-session-id');
+      await manager.create({ ...baseOpts, mode: 'Build' });
+      const buildOpts = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const buildAllowed = (buildOpts.options as { allowedTools: string[] }).allowedTools;
+
+      for (const tool of planAllowed) {
+        expect(buildAllowed).toContain(tool);
+      }
+    });
+
+    it('includes "Skill" in allowedTools for plan mode so Agent Skills are enabled', async () => {
+      await manager.create(baseOpts);
+
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
+      expect(opts.allowedTools).toContain('Skill');
     });
 
     it('passes resume option when resumeSessionId is provided', async () => {
@@ -227,9 +258,9 @@ describe('SessionManager', () => {
 
   describe('send()', () => {
     it('updates lastActivityAt', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       const beforeActivity = ws.lastActivityAt;
-      mockQuery.mockClear(); // Clear the create() call
 
       await new Promise((r) => setTimeout(r, 5));
 
@@ -239,6 +270,7 @@ describe('SessionManager', () => {
     });
 
     it('sets status to streaming', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       ws.status = 'idle';
 
@@ -248,6 +280,7 @@ describe('SessionManager', () => {
     });
 
     it('updates permissionMode when provided', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
       expect(ws.permissionMode).toBe('plan');
 
@@ -257,6 +290,7 @@ describe('SessionManager', () => {
     });
 
     it('preserves permissionMode when not provided', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       expect(ws.permissionMode).toBe('bypassPermissions');
 
@@ -271,71 +305,91 @@ describe('SessionManager', () => {
       );
     });
 
-    it('creates new query with resume when resultReceived is true', async () => {
+    // Task 3.2: send() after a `result` message delivers the new user message
+    // via q.streamInput() and does NOT call query() a second time.
+    it('task 3.2: delivers follow-up via streamInput without restarting query', async () => {
+      setMockQueryMessages(mockQueryObj, [createResultMessage()]);
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+
+      // Drain the first query so a result is observed (forwarder finishes).
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      const streamInputMock = vi.fn().mockResolvedValue(undefined);
+      (ws.query as any).streamInput = streamInputMock;
       mockQuery.mockClear();
 
-      // Simulate that a result was received and conversationId was captured
-      ws.resultReceived = true;
-      ws.conversationId = 'conv-123';
+      await manager.send(ws.id, 'follow up');
 
-      // Set up a blocking mock query so the forwarder doesn't complete before assertions
-      setMockQuery(createBlockingMockQuery());
-
-      await manager.send(ws.id, 'follow up message');
-
-      // Should have called query() again with resume option
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = args.options as Record<string, unknown>;
-      expect(opts.resume).toBe('conv-123');
-
-      // resultReceived should be reset
-      expect(ws.resultReceived).toBe(false);
-      expect(ws.status).toBe('streaming');
-    });
-
-    it('throws when resultReceived but no conversationId', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
-      ws.resultReceived = true;
-      ws.conversationId = undefined;
-
-      await expect(manager.send(ws.id, 'msg')).rejects.toThrow(
-        'Cannot resume session',
-      );
-    });
-
-    it('uses inputController when resultReceived is false', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
-      mockQuery.mockClear();
-
-      // resultReceived defaults to false
-      expect(ws.resultReceived).toBe(false);
-
-      await manager.send(ws.id, 'msg');
-
-      // Should NOT create a new query
       expect(mockQuery).not.toHaveBeenCalled();
+      expect(streamInputMock).toHaveBeenCalledOnce();
+      const [streamArg] = streamInputMock.mock.calls[0];
+      expect(typeof streamArg[Symbol.asyncIterator]).toBe('function');
+
+      const collected: any[] = [];
+      for await (const msg of streamArg) collected.push(msg);
+      expect(collected).toHaveLength(1);
+      expect(collected[0]).toMatchObject({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'follow up' }],
+        },
+      });
+    });
+  });
+
+  // Task 3.3: setMode() calls q.setPermissionMode() after a prior `result`.
+  describe('setMode() after result', () => {
+    it('task 3.3: setMode applies setPermissionMode to the live query', async () => {
+      setMockQueryMessages(mockQueryObj, [createResultMessage()]);
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
+
+      // Drain so that from a client's perspective a result has been received.
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      const setPermissionModeMock = vi.fn().mockResolvedValue(undefined);
+      (ws.query as any).setPermissionMode = setPermissionModeMock;
+
+      const ok = await manager.setMode(ws.id, 'Build');
+      expect(ok).toBe(true);
+      expect(setPermissionModeMock).toHaveBeenCalledWith('bypassPermissions');
+      expect(ws.permissionMode).toBe('bypassPermissions');
+      expect(ws.mode).toBe('Build');
+    });
+  });
+
+  // Task 3.4: setModel() updates the session model and is callable after a prior result.
+  describe('setModel() after result', () => {
+    it('task 3.4: setModel updates model and calls q.setModel', async () => {
+      setMockQueryMessages(mockQueryObj, [createResultMessage()]);
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      const setModelMock = vi.fn().mockResolvedValue(undefined);
+      (ws.query as any).setModel = setModelMock;
+
+      const ok = await manager.setModel(ws.id, 'opus');
+      expect(ok).toBe(true);
+      expect(setModelMock).toHaveBeenCalledWith('opus');
+      expect(ws.model).toBe('opus');
     });
   });
 
   describe('runQueryForwarder()', () => {
-    it('sets resultReceived and transitions to idle on result message', async () => {
+    it('transitions to idle on query completion', async () => {
       setMockQueryMessages(mockQueryObj, [
         createAssistantMessage(),
         createResultMessage(),
       ]);
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
-      // Drain the output channel via stream()
       await collectAsyncGenerator(manager.stream(ws.id));
 
-      expect(ws.resultReceived).toBe(true);
       expect(ws.status).toBe('idle');
     });
 
     it('sets status to error on genuine error before result', async () => {
-      // Create a mock query that throws an error
       const errorQuery = createMockQuery();
       (errorQuery as any)[Symbol.asyncIterator] = async function* () {
         throw new Error('SDK crashed');
@@ -344,32 +398,11 @@ describe('SessionManager', () => {
 
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
-      // Drain the output channel via stream()
       const messages = await collectAsyncGenerator(manager.stream(ws.id));
 
       expect(ws.status).toBe('error');
-      // Should push a synthetic error result
       const errorResult = messages.find((m: any) => m.type === 'result' && m.is_error);
       expect(errorResult).toBeDefined();
-    });
-
-    it('sets status to idle on error after result (post-result exit)', async () => {
-      // Create a mock query that yields a result then throws
-      const postResultQuery = createMockQuery();
-      (postResultQuery as any)[Symbol.asyncIterator] = async function* () {
-        yield createResultMessage();
-        throw new Error('Claude Code process exited with code 1');
-      };
-      setMockQuery(postResultQuery);
-
-      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
-
-      // Drain the output channel via stream()
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      // Should be idle, not error — the result was already received
-      expect(ws.status).toBe('idle');
-      expect(ws.resultReceived).toBe(true);
     });
   });
 
@@ -409,8 +442,9 @@ describe('SessionManager', () => {
     });
   });
 
-  describe('canUseTool callback', () => {
-    it('allows non-AskUserQuestion tools immediately', async () => {
+  describe('canUseTool callback dispatch', () => {
+    it('allows non-special tools immediately', async () => {
+      setMockQuery(createBlockingMockQuery());
       await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       const canUseTool = getCapturedCanUseTool();
@@ -424,13 +458,14 @@ describe('SessionManager', () => {
       });
     });
 
-    it('pauses on AskUserQuestion and resumes when resolved', async () => {
+    // Task 3.5: canUseTool("AskUserQuestion", ...) emits question_pending
+    // and awaits resolvePending(id, "question", { answers }).
+    it('task 3.5: AskUserQuestion emits question_pending and awaits resolvePending', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
-      expect(canUseTool).toBeDefined();
 
-      // Start the canUseTool call (it will wait)
       const questionInput = {
         questions: [
           {
@@ -447,14 +482,22 @@ describe('SessionManager', () => {
 
       const resultPromise = canUseTool('AskUserQuestion', questionInput);
 
-      // Verify there's a pending question
-      expect(manager.hasPendingQuestion(ws.id)).toBe(true);
+      expect(manager.hasPending(ws.id, 'question')).toBe(true);
 
-      // Resolve the question
-      const resolved = manager.resolvePendingQuestion(ws.id, { 'Which framework?': 'React' });
+      // Verify the question_pending control event was pushed to the channel.
+      let sawQuestionPending = false;
+      const streamGen = manager.stream(ws.id);
+      const firstEvent = await streamGen.next();
+      if (!firstEvent.done && (firstEvent.value as any).type === 'question_pending') {
+        sawQuestionPending = true;
+      }
+      expect(sawQuestionPending).toBe(true);
+
+      const resolved = manager.resolvePending(ws.id, 'question', {
+        answers: { 'Which framework?': 'React' },
+      });
       expect(resolved).toBe(true);
 
-      // Check the result
       const result = await resultPromise;
       expect(result).toEqual({
         behavior: 'allow',
@@ -464,11 +507,15 @@ describe('SessionManager', () => {
         },
       });
 
-      // Pending question should be cleared
-      expect(manager.hasPendingQuestion(ws.id)).toBe(false);
+      expect(manager.hasPending(ws.id, 'question')).toBe(false);
+      // Silence the still-open async iterator.
+      await streamGen.return(undefined);
     });
 
-    it('pauses on ExitPlanMode and resumes when approved with keepContext', async () => {
+    // Task 3.6: canUseTool("ExitPlanMode", ...) emits plan_pending and resolves
+    // via resolvePending(id, "plan", { approved, keepContext, feedback }).
+    it('task 3.6: ExitPlanMode emits plan_pending and resolves via resolvePending', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
@@ -476,33 +523,30 @@ describe('SessionManager', () => {
 
       const resultPromise = canUseTool('ExitPlanMode', planInput);
 
-      // Verify there's a pending approval
-      expect(manager.hasPendingPlanApproval(ws.id)).toBe(true);
+      expect(manager.hasPending(ws.id, 'plan')).toBe(true);
 
-      // Approve the plan with keepContext=true
-      const resolved = manager.resolvePendingPlanApproval(ws.id, true, true);
+      const resolved = manager.resolvePending(ws.id, 'plan', {
+        approved: true,
+        keepContext: true,
+      });
       expect(resolved).toBe(true);
 
-      // Check the result
       const result = await resultPromise;
       expect(result).toEqual({
         behavior: 'allow',
         updatedInput: { plan: planInput.plan },
       });
 
-      expect(manager.hasPendingPlanApproval(ws.id)).toBe(false);
+      expect(manager.hasPending(ws.id, 'plan')).toBe(false);
     });
 
-    it('denies ExitPlanMode when approved without keepContext', async () => {
+    it('resolvePending(plan, approved without keepContext) denies with interrupt message', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
-
       const canUseTool = getCapturedCanUseTool();
-      const planInput = { plan: 'The plan content' };
 
-      const resultPromise = canUseTool('ExitPlanMode', planInput);
-
-      // Approve the plan without keepContext (interrupts to start fresh session)
-      manager.resolvePendingPlanApproval(ws.id, true);
+      const resultPromise = canUseTool('ExitPlanMode', { plan: 'x' });
+      manager.resolvePending(ws.id, 'plan', { approved: true });
 
       const result = await resultPromise;
       expect(result).toEqual({
@@ -511,42 +555,137 @@ describe('SessionManager', () => {
       });
     });
 
-    it('denies ExitPlanMode when rejected', async () => {
+    it('resolvePending(plan, rejected) denies with rejection message', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
-
       const canUseTool = getCapturedCanUseTool();
-      const planInput = { plan: 'The plan content' };
 
-      const resultPromise = canUseTool('ExitPlanMode', planInput);
+      const resultPromise = canUseTool('ExitPlanMode', { plan: 'x' });
+      manager.resolvePending(ws.id, 'plan', { approved: false });
 
-      // Reject the plan
-      manager.resolvePendingPlanApproval(ws.id, false);
-
-      // Check the result
       const result = await resultPromise;
       expect(result).toEqual({
         behavior: 'deny',
         message: 'User rejected the plan. Please revise.',
       });
     });
+
+    // Task 3.7: canUseTool("WorkflowComplete", ...) with workflow context
+    // emits workflow_complete and returns allow; without returns deny.
+    it('task 3.7: WorkflowComplete with context emits and allows; without denies', async () => {
+      setMockQuery(createBlockingMockQuery());
+      const ws = await manager.create({
+        prompt: 'init',
+        model: 'sonnet',
+        mode: 'Build',
+        workflowContext: { stepId: 'step-1', executionId: 'exec-1', nodeType: 'agent' } as any,
+      });
+      const canUseTool = getCapturedCanUseTool();
+
+      const completionInput = {
+        status: 'success',
+        outputs: { result: 'ok' },
+        summary: 'Done',
+      };
+
+      const allowedResult = await canUseTool('WorkflowComplete', completionInput);
+      expect(allowedResult).toEqual({
+        behavior: 'allow',
+        updatedInput: completionInput,
+      });
+
+      await manager.close(ws.id);
+
+      // Fresh session without workflow context
+      setMockQuery(createBlockingMockQuery());
+      mockRandomUUID.mockReturnValue('session-no-wc');
+      await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      const canUseTool2 = getCapturedCanUseTool();
+
+      const deniedResult = await canUseTool2('WorkflowComplete', completionInput);
+      expect(deniedResult).toMatchObject({
+        behavior: 'deny',
+      });
+    });
+
+    // Task 3.8: canUseTool("workflow_signal", ...) with workflow context emits
+    // and allows; without returns deny.
+    it('task 3.8: workflow_signal with context emits and allows; without denies', async () => {
+      setMockQuery(createBlockingMockQuery());
+      const ws = await manager.create({
+        prompt: 'init',
+        model: 'sonnet',
+        mode: 'Build',
+        workflowContext: { stepId: 'step-1', executionId: 'exec-1', nodeType: 'agent' } as any,
+      });
+      const canUseTool = getCapturedCanUseTool();
+
+      const signalInput = { status: 'success' };
+
+      const allowedResult = await canUseTool('workflow_signal', signalInput);
+      expect(allowedResult).toEqual({
+        behavior: 'allow',
+        updatedInput: signalInput,
+      });
+
+      await manager.close(ws.id);
+
+      setMockQuery(createBlockingMockQuery());
+      mockRandomUUID.mockReturnValue('session-no-wc-2');
+      await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      const canUseTool2 = getCapturedCanUseTool();
+
+      const deniedResult = await canUseTool2('workflow_signal', signalInput);
+      expect(deniedResult).toMatchObject({
+        behavior: 'deny',
+      });
+    });
   });
 
-  describe('resolvePendingQuestion()', () => {
-    it('returns false when no pending question exists', () => {
-      const result = manager.resolvePendingQuestion('non-existent', { Q: 'A' });
+  describe('resolvePending()', () => {
+    it('returns false when no pending interaction exists (question)', () => {
+      const result = manager.resolvePending('non-existent', 'question', { answers: {} });
+      expect(result).toBe(false);
+    });
+
+    it('returns false when no pending interaction exists (plan)', () => {
+      const result = manager.resolvePending('non-existent', 'plan', { approved: true });
       expect(result).toBe(false);
     });
   });
 
-  describe('resolvePendingPlanApproval()', () => {
-    it('returns false when no pending approval exists', () => {
-      const result = manager.resolvePendingPlanApproval('non-existent', true);
-      expect(result).toBe(false);
+  describe('hasPending() / getPendingData()', () => {
+    it('returns false / undefined before registration', async () => {
+      setMockQuery(createBlockingMockQuery());
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
+
+      expect(manager.hasPending(ws.id, 'question')).toBe(false);
+      expect(manager.hasPending(ws.id, 'plan')).toBe(false);
+      expect(manager.getPendingData(ws.id, 'question')).toBeUndefined();
+      expect(manager.getPendingData(ws.id, 'plan')).toBeUndefined();
+    });
+
+    it('exposes captured data while a pending interaction is outstanding', async () => {
+      setMockQuery(createBlockingMockQuery());
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
+      const canUseTool = getCapturedCanUseTool();
+
+      const questionInput = {
+        questions: [{ question: 'Q?', header: 'Q', options: [], multiSelect: false }],
+      };
+      const promise = canUseTool('AskUserQuestion', questionInput);
+
+      const data = manager.getPendingData<{ questions: unknown[] }>(ws.id, 'question');
+      expect(data?.questions).toEqual(questionInput.questions);
+
+      manager.resolvePending(ws.id, 'question', { answers: {} });
+      await promise;
     });
   });
 
   describe('close()', () => {
     it('removes session from map and sets status to closed', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       await manager.close(ws.id);
@@ -555,21 +694,24 @@ describe('SessionManager', () => {
       expect(manager.get(ws.id)).toBeUndefined();
     });
 
-    it('rejects pending questions when session is closed', async () => {
+    // Task 3.9: close() rejects any outstanding pending interactions for the session.
+    it('task 3.9: rejects outstanding pending interactions on close', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
-
       const canUseTool = getCapturedCanUseTool();
-      const questionInput = {
+
+      const questionPromise = canUseTool('AskUserQuestion', {
         questions: [{ question: 'Test?', header: 'Test', options: [], multiSelect: false }],
-      };
+      });
+      const planPromise = canUseTool('ExitPlanMode', { plan: 'x' });
 
-      const resultPromise = canUseTool('AskUserQuestion', questionInput);
+      expect(manager.hasPending(ws.id, 'question')).toBe(true);
+      expect(manager.hasPending(ws.id, 'plan')).toBe(true);
 
-      // Close the session while question is pending
       await manager.close(ws.id);
 
-      // The promise should be rejected
-      await expect(resultPromise).rejects.toThrow('Session closed');
+      await expect(questionPromise).rejects.toThrow('Session closed');
+      await expect(planPromise).rejects.toThrow('Session closed');
     });
 
     it('does not throw for non-existent session', async () => {

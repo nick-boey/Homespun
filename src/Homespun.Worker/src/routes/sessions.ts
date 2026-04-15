@@ -42,8 +42,8 @@ export function createSessionsRoute(sessionManager: SessionManager) {
       mode: active.mode,
       model: active.model,
       permissionMode: active.permissionMode,
-      hasPendingQuestion: sessionManager.hasPendingQuestion(active.sessionId),
-      hasPendingPlanApproval: sessionManager.hasPendingPlanApproval(active.sessionId),
+      hasPendingQuestion: sessionManager.hasPending(active.sessionId, 'question'),
+      hasPendingPlanApproval: sessionManager.hasPending(active.sessionId, 'plan'),
       lastActivityAt: active.lastActivityAt,
       lastMessageType: active.lastMessageType,
       lastMessageSubtype: active.lastMessageSubtype,
@@ -122,7 +122,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     const body = await c.req.json<AnswerQuestionRequest>();
     info(`POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
 
-    const resolved = sessionManager.resolvePendingQuestion(sessionId, body.answers);
+    const resolved = sessionManager.resolvePending(sessionId, 'question', { answers: body.answers });
     if (!resolved) {
       return c.json({ ok: false, error: 'No pending question' }, 400);
     }
@@ -137,8 +137,11 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     const body = await c.req.json<ApprovePlanRequest>();
     info(`POST /sessions/${sessionId}/approve-plan - approved=${body.approved}, keepContext=${body.keepContext}`);
 
-    const resolved = sessionManager.resolvePendingPlanApproval(
-      sessionId, body.approved, body.keepContext, body.feedback);
+    const resolved = sessionManager.resolvePending(sessionId, 'plan', {
+      approved: body.approved,
+      keepContext: body.keepContext,
+      feedback: body.feedback,
+    });
     if (!resolved) {
       return c.json({ ok: false, error: 'No pending plan approval' }, 400);
     }
@@ -264,38 +267,6 @@ export function createSessionsRoute(sessionManager: SessionManager) {
           isRecoverable: false,
         }));
       }
-    });
-  });
-
-  // GET /sessions/:id/messages - Get message history for catch-up replay
-  // Query params:
-  //   since: ISO timestamp to get messages after (optional)
-  sessions.get('/:id/messages', (c) => {
-    const sessionId = c.req.param('id');
-    const sinceParam = c.req.query('since');
-
-    const ws = sessionManager.get(sessionId);
-    if (!ws) {
-      return c.json({ message: `Session ${sessionId} not found` }, 404);
-    }
-
-    let since: Date | undefined;
-    if (sinceParam) {
-      const parsed = new Date(sinceParam);
-      if (!isNaN(parsed.getTime())) {
-        since = parsed;
-      }
-    }
-
-    const history = sessionManager.getMessageHistory(sessionId, since);
-    info(`GET /sessions/${sessionId}/messages - since=${sinceParam || 'all'}, count=${history.length}`);
-
-    return c.json({
-      sessionId,
-      messages: history.map(entry => ({
-        timestamp: entry.timestamp.toISOString(),
-        event: entry.event,
-      })),
     });
   });
 

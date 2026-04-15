@@ -18,6 +18,8 @@ export function createMockQuery(messages: SDKMessage[] = []): MockQuery {
     supportedModels: vi.fn().mockResolvedValue([]),
     mcpServerStatus: vi.fn().mockResolvedValue([]),
     accountInfo: vi.fn().mockResolvedValue({}),
+    streamInput: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn(),
     _messages: messages,
     _iterator: null as any,
   };
