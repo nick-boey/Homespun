@@ -13,10 +13,11 @@ export function createMockSessionManager(): MockSessionManager {
     get: vi.fn(),
     list: vi.fn().mockReturnValue([]),
     closeAll: vi.fn().mockResolvedValue(undefined),
-    resolvePendingQuestion: vi.fn().mockReturnValue(true),
-    resolvePendingPlanApproval: vi.fn().mockReturnValue(true),
-    hasPendingQuestion: vi.fn().mockReturnValue(false),
-    hasPendingPlanApproval: vi.fn().mockReturnValue(false),
-    getPendingQuestions: vi.fn().mockReturnValue(undefined),
+    resolvePending: vi.fn().mockReturnValue(true),
+    hasPending: vi.fn().mockReturnValue(false),
+    getPendingData: vi.fn().mockReturnValue(undefined),
+    setMode: vi.fn().mockResolvedValue(true),
+    setModel: vi.fn().mockResolvedValue(true),
+    clearContextAndCreate: vi.fn(),
   };
 }

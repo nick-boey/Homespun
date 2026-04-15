@@ -197,7 +197,7 @@ describe('SessionManager Logging', () => {
       );
 
       // Clean up
-      sessionManager.resolvePendingQuestion('test-session-123', { '0': 'Option A' });
+      sessionManager.resolvePending('test-session-123', 'question', { answers: { '0': 'Option A' } });
       await promise;
     });
 
@@ -223,7 +223,7 @@ describe('SessionManager Logging', () => {
       vi.clearAllMocks();
 
       // Act
-      sessionManager.resolvePendingQuestion('test-session-123', { '0': 'Answer' });
+      sessionManager.resolvePending('test-session-123', 'question', { answers: { '0': 'Answer' } });
       await promise;
 
       // Assert
@@ -265,7 +265,7 @@ describe('SessionManager Logging', () => {
       );
 
       // Clean up
-      sessionManager.resolvePendingPlanApproval('test-session-123', true, true);
+      sessionManager.resolvePending('test-session-123', 'plan', { approved: true, keepContext: true });
       await promise;
     });
 
@@ -291,7 +291,7 @@ describe('SessionManager Logging', () => {
       vi.clearAllMocks();
 
       // Act
-      sessionManager.resolvePendingPlanApproval('test-session-123', true, true);
+      sessionManager.resolvePending('test-session-123', 'plan', { approved: true, keepContext: true });
       await promise;
 
       // Assert
@@ -428,52 +428,9 @@ describe('SessionManager Logging', () => {
       expect(invCalls).toHaveLength(1);
     });
 
-    it('T015: emits `inventory event=resume` on the resume code path', async () => {
-      // Arrange — create a session, then push a result so the forwarder completes.
-      setMockQueryMessages(mockQueryInstance, [
-        createSdkInitMessage({ session_id: 'test-session-123' }),
-        createAssistantMessage('Hi'),
-        createResultMessage(),
-      ]);
-      await sessionManager.create({
-        prompt: 'Test prompt',
-        model: 'opus',
-        mode: 'Build',
-      });
-      // Drain to mark resultReceived=true so the next send() takes the
-      // resume-with-new-query branch.
-      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
-
-      // Set conversationId so resume path has something to resume.
-      const ws = (sessionManager as unknown as { sessions: Map<string, { conversationId?: string }> }).sessions.get(
-        'test-session-123',
-      );
-      if (ws) ws.conversationId = 'conv-abc';
-
-      // New mock query for the resume send.
-      const resumeMock = createMockQuery();
-      setMockQueryMessages(resumeMock, [
-        createSdkInitMessage({ session_id: 'test-session-123' }),
-        createAssistantMessage('resumed'),
-        createResultMessage(),
-      ]);
-      setMockQuery(resumeMock);
-
-      // Clear captured logs so we only count the resume-side emission.
-      vi.clearAllMocks();
-
-      // Act
-      await sessionManager.send('test-session-123', 'follow-up');
-      await collectAsyncGenerator(sessionManager.stream('test-session-123'));
-
-      // Assert
-      const invCalls = (info as unknown as Mock).mock.calls.filter(
-        ([msg]: [unknown]) =>
-          typeof msg === 'string' &&
-          msg.startsWith('inventory event=resume sessionId=test-session-123 payload={'),
-      );
-      expect(invCalls).toHaveLength(1);
-    });
+    // T015 removed: the resume-with-new-query code path was deleted by the
+    // simplify-worker-session-manager change. A session now uses a single
+    // long-lived query(), so inventory only emits `event=create`.
 
     it('T025: canUseTool info log includes origin= field (builtin + mcp)', async () => {
       setMockQueryMessages(mockQueryInstance, [
@@ -562,7 +519,7 @@ describe('SessionManager Logging', () => {
       );
 
       // Clean up
-      sessionManager.resolvePendingQuestion('test-session-123', { '0': 'A1', '1': 'A2' });
+      sessionManager.resolvePending('test-session-123', 'question', { answers: { '0': 'A1', '1': 'A2' } });
       await promise;
     });
 
@@ -607,7 +564,7 @@ describe('SessionManager Logging', () => {
       );
 
       // Clean up
-      sessionManager.resolvePendingPlanApproval('test-session-123', true, true);
+      sessionManager.resolvePending('test-session-123', 'plan', { approved: true, keepContext: true });
       await promise;
     });
   });

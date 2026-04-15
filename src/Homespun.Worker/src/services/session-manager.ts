@@ -9,7 +9,6 @@ import type {
   AskUserQuestionInput,
   ExitPlanModeInput,
   UserQuestion,
-  ApprovePlanRequest,
   LastMessageType,
   WorkflowSessionContext,
 } from "../types/index.js";
@@ -32,7 +31,6 @@ import {
 import {
   captureDebugInfo,
   FileMonitor,
-  type DebugInfo,
 } from "../utils/diagnostics.js";
 import { watch, existsSync } from "node:fs";
 
@@ -75,7 +73,12 @@ export interface WorkflowSignalEventData {
 }
 
 export interface ControlEvent {
-  type: "question_pending" | "plan_pending" | "status_resumed" | "workflow_complete" | "workflow_signal";
+  type:
+    | "question_pending"
+    | "plan_pending"
+    | "status_resumed"
+    | "workflow_complete"
+    | "workflow_signal";
   data:
     | { questions: UserQuestion[] }
     | { plan: string }
@@ -99,34 +102,17 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
 }
 
 /**
- * Message history entry with timestamp for catch-up replay.
- */
-export interface MessageHistoryEntry {
-  timestamp: Date;
-  event: OutputEvent;
-}
-
-/**
  * Single-consumer async queue that merges pushes from multiple producers
  * (the SDK query background task and the canUseTool callback).
- * Also maintains a history of messages for catch-up replay after server restart.
  */
 export class OutputChannel {
   private queue: OutputEvent[] = [];
   private resolver: ((result: IteratorResult<OutputEvent>) => void) | null =
     null;
   private done = false;
-  private history: MessageHistoryEntry[] = [];
-  private readonly maxHistorySize = 1000; // Limit history to prevent memory issues
 
   push(event: OutputEvent): void {
     if (this.done) return;
-
-    // Add to history with timestamp
-    this.history.push({ timestamp: new Date(), event });
-    if (this.history.length > this.maxHistorySize) {
-      this.history.shift();
-    }
 
     if (this.resolver) {
       const resolve = this.resolver;
@@ -142,22 +128,8 @@ export class OutputChannel {
     if (this.resolver) {
       const resolve = this.resolver;
       this.resolver = null;
-      resolve({ value: undefined as any, done: true });
+      resolve({ value: undefined as unknown as OutputEvent, done: true });
     }
-  }
-
-  /**
-   * Gets messages since a given timestamp for catch-up replay.
-   */
-  getMessagesSince(since: Date): MessageHistoryEntry[] {
-    return this.history.filter((entry) => entry.timestamp > since);
-  }
-
-  /**
-   * Gets all messages in history.
-   */
-  getAllMessages(): MessageHistoryEntry[] {
-    return [...this.history];
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<OutputEvent> {
@@ -179,24 +151,40 @@ export class OutputChannel {
   }
 }
 
-// --- Session types ---
+// --- Pending-interaction types ---
 
-interface PendingQuestionState {
-  questions: AskUserQuestionInput["questions"];
-  resolve: (answers: Record<string, string>) => void;
-  reject: (error: Error) => void;
-}
+export type PendingKind = "question" | "plan";
 
-interface PendingPlanApprovalState {
-  plan: string;
+/**
+ * Payload used by `resolvePending` for each kind.
+ * - `question`: the record of answers keyed by question text.
+ * - `plan`: the approval decision with optional context control.
+ */
+export type PendingPayload =
+  | { kind: "question"; answers: Record<string, string> }
+  | {
+      kind: "plan";
+      approved: boolean;
+      keepContext?: boolean;
+      feedback?: string;
+    };
+
+/**
+ * Per-session, per-kind state tracked while the SDK awaits a user decision.
+ * `data` is the interaction-specific captured data (e.g. the questions to
+ * answer, or the plan to approve).
+ */
+interface PendingInteraction<T> {
+  data: T;
   resolve: (result: PermissionResult) => void;
-  reject: (error: Error) => void;
+  reject: (err: Error) => void;
 }
+
+// --- Session types ---
 
 interface WorkerSession {
   id: string;
   query: Query;
-  inputController: InputController;
   outputChannel: OutputChannel;
   conversationId?: string;
   mode: string;
@@ -207,7 +195,6 @@ interface WorkerSession {
   lastActivityAt: Date;
   lastMessageType?: LastMessageType;
   lastMessageSubtype?: string;
-  resultReceived: boolean;
   systemPrompt?: string;
   workingDirectory?: string;
   /** Workflow context when running as part of a workflow execution */
@@ -223,61 +210,11 @@ interface WorkerSession {
    * current session lifecycle phase. Guard against the SDK replaying init.
    */
   inventoryEmitted?: boolean;
-}
-
-/**
- * Controller for managing streaming input to the V1 query() API.
- * Allows sending messages to an active query session.
- */
-class InputController {
-  private messageQueue: SDKUserMessage[] = [];
-  private resolver: ((value: IteratorResult<SDKUserMessage>) => void) | null =
-    null;
-  private done = false;
-
-  async *[Symbol.asyncIterator](): AsyncGenerator<SDKUserMessage> {
-    while (!this.done) {
-      if (this.messageQueue.length > 0) {
-        yield this.messageQueue.shift()!;
-      } else {
-        // Wait for next message
-        const result = await new Promise<IteratorResult<SDKUserMessage>>(
-          (resolve) => {
-            this.resolver = resolve;
-          },
-        );
-        if (result.done) break;
-        yield result.value;
-      }
-    }
-  }
-
-  send(message: string): void {
-    const userMessage: SDKUserMessage = {
-      type: "user",
-      session_id: "",
-      message: {
-        role: "user",
-        content: [{ type: "text", text: message }],
-      },
-      parent_tool_use_id: null,
-    };
-
-    if (this.resolver) {
-      this.resolver({ value: userMessage, done: false });
-      this.resolver = null;
-    } else {
-      this.messageQueue.push(userMessage);
-    }
-  }
-
-  close(): void {
-    this.done = true;
-    if (this.resolver) {
-      this.resolver({ value: undefined as any, done: true });
-      this.resolver = null;
-    }
-  }
+  /**
+   * Cleanup handle for the debug-log file watcher attached in create().
+   * Invoked from runQueryForwarder's finally block.
+   */
+  debugLogCleanup?: () => void;
 }
 
 interface SDKUserMessage {
@@ -299,6 +236,12 @@ const PLAN_MODE_TOOLS = [
   "Task",
   "AskUserQuestion",
   "ExitPlanMode",
+  // Required to let the agent invoke discovered Agent Skills. Skills are
+  // loaded from `.claude/skills/` under the session cwd and `~/.claude/skills/`
+  // via `settingSources: ["user", "project"]`. Without "Skill" in the allowed
+  // list, the Skill tool is not exposed to the model — see
+  // https://code.claude.com/docs/en/agent-sdk/skills.
+  "Skill",
 ];
 
 function buildCommonOptions(
@@ -357,14 +300,257 @@ function buildCommonOptions(
   };
 }
 
+/**
+ * Yields a single SDK user message then returns. Used to push a follow-up
+ * message into the live query via `q.streamInput(...)`.
+ */
+async function* onceIterator(
+  msg: SDKUserMessage,
+): AsyncGenerator<SDKUserMessage> {
+  yield msg;
+}
+
+/**
+ * Attaches a filesystem watcher on the Claude SDK debug log and streams new
+ * lines to the worker's info log. Safe to call once per session; the returned
+ * cleanup fn is invoked when the session ends.
+ */
+function attachDebugLogStreaming(sessionId: string): { cleanup: () => void } {
+  const debugLogPath = "/home/homespun/.claude/debug/claude_sdk_debug.log";
+  const monitor = new FileMonitor(debugLogPath);
+  let watcher: ReturnType<typeof watch> | undefined;
+
+  if (existsSync(debugLogPath)) {
+    watcher = watch(
+      debugLogPath,
+      { persistent: false },
+      async (eventType) => {
+        if (eventType === "change") {
+          const newLines = await monitor.readNewLines();
+          newLines.forEach((line) => {
+            info(`[SDK Debug] ${line} (sessionId: ${sessionId})`);
+          });
+        }
+      },
+    );
+  }
+
+  return {
+    cleanup: () => {
+      watcher?.close();
+    },
+  };
+}
+
+// --- Tool handler registry ---
+
+/**
+ * Shared context passed to every tool handler. Exposes the manager's
+ * internal pending-state primitives without leaking them on the public API.
+ */
+interface HandlerContext {
+  sessionId: string;
+  registerPending: <T>(
+    kind: PendingKind,
+    data: T,
+    resolve: (result: PermissionResult) => void,
+    reject: (err: Error) => void,
+  ) => void;
+  logStatusChange: (session: WorkerSession, next: WorkerSession["status"], reason: string) => void;
+}
+
+type ToolHandler = (
+  input: Record<string, unknown>,
+  session: WorkerSession,
+  ctx: HandlerContext,
+) => Promise<PermissionResult>;
+
+const askUserQuestionHandler: ToolHandler = async (input, session, ctx) => {
+  const questionInput = input as unknown as AskUserQuestionInput;
+
+  const answersPromise = new Promise<Record<string, string>>(
+    (resolve, reject) => {
+      info(
+        `Session entering pending question state (sessionId: ${ctx.sessionId}, questionCount: ${questionInput.questions.length})`,
+      );
+      ctx.registerPending(
+        "question",
+        { questions: questionInput.questions },
+        (result) => {
+          // The unified resolver builds a PermissionResult for us, but the
+          // question handler needs just the answers object to complete.
+          // We unwrap updatedInput.answers back into a plain record.
+          const answers =
+            (result as { behavior: "allow"; updatedInput: { answers: Record<string, string> } })
+              .updatedInput.answers;
+          resolve(answers);
+        },
+        reject,
+      );
+    },
+  );
+
+  session.outputChannel.push({
+    type: "question_pending",
+    data: { questions: questionInput.questions },
+  });
+
+  info(
+    `emitted question_pending, waiting for answers on session '${ctx.sessionId}'`,
+  );
+
+  const answers = await answersPromise;
+
+  info(`received answers for session '${ctx.sessionId}'`);
+
+  ctx.logStatusChange(session, "streaming", "resuming_after_question");
+
+  return {
+    behavior: "allow",
+    updatedInput: {
+      questions: questionInput.questions,
+      answers,
+    },
+  };
+};
+
+const exitPlanModeHandler: ToolHandler = async (input, session, ctx) => {
+  const planInput = input as unknown as ExitPlanModeInput;
+  const planContent = planInput.plan || "";
+
+  const approvalPromise = new Promise<PermissionResult>((resolve, reject) => {
+    info(
+      `Session entering pending plan approval state (sessionId: ${ctx.sessionId})`,
+    );
+    ctx.registerPending("plan", { plan: planContent }, resolve, reject);
+  });
+
+  session.outputChannel.push({
+    type: "plan_pending",
+    data: { plan: planContent },
+  });
+
+  info(
+    `emitted plan_pending, waiting for approval on session '${ctx.sessionId}'`,
+  );
+
+  const result = await approvalPromise;
+
+  info(
+    `received plan approval decision for session '${ctx.sessionId}': behavior='${result.behavior}'`,
+  );
+
+  if (result.behavior === "allow") {
+    ctx.logStatusChange(session, "streaming", "resuming_after_plan_approval");
+  }
+
+  return result;
+};
+
+const workflowCompleteHandler: ToolHandler = async (input, session, ctx) => {
+  if (!session.workflowContext) {
+    info(
+      `WorkflowComplete denied - no workflow context (sessionId: ${ctx.sessionId})`,
+    );
+    return {
+      behavior: "deny",
+      message: "WorkflowComplete tool can only be used in workflow sessions",
+    };
+  }
+
+  if (!isValidWorkflowCompleteInput(input)) {
+    info(
+      `WorkflowComplete denied - invalid input (sessionId: ${ctx.sessionId})`,
+    );
+    return {
+      behavior: "deny",
+      message:
+        "Invalid WorkflowComplete input: requires status, outputs, and summary",
+    };
+  }
+
+  const completionInput = input as WorkflowCompleteInput;
+
+  session.outputChannel.push({
+    type: "workflow_complete",
+    data: {
+      workflowContext: session.workflowContext,
+      completion: completionInput,
+    },
+  });
+
+  info(
+    `emitted workflow_complete for session '${ctx.sessionId}' - status='${completionInput.status}', stepId='${session.workflowContext.stepId}'`,
+  );
+
+  return {
+    behavior: "allow",
+    updatedInput: input,
+  };
+};
+
+const workflowSignalHandler: ToolHandler = async (input, session, ctx) => {
+  if (!session.workflowContext) {
+    info(
+      `workflow_signal denied - no workflow context (sessionId: ${ctx.sessionId})`,
+    );
+    return {
+      behavior: "deny",
+      message: "workflow_signal tool can only be used in workflow sessions",
+    };
+  }
+
+  if (!isValidWorkflowSignalInput(input)) {
+    info(
+      `workflow_signal denied - invalid input (sessionId: ${ctx.sessionId})`,
+    );
+    return {
+      behavior: "deny",
+      message:
+        "Invalid workflow_signal input: requires status (success or fail)",
+    };
+  }
+
+  const signalInput = input as WorkflowSignalInput;
+
+  session.outputChannel.push({
+    type: "workflow_signal",
+    data: {
+      workflowContext: session.workflowContext,
+      signal: signalInput,
+    },
+  });
+
+  info(
+    `emitted workflow_signal for session '${ctx.sessionId}' - status='${signalInput.status}', stepId='${session.workflowContext.stepId}'`,
+  );
+
+  return {
+    behavior: "allow",
+    updatedInput: input,
+  };
+};
+
+const TOOL_HANDLERS: Record<string, ToolHandler> = {
+  AskUserQuestion: askUserQuestionHandler,
+  ExitPlanMode: exitPlanModeHandler,
+  [WORKFLOW_COMPLETE_TOOL]: workflowCompleteHandler,
+  [WORKFLOW_SIGNAL_TOOL]: workflowSignalHandler,
+};
+
 export class SessionManager {
   private sessions = new Map<string, WorkerSession>();
-  private pendingQuestions = new Map<string, PendingQuestionState>();
-  private pendingPlanApprovals = new Map<string, PendingPlanApprovalState>();
+  /**
+   * Unified pending-interaction map: sessionId → (kind → interaction).
+   * One-to-one between session+kind and outstanding promise.
+   */
+  private pending = new Map<
+    string,
+    Map<PendingKind, PendingInteraction<unknown>>
+  >();
 
   /**
    * Helper method to log status changes with consistent format.
-   * Updates the session status and logs the transition.
    */
   private logStatusChange(
     session: WorkerSession,
@@ -376,6 +562,38 @@ export class SessionManager {
     info(
       `Session status changed: ${previousStatus} → ${newStatus} (sessionId: ${session.id}, reason: ${reason})`,
     );
+  }
+
+  private registerPending<T>(
+    sessionId: string,
+    kind: PendingKind,
+    data: T,
+    resolve: (result: PermissionResult) => void,
+    reject: (err: Error) => void,
+  ): void {
+    let bySession = this.pending.get(sessionId);
+    if (!bySession) {
+      bySession = new Map();
+      this.pending.set(sessionId, bySession);
+    }
+    bySession.set(kind, {
+      data,
+      resolve,
+      reject,
+    } as PendingInteraction<unknown>);
+  }
+
+  private popPending(
+    sessionId: string,
+    kind: PendingKind,
+  ): PendingInteraction<unknown> | undefined {
+    const bySession = this.pending.get(sessionId);
+    if (!bySession) return undefined;
+    const entry = bySession.get(kind);
+    if (!entry) return undefined;
+    bySession.delete(kind);
+    if (bySession.size === 0) this.pending.delete(sessionId);
+    return entry;
   }
 
   async create(opts: {
@@ -391,7 +609,6 @@ export class SessionManager {
     const isPlan = opts.mode.toLowerCase() === "plan";
     const startTime = Date.now();
 
-    // Log comprehensive session creation details
     info(
       `Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || "/workdir"}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}', hasWorkflowContext=${!!opts.workflowContext}`,
     );
@@ -402,12 +619,8 @@ export class SessionManager {
       opts.workingDirectory,
     );
 
-    const inputController = new InputController();
-
-    // Create canUseTool callback that handles AskUserQuestion and ExitPlanMode
     const canUseTool = this.createCanUseToolCallback(id);
 
-    // Build session options
     const sessionOptions: Record<string, unknown> = {
       ...common,
       canUseTool,
@@ -419,6 +632,12 @@ export class SessionManager {
     } else {
       sessionOptions.permissionMode = "bypassPermissions";
       sessionOptions.allowDangerouslySkipPermissions = true;
+      // Build mode bypasses permissions so allowedTools is not used as a
+      // deny-list. Reuse PLAN_MODE_TOOLS so Build has at least the same
+      // exposure as Plan (notably "Skill" — which must be listed explicitly
+      // to be exposed to the model at all). The canUseTool callback handles
+      // everything else. See https://code.claude.com/docs/en/agent-sdk/skills.
+      sessionOptions.allowedTools = PLAN_MODE_TOOLS;
     }
 
     if (opts.resumeSessionId) {
@@ -426,33 +645,24 @@ export class SessionManager {
     }
 
     info(
-      `Session configuration: permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}, sessionId='${id}', allowedTools=${isPlan ? "PLAN_MODE_TOOLS" : "all"}, hasCanUseTool=true, hasResume=${!!opts.resumeSessionId}`,
+      `Session configuration: permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}, sessionId='${id}', allowedTools=${JSON.stringify(sessionOptions.allowedTools)}, hasCanUseTool=true, hasResume=${!!opts.resumeSessionId}`,
     );
 
-    // Create async generator that yields the initial message and subsequent messages
-    async function* createInputStream(
-      initialPrompt: string,
-      controller: InputController,
-    ): AsyncGenerator<SDKUserMessage> {
-      // Yield initial prompt
-      yield {
-        type: "user",
-        session_id: "",
-        message: {
-          role: "user",
-          content: [{ type: "text", text: initialPrompt }],
-        },
-        parent_tool_use_id: null,
-      };
-
-      // Yield subsequent messages from the controller
-      for await (const msg of controller) {
-        yield msg;
-      }
-    }
+    // Build the initial prompt as a single-message async iterable. The SDK
+    // accepts this as streaming-input mode; follow-up messages are pushed via
+    // q.streamInput() later.
+    const initialPrompt: SDKUserMessage = {
+      type: "user",
+      session_id: "",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: opts.prompt }],
+      },
+      parent_tool_use_id: null,
+    };
 
     const q = query({
-      prompt: createInputStream(opts.prompt, inputController),
+      prompt: onceIterator(initialPrompt),
       options: sessionOptions as Parameters<typeof query>[0]["options"],
     });
 
@@ -461,16 +671,14 @@ export class SessionManager {
     const workerSession: WorkerSession = {
       id,
       query: q,
-      inputController,
       outputChannel,
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
       permissionMode: isPlan ? "plan" : "bypassPermissions",
-      status: "idle", // Initialize as idle, will change to streaming below
+      status: "idle",
       createdAt: new Date(),
       lastActivityAt: new Date(),
-      resultReceived: false,
       systemPrompt: opts.systemPrompt,
       workingDirectory: opts.workingDirectory,
       workflowContext: opts.workflowContext,
@@ -479,30 +687,11 @@ export class SessionManager {
     this.sessions.set(id, workerSession);
     info(`session created, workerSessionId='${id}'`);
 
-    // Log initial status transition
     this.logStatusChange(workerSession, "streaming", "session_created");
 
-    // Setup debug log monitoring
-    let debugLogWatcher: any;
-    const debugLogPath = "/home/homespun/.claude/debug/claude_sdk_debug.log";
-    const debugMonitor = new FileMonitor(debugLogPath);
+    const debugHandle = attachDebugLogStreaming(id);
+    workerSession.debugLogCleanup = debugHandle.cleanup;
 
-    if (existsSync(debugLogPath)) {
-      debugLogWatcher = watch(
-        debugLogPath,
-        { persistent: false },
-        async (eventType) => {
-          if (eventType === "change") {
-            const newLines = await debugMonitor.readNewLines();
-            newLines.forEach((line) => {
-              info(`[SDK Debug] ${line} (sessionId: ${id})`);
-            });
-          }
-        },
-      );
-    }
-
-    // Background task: forward SDK query messages to the output channel
     this.runQueryForwarder(
       workerSession,
       q,
@@ -510,236 +699,37 @@ export class SessionManager {
       startTime,
       opts,
       sessionOptions,
-      debugMonitor,
-      debugLogPath,
-      debugLogWatcher,
     );
 
     return workerSession;
   }
 
   /**
-   * Creates the canUseTool callback for a session.
-   * Intercepts AskUserQuestion to emit a control event before pausing.
-   * Allows ExitPlanMode immediately (server handles plan display/approval).
+   * Creates the canUseTool callback for a session. Delegates to the tool
+   * handler registry; unknown tools are allowed with their input unchanged.
    */
   private createCanUseToolCallback(sessionId: string) {
     return async (
       toolName: string,
       input: Record<string, unknown>,
     ): Promise<PermissionResult> => {
-      const origin = resolveToolOrigin(
-        toolName,
-        this.sessions.get(sessionId)?.init,
-      );
+      const session = this.sessions.get(sessionId);
+      const origin = resolveToolOrigin(toolName, session?.init);
       info(
         `canUseTool - tool='${toolName}', sessionId='${sessionId}' origin=${origin}`,
       );
 
-      if (toolName === "AskUserQuestion") {
-        const questionInput = input as unknown as AskUserQuestionInput;
-
-        // Create promise that will be resolved when /answer endpoint is called
-        const answersPromise = new Promise<Record<string, string>>(
-          (resolve, reject) => {
-            info(
-              `Session entering pending question state (sessionId: ${sessionId}, questionCount: ${questionInput.questions.length})`,
-            );
-            this.pendingQuestions.set(sessionId, {
-              questions: questionInput.questions,
-              resolve,
-              reject,
-            });
-          },
-        );
-
-        // Emit control event BEFORE pausing — this flows to the SSE stream
-        // so the server can detect the pending question and show it to the user
-        const ws = this.sessions.get(sessionId);
-        ws?.outputChannel.push({
-          type: "question_pending",
-          data: { questions: questionInput.questions },
-        });
-
-        info(
-          `emitted question_pending, waiting for answers on session '${sessionId}'`,
-        );
-
-        // Wait for answers (this pauses SDK execution)
-        const answers = await answersPromise;
-
-        info(`received answers for session '${sessionId}'`);
-
-        // Log resuming status
-        const session = this.sessions.get(sessionId);
-        if (session) {
-          this.logStatusChange(session, "streaming", "resuming_after_question");
-        }
-
-        // Return allow with populated answers
-        return {
-          behavior: "allow",
-          updatedInput: {
-            questions: questionInput.questions,
-            answers,
-          },
+      const handler = TOOL_HANDLERS[toolName];
+      if (handler && session) {
+        const ctx: HandlerContext = {
+          sessionId,
+          registerPending: (kind, data, resolve, reject) =>
+            this.registerPending(sessionId, kind, data, resolve, reject),
+          logStatusChange: (s, next, reason) => this.logStatusChange(s, next, reason),
         };
+        return handler(input, session, ctx);
       }
 
-      if (toolName === "ExitPlanMode") {
-        const planInput = input as unknown as ExitPlanModeInput;
-        const planContent = planInput.plan || "";
-
-        // Create promise that will be resolved when /approve-plan endpoint is called
-        const approvalPromise = new Promise<PermissionResult>(
-          (resolve, reject) => {
-            info(
-              `Session entering pending plan approval state (sessionId: ${sessionId})`,
-            );
-            this.pendingPlanApprovals.set(sessionId, {
-              plan: planContent,
-              resolve,
-              reject,
-            });
-          },
-        );
-
-        // Emit control event BEFORE pausing — this flows to the SSE stream
-        // so the server can detect the pending plan and show it to the user
-        const ws = this.sessions.get(sessionId);
-        ws?.outputChannel.push({
-          type: "plan_pending",
-          data: { plan: planContent },
-        });
-
-        info(
-          `emitted plan_pending, waiting for approval on session '${sessionId}'`,
-        );
-
-        // Wait for approval decision (this pauses SDK execution)
-        const result = await approvalPromise;
-
-        info(
-          `received plan approval decision for session '${sessionId}': behavior='${result.behavior}'`,
-        );
-
-        // Log resuming status if approved
-        if (result.behavior === "allow") {
-          const session = this.sessions.get(sessionId);
-          if (session) {
-            this.logStatusChange(
-              session,
-              "streaming",
-              "resuming_after_plan_approval",
-            );
-          }
-        }
-
-        return result;
-      }
-
-      // Handle WorkflowComplete tool - only enabled when session has workflowContext
-      if (toolName === WORKFLOW_COMPLETE_TOOL) {
-        const ws = this.sessions.get(sessionId);
-
-        // Only allow WorkflowComplete when session has workflow context
-        if (!ws?.workflowContext) {
-          info(
-            `WorkflowComplete denied - no workflow context (sessionId: ${sessionId})`,
-          );
-          return {
-            behavior: "deny",
-            message:
-              "WorkflowComplete tool can only be used in workflow sessions",
-          };
-        }
-
-        // Validate the input
-        if (!isValidWorkflowCompleteInput(input)) {
-          info(
-            `WorkflowComplete denied - invalid input (sessionId: ${sessionId})`,
-          );
-          return {
-            behavior: "deny",
-            message:
-              "Invalid WorkflowComplete input: requires status, outputs, and summary",
-          };
-        }
-
-        const completionInput = input as WorkflowCompleteInput;
-
-        // Emit workflow_complete control event to SSE stream
-        // This notifies the server that the workflow node has completed
-        ws.outputChannel.push({
-          type: "workflow_complete",
-          data: {
-            workflowContext: ws.workflowContext,
-            completion: completionInput,
-          },
-        });
-
-        info(
-          `emitted workflow_complete for session '${sessionId}' - status='${completionInput.status}', stepId='${ws.workflowContext.stepId}'`,
-        );
-
-        // Allow the tool to execute - this signals session completion
-        return {
-          behavior: "allow",
-          updatedInput: input,
-        };
-      }
-
-      // Handle workflow_signal tool - only enabled when session has workflowContext
-      if (toolName === WORKFLOW_SIGNAL_TOOL) {
-        const ws = this.sessions.get(sessionId);
-
-        // Only allow workflow_signal when session has workflow context
-        if (!ws?.workflowContext) {
-          info(
-            `workflow_signal denied - no workflow context (sessionId: ${sessionId})`,
-          );
-          return {
-            behavior: "deny",
-            message:
-              "workflow_signal tool can only be used in workflow sessions",
-          };
-        }
-
-        // Validate the input
-        if (!isValidWorkflowSignalInput(input)) {
-          info(
-            `workflow_signal denied - invalid input (sessionId: ${sessionId})`,
-          );
-          return {
-            behavior: "deny",
-            message:
-              "Invalid workflow_signal input: requires status (success or fail)",
-          };
-        }
-
-        const signalInput = input as WorkflowSignalInput;
-
-        // Emit workflow_signal control event to SSE stream
-        ws.outputChannel.push({
-          type: "workflow_signal",
-          data: {
-            workflowContext: ws.workflowContext,
-            signal: signalInput,
-          },
-        });
-
-        info(
-          `emitted workflow_signal for session '${sessionId}' - status='${signalInput.status}', stepId='${ws.workflowContext.stepId}'`,
-        );
-
-        // Allow the tool to execute
-        return {
-          behavior: "allow",
-          updatedInput: input,
-        };
-      }
-
-      // Allow other tools
       return {
         behavior: "allow",
         updatedInput: input,
@@ -748,31 +738,30 @@ export class SessionManager {
   }
 
   /**
-   * Runs the background query forwarder that reads SDK messages and pushes them
-   * to the output channel. Handles result detection and clean shutdown.
+   * Runs the background query forwarder that reads SDK messages and pushes
+   * them to the output channel. There is now a single forwarder per session
+   * lifetime — follow-up messages are delivered via q.streamInput() directly
+   * into the same query without restarting it.
    */
   private runQueryForwarder(
     session: WorkerSession,
     q: Query,
     outputChannel: OutputChannel,
     startTime: number,
-    opts: { mode: string; model: string; systemPrompt?: string; workingDirectory?: string },
+    opts: {
+      mode: string;
+      model: string;
+      systemPrompt?: string;
+      workingDirectory?: string;
+    },
     sessionOptions: Record<string, unknown>,
-    debugMonitor: FileMonitor,
-    debugLogPath: string,
-    debugLogWatcher: any,
-    inventoryEvent: "create" | "resume" = "create",
   ): void {
     (async () => {
       try {
         info(`Query processing started (sessionId: ${session.id})`);
         let messageCount = 0;
-        // Reset inventory-emitted guard for this lifecycle phase.
         session.inventoryEmitted = false;
         for await (const msg of q) {
-          // Sniff the first system/init message for inventory logging (FR-001,
-          // FR-005) and for per-tool origin attribution (US2). Never disrupts
-          // the event stream — the message is still pushed to OutputChannel.
           if (
             !session.inventoryEmitted &&
             msg.type === "system" &&
@@ -785,12 +774,11 @@ export class SessionManager {
               const record = await buildInventoryFromInit(
                 initLike,
                 sessionOptions,
-                inventoryEvent,
+                "create",
                 session.id,
               );
               emitInventoryLog(record);
             } catch (err) {
-              // FR-006: never fail the session for inventory errors.
               warn(
                 `inventory emission failed for session '${session.id}': ${
                   err instanceof Error ? err.message : String(err)
@@ -801,149 +789,138 @@ export class SessionManager {
 
           outputChannel.push(msg);
           messageCount++;
-
-          // Detect result message — close input so CLI can exit cleanly
-          if (msg.type === 'result') {
-            session.resultReceived = true;
-            session.inputController.close();
-            info(`Result received, input closed for clean CLI exit (sessionId: ${session.id})`);
-          }
         }
         const duration = Date.now() - startTime;
-        info(`Query processing completed (sessionId: ${session.id}, messageCount: ${messageCount}, duration: ${duration}ms)`);
-        this.logStatusChange(session, 'idle', 'query_completed');
+        info(
+          `Query processing completed (sessionId: ${session.id}, messageCount: ${messageCount}, duration: ${duration}ms)`,
+        );
+        this.logStatusChange(session, "idle", "query_completed");
       } catch (err) {
         const duration = Date.now() - startTime;
         const errorMessage = err instanceof Error ? err.message : String(err);
 
-        if (session.resultReceived) {
-          // Error after a successful result — the CLI exited after producing output.
-          // This is expected behavior, not a real error.
-          info(`Post-result CLI exit (sessionId: ${session.id}, duration: ${duration}ms, error: ${errorMessage})`);
-          this.logStatusChange(session, 'idle', 'post_result_exit');
-        } else {
-          // Genuine error before any result was produced
-          const errorDetails = {
-            message: errorMessage,
-            stack: err instanceof Error ? err.stack : undefined,
-            type: err?.constructor?.name || 'Unknown',
-            sessionId: session.id,
-            sessionOptions: {
-              mode: opts.mode,
-              model: opts.model,
-              permissionMode: sessionOptions.permissionMode,
-              workingDirectory: sessionOptions.cwd,
+        const errorDetails = {
+          message: errorMessage,
+          stack: err instanceof Error ? err.stack : undefined,
+          type: err?.constructor?.name || "Unknown",
+          sessionId: session.id,
+          sessionOptions: {
+            mode: opts.mode,
+            model: opts.model,
+            permissionMode: sessionOptions.permissionMode,
+            workingDirectory: sessionOptions.cwd,
+          },
+          timestamp: new Date().toISOString(),
+          duration,
+        };
+
+        error(
+          `query forwarder error for session '${session.id}' - ${JSON.stringify(errorDetails)}`,
+        );
+        this.logStatusChange(session, "error", "query_error");
+
+        const debugInfo = await captureDebugInfo(this.sessions.size);
+
+        outputChannel.push({
+          type: "result",
+          subtype: "error_during_execution",
+          session_id: session.id,
+          is_error: true,
+          duration_ms: duration,
+          duration_api_ms: 0,
+          num_turns: 0,
+          total_cost_usd: 0,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+          },
+          result: errorDetails.message,
+          errors: [errorDetails.message],
+          debug: {
+            stack: errorDetails.stack,
+            errorType: errorDetails.type,
+            lastStderr: debugInfo.lastStderr.slice(-10),
+            diagnostics: {
+              memory: debugInfo.diagnostics.memory,
+              uptime: debugInfo.diagnostics.uptime,
+              sessionCount: debugInfo.sessionCount,
             },
-            timestamp: new Date().toISOString(),
-            duration,
-          };
-
-          error(`query forwarder error for session '${session.id}' - ${JSON.stringify(errorDetails)}`);
-          this.logStatusChange(session, 'error', 'query_error');
-
-          // Capture debug information
-          const debugInfo = await captureDebugInfo(this.sessions.size);
-
-          // Push a synthetic error result
-          outputChannel.push({
-            type: 'result',
-            subtype: 'error_during_execution',
-            session_id: session.id,
-            is_error: true,
-            duration_ms: duration,
-            duration_api_ms: 0,
-            num_turns: 0,
-            total_cost_usd: 0,
-            usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-            result: errorDetails.message,
-            errors: [errorDetails.message],
-            debug: {
-              stack: errorDetails.stack,
-              errorType: errorDetails.type,
-              lastStderr: debugInfo.lastStderr.slice(-10),
-              diagnostics: {
-                memory: debugInfo.diagnostics.memory,
-                uptime: debugInfo.diagnostics.uptime,
-                sessionCount: debugInfo.sessionCount,
-              },
-              sessionOptions: errorDetails.sessionOptions,
-            },
-          } as unknown as SDKMessage);
-        }
+            sessionOptions: errorDetails.sessionOptions,
+          },
+        } as unknown as SDKMessage);
       } finally {
         outputChannel.complete();
-        debugLogWatcher?.close();
+        session.debugLogCleanup?.();
+        session.debugLogCleanup = undefined;
       }
     })();
   }
 
   /**
-   * Resolves a pending question for a session.
-   * Called by the /answer endpoint when the user provides answers.
+   * Resolves a pending interaction for a session and kind. The payload
+   * is unpacked per kind:
+   * - `question`: `{ answers }` becomes a PermissionResult with answers bound
+   *   into `updatedInput`.
+   * - `plan`: `{ approved, keepContext?, feedback? }` is mapped to an
+   *   allow/deny PermissionResult matching the legacy ExitPlanMode semantics.
+   *
+   * Returns true if a matching pending interaction was resolved, false if
+   * none was outstanding.
    */
-  resolvePendingQuestion(
+  resolvePending(
     sessionId: string,
-    answers: Record<string, string>,
+    kind: PendingKind,
+    payload: Record<string, unknown>,
   ): boolean {
-    const pending = this.pendingQuestions.get(sessionId);
-    if (!pending) {
+    const entry = this.popPending(sessionId, kind);
+    if (!entry) {
       info(
-        `resolvePendingQuestion - no pending question for session '${sessionId}'`,
+        `resolvePending - no pending ${kind} for session '${sessionId}'`,
       );
       return false;
     }
 
-    // Emit status_resumed BEFORE resolving to ensure correct event ordering in SSE stream
     const ws = this.sessions.get(sessionId);
-    ws?.outputChannel.push({
-      type: "status_resumed",
-      data: {},
-    });
 
-    pending.resolve(answers);
-    this.pendingQuestions.delete(sessionId);
-    info(
-      `Session exiting pending question state (sessionId: ${sessionId}, resolved: true)`,
-    );
-    info(`resolvePendingQuestion - resolved for session '${sessionId}'`);
-    return true;
-  }
-
-  /**
-   * Resolves a pending plan approval for a session.
-   * Called by the /approve-plan endpoint when the user makes a decision.
-   */
-  resolvePendingPlanApproval(
-    sessionId: string,
-    approved: boolean,
-    keepContext?: boolean,
-    feedback?: string,
-  ): boolean {
-    const pending = this.pendingPlanApprovals.get(sessionId);
-    if (!pending) {
+    if (kind === "question") {
+      const answers = (payload.answers ?? {}) as Record<string, string>;
+      ws?.outputChannel.push({ type: "status_resumed", data: {} });
+      const data = entry.data as { questions: UserQuestion[] };
+      const result: PermissionResult = {
+        behavior: "allow",
+        updatedInput: {
+          questions: data.questions,
+          answers,
+        },
+      };
+      entry.resolve(result);
       info(
-        `resolvePendingPlanApproval - no pending approval for session '${sessionId}'`,
+        `Session exiting pending question state (sessionId: ${sessionId}, resolved: true)`,
       );
-      return false;
+      return true;
     }
+
+    // kind === "plan"
+    const approved = Boolean(payload.approved);
+    const keepContext = payload.keepContext as boolean | undefined;
+    const feedback = payload.feedback as string | undefined;
+    const planData = entry.data as { plan: string };
 
     let result: PermissionResult;
-
     if (approved && keepContext) {
-      // Approve and continue in same session context
       result = {
         behavior: "allow",
-        updatedInput: { plan: pending.plan },
+        updatedInput: { plan: planData.plan },
       };
     } else if (approved && !keepContext) {
-      // Approve but signal to interrupt (server will start fresh session with plan)
       result = {
         behavior: "deny",
         message:
           "Plan approved. Interrupting to start fresh implementation session.",
       };
     } else {
-      // Reject — agent should revise the plan
       result = {
         behavior: "deny",
         message: feedback
@@ -952,54 +929,37 @@ export class SessionManager {
       };
     }
 
-    // Emit status_resumed BEFORE resolving to ensure correct event ordering in SSE stream
-    // Skip for approved && !keepContext since session will be interrupted
     if (!(approved && !keepContext)) {
-      const ws = this.sessions.get(sessionId);
-      ws?.outputChannel.push({
-        type: "status_resumed",
-        data: {},
-      });
+      ws?.outputChannel.push({ type: "status_resumed", data: {} });
     }
 
-    pending.resolve(result);
-    this.pendingPlanApprovals.delete(sessionId);
+    entry.resolve(result);
     info(
       `Session exiting pending plan approval state (sessionId: ${sessionId}, approved: ${approved})`,
-    );
-    info(
-      `resolvePendingPlanApproval - resolved for session '${sessionId}', approved=${approved}, keepContext=${keepContext}`,
     );
     return true;
   }
 
   /**
-   * Checks if a session has a pending plan approval.
+   * Returns true when a pending interaction of the given kind is outstanding
+   * for the session.
    */
-  hasPendingPlanApproval(sessionId: string): boolean {
-    return this.pendingPlanApprovals.has(sessionId);
+  hasPending(sessionId: string, kind: PendingKind): boolean {
+    return this.pending.get(sessionId)?.has(kind) ?? false;
   }
 
   /**
-   * Checks if a session has a pending question.
+   * Returns the data captured when the pending interaction was registered
+   * (the questions for `question`, the plan string for `plan`), or undefined
+   * if no interaction of that kind is outstanding.
    */
-  hasPendingQuestion(sessionId: string): boolean {
-    return this.pendingQuestions.has(sessionId);
+  getPendingData<T>(sessionId: string, kind: PendingKind): T | undefined {
+    return this.pending.get(sessionId)?.get(kind)?.data as T | undefined;
   }
 
   /**
-   * Gets the pending questions for a session.
-   */
-  getPendingQuestions(
-    sessionId: string,
-  ): AskUserQuestionInput["questions"] | undefined {
-    return this.pendingQuestions.get(sessionId)?.questions;
-  }
-
-  /**
-   * Sets the mode for a session without sending a message.
-   * Updates the permission mode and stores the mode string.
-   * Returns false if session not found.
+   * Sets the mode for a session without sending a message. Updates the
+   * permission mode and pushes it through to the live SDK query.
    */
   async setMode(sessionId: string, mode: "Plan" | "Build"): Promise<boolean> {
     const ws = this.sessions.get(sessionId);
@@ -1010,7 +970,6 @@ export class SessionManager {
 
     const newPermissionMode = mapMode(mode);
 
-    // Skip if no change
     if (ws.mode === mode && ws.permissionMode === newPermissionMode) {
       info(`setMode - no change (mode='${mode}', sessionId='${sessionId}')`);
       return true;
@@ -1022,10 +981,7 @@ export class SessionManager {
       `setMode - mode updated to '${mode}', permissionMode='${newPermissionMode}' (sessionId='${sessionId}')`,
     );
 
-    // Update permission mode on the SDK query if available.
-    // Skip if the query has already completed (resultReceived) — calling
-    // setPermissionMode on an exited CLI process will hang indefinitely.
-    if (!ws.resultReceived && ws.query.setPermissionMode) {
+    if (ws.query.setPermissionMode) {
       await ws.query.setPermissionMode(newPermissionMode);
       info(
         `setMode - setPermissionMode('${newPermissionMode}') applied (sessionId='${sessionId}')`,
@@ -1037,17 +993,16 @@ export class SessionManager {
   }
 
   /**
-   * Sets the model for a session without sending a message.
-   * Returns false if session not found.
+   * Sets the model for a session without sending a message. Applies to the
+   * live SDK query when available so the next turn uses the new model.
    */
-  setModel(sessionId: string, model: string): boolean {
+  async setModel(sessionId: string, model: string): Promise<boolean> {
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       info(`setModel - session '${sessionId}' not found`);
       return false;
     }
 
-    // Skip if no change
     if (ws.model === model) {
       info(`setModel - no change (model='${model}', sessionId='${sessionId}')`);
       return true;
@@ -1055,6 +1010,12 @@ export class SessionManager {
 
     ws.model = model;
     info(`setModel - model updated to '${model}' (sessionId='${sessionId}')`);
+
+    if (ws.query.setModel) {
+      await ws.query.setModel(model);
+      info(`setModel - setModel('${model}') applied (sessionId='${sessionId}')`);
+    }
+
     ws.lastActivityAt = new Date();
     return true;
   }
@@ -1073,24 +1034,21 @@ export class SessionManager {
       throw new Error(`Session ${sessionId} not found`);
     }
 
-    // Track model changes when a different model is specified
     if (model) {
       ws.model = model;
       info(`model updated to '${model}'`);
+      if (ws.query.setModel) {
+        await ws.query.setModel(model);
+      }
     }
 
     if (mode) {
       ws.permissionMode = mapMode(mode);
-      // Update the mode string to reflect the mode change
       ws.mode = ws.permissionMode === "plan" ? "Plan" : "Build";
       info(
         `mode updated to '${ws.mode}', permissionMode='${ws.permissionMode}'`,
       );
-      // Only update the running query's permission mode if it's still active.
-      // If resultReceived is true, the CLI process has exited and
-      // setPermissionMode will hang. The new query (created below) will
-      // use the updated ws.permissionMode instead.
-      if (!ws.resultReceived && ws.query.setPermissionMode) {
+      if (ws.query.setPermissionMode) {
         await ws.query.setPermissionMode(ws.permissionMode);
         info(`setPermissionMode('${ws.permissionMode}') applied`);
       }
@@ -1098,123 +1056,17 @@ export class SessionManager {
 
     ws.lastActivityAt = new Date();
 
-    if (ws.resultReceived) {
-      // Previous CLI process exited after producing a result.
-      // Start a new query() with resume to continue the conversation.
-      info(
-        `send() - previous query completed, starting new query with resume (sessionId='${sessionId}', conversationId='${ws.conversationId}')`,
-      );
+    const userMessage: SDKUserMessage = {
+      type: "user",
+      session_id: ws.conversationId ?? "",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: message }],
+      },
+      parent_tool_use_id: null,
+    };
 
-      if (!ws.conversationId) {
-        throw new Error(
-          `Cannot resume session ${sessionId}: no conversationId available`,
-        );
-      }
-
-      const isPlan = ws.mode.toLowerCase() === "plan";
-      const common = buildCommonOptions(
-        ws.model,
-        ws.systemPrompt,
-        ws.workingDirectory,
-      );
-      const canUseTool = this.createCanUseToolCallback(sessionId);
-
-      const newSessionOptions: Record<string, unknown> = {
-        ...common,
-        canUseTool,
-        resume: ws.conversationId,
-      };
-
-      if (isPlan) {
-        newSessionOptions.permissionMode = "plan";
-        newSessionOptions.allowedTools = PLAN_MODE_TOOLS;
-      } else {
-        newSessionOptions.permissionMode = "bypassPermissions";
-        newSessionOptions.allowDangerouslySkipPermissions = true;
-      }
-
-      const newInputController = new InputController();
-      const newOutputChannel = new OutputChannel();
-
-      // Create input stream that yields the new message then waits for more
-      async function* createResumeInputStream(
-        initialMessage: string,
-        controller: InputController,
-      ): AsyncGenerator<SDKUserMessage> {
-        yield {
-          type: "user",
-          session_id: "",
-          message: {
-            role: "user",
-            content: [{ type: "text", text: initialMessage }],
-          },
-          parent_tool_use_id: null,
-        };
-        for await (const msg of controller) {
-          yield msg;
-        }
-      }
-
-      const newQuery = query({
-        prompt: createResumeInputStream(message, newInputController),
-        options: newSessionOptions as Parameters<typeof query>[0]["options"],
-      });
-
-      // Update session state
-      ws.query = newQuery;
-      ws.inputController = newInputController;
-      ws.outputChannel = newOutputChannel;
-      ws.resultReceived = false;
-
-      this.logStatusChange(ws, "streaming", "resumed_with_new_query");
-
-      // Emit status_resumed control event
-      ws.outputChannel.push({
-        type: "status_resumed",
-        data: {},
-      });
-
-      // Start new forwarder
-      const startTime = Date.now();
-      const debugLogPath = "/home/homespun/.claude/debug/claude_sdk_debug.log";
-      const debugMonitor = new FileMonitor(debugLogPath);
-      let debugLogWatcher: ReturnType<typeof watch> | undefined;
-      if (existsSync(debugLogPath)) {
-        debugLogWatcher = watch(
-          debugLogPath,
-          { persistent: false },
-          async (eventType) => {
-            if (eventType === "change") {
-              const newLines = await debugMonitor.readNewLines();
-              newLines.forEach((line) => {
-                info(`[SDK Debug] ${line} (sessionId: ${sessionId})`);
-              });
-            }
-          },
-        );
-      }
-
-      this.runQueryForwarder(
-        ws,
-        newQuery,
-        newOutputChannel,
-        startTime,
-        {
-          mode: ws.mode,
-          model: ws.model,
-          systemPrompt: ws.systemPrompt,
-          workingDirectory: ws.workingDirectory,
-        },
-        newSessionOptions,
-        debugMonitor,
-        debugLogPath,
-        debugLogWatcher,
-        "resume",
-      );
-    } else {
-      // CLI process still running — send via input controller
-      ws.inputController.send(message);
-    }
+    await ws.query.streamInput(onceIterator(userMessage));
 
     this.logStatusChange(ws, "streaming", "message_sent");
 
@@ -1231,14 +1083,14 @@ export class SessionManager {
       for await (const event of ws.outputChannel) {
         if (isControlEvent(event)) {
           info(`stream() - control event: type='${event.type}'`);
-          // Log additional detail for control events
           if (event.type === "question_pending") {
-            const questionCount = (event.data as any).questions?.length || 0;
+            const questionCount =
+              (event.data as { questions?: UserQuestion[] }).questions?.length ||
+              0;
             debug(`Control event details: ${questionCount} questions pending`);
           } else if (event.type === "plan_pending") {
             debug(`Control event details: plan approval pending`);
           }
-          // Track control event as last message type
           ws.lastMessageType = event.type;
           ws.lastMessageSubtype = undefined;
           ws.lastActivityAt = new Date();
@@ -1246,30 +1098,37 @@ export class SessionManager {
           continue;
         }
 
-        // SDK message — capture conversation ID and track message type
         const msg = event;
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
         }
 
-        // Track SDK message type
         ws.lastMessageType = msg.type as LastMessageType;
-        ws.lastMessageSubtype = (msg as any).subtype;
+        ws.lastMessageSubtype = (msg as { subtype?: string }).subtype;
         ws.lastActivityAt = new Date();
 
-        if (msg.type === "system" && (msg as any).subtype === "init") {
+        if (
+          msg.type === "system" &&
+          (msg as { subtype?: string }).subtype === "init"
+        ) {
+          const initMsg = msg as {
+            permissionMode?: string;
+            model?: string;
+            tools?: string[];
+          };
+          const hasSkill = Array.isArray(initMsg.tools) && initMsg.tools.includes("Skill");
           info(
-            `SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`,
+            `SDK init: permissionMode='${initMsg.permissionMode}', model='${initMsg.model}', toolCount=${initMsg.tools?.length ?? 0}, hasSkillTool=${hasSkill}`,
           );
         }
         if (msg.type === "result") {
-          const r = msg as any;
+          const r = msg as { subtype?: string; is_error?: boolean };
           info(`result: subtype='${r.subtype}', is_error=${r.is_error}`);
         }
         yield event;
       }
     } finally {
-      // Don't overwrite error status — it indicates a genuine failure
+      // Don't overwrite error status — it indicates a genuine failure.
       if (ws.status !== "error") {
         this.logStatusChange(ws, "idle", "stream_complete");
       }
@@ -1280,26 +1139,18 @@ export class SessionManager {
     const ws = this.sessions.get(sessionId);
     if (!ws) return;
 
-    // Reject any pending questions
-    const pendingQuestion = this.pendingQuestions.get(sessionId);
-    if (pendingQuestion) {
-      warn(`Session closed with pending question (sessionId: ${sessionId})`);
-      pendingQuestion.reject(new Error("Session closed"));
-      this.pendingQuestions.delete(sessionId);
-    }
-
-    // Reject any pending plan approvals
-    const pendingPlan = this.pendingPlanApprovals.get(sessionId);
-    if (pendingPlan) {
-      warn(
-        `Session closed with pending plan approval (sessionId: ${sessionId})`,
-      );
-      pendingPlan.reject(new Error("Session closed"));
-      this.pendingPlanApprovals.delete(sessionId);
+    const bySession = this.pending.get(sessionId);
+    if (bySession) {
+      for (const [kind, entry] of bySession) {
+        const label = kind === "question" ? "question" : "plan approval";
+        warn(`Session closed with pending ${label} (sessionId: ${sessionId})`);
+        entry.reject(new Error("Session closed"));
+      }
+      this.pending.delete(sessionId);
     }
 
     ws.outputChannel.complete();
-    ws.inputController.close();
+    ws.query.close?.();
     this.logStatusChange(ws, "closed", "session_closed");
     this.sessions.delete(sessionId);
   }
@@ -1330,25 +1181,9 @@ export class SessionManager {
   }
 
   /**
-   * Gets message history for a session since a given timestamp.
-   * Used for catch-up replay after server restart.
-   */
-  getMessageHistory(sessionId: string, since?: Date): MessageHistoryEntry[] {
-    const ws = this.sessions.get(sessionId);
-    if (!ws) {
-      return [];
-    }
-
-    if (since) {
-      return ws.outputChannel.getMessagesSince(since);
-    }
-    return ws.outputChannel.getAllMessages();
-  }
-
-  /**
    * Clears context by closing an existing session and creating a new one.
-   * Returns the new session. The old session is closed but not deleted
-   * from history (handled by the server's message cache).
+   * Returns the new session. Message replay after the swap comes exclusively
+   * from the server-side cache.
    */
   async clearContextAndCreate(
     currentSessionId: string,
@@ -1364,7 +1199,6 @@ export class SessionManager {
       `clearContextAndCreate - closing session '${currentSessionId}' and creating new session`,
     );
 
-    // Close the existing session if it exists
     const existingSession = this.sessions.get(currentSessionId);
     if (existingSession) {
       await this.close(currentSessionId);
@@ -1374,14 +1208,12 @@ export class SessionManager {
       );
     }
 
-    // Create a new session with fresh context (no resume)
     const newSession = await this.create({
       prompt: opts.prompt,
       model: opts.model,
       mode: opts.mode,
       systemPrompt: opts.systemPrompt,
       workingDirectory: opts.workingDirectory,
-      // No resumeSessionId - this is a fresh context
     });
 
     info(

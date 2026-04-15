@@ -45,8 +45,7 @@ describe('GET /sessions/active', () => {
     sm.list.mockReturnValue([
       { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
     ]);
-    sm.hasPendingQuestion.mockReturnValue(false);
-    sm.hasPendingPlanApproval.mockReturnValue(false);
+    sm.hasPending.mockImplementation(() => false);
 
     const res = await app.request('/active');
     const body = await res.json();
@@ -67,8 +66,7 @@ describe('GET /sessions/active', () => {
     sm.list.mockReturnValue([
       { sessionId: 's1', status: 'streaming', lastActivityAt: '2025-01-01T00:00:00Z' },
     ]);
-    sm.hasPendingQuestion.mockReturnValue(false);
-    sm.hasPendingPlanApproval.mockReturnValue(false);
+    sm.hasPending.mockImplementation(() => false);
 
     const res = await app.request('/active');
     const body = await res.json();
@@ -83,8 +81,7 @@ describe('GET /sessions/active', () => {
     sm.list.mockReturnValue([
       { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
     ]);
-    sm.hasPendingQuestion.mockReturnValue(true);
-    sm.hasPendingPlanApproval.mockReturnValue(false);
+    sm.hasPending.mockImplementation((_: string, kind: string) => kind === 'question');
 
     const res = await app.request('/active');
     const body = await res.json();
@@ -99,8 +96,7 @@ describe('GET /sessions/active', () => {
     sm.list.mockReturnValue([
       { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
     ]);
-    sm.hasPendingQuestion.mockReturnValue(false);
-    sm.hasPendingPlanApproval.mockReturnValue(true);
+    sm.hasPending.mockImplementation((_: string, kind: string) => kind === 'plan');
 
     const res = await app.request('/active');
     const body = await res.json();
@@ -257,7 +253,7 @@ describe('POST /sessions/:id/message', () => {
 describe('POST /sessions/:id/answer', () => {
   it('resolves pending question when one exists', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingQuestion.mockReturnValue(true);
+    sm.resolvePending.mockReturnValue(true);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
     sm.stream.mockReturnValue((async function* () {})());
 
@@ -273,9 +269,11 @@ describe('POST /sessions/:id/answer', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(sm.resolvePendingQuestion).toHaveBeenCalledWith('sess-1', {
-      'Which framework?': 'React',
-      'Include tests?': 'Yes',
+    expect(sm.resolvePending).toHaveBeenCalledWith('sess-1', 'question', {
+      answers: {
+        'Which framework?': 'React',
+        'Include tests?': 'Yes',
+      },
     });
     // Should not send as message when pending question was resolved
     expect(sm.send).not.toHaveBeenCalled();
@@ -283,7 +281,7 @@ describe('POST /sessions/:id/answer', () => {
 
   it('returns 400 when no pending question', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingQuestion.mockReturnValue(false);
+    sm.resolvePending.mockReturnValue(false);
 
     const res = await app.request('/sess-1/answer', {
       method: 'POST',
@@ -300,7 +298,7 @@ describe('POST /sessions/:id/answer', () => {
 describe('POST /sessions/:id/approve-plan', () => {
   it('resolves pending plan approval when approved', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingPlanApproval.mockReturnValue(true);
+    sm.resolvePending.mockReturnValue(true);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
     sm.stream.mockReturnValue((async function* () {})());
 
@@ -311,12 +309,16 @@ describe('POST /sessions/:id/approve-plan', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(sm.resolvePendingPlanApproval).toHaveBeenCalledWith('sess-1', true, undefined, undefined);
+    expect(sm.resolvePending).toHaveBeenCalledWith('sess-1', 'plan', {
+      approved: true,
+      keepContext: undefined,
+      feedback: undefined,
+    });
   });
 
   it('resolves pending plan approval when rejected', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingPlanApproval.mockReturnValue(true);
+    sm.resolvePending.mockReturnValue(true);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
     sm.stream.mockReturnValue((async function* () {})());
 
@@ -327,12 +329,16 @@ describe('POST /sessions/:id/approve-plan', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(sm.resolvePendingPlanApproval).toHaveBeenCalledWith('sess-1', false, undefined, undefined);
+    expect(sm.resolvePending).toHaveBeenCalledWith('sess-1', 'plan', {
+      approved: false,
+      keepContext: undefined,
+      feedback: undefined,
+    });
   });
 
-  it('passes keepContext and feedback to resolvePendingPlanApproval', async () => {
+  it('passes keepContext and feedback to resolvePending', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingPlanApproval.mockReturnValue(true);
+    sm.resolvePending.mockReturnValue(true);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
     sm.stream.mockReturnValue((async function* () {})());
 
@@ -343,12 +349,16 @@ describe('POST /sessions/:id/approve-plan', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(sm.resolvePendingPlanApproval).toHaveBeenCalledWith('sess-1', true, true, 'looks good');
+    expect(sm.resolvePending).toHaveBeenCalledWith('sess-1', 'plan', {
+      approved: true,
+      keepContext: true,
+      feedback: 'looks good',
+    });
   });
 
   it('returns 400 when no pending plan approval', async () => {
     const { sm, app } = createApp();
-    sm.resolvePendingPlanApproval.mockReturnValue(false);
+    sm.resolvePending.mockReturnValue(false);
 
     const res = await app.request('/sess-1/approve-plan', {
       method: 'POST',
