@@ -2,8 +2,7 @@ name: Worker Live Tests
 
 # Runs the worker's live integration suite against a freshly-built
 # `homespun-worker:local` image. Uses real Claude inference (paid), so the
-# suite is gated to post-merge on `main` and a nightly schedule — never on
-# every PR.
+# suite is gated to post-merge on `main` — never on every PR.
 #
 # Motivation: PR #776 (`simplify-worker-session-manager`) merged green because
 # the live tests and the `scripts/spike-idle-tolerance.ts` regression probe
@@ -17,10 +16,6 @@ on:
       - "src/Homespun.Worker/**"
       - "tests/Homespun.Worker/**"
       - ".github/workflows/worker-live-tests.yml"
-  schedule:
-    # 09:00 UTC daily. Catches SDK upgrades and environmental drift even when
-    # no worker PR has landed in a day.
-    - cron: "0 9 * * *"
   workflow_dispatch: {}
 
 permissions:
