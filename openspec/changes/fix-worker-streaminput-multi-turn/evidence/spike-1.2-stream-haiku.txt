@@ -1,0 +1,19 @@
+spike-idle-tolerance: IDLE_SECONDS=3, model=claude-haiku-4-5-20251001, permissionMode=default, dangerousSkip=false, setModeOnTurn2=false
+[turn1] msg type=system subtype=init
+[turn1] msg type=assistant
+[turn1] msg type=assistant
+[turn1] msg type=rate_limit_event
+[turn1] msg type=result subtype=success
+FIRST RESULT received
+idling for 3s...
+idle complete after 3s
+calling q.streamInput(once(followup))...
+FOLLOW-UP FAILURE: Error: drain ended before second result (seen=1, followupScheduled=true)
+Error: drain ended before second result (seen=1, followupScheduled=true)
+    at main (/app/scripts/spike-idle-tolerance.ts:244:13)
+streamInput rejected: ProcessTransport is not ready for writing
+npm notice
+npm notice New minor version of npm available! 11.9.0 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice

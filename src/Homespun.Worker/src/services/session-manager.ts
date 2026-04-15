@@ -21,7 +21,14 @@ import {
   type WorkflowSignalInput,
 } from "../tools/workflow-tools.js";
 import { randomUUID } from "node:crypto";
-import { info, error, warn, debug } from "../utils/logger.js";
+import {
+  info,
+  error,
+  warn,
+  debug,
+  sdkDebug,
+  isSdkDebugEnabled,
+} from "../utils/logger.js";
 import {
   buildInventoryFromInit,
   emitInventoryLog,
@@ -33,6 +40,7 @@ import {
   FileMonitor,
 } from "../utils/diagnostics.js";
 import { watch, existsSync } from "node:fs";
+import { InputQueue } from "./input-queue.js";
 
 export type SdkPermissionMode =
   | "default"
@@ -104,6 +112,20 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
 /**
  * Single-consumer async queue that merges pushes from multiple producers
  * (the SDK query background task and the canUseTool callback).
+ *
+ * ## Invariants
+ *
+ * - **Single consumer at a time.** The channel delivers each event to exactly
+ *   one consumer. Per-HTTP-request SSE streams consume the channel
+ *   sequentially, but never concurrently. The behavior under concurrent
+ *   `for await` loops is undefined — whichever consumer installed the most
+ *   recent resolver receives the next push.
+ * - **Events survive consumer abort.** When a consumer exits its `for await`
+ *   (e.g. because `streamSessionEvents` returns on a `result`), the pending
+ *   resolver MUST be cleared in the generator's `finally` block so that any
+ *   subsequent `push(...)` lands in the internal buffer rather than invoking
+ *   a stale promise resolver (which would silently drop the event). The next
+ *   consumer then drains from the buffer.
  */
 export class OutputChannel {
   private queue: OutputEvent[] = [];
@@ -133,19 +155,48 @@ export class OutputChannel {
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<OutputEvent> {
-    while (true) {
-      if (this.queue.length > 0) {
-        yield this.queue.shift()!;
-      } else if (this.done) {
-        return;
-      } else {
-        const result = await new Promise<IteratorResult<OutputEvent>>(
-          (resolve) => {
-            this.resolver = resolve;
-          },
-        );
-        if (result.done) return;
-        yield result.value;
+    // If a prior iterator is still suspended on an un-settled promise (e.g.
+    // an aborted SSE consumer whose runtime never called .return()), its
+    // resolver is still attached to this channel. Complete it with done:true
+    // so it unblocks and runs its own finally, then claim the slot for this
+    // new iterator. Without this, the next push() would deliver the event to
+    // the orphaned resolver and the new consumer would never see it.
+    if (this.resolver) {
+      const stale = this.resolver;
+      this.resolver = null;
+      stale({ value: undefined as unknown as OutputEvent, done: true });
+    }
+
+    // Track which resolver this iterator installed so finally only clears
+    // its own subscription and not a resolver that belongs to a later
+    // iterator that supplanted it.
+    let myResolver: ((r: IteratorResult<OutputEvent>) => void) | null = null;
+
+    try {
+      while (true) {
+        if (this.queue.length > 0) {
+          yield this.queue.shift()!;
+        } else if (this.done) {
+          return;
+        } else {
+          const result = await new Promise<IteratorResult<OutputEvent>>(
+            (resolve) => {
+              myResolver = resolve;
+              this.resolver = resolve;
+            },
+          );
+          myResolver = null;
+          if (result.done) return;
+          yield result.value;
+        }
+      }
+    } finally {
+      // Clear the resolver slot only if it still points at ours — a later
+      // iterator may have supplanted it by now, and we must not clobber
+      // that. Without this, events produced between two per-turn SSE
+      // consumer iterations would be silently dropped.
+      if (myResolver && this.resolver === myResolver) {
+        this.resolver = null;
       }
     }
   }
@@ -185,6 +236,13 @@ interface PendingInteraction<T> {
 interface WorkerSession {
   id: string;
   query: Query;
+  /**
+   * Persistent input iterable supplied to `query({ prompt })`. The initial
+   * user prompt is pushed here on session create; follow-up user messages
+   * are pushed here by `send()`. Closed by `close()` so the session's
+   * `query()` lifecycle ends cleanly.
+   */
+  inputQueue: InputQueue;
   outputChannel: OutputChannel;
   conversationId?: string;
   mode: string;
@@ -301,13 +359,31 @@ function buildCommonOptions(
 }
 
 /**
- * Yields a single SDK user message then returns. Used to push a follow-up
- * message into the live query via `q.streamInput(...)`.
+ * Strip credentials from an object before passing it to `sdkDebug`. Mutates
+ * the returned shallow copy — the original `sessionOptions` is not modified.
  */
-async function* onceIterator(
-  msg: SDKUserMessage,
-): AsyncGenerator<SDKUserMessage> {
-  yield msg;
+function redactSessionOptionsForLog(
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...options };
+  if (copy.env && typeof copy.env === "object") {
+    const env = { ...(copy.env as Record<string, unknown>) };
+    for (const key of [
+      "GITHUB_TOKEN",
+      "GH_TOKEN",
+      "GitHub__Token",
+      "CLAUDE_CODE_OAUTH_TOKEN",
+      "ANTHROPIC_API_KEY",
+    ]) {
+      if (key in env) env[key] = "[REDACTED]";
+    }
+    copy.env = env;
+  }
+  // Don't spill the canUseTool callback's source.
+  if (typeof copy.canUseTool === "function") {
+    copy.canUseTool = "[Function]";
+  }
+  return copy;
 }
 
 /**
@@ -648,9 +724,13 @@ export class SessionManager {
       `Session configuration: permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}, sessionId='${id}', allowedTools=${JSON.stringify(sessionOptions.allowedTools)}, hasCanUseTool=true, hasResume=${!!opts.resumeSessionId}`,
     );
 
-    // Build the initial prompt as a single-message async iterable. The SDK
-    // accepts this as streaming-input mode; follow-up messages are pushed via
-    // q.streamInput() later.
+    // Build the initial prompt as the first entry in a persistent InputQueue.
+    // The queue's iterator never returns until close() is called, which keeps
+    // the SDK's internal streamInput suspended between turns and prevents
+    // transport.endInput() from closing stdin to the CLI. Follow-up messages
+    // are delivered by pushing into this same queue rather than by invoking
+    // q.streamInput() — see scripts/spike-idle-tolerance.ts for the contract
+    // and the `fix-worker-streaminput-multi-turn` OpenSpec change for the why.
     const initialPrompt: SDKUserMessage = {
       type: "user",
       session_id: "",
@@ -661,8 +741,25 @@ export class SessionManager {
       parent_tool_use_id: null,
     };
 
+    const inputQueue = new InputQueue();
+
+    // Capture point 1: full session options just before query({...}). Gated
+    // on DEBUG_AGENT_SDK. Credentials are redacted from options.env.
+    if (isSdkDebugEnabled()) {
+      warn(
+        `DEBUG_AGENT_SDK is enabled — high log volume expected (sessionId: ${id})`,
+      );
+      sdkDebug("tx", redactSessionOptionsForLog(sessionOptions));
+    }
+
+    // Capture point 2: initial user message pushed into the input queue.
+    if (isSdkDebugEnabled()) {
+      sdkDebug("tx", initialPrompt);
+    }
+    inputQueue.push(initialPrompt);
+
     const q = query({
-      prompt: onceIterator(initialPrompt),
+      prompt: inputQueue,
       options: sessionOptions as Parameters<typeof query>[0]["options"],
     });
 
@@ -671,6 +768,7 @@ export class SessionManager {
     const workerSession: WorkerSession = {
       id,
       query: q,
+      inputQueue,
       outputChannel,
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
@@ -739,9 +837,12 @@ export class SessionManager {
 
   /**
    * Runs the background query forwarder that reads SDK messages and pushes
-   * them to the output channel. There is now a single forwarder per session
-   * lifetime — follow-up messages are delivered via q.streamInput() directly
-   * into the same query without restarting it.
+   * them to the output channel. There is a single forwarder per session
+   * lifetime. Follow-up user messages are delivered by pushing into the
+   * session's persistent `InputQueue` (the same iterable supplied as the
+   * initial `prompt` to `query()`), never via `q.streamInput(...)` — see
+   * the `fix-worker-streaminput-multi-turn` OpenSpec change for the SDK
+   * contract that motivates this design.
    */
   private runQueryForwarder(
     session: WorkerSession,
@@ -762,6 +863,10 @@ export class SessionManager {
         let messageCount = 0;
         session.inventoryEmitted = false;
         for await (const msg of q) {
+          // Capture point 4: every raw SDK message yielded by the Query.
+          if (isSdkDebugEnabled()) {
+            sdkDebug("rx", msg);
+          }
           if (
             !session.inventoryEmitted &&
             msg.type === "system" &&
@@ -982,6 +1087,9 @@ export class SessionManager {
     );
 
     if (ws.query.setPermissionMode) {
+      if (isSdkDebugEnabled()) {
+        sdkDebug("tx", { op: "setPermissionMode", mode: newPermissionMode });
+      }
       await ws.query.setPermissionMode(newPermissionMode);
       info(
         `setMode - setPermissionMode('${newPermissionMode}') applied (sessionId='${sessionId}')`,
@@ -1012,6 +1120,9 @@ export class SessionManager {
     info(`setModel - model updated to '${model}' (sessionId='${sessionId}')`);
 
     if (ws.query.setModel) {
+      if (isSdkDebugEnabled()) {
+        sdkDebug("tx", { op: "setModel", model });
+      }
       await ws.query.setModel(model);
       info(`setModel - setModel('${model}') applied (sessionId='${sessionId}')`);
     }
@@ -1038,6 +1149,9 @@ export class SessionManager {
       ws.model = model;
       info(`model updated to '${model}'`);
       if (ws.query.setModel) {
+        if (isSdkDebugEnabled()) {
+          sdkDebug("tx", { op: "setModel", model });
+        }
         await ws.query.setModel(model);
       }
     }
@@ -1049,6 +1163,12 @@ export class SessionManager {
         `mode updated to '${ws.mode}', permissionMode='${ws.permissionMode}'`,
       );
       if (ws.query.setPermissionMode) {
+        if (isSdkDebugEnabled()) {
+          sdkDebug("tx", {
+            op: "setPermissionMode",
+            mode: ws.permissionMode,
+          });
+        }
         await ws.query.setPermissionMode(ws.permissionMode);
         info(`setPermissionMode('${ws.permissionMode}') applied`);
       }
@@ -1066,7 +1186,13 @@ export class SessionManager {
       parent_tool_use_id: null,
     };
 
-    await ws.query.streamInput(onceIterator(userMessage));
+    // Push into the persistent input queue. This avoids q.streamInput(...)
+    // which always calls transport.endInput() at the tail and would close
+    // stdin to the CLI subprocess after the message is written.
+    if (isSdkDebugEnabled()) {
+      sdkDebug("tx", userMessage);
+    }
+    ws.inputQueue.push(userMessage);
 
     this.logStatusChange(ws, "streaming", "message_sent");
 
@@ -1149,6 +1275,11 @@ export class SessionManager {
       this.pending.delete(sessionId);
     }
 
+    // Close the input queue first so the SDK's internal consumer sees
+    // { done: true } and finishes its streamInput loop before we tear down
+    // the Query itself. Closing the query first can surface a spurious
+    // write-error if a push is racing.
+    ws.inputQueue.close();
     ws.outputChannel.complete();
     ws.query.close?.();
     this.logStatusChange(ws, "closed", "session_closed");

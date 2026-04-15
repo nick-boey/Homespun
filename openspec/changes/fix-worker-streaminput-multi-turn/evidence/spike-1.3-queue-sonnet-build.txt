@@ -1,0 +1,22 @@
+spike-idle-tolerance: IDLE_SECONDS=3, model=claude-sonnet-4-5-20250929, permissionMode=bypassPermissions, dangerousSkip=true, setModeOnTurn2=true
+[turn1] msg type=system subtype=init
+[turn1] msg type=assistant
+[turn1] msg type=assistant
+[turn1] msg type=rate_limit_event
+[turn1] msg type=result subtype=success
+FIRST RESULT received
+idling for 3s...
+idle complete after 3s
+calling setPermissionMode('bypassPermissions')...
+setPermissionMode accepted
+pushing follow-up through persistent input queue...
+[turn2] msg type=system subtype=init
+[turn2] msg type=assistant
+[turn2] msg type=assistant
+[turn2] msg type=result subtype=success
+FOLLOW-UP SUCCESS
+npm notice
+npm notice New minor version of npm available! 11.9.0 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice

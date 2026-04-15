@@ -1,0 +1,23 @@
+spike-idle-tolerance: IDLE_SECONDS=3, model=claude-sonnet-4-5-20250929, permissionMode=bypassPermissions, dangerousSkip=true, setModeOnTurn2=true
+[turn1] msg type=system subtype=init
+[turn1] msg type=assistant
+[turn1] msg type=assistant
+[turn1] msg type=rate_limit_event
+[turn1] msg type=result subtype=success
+FIRST RESULT received
+idling for 3s...
+idle complete after 3s
+calling setPermissionMode('bypassPermissions')...
+FOLLOW-UP FAILURE: Error: ProcessTransport is not ready for writing
+Error: ProcessTransport is not ready for writing
+    at y4.write (file:///app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs:19:7066)
+    at file:///app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs:21:4049
+    at new Promise (<anonymous>)
+    at h4.request (file:///app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs:21:3742)
+    at h4.setPermissionMode (file:///app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs:21:2523)
+    at main (/app/scripts/spike-idle-tolerance.ts:219:21)
+npm notice
+npm notice New minor version of npm available! 11.9.0 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice

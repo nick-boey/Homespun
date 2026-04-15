@@ -1,0 +1,72 @@
+name: Worker Live Tests
+
+# Runs the worker's live integration suite against a freshly-built
+# `homespun-worker:local` image. Uses real Claude inference (paid), so the
+# suite is gated to post-merge on `main` — never on every PR.
+#
+# Motivation: PR #776 (`simplify-worker-session-manager`) merged green because
+# the live tests and the `scripts/spike-idle-tolerance.ts` regression probe
+# were not in CI. See OpenSpec change `fix-worker-streaminput-multi-turn` for
+# the detailed write-up and the investigation that led to this workflow.
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/Homespun.Worker/**"
+      - "tests/Homespun.Worker/**"
+      - ".github/workflows/worker-live-tests.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Cap concurrency so two runs can't burn inference in parallel.
+concurrency:
+  group: worker-live-tests
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Worker live integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install worker deps
+        working-directory: src/Homespun.Worker
+        run: npm ci
+
+      - name: Build worker image
+        run: docker build -t homespun-worker:local ./src/Homespun.Worker
+
+      # Quick-check spike before the full live suite so an SDK regression that
+      # re-breaks streamInput surfaces within ~30s rather than after a
+      # multi-minute live-suite run. Uses INPUT_MODE=queue + the shortest idle
+      # that still exercises a full two-turn flow.
+      - name: Spike — streamInput regression probe
+        working-directory: src/Homespun.Worker
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          INPUT_MODE: queue
+          IDLE_SECONDS: "3"
+        run: docker run --rm \
+          -e CLAUDE_CODE_OAUTH_TOKEN \
+          -e INPUT_MODE \
+          -e IDLE_SECONDS \
+          -v "$(pwd):/worker" \
+          -w /worker \
+          homespun-worker:local \
+          node --experimental-strip-types scripts/spike-idle-tolerance.ts
+
+      - name: Worker live suite
+        working-directory: src/Homespun.Worker
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: npm run test:live

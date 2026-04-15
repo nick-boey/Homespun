@@ -142,3 +142,7 @@ Order of implementation (see tasks.md):
 - Should the handler registry live in a new file (`src/services/tool-handlers.ts`) or remain inline in `session-manager.ts`? Deferred to implementation — preference is inline unless it pushes the file back over 700 lines.
 - Does the worker need to expose any equivalent of the removed `/messages` endpoint for operator diagnostics (e.g. `/sessions/:id/debug`)? No known consumer today; leave out unless a need surfaces.
 - Idle tolerance spike script at `src/Homespun.Worker/scripts/spike-idle-tolerance.ts` — run manually before landing the refactor; keep-alive task to be added if it fails.
+
+## Correction — 2026-04-16
+
+The `onceIterator(initialPrompt)` + `q.streamInput(onceIterator(followup))` pattern shipped with this change does not survive past the first turn: the SDK's internal `streamInput` calls `transport.endInput()` at the tail, which closes stdin to the CLI and causes `ProcessTransport is not ready for writing` on the next `streamInput`/`setPermissionMode`/`setModel`. The regression merged green because the worker live tests and `spike-idle-tolerance.ts` were not running in CI. OpenSpec change `fix-worker-streaminput-multi-turn` (2026-04) replaces the per-turn `streamInput` path with a persistent `InputQueue` passed as the `prompt`, and wires the live suite + spike into a scheduled workflow so this class of regression surfaces within hours.
