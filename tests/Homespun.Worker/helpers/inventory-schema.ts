@@ -12,7 +12,7 @@ import addFormatsImport from "ajv-formats";
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(
   here,
-  "../../../specs/001-worker-skills-logging/contracts/inventory-log-record.schema.json",
+  "../../../openspec/changes/worker-skills-logging/contracts/inventory-log-record.schema.json",
 );
 
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));

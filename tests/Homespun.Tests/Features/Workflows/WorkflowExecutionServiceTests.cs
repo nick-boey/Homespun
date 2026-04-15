@@ -1036,11 +1036,18 @@ public class WorkflowExecutionServiceTests
 
         // Act
         var result = await service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
-        await Task.Delay(200);
+
+        // Poll until the workflow reaches a terminal status (avoids fixed-delay race in CI)
+        WorkflowExecution? execution = null;
+        for (var i = 0; i < 20; i++)
+        {
+            await Task.Delay(50);
+            execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+            if (execution!.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Failed)
+                break;
+        }
 
         // Assert - step-1 failed, jumped to step-3, step-2 was skipped
-        var execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
-
         Assert.Multiple(() =>
         {
             Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
