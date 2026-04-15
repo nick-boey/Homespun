@@ -9,8 +9,8 @@ namespace Homespun.Api.Tests.Features.AgentOrchestration;
 
 /// <summary>
 /// Integration tests for stacked PR agent startup flow.
-/// Tests that the base branch resolution and blocking issue validation
-/// are properly integrated into the agent start pipeline.
+/// Tests that the base branch resolution is properly integrated
+/// into the agent start pipeline.
 /// </summary>
 [TestFixture]
 public class StackedPrAgentStartTests
@@ -69,7 +69,7 @@ public class StackedPrAgentStartTests
     /// <summary>
     /// Test that start agent endpoint returns OK for a valid project.
     /// Note: In mock mode, the actual agent start is simulated but the
-    /// base branch resolution and blocking issue checks are still performed.
+    /// base branch resolution is still performed.
     /// </summary>
     [Test]
     public async Task StartAgent_ReturnsOk_ForValidProject()

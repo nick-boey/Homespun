@@ -63,16 +63,6 @@ public interface IProjectFleeceService
     /// <returns>List of child issues sorted by sortOrder.</returns>
     Task<IReadOnlyList<Issue>> GetChildrenAsync(string projectPath, string issueId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Checks if an issue has blocking dependencies (open children or open prior siblings).
-    /// Returns details about what is blocking execution.
-    /// </summary>
-    /// <param name="projectPath">Path to the project.</param>
-    /// <param name="issueId">The issue ID to check.</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Details about blocking issues.</returns>
-    Task<BlockingIssuesResult> GetBlockingIssuesAsync(string projectPath, string issueId, CancellationToken ct = default);
-
     #endregion
 
     #region Cache Management

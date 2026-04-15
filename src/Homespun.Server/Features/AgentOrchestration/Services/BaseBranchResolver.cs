@@ -9,19 +9,17 @@ namespace Homespun.Features.AgentOrchestration.Services;
 public record BaseBranchResolutionResult(string? BaseBranch, string? Error);
 
 /// <summary>
-/// Interface for resolving the base branch and validating blocking issues for agent startup.
+/// Interface for resolving the base branch for agent startup.
 /// </summary>
 public interface IBaseBranchResolver
 {
     /// <summary>
-    /// Resolves the correct base branch for an agent start request and validates that
-    /// there are no blocking issues.
+    /// Resolves the correct base branch for an agent start request.
     /// </summary>
     /// <param name="request">The agent start request.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>
     /// A result containing either the resolved base branch name or an error message.
-    /// If there are blocking issues, BaseBranch will be null and Error will contain details.
     /// </returns>
     Task<BaseBranchResolutionResult> ResolveBaseBranchAsync(AgentStartRequest request, CancellationToken ct = default);
 }
@@ -31,11 +29,10 @@ public interface IBaseBranchResolver
 /// </summary>
 /// <remarks>
 /// The resolution logic follows these steps:
-/// 1. Check for blocking issues (open children or open prior siblings) - if blocked, return error
-/// 2. If an explicit BaseBranch is specified in the request, use it
-/// 3. Check for a prior sibling in the issue hierarchy
-/// 4. If the prior sibling has an open PR, use the PR's branch as the base
-/// 5. Otherwise (no prior sibling, or prior sibling's PR is merged/missing), use the default branch
+/// 1. If an explicit BaseBranch is specified in the request, use it
+/// 2. Check for a prior sibling in the issue hierarchy
+/// 3. If the prior sibling has an open PR, use the PR's branch as the base
+/// 4. Otherwise (no prior sibling, or prior sibling's PR is merged/missing), use the default branch
 /// </remarks>
 public class BaseBranchResolver(
     IProjectFleeceService fleeceService,
@@ -49,24 +46,7 @@ public class BaseBranchResolver(
         var projectPath = request.ProjectLocalPath;
         var issueId = request.IssueId;
 
-        // Step 1: Check for blocking issues
-        var blocking = await fleeceService.GetBlockingIssuesAsync(projectPath, issueId, ct);
-        if (blocking.IsBlocked)
-        {
-            var blockingIds = blocking.OpenChildren
-                .Concat(blocking.OpenPriorSiblings)
-                .Select(i => i.Id)
-                .ToList();
-
-            var error = $"Cannot start agent: blocked by open issues: {string.Join(", ", blockingIds)}";
-            logger.LogWarning(
-                "Agent start blocked for issue {IssueId}: {Error}",
-                issueId, error);
-
-            return new BaseBranchResolutionResult(null, error);
-        }
-
-        // Step 2: If BaseBranch is already specified in the request, use it
+        // Step 1: If BaseBranch is already specified in the request, use it
         if (!string.IsNullOrEmpty(request.BaseBranch))
         {
             logger.LogDebug(
@@ -76,7 +56,7 @@ public class BaseBranchResolver(
             return new BaseBranchResolutionResult(request.BaseBranch, null);
         }
 
-        // Step 3: Check for prior sibling in the hierarchy
+        // Step 2: Check for prior sibling in the hierarchy
         var priorSibling = await fleeceService.GetPriorSiblingAsync(projectPath, issueId, ct);
         if (priorSibling == null)
         {
@@ -87,7 +67,7 @@ public class BaseBranchResolver(
             return new BaseBranchResolutionResult(request.ProjectDefaultBranch, null);
         }
 
-        // Step 4: Check if the prior sibling has a linked PR
+        // Step 3: Check if the prior sibling has a linked PR
         var pr = await gitHubService.GetPullRequestForIssueAsync(request.ProjectId, priorSibling.Id);
         if (pr == null)
         {
@@ -99,7 +79,7 @@ public class BaseBranchResolver(
             return new BaseBranchResolutionResult(request.ProjectDefaultBranch, null);
         }
 
-        // Step 5: PR found - it's an open PR, use its branch as the base for stacking
+        // Step 4: PR found - it's an open PR, use its branch as the base for stacking
         // Note: Only open PRs are tracked locally (OpenPullRequestStatus enum doesn't have Merged)
         logger.LogInformation(
             "Using stacked PR branch {BranchName} from prior sibling {PriorSiblingId} as base for issue {IssueId}",
