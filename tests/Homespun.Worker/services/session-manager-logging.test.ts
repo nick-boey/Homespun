@@ -11,6 +11,8 @@ vi.mock('#src/utils/logger.js', () => ({
   error: vi.fn(),
   warn: vi.fn(),
   debug: vi.fn(),
+  sdkDebug: vi.fn(),
+  isSdkDebugEnabled: vi.fn(() => false),
 }));
 
 // Track the canUseTool callback that gets passed to query()

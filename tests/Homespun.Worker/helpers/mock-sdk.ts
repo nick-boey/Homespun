@@ -1,37 +1,89 @@
-import type { SDKMessage, Query, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  SDKMessage,
+  Query,
+  PermissionResult,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
+
+/**
+ * The error message the real `@anthropic-ai/claude-agent-sdk` `ProcessTransport`
+ * throws when a write is attempted after `endInput()` has been called. Kept in
+ * sync with `sdk.mjs`'s own throw string so tests observe the same failure
+ * shape as production.
+ */
+export const TRANSPORT_NOT_READY_ERROR =
+  'ProcessTransport is not ready for writing';
 
 export interface MockQuery extends Query {
   setPermissionMode: ReturnType<typeof vi.fn>;
   _iterator: AsyncGenerator<SDKMessage>;
   _messages: SDKMessage[];
+  /**
+   * Simulate the real SDK's `endInput()` happening — any subsequent
+   * write/control call must throw. Used by tests that want to assert the
+   * session-manager never invokes streamInput / setPermissionMode / setModel
+   * on a Query whose initial iterable has already completed.
+   */
+  _simulateInputEnded(): void;
+  /**
+   * Push a message into the mock's injected input queue. Tests use this
+   * instead of `q.streamInput(...)` when they want to exercise the
+   * session-manager's persistent-input-queue path.
+   */
+  _pushInput(msg: SDKUserMessage): void;
 }
 
-// Mock V1 Query object that acts as an async generator
+// Mock V1 Query object that acts as an async generator. Mirrors the real
+// sdk.mjs contract: once the input iterable passed to `query({prompt})` is
+// exhausted, the transport throws on any further streamInput / setPermissionMode
+// / setModel call. This guards against regressions that feed the SDK a finite
+// iterable and then call streamInput for follow-ups (the #776 failure mode
+// that this OpenSpec change addresses).
 export function createMockQuery(messages: SDKMessage[] = []): MockQuery {
+  let inputEnded = false;
+  const failIfInputEnded = (op: string) => {
+    if (inputEnded) {
+      throw new Error(`${TRANSPORT_NOT_READY_ERROR}: ${op}`);
+    }
+  };
+
   const mockQuery = {
-    setPermissionMode: vi.fn().mockResolvedValue(undefined),
+    setPermissionMode: vi.fn(async (..._args: unknown[]) => {
+      failIfInputEnded('setPermissionMode');
+    }),
     interrupt: vi.fn().mockResolvedValue(undefined),
     rewindFiles: vi.fn().mockResolvedValue(undefined),
-    setModel: vi.fn().mockResolvedValue(undefined),
+    setModel: vi.fn(async (..._args: unknown[]) => {
+      failIfInputEnded('setModel');
+    }),
     setMaxThinkingTokens: vi.fn().mockResolvedValue(undefined),
     supportedCommands: vi.fn().mockResolvedValue([]),
     supportedModels: vi.fn().mockResolvedValue([]),
     mcpServerStatus: vi.fn().mockResolvedValue([]),
     accountInfo: vi.fn().mockResolvedValue({}),
-    streamInput: vi.fn().mockResolvedValue(undefined),
+    streamInput: vi.fn(async (..._args: unknown[]) => {
+      failIfInputEnded('streamInput');
+    }),
     close: vi.fn(),
     _messages: messages,
-    _iterator: null as any,
+    _iterator: null as unknown as AsyncGenerator<SDKMessage>,
+    _simulateInputEnded(): void {
+      inputEnded = true;
+    },
+    _pushInput(_msg: SDKUserMessage): void {
+      // Default no-op; test may override to capture pushed messages.
+    },
   };
 
   // Make it async iterable
-  (mockQuery as any)[Symbol.asyncIterator] = function* () {
-    for (const msg of this._messages) {
-      yield msg;
-    }
-  };
+  (mockQuery as unknown as { [Symbol.asyncIterator]: () => AsyncGenerator<SDKMessage> })[Symbol.asyncIterator] =
+    function* () {
+      for (const msg of this._messages) {
+        yield msg;
+      }
+    } as unknown as () => AsyncGenerator<SDKMessage>;
 
-  return mockQuery as MockQuery;
+  return mockQuery as unknown as MockQuery;
 }
 
 // Helper to set messages on a mock query
@@ -45,10 +97,11 @@ export function setMockQueryMessages(query: MockQuery, messages: SDKMessage[]): 
  */
 export function createBlockingMockQuery(): MockQuery {
   const mockQuery = createMockQuery();
-  (mockQuery as any)[Symbol.asyncIterator] = async function* () {
-    // Block forever — never yield, never return
-    await new Promise(() => {});
-  };
+  (mockQuery as unknown as { [Symbol.asyncIterator]: () => AsyncGenerator<SDKMessage> })[Symbol.asyncIterator] =
+    async function* () {
+      // Block forever — never yield, never return
+      await new Promise(() => {});
+    } as unknown as () => AsyncGenerator<SDKMessage>;
   return mockQuery;
 }
 

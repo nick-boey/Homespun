@@ -14,6 +14,14 @@ const issueId = process.env.ISSUE_ID || undefined;
 const projectName = process.env.PROJECT_NAME || undefined;
 const debugEnabled = process.env.DEBUG_LOGGING === 'true';
 
+/**
+ * Whether `DEBUG_AGENT_SDK=true` is set in the process environment. Read
+ * lazily on each call so tests that stub env after import still work.
+ */
+export function isSdkDebugEnabled(): boolean {
+  return process.env.DEBUG_AGENT_SDK === 'true';
+}
+
 function getCallerInfo(): { file: string; line: number } {
   const stack = new Error().stack?.split('\n')[3]; // Skip: Error, getCallerInfo, log fn
   const match = stack?.match(/at .* \((.+):(\d+):\d+\)/) || stack?.match(/at (.+):(\d+):\d+/);
@@ -61,4 +69,31 @@ export function warn(message: string): void {
 
 export function error(message: string, err?: unknown): void {
   console.error(formatLog('Error', message, err));
+}
+
+/**
+ * Emit a single structured log entry capturing an SDK-boundary message.
+ *
+ * Gated by `DEBUG_AGENT_SDK=true` so production traffic is unaffected unless
+ * the flag is explicitly enabled. The payload is JSON-serialized into the
+ * entry's `Message` field, so existing Promtail / `docker logs` consumers
+ * handle it identically to other worker logs.
+ *
+ * - `direction: 'tx'` — outbound from worker to SDK (session options, user
+ *   messages pushed into the input queue, control calls like setPermissionMode
+ *   / setModel).
+ * - `direction: 'rx'` — inbound from SDK (raw messages yielded by the
+ *   `Query` async iterable).
+ */
+export function sdkDebug(direction: 'tx' | 'rx', msg: unknown): void {
+  if (!isSdkDebugEnabled()) return;
+  let payload: string;
+  try {
+    payload = JSON.stringify(msg);
+  } catch {
+    payload = String(msg);
+  }
+  console.log(
+    formatLog('Debug', `[SDK ${direction}] ${payload}`),
+  );
 }

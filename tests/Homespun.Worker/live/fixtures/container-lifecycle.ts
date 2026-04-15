@@ -112,6 +112,13 @@ export async function startContainer(
     );
   }
 
+  // Forward DEBUG_AGENT_SDK from the host so developers can flip SDK-boundary
+  // debug logging on without rebuilding the worker image or editing configs.
+  // Off by default; the live-test suite only sees it when explicitly exported.
+  if (process.env.DEBUG_AGENT_SDK) {
+    args.push("-e", "DEBUG_AGENT_SDK=" + process.env.DEBUG_AGENT_SDK);
+  }
+
   // Additional environment variables
   if (finalConfig.env) {
     for (const [key, value] of Object.entries(finalConfig.env)) {

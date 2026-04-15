@@ -305,36 +305,53 @@ describe('SessionManager', () => {
       );
     });
 
-    // Task 3.2: send() after a `result` message delivers the new user message
-    // via q.streamInput() and does NOT call query() a second time.
-    it('task 3.2: delivers follow-up via streamInput without restarting query', async () => {
+    // After `fix-worker-streaminput-multi-turn`: send() delivers the new user
+    // message by pushing into the session's persistent input queue (the same
+    // iterable passed to `query({prompt})`). It does NOT call query() again
+    // and does NOT call q.streamInput() — the latter would close stdin to
+    // the CLI and break subsequent turns.
+    it('task 3.2: delivers follow-up by pushing into inputQueue (not streamInput)', async () => {
       setMockQueryMessages(mockQueryObj, [createResultMessage()]);
       const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       // Drain the first query so a result is observed (forwarder finishes).
       await collectAsyncGenerator(manager.stream(ws.id));
 
-      const streamInputMock = vi.fn().mockResolvedValue(undefined);
-      (ws.query as any).streamInput = streamInputMock;
+      const pushSpy = vi.spyOn(ws.inputQueue, 'push');
+      const streamInputMock = (ws.query as unknown as { streamInput: ReturnType<typeof vi.fn> }).streamInput;
       mockQuery.mockClear();
 
       await manager.send(ws.id, 'follow up');
 
       expect(mockQuery).not.toHaveBeenCalled();
-      expect(streamInputMock).toHaveBeenCalledOnce();
-      const [streamArg] = streamInputMock.mock.calls[0];
-      expect(typeof streamArg[Symbol.asyncIterator]).toBe('function');
-
-      const collected: any[] = [];
-      for await (const msg of streamArg) collected.push(msg);
-      expect(collected).toHaveLength(1);
-      expect(collected[0]).toMatchObject({
+      expect(streamInputMock).not.toHaveBeenCalled();
+      expect(pushSpy).toHaveBeenCalledOnce();
+      const [pushed] = pushSpy.mock.calls[0];
+      expect(pushed).toMatchObject({
         type: 'user',
         message: {
           role: 'user',
           content: [{ type: 'text', text: 'follow up' }],
         },
       });
+    });
+
+    // Mock-contract test: the mock SDK's streamInput must fail once the
+    // initial input iterable has been exhausted, mirroring the real SDK's
+    // `ProcessTransport is not ready for writing` behavior. This guards
+    // against a future regression that reintroduces the onceIterator +
+    // q.streamInput pattern by making the unit tests red.
+    it('mock SDK contract: streamInput throws after initial input iterable exhausted', async () => {
+      setMockQueryMessages(mockQueryObj, [createResultMessage()]);
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      // Simulate the SDK's endInput() firing after the initial iterable completes.
+      (ws.query as unknown as { _simulateInputEnded: () => void })._simulateInputEnded();
+
+      await expect(
+        (ws.query as unknown as { streamInput: (x: unknown) => Promise<void> }).streamInput('anything'),
+      ).rejects.toThrow(/ProcessTransport is not ready for writing/);
     });
   });
 

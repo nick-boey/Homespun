@@ -1,8 +1,11 @@
 /**
  * Vitest Configuration for Live Worker Container Tests
  *
- * These tests use real inference and should be run manually during development.
- * They are NOT intended to run in CI.
+ * These tests use real inference against a locally-built `homespun-worker`
+ * image and cost money per run. They are invoked manually during development
+ * and by the scheduled `worker-live-tests` workflow
+ * (`.github/workflows/worker-live-tests.yml`) post-merge / nightly — do NOT
+ * include them in the per-PR worker CI job.
  */
 
 import { defineConfig } from 'vitest/config';
