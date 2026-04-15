@@ -6,8 +6,8 @@
  * resource categories (skills, plugins, slash commands, sub-agents, hooks,
  * MCP servers) available to the SDK session.
  *
- * See specs/001-worker-skills-logging/ for the full spec, data model and
- * JSON Schema contract.
+ * See openspec/changes/worker-skills-logging/ for the full spec, data model
+ * and JSON Schema contract.
  */
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
