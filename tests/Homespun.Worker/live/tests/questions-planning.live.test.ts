@@ -80,7 +80,7 @@ describe("Worker Container - Questions and Planning", () => {
       body: JSON.stringify({
         prompt,
         mode: "Plan",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 
@@ -204,7 +204,7 @@ describe("Worker Container - Questions and Planning", () => {
       body: JSON.stringify({
         prompt: "What number was in the original prompt?",
         mode: "Plan",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 
