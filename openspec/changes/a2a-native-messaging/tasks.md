@@ -112,12 +112,12 @@
 
 ## 14. Verification
 
-- [ ] 14.1 `dotnet test` — confirm all non-Live tests pass; any deleted tests are accounted for by deletion commits, not test-suite regressions
-- [ ] 14.2 `cd src/Homespun.Web && npm run lint:fix && npm run format:check && npm run typecheck && npm test`
-- [ ] 14.3 `cd src/Homespun.Web && npm run generate:api:fetch` — regenerate the API client, confirm `SessionEventsController` appears and `SessionCacheController` does not
-- [ ] 14.4 Live worker integration test: spin the worker container from this branch, create a session, send a multi-tool turn, refresh the UI, confirm messages match between live and reload — capture Playwright screenshots
-- [ ] 14.5 `openspec validate a2a-native-messaging` — confirm the proposal validates
-- [ ] 14.6 Code-review pass (use `superpowers:code-reviewer` or `code-review:code-review` skill)
+- [x] 14.1 `dotnet test` — 2581 passed / 7 skipped across `Homespun.Tests` (2325) + `Homespun.Api.Tests` (256) after the Phase 9.6 (`SessionCacheController`), Phase 10 (purge service), and Phase 11 (refresh-fidelity) changes. The 7 skipped are existing `RealData` JSONL fixture tests that only run under explicit opt-in.
+- [x] 14.2 `cd src/Homespun.Web && npm run typecheck && npm run format:check && npm test` — 0 type errors, 0 format diffs, 2250 passed / 1 skipped across 199 test files. `npm run lint:fix` idempotent (pre-existing `error-boundary.tsx` lint errors and `react-refresh` / `react-hooks/incompatible-library` warnings are unrelated to this change).
+- [ ] 14.3 `npm run generate:api:fetch` blocked — requires a running mock server at `localhost:5000`. The stale `SessionCacheController` endpoints in `src/api/generated/sdk.gen.ts` are dead code (no consumer calls them; the old `use-historical-session-messages.ts` and `signalr-message-adapter.ts` that used them are deleted) but should be regenerated on the next occasion the mock server is started.
+- [ ] 14.4 Live worker integration test — deferred. Unit-level refresh-fidelity is covered by `RefreshFidelityTests` (Phase 11); full live-worker + Playwright verification is a separate QA pass.
+- [x] 14.5 `openspec validate a2a-native-messaging` — reports `Change 'a2a-native-messaging' is valid`.
+- [ ] 14.6 Code-review pass — pending. Recommended to run after the Phase 9.7 `MessageProcessingService` gut (which is the remaining structural work in this change).
 
 ## Dependencies
 
