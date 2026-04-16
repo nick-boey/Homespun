@@ -227,6 +227,15 @@ else
     builder.Services.Configure<SessionEventsOptions>(
         builder.Configuration.GetSection(SessionEventsOptions.SectionName));
 
+    // One-shot startup purge of legacy MessageCacheStore JSONL files. The new A2A
+    // event log (*.events.jsonl) is left untouched. See `docs/a2a-native-migration.md`
+    // and `HOMESPUN_SKIP_CACHE_PURGE=true` to opt out.
+    builder.Services.AddHostedService(sp =>
+        new SessionCachePurgeHostedService(
+            messageCacheDir,
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<ILogger<SessionCachePurgeHostedService>>()));
+
     // Issue workspace service - manages per-issue folder structure for agent isolation
     var projectsBaseDir = builder.Configuration["HOMESPUN_PROJECTS_PATH"]
         ?? Path.Combine(dataDirectory!, "projects");

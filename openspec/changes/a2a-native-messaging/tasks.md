@@ -84,9 +84,9 @@
 
 ## 10. Cache purge on startup
 
-- [ ] 10.1 Add a `SessionCachePurgeHostedService` (or equivalent) that runs once at startup, enumerates existing `{baseDir}/**/*.jsonl` files, and deletes them — logging the count with a warning so it's visible in the upgrade log
-- [ ] 10.2 Skip purge if env var `HOMESPUN_SKIP_CACHE_PURGE=true` (escape hatch for dev sessions in progress during upgrade)
-- [ ] 10.3 Document the purge behavior in the PR description and the project README's upgrade notes section
+- [x] 10.1 Added `SessionCachePurgeHostedService` (under `Features/ClaudeCode/Services/`) that runs once at startup, enumerates legacy `*.jsonl` + `*.meta.json` + `index.json` files under the cache directory, preserves the new `*.events.jsonl` A2A logs, and logs a warning with the deleted count. Five unit tests cover the delete/preserve/skip/missing-dir paths.
+- [x] 10.2 Set `HOMESPUN_SKIP_CACHE_PURGE=true` (env var or config key) to bypass the purge.
+- [x] 10.3 Documented purge behavior + env var in `docs/a2a-native-migration.md` (see Phase 12.3). The PR description will reference this doc.
 
 ## 11. Refresh-fidelity integration test
 
