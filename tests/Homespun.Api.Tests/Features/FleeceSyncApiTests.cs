@@ -179,65 +179,8 @@ public class SessionCacheApiTests
         _factory.Dispose();
     }
 
-    // --- GET /api/sessions/{sessionId}/cache/messages ---
-
-    [Test]
-    public async Task GetMessages_ReturnsOk_ForNonExistentSession()
-    {
-        // The messages endpoint always returns 200 OK (empty list for unknown sessions)
-        var response = await _client.GetAsync("/api/sessions/non-existent-session/cache/messages");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.That(content, Is.Not.Null.And.Not.Empty);
-    }
-
-    // --- GET /api/sessions/{sessionId}/cache/summary ---
-
-    [Test]
-    public async Task GetSummary_ReturnsNotFound_ForNonExistentSession()
-    {
-        // Act
-        var response = await _client.GetAsync("/api/sessions/non-existent-session/cache/summary");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    // --- GET /api/sessions/cache/project/{projectId} ---
-
-    [Test]
-    public async Task ListSessions_ReturnsOk_ForNonExistentProject()
-    {
-        // The list endpoint always returns 200 OK (empty list for unknown projects)
-        var response = await _client.GetAsync("/api/sessions/cache/project/non-existent-project");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var sessions = await response.Content.ReadFromJsonAsync<List<SessionCacheSummary>>(JsonOptions);
-        Assert.Multiple(() =>
-        {
-            Assert.That(sessions, Is.Not.Null);
-            Assert.That(sessions!, Is.Empty);
-        });
-    }
-
-    // --- GET /api/sessions/cache/entity/{projectId}/{entityId} ---
-
-    [Test]
-    public async Task GetEntitySessionIds_ReturnsOk_ForNonExistentEntity()
-    {
-        // The entity endpoint always returns 200 OK (empty list for unknown entities)
-        var response = await _client.GetAsync("/api/sessions/cache/entity/non-existent-project/non-existent-entity");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var sessionIds = await response.Content.ReadFromJsonAsync<List<string>>(JsonOptions);
-        Assert.Multiple(() =>
-        {
-            Assert.That(sessionIds, Is.Not.Null);
-            Assert.That(sessionIds!, Is.Empty);
-        });
-    }
+    // SessionCacheController endpoints (/cache/messages, /cache/summary,
+    // /cache/project/{id}, /cache/entity/{project}/{entity}) removed with the
+    // a2a-native-messaging change. Replay now lives on SessionEventsController —
+    // see SessionEventsApiTests for the replacement coverage.
 }

@@ -75,7 +75,7 @@
 - [ ] 9.3 Delete `SdkMessageParser.cs` (server-side)
 - [ ] 9.4 Delete `ContentBlockAssembler`
 - [ ] 9.5 Delete `MessageCacheStore.cs` and `IMessageCacheStore.cs`
-- [ ] 9.6 Delete `SessionCacheController.cs` and its unit/API tests
+- [x] 9.6 Deleted `SessionCacheController.cs` and its API tests in `FleeceSyncApiTests` (`/cache/messages`, `/cache/summary`, `/cache/project/{id}`, `/cache/entity/{project}/{entity}`). Replay now lives on `SessionEventsController` — see `SessionEventsApiTests` for the replacement coverage.
 - [ ] 9.7 Delete `ProcessStreamEventAsync`, `ProcessAssistantMessageAsync` (assembly parts), `ProcessUserMessageAsync` (assembly parts), `ConvertBlockStateToContent`, `ConvertSdkContentBlock`, `ConvertSdkToolResult`, `MessageProcessingContext.Assembler`, `HasCachedCurrentMessage`, `CurrentAssistantMessage` from `MessageProcessingService.cs`
 - [ ] 9.8 Delete `SdkMessages.cs` DTOs (server-side) — `SdkAssistantMessage`, `SdkUserMessage`, `SdkToolUseBlock`, `SdkToolResultBlock`, `SdkThinkingBlock`, `SdkStreamEvent`, `SdkSystemMessage`, `SdkResultMessage` — wherever server-side code owned them
 - [x] 9.9 Deleted every per-type `BroadcastAGUI*` method from `ClaudeCodeHubExtensions` (RunStarted/Finished/Error, TextMessage{Start,Content,End}, ToolCall{Start,Args,End,Result}, plus the `BroadcastAGUIEvent` dispatcher). `BroadcastAGUICustomEvent` retained — see note on 5.2.
