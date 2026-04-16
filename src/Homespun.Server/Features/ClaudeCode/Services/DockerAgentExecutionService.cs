@@ -1575,6 +1575,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         if (!string.IsNullOrEmpty(projectName))
             dockerArgs.Append($"-e PROJECT_NAME={projectName} ");
         dockerArgs.Append("-e DEBUG_LOGGING=true ");
+        dockerArgs.Append("-e DEBUG_AGENT_SDK=true ");
 
         AppendAuthEnvironmentVars(dockerArgs);
         AppendCredentialsMount(dockerArgs);

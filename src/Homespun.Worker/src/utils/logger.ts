@@ -74,8 +74,9 @@ export function error(message: string, err?: unknown): void {
 /**
  * Emit a single structured log entry capturing an SDK-boundary message.
  *
- * Gated by `DEBUG_AGENT_SDK=true` so production traffic is unaffected unless
- * the flag is explicitly enabled. The payload is JSON-serialized into the
+ * Gated by `DEBUG_AGENT_SDK=true`. Enabled by default in both docker-compose
+ * and server-spawned agent containers; set `DEBUG_AGENT_SDK=false` to disable.
+ * The payload is JSON-serialized into the
  * entry's `Message` field, so existing Promtail / `docker logs` consumers
  * handle it identically to other worker logs.
  *
