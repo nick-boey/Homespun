@@ -76,7 +76,7 @@ describe("Worker Container - File Operations", () => {
       body: JSON.stringify({
         prompt: "Write the text 'test' to the file 'test.txt'",
         mode: "Build",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 
@@ -122,7 +122,7 @@ describe("Worker Container - File Operations", () => {
       body: JSON.stringify({
         prompt: "Read the file 'test.txt' and print out the contents",
         mode: "Build",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 
@@ -172,7 +172,7 @@ describe("Worker Container - File Operations", () => {
       body: JSON.stringify({
         prompt: "Remember the secret word 'penguin'. Do not write any files.",
         mode: "Build",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 

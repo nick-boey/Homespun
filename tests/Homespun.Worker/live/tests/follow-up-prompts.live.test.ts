@@ -73,7 +73,7 @@ describe("Worker Container - Follow-Up Prompts", () => {
       body: JSON.stringify({
         prompt: "Say 'hello, world'",
         mode: "Build",
-        model: "claude-sonnet-4-20250514",
+        model: "haiku",
       }),
     });
 
