@@ -87,9 +87,9 @@ services:
       - PORT=8080
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
       # DEBUG_AGENT_SDK enables structured stdout capture of every message
-      # crossing the @anthropic-ai/claude-agent-sdk boundary. Off by default;
-      # export DEBUG_AGENT_SDK=true in your host env to turn it on.
-      - DEBUG_AGENT_SDK=${DEBUG_AGENT_SDK:-false}
+      # crossing the @anthropic-ai/claude-agent-sdk boundary. On by default;
+      # export DEBUG_AGENT_SDK=false in your host env to turn it off.
+      - DEBUG_AGENT_SDK=${DEBUG_AGENT_SDK:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
