@@ -89,12 +89,16 @@
 - [ ] 9.7 Unit tests: encrypted at rest; masked on GET; deletion clears access
 - [ ] 9.8 Integration test: user A's secret not visible to user B even on a public project
 
-## 10. Session Metadata & Message Cache
+## 10. Session Metadata & A2A Event Store
+
+> Depends on `a2a-native-messaging` — the `A2AEventRecord` / `SessionEventEnvelope` shape and the `A2AEventStore` interface are introduced there.
 
 - [ ] 10.1 Rebuild `SessionMetadataStore` as an EF-backed repository over `SessionMetadata` entity
-- [ ] 10.2 Rebuild `MessageCacheStore` as an EF-backed repository over `SessionMessage` entity; sequence number allocation via transactional `max(seq)+1` with retry on unique-violation
-- [ ] 10.3 Remove JSONL filesystem writer from production DI; keep an in-memory fixture for tests
-- [ ] 10.4 Integration test: survive container restart; seq uniqueness under concurrent writes; messages retrieved ordered
+- [ ] 10.2 Rebuild `A2AEventStore` as an EF-backed repository over the `session_events` entity (see design D6); `seq` allocation via transactional `max(seq)+1` keyed by `session_id`, with retry on `(session_id, seq)` unique-violation
+- [ ] 10.3 Preserve the append-before-broadcast invariant from `a2a-native-messaging`: the EF append SHALL commit before the ingestor issues the SignalR broadcast
+- [ ] 10.4 Preserve `event_id` uniqueness so client-side dedup continues to work across reconnect
+- [ ] 10.5 Remove JSONL filesystem writer from production DI; keep an in-memory fixture for tests
+- [ ] 10.6 Integration test: survive container restart; `(session_id, seq)` uniqueness under concurrent writes; events retrieved ordered by `seq`; `event_id` stable across live + replay paths
 
 ## 11. ACA Deployment IaC
 

@@ -157,6 +157,16 @@ public static class MockServiceExtensions
             return new MessageCacheStore(tempFolder.SessionsPath, logger);
         });
 
+        // A2A event store + translator — shared between mock and production modes.
+        services.AddSingleton<IA2AEventStore>(sp =>
+        {
+            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
+            var logger = sp.GetRequiredService<ILogger<A2AEventStore>>();
+            return new A2AEventStore(tempFolder.SessionsPath, logger);
+        });
+        services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
+        services.Configure<Homespun.Features.ClaudeCode.Settings.SessionEventsOptions>(_ => { });
+
         // Pull request workflow service (needed by GraphService)
         services.AddScoped<PullRequestWorkflowService>();
 

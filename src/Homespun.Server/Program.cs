@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Commands;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
@@ -209,6 +210,22 @@ else
     var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
     builder.Services.AddSingleton<IMessageCacheStore>(sp =>
         new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
+
+    // A2A event store — append-only JSONL of raw A2A events per session,
+    // the source of truth for both live broadcast and replay.
+    builder.Services.AddSingleton<IA2AEventStore>(sp =>
+        new A2AEventStore(messageCacheDir, sp.GetRequiredService<ILogger<A2AEventStore>>()));
+
+    // Pure A2A → AG-UI translator used by both the live ingestion path and the replay endpoint.
+    builder.Services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
+
+    // SessionEventIngestor — orchestrates worker A2A event → store append → translate →
+    // envelope broadcast. Single point where the append-before-broadcast invariant lives.
+    builder.Services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
+
+    // Replay-endpoint default mode (Incremental vs Full) + any future session-event options.
+    builder.Services.Configure<SessionEventsOptions>(
+        builder.Configuration.GetSection(SessionEventsOptions.SectionName));
 
     // Issue workspace service - manages per-issue folder structure for agent isolation
     var projectsBaseDir = builder.Configuration["HOMESPUN_PROJECTS_PATH"]

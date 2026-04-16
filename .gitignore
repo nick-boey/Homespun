@@ -565,3 +565,6 @@ terraform.rc
 # LikeC4 build output
 docs/architecture/dist/
 docs/architecture/images/
+
+# Temporary folder
+.tmp/

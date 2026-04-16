@@ -20,6 +20,7 @@ public class DockerAgentExecutionServiceTests
     private DockerAgentExecutionService _service = null!;
     private Mock<ILogger<DockerAgentExecutionService>> _loggerMock = null!;
     private Mock<ISecretsService> _secretsServiceMock = null!;
+    private Mock<ISessionEventIngestor> _eventIngestorMock = null!;
     private DockerAgentExecutionOptions _options = null!;
 
     [SetUp]
@@ -33,6 +34,7 @@ public class DockerAgentExecutionServiceTests
         _secretsServiceMock
             .Setup(s => s.GetSecretsForInjectionByProjectIdAsync(It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, string>());
+        _eventIngestorMock = new Mock<ISessionEventIngestor>();
         _options = new DockerAgentExecutionOptions
         {
             WorkerImage = "ghcr.io/nick-boey/homespun-worker:test",
@@ -47,7 +49,8 @@ public class DockerAgentExecutionServiceTests
         _service = new DockerAgentExecutionService(
             Options.Create(_options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
     }
 
     [TearDown]
@@ -136,7 +139,8 @@ public class DockerAgentExecutionServiceTests
         var service = new DockerAgentExecutionService(
             Options.Create(options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/test-workspace");
@@ -157,7 +161,8 @@ public class DockerAgentExecutionServiceTests
         var service = new DockerAgentExecutionService(
             Options.Create(options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/test-workspace");
@@ -178,7 +183,8 @@ public class DockerAgentExecutionServiceTests
         var service = new DockerAgentExecutionService(
             Options.Create(options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/some/other/path");
@@ -199,7 +205,8 @@ public class DockerAgentExecutionServiceTests
         var service = new DockerAgentExecutionService(
             Options.Create(options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data");
@@ -220,7 +227,8 @@ public class DockerAgentExecutionServiceTests
         var service = new DockerAgentExecutionService(
             Options.Create(options),
             _loggerMock.Object,
-            _secretsServiceMock.Object);
+            _secretsServiceMock.Object,
+            _eventIngestorMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/projects/feature-123/src");
@@ -447,7 +455,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -574,7 +582,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act - workingDirectory points to clone/workdir
         var args = service.BuildContainerDockerArgs(
@@ -596,7 +604,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -618,7 +626,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -644,7 +652,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act - provide explicit claudePath separate from workingDirectory
         var args = service.BuildContainerDockerArgs(
@@ -669,7 +677,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object, _eventIngestorMock.Object);
 
         // Act - provide an explicit claudePath that differs from what would be derived
         var args = service.BuildContainerDockerArgs(
@@ -1321,7 +1329,7 @@ public class AnswerQuestionAsyncTests
             .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(
-            Options.Create(options), loggerMock.Object, secretsServiceMock.Object);
+            Options.Create(options), loggerMock.Object, secretsServiceMock.Object, Mock.Of<ISessionEventIngestor>());
 
         // Act
         var result = await service.AnswerQuestionAsync("non-existent-session",
@@ -1353,7 +1361,7 @@ public class ApprovePlanAsyncTests
             .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(
-            Options.Create(options), loggerMock.Object, secretsServiceMock.Object);
+            Options.Create(options), loggerMock.Object, secretsServiceMock.Object, Mock.Of<ISessionEventIngestor>());
 
         // Act
         var result = await service.ApprovePlanAsync("non-existent-session", true, true);

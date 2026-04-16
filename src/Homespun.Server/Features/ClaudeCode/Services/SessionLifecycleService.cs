@@ -140,11 +140,10 @@ public class SessionLifecycleService : ISessionLifecycleService
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
 
-        // Broadcast AG-UI run started event
+        // Run started is now broadcast as a SessionEventEnvelope by SessionEventIngestor
+        // when it observes the first A2A Task event for this session.
         var runId = Guid.NewGuid().ToString();
         _stateManager.SetRunId(sessionId, runId);
-        var runStartedEvent = _agUIEventService.CreateRunStarted(sessionId, runId);
-        await _hubContext.BroadcastAGUIRunStarted(sessionId, runStartedEvent);
 
         return session;
     }

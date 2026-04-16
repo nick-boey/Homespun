@@ -84,23 +84,28 @@ This change is the foundation for two subsequent changes — `aci-agent-executio
 
 **Rationale:** Config is bootstrap, not runtime policy. Stops a misconfigured deploy from leaving an instance admin-less. Matches the user's explicit request for "specific admin seeding."
 
-### D6: Session messages as an append-only Postgres table
+### D6: Session events as an append-only Postgres table
 
-**Decision:**
+**Decision:** Persist the A2A event records defined by `a2a-native-messaging` into Postgres, preserving their envelope shape:
+
 ```sql
-session_messages (
-  id           bigserial PRIMARY KEY,
-  session_id   text NOT NULL,
-  seq          int NOT NULL,
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  kind         text NOT NULL,         -- 'system', 'user', 'assistant', 'result', etc.
-  payload      jsonb NOT NULL,
-  UNIQUE (session_id, seq)
+session_events (
+  id            bigserial PRIMARY KEY,
+  session_id    text NOT NULL,
+  seq           bigint NOT NULL,       -- matches A2AEventRecord.Seq
+  event_id      uuid NOT NULL,         -- matches A2AEventRecord.EventId (stable across live + replay)
+  received_at   timestamptz NOT NULL DEFAULT now(),
+  payload       jsonb NOT NULL,        -- the raw A2A event (Task | Message | StatusUpdate | ArtifactUpdate)
+  UNIQUE (session_id, seq),
+  UNIQUE (event_id)
 )
 ```
-Reads are `WHERE session_id = ? ORDER BY seq`. Streaming live is via LISTEN/NOTIFY or polling-on-seq — TBD in the ACI execution change. For now, `MessageCacheStore` is re-implemented with this table; no external streaming.
 
-**Rationale:** Append-only + ordered sequence = identical semantics to the current JSONL file. jsonb avoids schema churn when SDK message formats evolve. Postgres handles the "many concurrent sessions" write pattern far better than per-session files would with ephemeral containers.
+Reads are `WHERE session_id = ? AND seq > ? ORDER BY seq` (matching the `/api/sessions/{id}/events?since=N` endpoint). Streaming live stays on SignalR via the server-side ingestor introduced by `a2a-native-messaging`; Postgres LISTEN/NOTIFY is not used in this phase. The on-disk `A2AEventStore` (JSONL) is rebuilt as an EF-backed repository against this table.
+
+**Rationale:** Append-only + ordered sequence with a dedicated `event_id` column matches the `SessionEventEnvelope` replay contract the client already depends on. Keeping the full A2A payload as jsonb preserves the verbatim-storage invariant so the server-side translator can still run over replayed rows.
+
+**Dependency:** This schema is contingent on `a2a-native-messaging` landing first. `ClaudeMessage` / `MessageCacheStore` are deleted by that change; attempting to implement D6 before it lands would fork the storage shape.
 
 **Trade-off:** Slightly more storage vs. flat files. Negligible.
 

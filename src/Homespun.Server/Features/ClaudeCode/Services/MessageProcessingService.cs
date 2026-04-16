@@ -297,8 +297,8 @@ public class MessageProcessingService : IMessageProcessingService
                         sessionId, errorMessage, resultMsg.Subtype, isRecoverable);
                     await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
-                    var runErrorEvent = _agUIEventService.CreateRunError(errorMessage, resultMsg.Subtype);
-                    await _hubContext.BroadcastAGUIRunError(sessionId, runErrorEvent);
+                    // Run error is now broadcast as a SessionEventEnvelope by SessionEventIngestor
+                    // when it observes the failed A2A StatusUpdate event.
 
                     await _workflowSessionCallback.Value.HandleSessionFailedAsync(
                         sessionId, errorMessage, CancellationToken.None);
@@ -323,10 +323,9 @@ public class MessageProcessingService : IMessageProcessingService
 
                 if (!resultMsg.IsError)
                 {
-                    var runId = _stateManager.GetRunId(sessionId) ?? Guid.NewGuid().ToString();
-                    var runFinishedEvent = _agUIEventService.CreateRunFinished(sessionId, runId, resultMsg.Result);
-                    await _hubContext.BroadcastAGUIRunFinished(sessionId, runFinishedEvent);
-
+                    // Run finished is now broadcast as a SessionEventEnvelope by
+                    // SessionEventIngestor when it observes the completed A2A StatusUpdate.
+                    _stateManager.GetRunId(sessionId);
                     await _workflowSessionCallback.Value.HandleSessionCompletedAsync(
                         sessionId, CancellationToken.None);
                 }
@@ -353,22 +352,8 @@ public class MessageProcessingService : IMessageProcessingService
                 if (evt.TryGetProperty("content_block", out var contentBlock))
                 {
                     context.Assembler.StartBlock(index, contentBlock);
-
-                    var blockType = contentBlock.TryGetProperty("type", out var blockTypeVal) ? blockTypeVal.GetString() : null;
-                    if (blockType == "tool_use")
-                    {
-                        var toolCallId = contentBlock.TryGetProperty("id", out var idVal) ? idVal.GetString() : Guid.NewGuid().ToString();
-                        var toolName = contentBlock.TryGetProperty("name", out var nameVal) ? nameVal.GetString() : "unknown";
-                        var toolStartEvent = AGUIEvents.AGUIEventFactory.CreateToolCallStart(
-                            toolCallId!, toolName!, context.CurrentAssistantMessage?.Id);
-                        _ = _hubContext.BroadcastAGUIToolCallStart(sessionId, toolStartEvent);
-                    }
-                    else if (blockType == "text" || blockType == "thinking")
-                    {
-                        var msgId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                        var textStartEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant");
-                        _ = _hubContext.BroadcastAGUITextMessageStart(sessionId, textStartEvent);
-                    }
+                    // AG-UI per-block broadcasts are now handled by SessionEventIngestor via
+                    // the A2A event stream; nothing to do on this legacy path besides assembly.
                 }
                 break;
             }
@@ -379,34 +364,9 @@ public class MessageProcessingService : IMessageProcessingService
                 if (evt.TryGetProperty("delta", out var delta))
                 {
                     context.Assembler.ApplyDelta(index, delta);
-
-                    var block = index < context.Assembler.Blocks.Count ? context.Assembler.Blocks[index] : null;
-                    if (block != null)
-                    {
-                        var deltaType = delta.TryGetProperty("type", out var dt) ? dt.GetString() : null;
-                        switch (deltaType)
-                        {
-                            case "text_delta":
-                            case "thinking_delta":
-                                var textDelta = delta.TryGetProperty("text", out var txt) ? txt.GetString() :
-                                               (delta.TryGetProperty("thinking", out var th) ? th.GetString() : null);
-                                if (!string.IsNullOrEmpty(textDelta))
-                                {
-                                    var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                                    var textContentEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageContent(messageId, textDelta);
-                                    _ = _hubContext.BroadcastAGUITextMessageContent(sessionId, textContentEvent);
-                                }
-                                break;
-                            case "input_json_delta":
-                                var jsonDelta = delta.TryGetProperty("partial_json", out var pj) ? pj.GetString() : null;
-                                if (!string.IsNullOrEmpty(jsonDelta) && block.ToolUseId != null)
-                                {
-                                    var toolArgsEvent = AGUIEvents.AGUIEventFactory.CreateToolCallArgs(block.ToolUseId, jsonDelta);
-                                    _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId, toolArgsEvent);
-                                }
-                                break;
-                        }
-                    }
+                    // Per-delta AG-UI broadcasts are now handled by SessionEventIngestor via
+                    // the A2A event stream. Assembly continues here only to drive the
+                    // tool-interaction dispatches at block-stop time.
                 }
                 break;
             }
@@ -423,17 +383,8 @@ public class MessageProcessingService : IMessageProcessingService
                     content.IsStreaming = false;
                     context.CurrentAssistantMessage.Content.Add(content);
 
-                    if (block.Type == "tool_use" && block.ToolUseId != null)
-                    {
-                        var toolEndEvent = AGUIEvents.AGUIEventFactory.CreateToolCallEnd(block.ToolUseId);
-                        _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId, toolEndEvent);
-                    }
-                    else if (block.Type == "text" || block.Type == "thinking")
-                    {
-                        var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                        var textEndEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(messageId);
-                        _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId, textEndEvent);
-                    }
+                    // Per-block AG-UI end events are now broadcast by SessionEventIngestor via
+                    // the A2A event stream.
 
                     if (content.Type == ClaudeContentType.ToolUse &&
                         content.ToolName == "AskUserQuestion" &&
@@ -478,33 +429,9 @@ public class MessageProcessingService : IMessageProcessingService
                 var content = ConvertSdkContentBlock(sessionId, block);
                 context.CurrentAssistantMessage.Content.Add(content);
 
-                // Broadcast AG-UI events for complete assistant message blocks
-                // (streaming path handles its own broadcasting via ProcessStreamEventAsync)
-                if (content.Type == ClaudeContentType.Text || content.Type == ClaudeContentType.Thinking)
-                {
-                    var msgId = context.CurrentAssistantMessage.Id;
-                    _ = _hubContext.BroadcastAGUITextMessageStart(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant"));
-                    if (!string.IsNullOrEmpty(content.Text))
-                    {
-                        _ = _hubContext.BroadcastAGUITextMessageContent(sessionId,
-                            AGUIEvents.AGUIEventFactory.CreateTextMessageContent(msgId, content.Text));
-                    }
-                    _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(msgId));
-                }
-                else if (content.Type == ClaudeContentType.ToolUse && content.ToolUseId != null)
-                {
-                    _ = _hubContext.BroadcastAGUIToolCallStart(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateToolCallStart(content.ToolUseId, content.ToolName ?? "unknown", context.CurrentAssistantMessage.Id));
-                    if (!string.IsNullOrEmpty(content.ToolInput))
-                    {
-                        _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId,
-                            AGUIEvents.AGUIEventFactory.CreateToolCallArgs(content.ToolUseId, content.ToolInput));
-                    }
-                    _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateToolCallEnd(content.ToolUseId));
-                }
+                // Per-block AG-UI events are now broadcast by SessionEventIngestor via the
+                // A2A event stream. This loop only drives the tool-interaction dispatches
+                // below until Phase 9.7 fully retires the legacy assembly path.
 
                 if (content.Type == ClaudeContentType.ToolUse &&
                     content.ToolName == "AskUserQuestion" &&
@@ -573,17 +500,8 @@ public class MessageProcessingService : IMessageProcessingService
             session.Messages.Add(toolResultMessage);
             await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
 
-            foreach (var toolResult in toolResultContents)
-            {
-                if (!string.IsNullOrEmpty(toolResult.ToolUseId))
-                {
-                    var toolResultEvent = AGUIEvents.AGUIEventFactory.CreateToolCallResult(
-                        toolResult.ToolUseId,
-                        toolResult.ToolResult ?? "",
-                        toolResultMessage.Id);
-                    _ = _hubContext.BroadcastAGUIToolCallResult(sessionId, toolResultEvent);
-                }
-            }
+            // Tool-call result AG-UI events are now broadcast by SessionEventIngestor via
+            // the A2A event stream.
 
             foreach (var toolResult in toolResultContents)
             {
