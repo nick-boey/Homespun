@@ -109,7 +109,7 @@ tests/
 
 - **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory
   - **Version Sync Required**: When updating the `Fleece.Core` NuGet package version in `Homespun.Server.csproj` and `Homespun.Shared.csproj`, you must also update the `Fleece.Cli` version in `Dockerfile.base` to match
-- **ClaudeCode**: Claude Code SDK session management - supports Plan (read-only) and Build (full access) modes
+- **ClaudeCode**: Claude Code SDK session management — supports Plan (read-only) and Build (full access) modes. The worker is the only component that speaks the native SDK format; the server ingests A2A events from the worker via `ISessionEventIngestor`, appends each event to the per-session JSONL log through `A2AEventStore`, translates once via `A2AToAGUITranslator`, and broadcasts a single `SessionEventEnvelope` per AG-UI event over SignalR's `ReceiveSessionEvent`. Refresh replays the same envelopes through `GET /api/sessions/{id}/events?since=N&mode=incremental|full` so live and refresh produce identical streams. The default replay mode is configurable via `SessionEvents:ReplayMode`; `Full` is the kill switch if incremental replay ever produces a gap.
 - **Commands**: Shell command execution abstraction
 - **Git**: Git clone creation, management, and rebase operations
 - **GitHub**: GitHub PR synchronization and API operations using Octokit

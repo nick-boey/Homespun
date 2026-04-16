@@ -314,8 +314,12 @@ public class A2AMessageParserTests
     }
 
     [Test]
-    public void ConvertToSdkMessage_Message_AgentRole_ReturnsAssistantMessage()
+    public void ConvertToSdkMessage_Message_ReturnsNull()
     {
+        // Content-bearing Message events no longer convert to SdkAssistantMessage/SdkUserMessage —
+        // they flow through SessionEventIngestor as AG-UI envelopes (and through the tool-use tap
+        // for workflow_signal / Write plan capture). ConvertToSdkMessage now only maps control-plane
+        // variants: Task + StatusUpdate.
         var message = new AgentMessage
         {
             MessageId = "msg-123",
@@ -327,29 +331,7 @@ public class A2AMessageParserTests
 
         var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
-        Assert.That(result, Is.InstanceOf<SdkAssistantMessage>());
-        var assistantMsg = (SdkAssistantMessage)result!;
-        Assert.That(assistantMsg.Message.Role, Is.EqualTo("assistant"));
-        Assert.That(assistantMsg.Message.Content, Has.Count.EqualTo(1));
-    }
-
-    [Test]
-    public void ConvertToSdkMessage_Message_UserRole_ReturnsUserMessage()
-    {
-        var message = new AgentMessage
-        {
-            MessageId = "msg-123",
-            Role = MessageRole.User,
-            Parts = new List<Part> { new TextPart { Text = "Hello from user" } },
-            ContextId = "context-456"
-        };
-        var parsed = new ParsedAgentMessage(message);
-
-        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
-
-        Assert.That(result, Is.InstanceOf<SdkUserMessage>());
-        var userMsg = (SdkUserMessage)result!;
-        Assert.That(userMsg.Message.Role, Is.EqualTo("user"));
+        Assert.That(result, Is.Null);
     }
 
     [Test]

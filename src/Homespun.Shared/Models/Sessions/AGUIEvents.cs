@@ -30,35 +30,96 @@ public static class AGUIEventType
 
     // Custom events
     public const string Custom = "AGUI_Custom";
+
+    /// <summary>
+    /// Single SignalR method name used for all AG-UI envelopes broadcast to clients. Every
+    /// canonical AG-UI event and every Homespun <c>Custom</c> variant flows through this one
+    /// method wrapped in <see cref="SessionEventEnvelope"/>.
+    /// </summary>
+    public const string ReceiveSessionEvent = "ReceiveSessionEvent";
 }
 
 /// <summary>
-/// Custom AG-UI event names for Homespun-specific events.
-/// Used with the Custom event type.
+/// Custom AG-UI event name catalog for Homespun-specific concerns that don't fit the
+/// canonical AG-UI events. Every name is Homespun-namespaced (lowercase, dot-separated) so
+/// that any future non-Homespun AG-UI consumer can safely ignore unrecognized names while
+/// remaining spec-conformant.
+///
+/// <para>
+/// See <c>docs/session-events.md</c> for the payload shape and semantic meaning of each
+/// custom event.
+/// </para>
 /// </summary>
 public static class AGUICustomEventName
 {
     /// <summary>
-    /// Emitted when Claude asks a question that needs user input.
-    /// Maps from A2A input-required state with inputType="question".
+    /// Agent-side reasoning block emitted before a text or tool-use block.
+    /// Payload: <c>{ text: string, parentMessageId?: string }</c>.
     /// </summary>
-    public const string QuestionPending = "QuestionPending";
+    public const string Thinking = "thinking";
 
     /// <summary>
-    /// Emitted when Claude presents a plan that needs user approval.
-    /// Maps from A2A input-required state with inputType="plan-approval".
+    /// A hook has begun executing (SessionStart, PreToolUse, PostToolUse, etc.).
+    /// Payload: <c>{ hookId: string, hookName: string, hookEvent: string }</c>.
     /// </summary>
-    public const string PlanPending = "PlanPending";
+    public const string HookStarted = "hook.started";
 
     /// <summary>
-    /// Emitted when a hook is executed.
+    /// A hook has finished executing.
+    /// Payload: <c>{ hookId: string, hookName: string, output: string?, exitCode: int?, outcome: string }</c>.
     /// </summary>
-    public const string HookExecuted = "HookExecuted";
+    public const string HookResponse = "hook.response";
 
     /// <summary>
-    /// Emitted when context is cleared.
+    /// Worker-emitted system init event describing the session's model, tools, and permission mode.
+    /// Payload: <c>{ model: string?, tools: string[]?, permissionMode: string? }</c>.
     /// </summary>
-    public const string ContextCleared = "ContextCleared";
+    public const string SystemInit = "system.init";
+
+    /// <summary>
+    /// Claude is asking the user a question (SDK input-required, inputType=question).
+    /// Payload: <c>PendingQuestion</c>.
+    /// </summary>
+    public const string QuestionPending = "question.pending";
+
+    /// <summary>
+    /// Claude is presenting a plan for approval (SDK input-required, inputType=plan-approval).
+    /// Payload: <c>AGUIPlanPendingData</c>.
+    /// </summary>
+    public const string PlanPending = "plan.pending";
+
+    /// <summary>
+    /// Marks that the session has resumed from a paused/input-required state.
+    /// Payload: <c>{}</c>.
+    /// </summary>
+    public const string StatusResumed = "status.resumed";
+
+    /// <summary>
+    /// A higher-level workflow (issue-agent modification, rebase, etc.) completed.
+    /// Payload: <c>{ status: string, outputs?: object, artifacts?: object[] }</c>.
+    /// </summary>
+    public const string WorkflowComplete = "workflow.complete";
+
+    /// <summary>
+    /// Echo of a user-submitted message so other tabs see it. Emitted by the server when a
+    /// user message is accepted from the hub.
+    /// Payload: <c>{ text: string }</c>.
+    /// </summary>
+    public const string UserMessage = "user.message";
+
+    /// <summary>
+    /// Fallback for A2A event variants the translator does not recognize. Payload preserves
+    /// the original A2A event so clients can render or log it without loss.
+    /// Payload: <c>{ original: object }</c>.
+    /// </summary>
+    public const string Raw = "raw";
+
+    /// <summary>
+    /// Emitted when a session's context is cleared (separate from the A2A translation path —
+    /// this is a Homespun-internal lifecycle event).
+    /// Payload: <c>{ sessionId: string }</c>.
+    /// </summary>
+    public const string ContextCleared = "context.cleared";
 }
 
 #region AG-UI Event Types
@@ -66,18 +127,46 @@ public static class AGUICustomEventName
 // See: https://docs.ag-ui.com/concepts/events
 
 /// <summary>
-/// Base class for all AG-UI events.
+/// Base class for all AG-UI events. Serves as the discriminated union type embedded in
+/// <see cref="SessionEventEnvelope.Event"/>.
+///
+/// <para>
+/// The <see cref="JsonPolymorphicAttribute"/> enables correct polymorphic serialization
+/// when a concrete event is assigned to an <see cref="AGUIBaseEvent"/>-typed field (as in
+/// the envelope and the replay endpoint response). The discriminator is the <c>type</c>
+/// property, which matches each concrete type's <see cref="Type"/> override — so the
+/// serialized payload shape is identical whether the runtime or declared type drives
+/// serialization.
+/// </para>
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type", UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor)]
+[JsonDerivedType(typeof(RunStartedEvent), typeDiscriminator: "RUN_STARTED")]
+[JsonDerivedType(typeof(RunFinishedEvent), typeDiscriminator: "RUN_FINISHED")]
+[JsonDerivedType(typeof(RunErrorEvent), typeDiscriminator: "RUN_ERROR")]
+[JsonDerivedType(typeof(TextMessageStartEvent), typeDiscriminator: "TEXT_MESSAGE_START")]
+[JsonDerivedType(typeof(TextMessageContentEvent), typeDiscriminator: "TEXT_MESSAGE_CONTENT")]
+[JsonDerivedType(typeof(TextMessageEndEvent), typeDiscriminator: "TEXT_MESSAGE_END")]
+[JsonDerivedType(typeof(ToolCallStartEvent), typeDiscriminator: "TOOL_CALL_START")]
+[JsonDerivedType(typeof(ToolCallArgsEvent), typeDiscriminator: "TOOL_CALL_ARGS")]
+[JsonDerivedType(typeof(ToolCallEndEvent), typeDiscriminator: "TOOL_CALL_END")]
+[JsonDerivedType(typeof(ToolCallResultEvent), typeDiscriminator: "TOOL_CALL_RESULT")]
+[JsonDerivedType(typeof(StateSnapshotEvent), typeDiscriminator: "STATE_SNAPSHOT")]
+[JsonDerivedType(typeof(StateDeltaEvent), typeDiscriminator: "STATE_DELTA")]
+[JsonDerivedType(typeof(CustomEvent), typeDiscriminator: "CUSTOM")]
 public abstract record AGUIBaseEvent
 {
     /// <summary>
-    /// The event type discriminator.
+    /// The event type discriminator as a runtime-accessible string. Each concrete subtype
+    /// overrides this with the canonical AG-UI spec value; the same value appears in the
+    /// emitted JSON via the <see cref="JsonPolymorphicAttribute"/> discriminator. Marked
+    /// <see cref="JsonIgnoreAttribute"/> so the JSON contains exactly one <c>type</c> field
+    /// (supplied by the polymorphic discriminator, not this property).
     /// </summary>
-    [JsonPropertyName("type")]
+    [JsonIgnore]
     public abstract string Type { get; }
 
     /// <summary>
-    /// Unix timestamp in milliseconds.
+    /// Unix timestamp in milliseconds the event was created on the server.
     /// </summary>
     [JsonPropertyName("timestamp")]
     public long Timestamp { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -88,6 +177,7 @@ public abstract record AGUIBaseEvent
 /// </summary>
 public record RunStartedEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "RUN_STARTED";
 
     /// <summary>
@@ -108,6 +198,7 @@ public record RunStartedEvent : AGUIBaseEvent
 /// </summary>
 public record RunFinishedEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "RUN_FINISHED";
 
     /// <summary>
@@ -134,6 +225,7 @@ public record RunFinishedEvent : AGUIBaseEvent
 /// </summary>
 public record RunErrorEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "RUN_ERROR";
 
     /// <summary>
@@ -154,6 +246,7 @@ public record RunErrorEvent : AGUIBaseEvent
 /// </summary>
 public record TextMessageStartEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TEXT_MESSAGE_START";
 
     /// <summary>
@@ -174,6 +267,7 @@ public record TextMessageStartEvent : AGUIBaseEvent
 /// </summary>
 public record TextMessageContentEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TEXT_MESSAGE_CONTENT";
 
     /// <summary>
@@ -194,6 +288,7 @@ public record TextMessageContentEvent : AGUIBaseEvent
 /// </summary>
 public record TextMessageEndEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TEXT_MESSAGE_END";
 
     /// <summary>
@@ -208,6 +303,7 @@ public record TextMessageEndEvent : AGUIBaseEvent
 /// </summary>
 public record ToolCallStartEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TOOL_CALL_START";
 
     /// <summary>
@@ -234,6 +330,7 @@ public record ToolCallStartEvent : AGUIBaseEvent
 /// </summary>
 public record ToolCallArgsEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TOOL_CALL_ARGS";
 
     /// <summary>
@@ -254,6 +351,7 @@ public record ToolCallArgsEvent : AGUIBaseEvent
 /// </summary>
 public record ToolCallEndEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TOOL_CALL_END";
 
     /// <summary>
@@ -268,6 +366,7 @@ public record ToolCallEndEvent : AGUIBaseEvent
 /// </summary>
 public record ToolCallResultEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "TOOL_CALL_RESULT";
 
     /// <summary>
@@ -300,6 +399,7 @@ public record ToolCallResultEvent : AGUIBaseEvent
 /// </summary>
 public record StateSnapshotEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "STATE_SNAPSHOT";
 
     /// <summary>
@@ -314,6 +414,7 @@ public record StateSnapshotEvent : AGUIBaseEvent
 /// </summary>
 public record StateDeltaEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "STATE_DELTA";
 
     /// <summary>
@@ -328,6 +429,7 @@ public record StateDeltaEvent : AGUIBaseEvent
 /// </summary>
 public record CustomEvent : AGUIBaseEvent
 {
+    [JsonIgnore]
     public override string Type => "CUSTOM";
 
     /// <summary>

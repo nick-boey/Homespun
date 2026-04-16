@@ -167,28 +167,18 @@ import type {
   GetApiPullRequestsByIdData,
   GetApiPullRequestsByIdErrors,
   GetApiPullRequestsByIdResponses,
-  GetApiSessionsByIdCachedMessagesData,
-  GetApiSessionsByIdCachedMessagesResponses,
   GetApiSessionsByIdData,
   GetApiSessionsByIdErrors,
   GetApiSessionsByIdResponses,
-  GetApiSessionsBySessionIdCacheMessagesData,
-  GetApiSessionsBySessionIdCacheMessagesResponses,
-  GetApiSessionsBySessionIdCacheSummaryData,
-  GetApiSessionsBySessionIdCacheSummaryErrors,
-  GetApiSessionsBySessionIdCacheSummaryResponses,
-  GetApiSessionsCacheEntityByProjectIdByEntityIdData,
-  GetApiSessionsCacheEntityByProjectIdByEntityIdResponses,
-  GetApiSessionsCacheProjectByProjectIdData,
-  GetApiSessionsCacheProjectByProjectIdResponses,
+  GetApiSessionsBySessionIdEventsData,
+  GetApiSessionsBySessionIdEventsErrors,
+  GetApiSessionsBySessionIdEventsResponses,
   GetApiSessionsData,
   GetApiSessionsEntityByEntityIdData,
   GetApiSessionsEntityByEntityIdErrors,
   GetApiSessionsEntityByEntityIdResponses,
   GetApiSessionsEntityByEntityIdResumableData,
   GetApiSessionsEntityByEntityIdResumableResponses,
-  GetApiSessionsHistoryByProjectIdByEntityIdData,
-  GetApiSessionsHistoryByProjectIdByEntityIdResponses,
   GetApiSessionsProjectByProjectIdData,
   GetApiSessionsProjectByProjectIdResponses,
   GetApiSessionsResponses,
@@ -1553,45 +1543,15 @@ export class Secrets {
   }
 }
 
-export class SessionCache {
-  public static getApiSessionsBySessionIdCacheMessages<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionsBySessionIdCacheMessagesData, ThrowOnError>
+export class SessionEvents {
+  public static getApiSessionsBySessionIdEvents<ThrowOnError extends boolean = false>(
+    options: Options<GetApiSessionsBySessionIdEventsData, ThrowOnError>
   ) {
     return (options.client ?? client).get<
-      GetApiSessionsBySessionIdCacheMessagesResponses,
-      unknown,
+      GetApiSessionsBySessionIdEventsResponses,
+      GetApiSessionsBySessionIdEventsErrors,
       ThrowOnError
-    >({ url: '/api/sessions/{sessionId}/cache/messages', ...options })
-  }
-
-  public static getApiSessionsBySessionIdCacheSummary<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionsBySessionIdCacheSummaryData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiSessionsBySessionIdCacheSummaryResponses,
-      GetApiSessionsBySessionIdCacheSummaryErrors,
-      ThrowOnError
-    >({ url: '/api/sessions/{sessionId}/cache/summary', ...options })
-  }
-
-  public static getApiSessionsCacheProjectByProjectId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionsCacheProjectByProjectIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiSessionsCacheProjectByProjectIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/sessions/cache/project/{projectId}', ...options })
-  }
-
-  public static getApiSessionsCacheEntityByProjectIdByEntityId<
-    ThrowOnError extends boolean = false,
-  >(options: Options<GetApiSessionsCacheEntityByProjectIdByEntityIdData, ThrowOnError>) {
-    return (options.client ?? client).get<
-      GetApiSessionsCacheEntityByProjectIdByEntityIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/sessions/cache/entity/{projectId}/{entityId}', ...options })
+    >({ url: '/api/sessions/{sessionId}/events', ...options })
   }
 }
 
@@ -1680,26 +1640,6 @@ export class Sessions {
       unknown,
       ThrowOnError
     >({ url: '/api/sessions/entity/{entityId}/resumable', ...options })
-  }
-
-  public static getApiSessionsHistoryByProjectIdByEntityId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionsHistoryByProjectIdByEntityIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiSessionsHistoryByProjectIdByEntityIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/sessions/history/{projectId}/{entityId}', ...options })
-  }
-
-  public static getApiSessionsByIdCachedMessages<ThrowOnError extends boolean = false>(
-    options: Options<GetApiSessionsByIdCachedMessagesData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiSessionsByIdCachedMessagesResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/sessions/{id}/cached-messages', ...options })
   }
 
   public static postApiSessionsByIdResume<ThrowOnError extends boolean = false>(

@@ -4,6 +4,10 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type AguiBaseEvent = {
+  timestamp?: number
+}
+
 export type AcceptIssuesAgentChangesResponse = {
   success?: boolean
   message?: string | null
@@ -102,42 +106,6 @@ export const ChangeType = {
 
 export type ChangeType = (typeof ChangeType)[keyof typeof ChangeType]
 
-export const ClaudeContentType = {
-  TEXT: 'text',
-  THINKING: 'thinking',
-  TOOL_USE: 'toolUse',
-  TOOL_RESULT: 'toolResult',
-} as const
-
-export type ClaudeContentType = (typeof ClaudeContentType)[keyof typeof ClaudeContentType]
-
-export type ClaudeMessage = {
-  id?: string | null
-  sessionId: string | null
-  role: ClaudeMessageRole
-  content?: Array<ClaudeMessageContent> | null
-  createdAt?: string
-  isStreaming?: boolean
-}
-
-export type ClaudeMessageContent = {
-  type: ClaudeContentType
-  text?: string | null
-  thinking?: string | null
-  toolName?: string | null
-  toolInput?: string | null
-  toolResult?: string | null
-  toolSuccess?: boolean | null
-  toolUseId?: string | null
-  parsedToolResult?: ToolResultData
-  isStreaming?: boolean
-  index?: number
-}
-
-export const ClaudeMessageRole = { USER: 'user', ASSISTANT: 'assistant' } as const
-
-export type ClaudeMessageRole = (typeof ClaudeMessageRole)[keyof typeof ClaudeMessageRole]
-
 export type ClaudeSession = {
   id: string | null
   entityId: string | null
@@ -148,7 +116,6 @@ export type ClaudeSession = {
   status?: ClaudeSessionStatus
   createdAt?: string
   lastActivityAt?: string
-  messages?: Array<ClaudeMessage> | null
   errorMessage?: string | null
   conversationId?: string | null
   systemPrompt?: string | null
@@ -755,6 +722,9 @@ export type OpenPullRequestStatus =
 export type ParentIssueRef = {
   parentIssue: string | null
   sortOrder: string | null
+  lastUpdated?: string
+  updatedBy?: string | null
+  active?: boolean
 }
 
 export type ParentIssueRefResponse = {
@@ -996,15 +966,11 @@ export type SessionBranchInfo = {
   hasUncommittedChanges?: boolean
 }
 
-export type SessionCacheSummary = {
+export type SessionEventEnvelope = {
+  seq?: number
   sessionId?: string | null
-  entityId?: string | null
-  projectId?: string | null
-  messageCount?: number
-  createdAt?: string
-  lastMessageAt?: string
-  mode?: SessionMode
-  model?: string | null
+  eventId?: string | null
+  event?: AguiBaseEvent
 }
 
 export const SessionMode = { PLAN: 'plan', BUILD: 'build' } as const
@@ -1161,13 +1127,6 @@ export const TelemetryEventType = {
 } as const
 
 export type TelemetryEventType = (typeof TelemetryEventType)[keyof typeof TelemetryEventType]
-
-export type ToolResultData = {
-  toolName: string | null
-  summary: string | null
-  isSuccess?: boolean
-  typedData?: unknown
-}
 
 export type UpdateAgentPromptRequest = {
   initialMessage?: string | null
@@ -4151,92 +4110,37 @@ export type PutApiProjectsByProjectIdSecretsByNameResponses = {
 export type PutApiProjectsByProjectIdSecretsByNameResponse =
   PutApiProjectsByProjectIdSecretsByNameResponses[keyof PutApiProjectsByProjectIdSecretsByNameResponses]
 
-export type GetApiSessionsBySessionIdCacheMessagesData = {
+export type GetApiSessionsBySessionIdEventsData = {
   body?: never
   path: {
     sessionId: string
   }
-  query?: never
-  url: '/api/sessions/{sessionId}/cache/messages'
-}
-
-export type GetApiSessionsBySessionIdCacheMessagesResponses = {
-  /**
-   * OK
-   */
-  200: Array<ClaudeMessage>
-}
-
-export type GetApiSessionsBySessionIdCacheMessagesResponse =
-  GetApiSessionsBySessionIdCacheMessagesResponses[keyof GetApiSessionsBySessionIdCacheMessagesResponses]
-
-export type GetApiSessionsBySessionIdCacheSummaryData = {
-  body?: never
-  path: {
-    sessionId: string
+  query?: {
+    since?: number
+    mode?: string
   }
-  query?: never
-  url: '/api/sessions/{sessionId}/cache/summary'
+  url: '/api/sessions/{sessionId}/events'
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryErrors = {
+export type GetApiSessionsBySessionIdEventsErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryError =
-  GetApiSessionsBySessionIdCacheSummaryErrors[keyof GetApiSessionsBySessionIdCacheSummaryErrors]
+export type GetApiSessionsBySessionIdEventsError =
+  GetApiSessionsBySessionIdEventsErrors[keyof GetApiSessionsBySessionIdEventsErrors]
 
-export type GetApiSessionsBySessionIdCacheSummaryResponses = {
+export type GetApiSessionsBySessionIdEventsResponses = {
   /**
    * OK
    */
-  200: SessionCacheSummary
+  200: Array<SessionEventEnvelope>
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryResponse =
-  GetApiSessionsBySessionIdCacheSummaryResponses[keyof GetApiSessionsBySessionIdCacheSummaryResponses]
-
-export type GetApiSessionsCacheProjectByProjectIdData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/sessions/cache/project/{projectId}'
-}
-
-export type GetApiSessionsCacheProjectByProjectIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<SessionCacheSummary>
-}
-
-export type GetApiSessionsCacheProjectByProjectIdResponse =
-  GetApiSessionsCacheProjectByProjectIdResponses[keyof GetApiSessionsCacheProjectByProjectIdResponses]
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdData = {
-  body?: never
-  path: {
-    projectId: string
-    entityId: string
-  }
-  query?: never
-  url: '/api/sessions/cache/entity/{projectId}/{entityId}'
-}
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<string>
-}
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponse =
-  GetApiSessionsCacheEntityByProjectIdByEntityIdResponses[keyof GetApiSessionsCacheEntityByProjectIdByEntityIdResponses]
+export type GetApiSessionsBySessionIdEventsResponse =
+  GetApiSessionsBySessionIdEventsResponses[keyof GetApiSessionsBySessionIdEventsResponses]
 
 export type GetApiSessionsData = {
   body?: never
@@ -4427,45 +4331,6 @@ export type GetApiSessionsEntityByEntityIdResumableResponses = {
 
 export type GetApiSessionsEntityByEntityIdResumableResponse =
   GetApiSessionsEntityByEntityIdResumableResponses[keyof GetApiSessionsEntityByEntityIdResumableResponses]
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdData = {
-  body?: never
-  path: {
-    projectId: string
-    entityId: string
-  }
-  query?: never
-  url: '/api/sessions/history/{projectId}/{entityId}'
-}
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<SessionCacheSummary>
-}
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdResponse =
-  GetApiSessionsHistoryByProjectIdByEntityIdResponses[keyof GetApiSessionsHistoryByProjectIdByEntityIdResponses]
-
-export type GetApiSessionsByIdCachedMessagesData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: never
-  url: '/api/sessions/{id}/cached-messages'
-}
-
-export type GetApiSessionsByIdCachedMessagesResponses = {
-  /**
-   * OK
-   */
-  200: Array<ClaudeMessage>
-}
-
-export type GetApiSessionsByIdCachedMessagesResponse =
-  GetApiSessionsByIdCachedMessagesResponses[keyof GetApiSessionsByIdCachedMessagesResponses]
 
 export type PostApiSessionsByIdResumeData = {
   body?: ResumeSessionRequest

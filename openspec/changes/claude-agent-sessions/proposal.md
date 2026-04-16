@@ -28,3 +28,7 @@ Claude Agent Sessions is the core runtime that runs Claude Agent SDK sessions in
 - **Shared**: ~26 files / ~1.7K LOC (session DTOs, enums, hub contracts).
 - **Testing**: 27 backend unit test files (~15K LOC), API tests, ~36 co-located web tests.
 - **Status**: Migrated — documents the as-built implementation.
+
+## Superseded by
+
+The AG-UI streaming, final-message persistence, and session-resume requirements in this change's specs are rewritten by `a2a-native-messaging` (2026-04-16). That change moves the server to A2A-native ingestion, adds the per-session monotonic-`seq` event log, collapses the many `BroadcastAGUI*` hub methods into a single `ReceiveSessionEvent`, and deletes the `ClaudeMessage` shared types. When `a2a-native-messaging` lands, its spec deltas supersede the corresponding requirements here. Session lifecycle states and control semantics (plan approval, Q&A, mode/model switching, container reconciliation) remain as described in this change.

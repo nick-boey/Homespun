@@ -13,7 +13,6 @@ import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { toApiSessionMode, normalizeSessionMode } from '@/lib/utils/session-mode'
 import {
   useSession,
-  useSessionMessages,
   MessageList,
   ChatInput,
   usePlanApproval,
@@ -28,7 +27,7 @@ import {
   useIssueContext,
   useSessionShortcuts,
 } from '@/features/sessions'
-import { useHistoricalSessionMessages } from '@/features/sessions/hooks/use-historical-session-messages'
+import { useSessionEvents } from '@/features/sessions/hooks/use-session-events'
 import { useClearContext } from '@/features/sessions/hooks/use-clear-context'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
@@ -98,12 +97,16 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const [viewingHistoricalSessionId, setViewingHistoricalSessionId] = useState<string | null>(null)
   const isMobile = useMobile()
 
-  // Fetch historical session messages when viewing a past session
-  const { messages: historicalMessages, isLoading: isLoadingHistorical } =
-    useHistoricalSessionMessages(viewingHistoricalSessionId)
-
   // Determine if we're viewing a historical session
   const isViewingHistorical = viewingHistoricalSessionId !== null
+
+  // Resolve the event stream for whichever session is being viewed. The new unified
+  // hook fetches `/api/sessions/{id}/events` replay on mount and subscribes to live
+  // `ReceiveSessionEvent` envelopes; passing a historical sessionId simply yields a
+  // replay-only view (no live envelopes will arrive for a terminated session).
+  const viewedSessionId = viewingHistoricalSessionId ?? sessionId
+  const { state: aguiState, isReplayingHistory } = useSessionEvents(viewedSessionId)
+  const messages = aguiState.messages
 
   // Get session settings (mode/model) from server or cache
   const { mode, model } = useSessionSettings(sessionId, session)
@@ -121,13 +124,6 @@ function SessionChat({ sessionId }: { sessionId: string }) {
 
   // Clear context and start new session
   const { clearContext, isPending: isClearingContext } = useClearContext()
-
-  // Get session messages with real-time updates
-  const { messages, addUserMessage } = useSessionMessages({
-    sessionId,
-    initialMessages: session?.messages ?? [],
-    isLoading,
-  })
 
   // Handle question answering
   const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
@@ -154,13 +150,12 @@ function SessionChat({ sessionId }: { sessionId: string }) {
     session?.status === 'runningHooks' ||
     session?.status === 'starting'
 
-  // Handle sending messages
+  // Handle sending messages. The server echoes each accepted user message as a
+  // `user.message` custom AG-UI event, so the reducer picks it up from the envelope
+  // stream — no local optimistic append is needed.
   const handleSend = useCallback(
     async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
       if (!isConnected || !isJoined) return
-
-      // Add user message optimistically (show in chat regardless of action)
-      addUserMessage(message)
 
       // Check if there's a pending plan - intercept and reject with feedback
       if (hasPendingPlan) {
@@ -194,7 +189,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         setIsSending(false)
       }
     },
-    [isConnected, isJoined, sessionId, addUserMessage, hasPendingPlan, reject]
+    [isConnected, isJoined, sessionId, hasPendingPlan, reject]
   )
 
   // Handle stop session
@@ -378,12 +373,12 @@ function SessionChat({ sessionId }: { sessionId: string }) {
           className="border-border absolute inset-0 overflow-y-auto rounded-lg border"
         >
           {isViewingHistorical ? (
-            <MessageList messages={historicalMessages} isLoading={isLoadingHistorical} />
+            <MessageList messages={messages} isLoading={isReplayingHistory} />
           ) : (
             <>
               <MessageList
                 messages={messages}
-                isLoading={isLoading}
+                isLoading={isLoading || isReplayingHistory}
                 pendingQuestion={!isProcessingAnswer ? session?.pendingQuestion : undefined}
                 onAnswerQuestion={answerQuestion}
                 isSubmittingAnswer={isSubmittingAnswer}
@@ -456,6 +451,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
       {session && (
         <SessionInfoPanel
           session={session}
+          messages={messages}
           isOpen={infoPanelOpen}
           onOpenChange={setInfoPanelOpen}
           viewingHistoricalSessionId={viewingHistoricalSessionId}

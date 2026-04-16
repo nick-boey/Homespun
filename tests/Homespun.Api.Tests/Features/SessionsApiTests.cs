@@ -204,51 +204,10 @@ public class SessionsApiTests
         Assert.That(sessions, Is.Not.Null);
     }
 
-    // --- GET /api/sessions/history/{projectId}/{entityId} ---
-
-    [Test]
-    public async Task GetSessionHistory_ReturnsOk()
-    {
-        // Act
-        var response = await _client.GetAsync(
-            $"/api/sessions/history/{_projectId}/some-entity-id");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var history = await response.Content.ReadFromJsonAsync<List<SessionCacheSummary>>(JsonOptions);
-        Assert.That(history, Is.Not.Null);
-    }
-
-    // --- GET /api/sessions/{id}/cached-messages ---
-
-    [Test]
-    public async Task GetCachedMessages_ReturnsOk_ForExistingSession()
-    {
-        // Arrange
-        var session = await CreateSession();
-
-        // Act
-        var response = await _client.GetAsync($"/api/sessions/{session.Id}/cached-messages");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var messages = await response.Content.ReadFromJsonAsync<List<ClaudeMessage>>(JsonOptions);
-        Assert.That(messages, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task GetCachedMessages_ReturnsOk_WithEmptyList_ForNonExistentSession()
-    {
-        // The mock service returns empty list for non-existent sessions
-        // Act
-        var response = await _client.GetAsync("/api/sessions/non-existent-id/cached-messages");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var messages = await response.Content.ReadFromJsonAsync<List<ClaudeMessage>>(JsonOptions);
-        Assert.That(messages, Is.Not.Null);
-        Assert.That(messages, Is.Empty);
-    }
+    // GET /api/sessions/history/{projectId}/{entityId} and
+    // GET /api/sessions/{id}/cached-messages were retired along with MessageCacheStore
+    // and ClaudeMessage. Refresh-replay now goes through
+    // GET /api/sessions/{id}/events (see SessionEventsApiTests).
 
     // --- POST /api/sessions ---
 

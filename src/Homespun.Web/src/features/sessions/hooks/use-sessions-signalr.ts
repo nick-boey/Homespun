@@ -44,9 +44,9 @@ export function useSessionsSignalR(): void {
       invalidateAllSessionsQueries(queryClient)
       invalidateTaskGraphQueries(queryClient)
       // Invalidate session history for this entity to show the new session
-      if (newSession.projectId && newSession.entityId) {
+      if (newSession.entityId) {
         queryClient.invalidateQueries({
-          queryKey: sessionHistoryQueryKey(newSession.projectId, newSession.entityId),
+          queryKey: sessionHistoryQueryKey(newSession.entityId),
         })
       }
     }

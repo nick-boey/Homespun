@@ -1,26 +1,30 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Fleece.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
-using AGUIEvents = Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
-/// Handles sending messages, processing SDK message streams,
-/// content block assembly, and message format conversions.
+/// Handles sending messages and orchestrates the per-turn lifecycle (status transitions,
+/// turn id bookkeeping, session result aggregation, workflow callbacks, error handling).
+///
+/// <para>
+/// Content-block assembly, AG-UI broadcast, and message-cache persistence have moved to
+/// <see cref="SessionEventIngestor"/> + <see cref="A2AEventStore"/>. This service no longer
+/// constructs <c>ClaudeMessage</c> records; it simply drives the worker through its
+/// session-start and send-message entry points and observes the control-plane primitives
+/// (<see cref="SdkQuestionPendingMessage"/>, <see cref="SdkPlanPendingMessage"/>, <see cref="SdkResultMessage"/>)
+/// that the worker still emits alongside A2A events.
+/// </para>
 /// </summary>
 public class MessageProcessingService : IMessageProcessingService
 {
     private readonly IClaudeSessionStore _sessionStore;
     private readonly ILogger<MessageProcessingService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
-    private readonly IToolResultParser _toolResultParser;
-    private readonly IMessageCacheStore _messageCache;
     private readonly IAgentExecutionService _agentExecutionService;
-    private readonly IAGUIEventService _agUIEventService;
     private readonly IFleeceIssueTransitionService _fleeceTransitionService;
     private readonly ISessionStateManager _stateManager;
     private readonly IToolInteractionService _toolInteraction;
@@ -31,10 +35,7 @@ public class MessageProcessingService : IMessageProcessingService
         IClaudeSessionStore sessionStore,
         ILogger<MessageProcessingService> logger,
         IHubContext<ClaudeCodeHub> hubContext,
-        IToolResultParser toolResultParser,
-        IMessageCacheStore messageCache,
         IAgentExecutionService agentExecutionService,
-        IAGUIEventService agUIEventService,
         IFleeceIssueTransitionService fleeceTransitionService,
         ISessionStateManager stateManager,
         IToolInteractionService toolInteraction,
@@ -44,10 +45,7 @@ public class MessageProcessingService : IMessageProcessingService
         _sessionStore = sessionStore;
         _logger = logger;
         _hubContext = hubContext;
-        _toolResultParser = toolResultParser;
-        _messageCache = messageCache;
         _agentExecutionService = agentExecutionService;
-        _agUIEventService = agUIEventService;
         _fleeceTransitionService = fleeceTransitionService;
         _stateManager = stateManager;
         _toolInteraction = toolInteraction;
@@ -103,24 +101,14 @@ public class MessageProcessingService : IMessageProcessingService
             await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, session.Model);
         }
 
-        var userMessage = new ClaudeMessage
-        {
-            SessionId = sessionId,
-            Role = ClaudeMessageRole.User,
-            Content = [new ClaudeMessageContent { Type = ClaudeContentType.Text, Text = message }]
-        };
-        session.Messages.Add(userMessage);
-        // This MUST be set before the status broadcast to prevent a race condition:
-        // without this, the await on BroadcastSessionStatusChanged can yield the thread,
-        // allowing a superseded invocation's post-loop guard to see the old turn ID
-        // and erroneously set WaitingForInput.
+        // Turn id MUST be set before the status broadcast — without it, the await on
+        // BroadcastSessionStatusChanged can yield and let a superseded invocation's
+        // post-loop guard see the old turn id and erroneously transition to WaitingForInput.
         var turnId = Guid.NewGuid();
         _stateManager.SetCurrentTurnId(sessionId, turnId);
 
         session.Status = ClaudeSessionStatus.Running;
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
-
-        await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);
 
         try
         {
@@ -128,18 +116,6 @@ public class MessageProcessingService : IMessageProcessingService
             using var linkedCts = cts != null
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var currentAssistantMessage = new ClaudeMessage
-            {
-                SessionId = sessionId,
-                Role = ClaudeMessageRole.Assistant,
-                Content = []
-            };
-            var messageContext = new MessageProcessingContext
-            {
-                CurrentAssistantMessage = currentAssistantMessage,
-                TurnId = turnId
-            };
 
             IAsyncEnumerable<SdkMessage> messageStream;
 
@@ -154,7 +130,8 @@ public class MessageProcessingService : IMessageProcessingService
                     SystemPrompt: session.SystemPrompt,
                     ResumeSessionId: session.ConversationId,
                     IssueId: session.EntityId,
-                    ProjectId: session.ProjectId
+                    ProjectId: session.ProjectId,
+                    HomespunSessionId: sessionId
                 );
 
                 if (!string.IsNullOrEmpty(session.EntityId) && !string.IsNullOrEmpty(session.ProjectId))
@@ -183,7 +160,7 @@ public class MessageProcessingService : IMessageProcessingService
 
             await foreach (var msg in messageStream.WithCancellation(linkedCts.Token))
             {
-                await ProcessSdkMessageAsync(sessionId, session, messageContext, msg, linkedCts.Token);
+                await ProcessSdkMessageAsync(sessionId, session, msg, turnId, linkedCts.Token);
 
                 if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started")
                 {
@@ -194,13 +171,6 @@ public class MessageProcessingService : IMessageProcessingService
 
                 if (msg is SdkResultMessage)
                     break;
-            }
-
-            if (messageContext.CurrentAssistantMessage.Content.Count > 0 &&
-                !messageContext.HasCachedCurrentMessage)
-            {
-                session.Messages.Add(messageContext.CurrentAssistantMessage);
-                await _messageCache.AppendMessageAsync(sessionId, messageContext.CurrentAssistantMessage, linkedCts.Token);
             }
 
             if (session.Status == ClaudeSessionStatus.Running &&
@@ -231,19 +201,11 @@ public class MessageProcessingService : IMessageProcessingService
         }
     }
 
-    private class MessageProcessingContext
-    {
-        public ClaudeMessage CurrentAssistantMessage { get; set; } = null!;
-        public bool HasCachedCurrentMessage { get; set; }
-        public ContentBlockAssembler Assembler { get; } = new();
-        public Guid TurnId { get; init; }
-    }
-
     private async Task ProcessSdkMessageAsync(
         string sessionId,
         ClaudeSession session,
-        MessageProcessingContext context,
         SdkMessage msg,
+        Guid turnId,
         CancellationToken cancellationToken)
     {
         switch (msg)
@@ -254,468 +216,80 @@ public class MessageProcessingService : IMessageProcessingService
                 break;
 
             case SdkQuestionPendingMessage questionMsg:
-                await _toolInteraction.HandleQuestionPendingFromWorkerAsync(sessionId, session, questionMsg, context.TurnId, cancellationToken);
+                await _toolInteraction.HandleQuestionPendingFromWorkerAsync(sessionId, session, questionMsg, turnId, cancellationToken);
                 break;
 
             case SdkPlanPendingMessage planMsg:
-                await _toolInteraction.HandlePlanPendingFromWorkerAsync(sessionId, session, planMsg, context.TurnId, cancellationToken);
-                break;
-
-            case SdkStreamEvent streamEvt:
-                await ProcessStreamEventAsync(sessionId, session, context, streamEvt);
-                break;
-
-            case SdkAssistantMessage assistantMsg:
-                await ProcessAssistantMessageAsync(sessionId, session, context, assistantMsg, cancellationToken);
-                break;
-
-            case SdkUserMessage userMsg:
-                await ProcessUserMessageAsync(sessionId, session, context, userMsg, cancellationToken);
+                await _toolInteraction.HandlePlanPendingFromWorkerAsync(sessionId, session, planMsg, turnId, cancellationToken);
                 break;
 
             case SdkResultMessage resultMsg:
-                session.TotalCostUsd = resultMsg.TotalCostUsd;
-                session.TotalDurationMs = resultMsg.DurationMs;
-
-                var previousConversationId = session.ConversationId;
-                session.ConversationId = resultMsg.SessionId;
-                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
-
-                if (resultMsg.IsError)
-                {
-                    var errorMessage = BuildErrorMessage(resultMsg);
-                    var isRecoverable = IsRecoverableError(resultMsg.Subtype);
-
-                    session.Status = ClaudeSessionStatus.Error;
-                    session.ErrorMessage = errorMessage;
-
-                    _logger.LogWarning(
-                        "Session {SessionId} encountered error: subtype={Subtype}, message={Message}, recoverable={Recoverable}",
-                        sessionId, resultMsg.Subtype, errorMessage, isRecoverable);
-
-                    await _hubContext.BroadcastSessionError(
-                        sessionId, errorMessage, resultMsg.Subtype, isRecoverable);
-                    await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
-
-                    var runErrorEvent = _agUIEventService.CreateRunError(errorMessage, resultMsg.Subtype);
-                    await _hubContext.BroadcastAGUIRunError(sessionId, runErrorEvent);
-
-                    await _workflowSessionCallback.Value.HandleSessionFailedAsync(
-                        sessionId, errorMessage, CancellationToken.None);
-                }
-
-                if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
-                {
-                    var metadata = new SessionMetadata(
-                        SessionId: resultMsg.SessionId,
-                        EntityId: session.EntityId,
-                        ProjectId: session.ProjectId,
-                        WorkingDirectory: session.WorkingDirectory,
-                        Mode: session.Mode,
-                        Model: session.Model,
-                        SystemPrompt: session.SystemPrompt,
-                        CreatedAt: session.CreatedAt
-                    );
-                    await _metadataStore.SaveAsync(metadata, cancellationToken);
-                }
-
-                await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
-
-                if (!resultMsg.IsError)
-                {
-                    var runId = _stateManager.GetRunId(sessionId) ?? Guid.NewGuid().ToString();
-                    var runFinishedEvent = _agUIEventService.CreateRunFinished(sessionId, runId, resultMsg.Result);
-                    await _hubContext.BroadcastAGUIRunFinished(sessionId, runFinishedEvent);
-
-                    await _workflowSessionCallback.Value.HandleSessionCompletedAsync(
-                        sessionId, CancellationToken.None);
-                }
+                await ProcessResultMessageAsync(sessionId, session, resultMsg, cancellationToken);
                 break;
         }
     }
 
-    private async Task ProcessStreamEventAsync(
+    private async Task ProcessResultMessageAsync(
         string sessionId,
         ClaudeSession session,
-        MessageProcessingContext context,
-        SdkStreamEvent streamEvt)
-    {
-        if (streamEvt.Event == null || !streamEvt.Event.HasValue) return;
-        var evt = streamEvt.Event.Value;
-
-        var eventType = evt.TryGetProperty("type", out var t) ? t.GetString() : null;
-
-        switch (eventType)
-        {
-            case "content_block_start":
-            {
-                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
-                if (evt.TryGetProperty("content_block", out var contentBlock))
-                {
-                    context.Assembler.StartBlock(index, contentBlock);
-
-                    var blockType = contentBlock.TryGetProperty("type", out var blockTypeVal) ? blockTypeVal.GetString() : null;
-                    if (blockType == "tool_use")
-                    {
-                        var toolCallId = contentBlock.TryGetProperty("id", out var idVal) ? idVal.GetString() : Guid.NewGuid().ToString();
-                        var toolName = contentBlock.TryGetProperty("name", out var nameVal) ? nameVal.GetString() : "unknown";
-                        var toolStartEvent = AGUIEvents.AGUIEventFactory.CreateToolCallStart(
-                            toolCallId!, toolName!, context.CurrentAssistantMessage?.Id);
-                        _ = _hubContext.BroadcastAGUIToolCallStart(sessionId, toolStartEvent);
-                    }
-                    else if (blockType == "text" || blockType == "thinking")
-                    {
-                        var msgId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                        var textStartEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant");
-                        _ = _hubContext.BroadcastAGUITextMessageStart(sessionId, textStartEvent);
-                    }
-                }
-                break;
-            }
-
-            case "content_block_delta":
-            {
-                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
-                if (evt.TryGetProperty("delta", out var delta))
-                {
-                    context.Assembler.ApplyDelta(index, delta);
-
-                    var block = index < context.Assembler.Blocks.Count ? context.Assembler.Blocks[index] : null;
-                    if (block != null)
-                    {
-                        var deltaType = delta.TryGetProperty("type", out var dt) ? dt.GetString() : null;
-                        switch (deltaType)
-                        {
-                            case "text_delta":
-                            case "thinking_delta":
-                                var textDelta = delta.TryGetProperty("text", out var txt) ? txt.GetString() :
-                                               (delta.TryGetProperty("thinking", out var th) ? th.GetString() : null);
-                                if (!string.IsNullOrEmpty(textDelta))
-                                {
-                                    var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                                    var textContentEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageContent(messageId, textDelta);
-                                    _ = _hubContext.BroadcastAGUITextMessageContent(sessionId, textContentEvent);
-                                }
-                                break;
-                            case "input_json_delta":
-                                var jsonDelta = delta.TryGetProperty("partial_json", out var pj) ? pj.GetString() : null;
-                                if (!string.IsNullOrEmpty(jsonDelta) && block.ToolUseId != null)
-                                {
-                                    var toolArgsEvent = AGUIEvents.AGUIEventFactory.CreateToolCallArgs(block.ToolUseId, jsonDelta);
-                                    _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId, toolArgsEvent);
-                                }
-                                break;
-                        }
-                    }
-                }
-                break;
-            }
-
-            case "content_block_stop":
-            {
-                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
-                context.Assembler.StopBlock(index);
-
-                if (index < context.Assembler.Blocks.Count)
-                {
-                    var block = context.Assembler.Blocks[index];
-                    var content = ConvertBlockStateToContent(sessionId, block);
-                    content.IsStreaming = false;
-                    context.CurrentAssistantMessage.Content.Add(content);
-
-                    if (block.Type == "tool_use" && block.ToolUseId != null)
-                    {
-                        var toolEndEvent = AGUIEvents.AGUIEventFactory.CreateToolCallEnd(block.ToolUseId);
-                        _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId, toolEndEvent);
-                    }
-                    else if (block.Type == "text" || block.Type == "thinking")
-                    {
-                        var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
-                        var textEndEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(messageId);
-                        _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId, textEndEvent);
-                    }
-
-                    if (content.Type == ClaudeContentType.ToolUse &&
-                        content.ToolName == "AskUserQuestion" &&
-                        !string.IsNullOrEmpty(content.ToolInput))
-                    {
-                        await _toolInteraction.HandleAskUserQuestionTool(sessionId, session, content, CancellationToken.None);
-                    }
-
-                    if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
-                    {
-                        await _toolInteraction.HandleExitPlanModeCompletedAsync(sessionId, session, content, CancellationToken.None);
-                    }
-
-                    if (content.Type == ClaudeContentType.ToolUse &&
-                        content.ToolName == "workflow_signal" &&
-                        !string.IsNullOrEmpty(content.ToolInput))
-                    {
-                        await _toolInteraction.HandleWorkflowSignalToolAsync(sessionId, content, CancellationToken.None);
-                    }
-
-                    if (content.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
-                    {
-                        _toolInteraction.TryCaptureWrittenPlanContent(session, content);
-                    }
-                }
-                break;
-            }
-        }
-    }
-
-    private async Task ProcessAssistantMessageAsync(
-        string sessionId,
-        ClaudeSession session,
-        MessageProcessingContext context,
-        SdkAssistantMessage assistantMsg,
+        SdkResultMessage resultMsg,
         CancellationToken cancellationToken)
     {
-        if (context.CurrentAssistantMessage.Content.Count == 0 && assistantMsg.Message.Content.Count > 0)
+        session.TotalCostUsd = resultMsg.TotalCostUsd;
+        session.TotalDurationMs = resultMsg.DurationMs;
+
+        var previousConversationId = session.ConversationId;
+        session.ConversationId = resultMsg.SessionId;
+        _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
+
+        if (resultMsg.IsError)
         {
-            foreach (var block in assistantMsg.Message.Content)
-            {
-                var content = ConvertSdkContentBlock(sessionId, block);
-                context.CurrentAssistantMessage.Content.Add(content);
+            var errorMessage = BuildErrorMessage(resultMsg);
+            var isRecoverable = IsRecoverableError(resultMsg.Subtype);
 
-                // Broadcast AG-UI events for complete assistant message blocks
-                // (streaming path handles its own broadcasting via ProcessStreamEventAsync)
-                if (content.Type == ClaudeContentType.Text || content.Type == ClaudeContentType.Thinking)
-                {
-                    var msgId = context.CurrentAssistantMessage.Id;
-                    _ = _hubContext.BroadcastAGUITextMessageStart(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant"));
-                    if (!string.IsNullOrEmpty(content.Text))
-                    {
-                        _ = _hubContext.BroadcastAGUITextMessageContent(sessionId,
-                            AGUIEvents.AGUIEventFactory.CreateTextMessageContent(msgId, content.Text));
-                    }
-                    _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(msgId));
-                }
-                else if (content.Type == ClaudeContentType.ToolUse && content.ToolUseId != null)
-                {
-                    _ = _hubContext.BroadcastAGUIToolCallStart(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateToolCallStart(content.ToolUseId, content.ToolName ?? "unknown", context.CurrentAssistantMessage.Id));
-                    if (!string.IsNullOrEmpty(content.ToolInput))
-                    {
-                        _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId,
-                            AGUIEvents.AGUIEventFactory.CreateToolCallArgs(content.ToolUseId, content.ToolInput));
-                    }
-                    _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId,
-                        AGUIEvents.AGUIEventFactory.CreateToolCallEnd(content.ToolUseId));
-                }
+            session.Status = ClaudeSessionStatus.Error;
+            session.ErrorMessage = errorMessage;
 
-                if (content.Type == ClaudeContentType.ToolUse &&
-                    content.ToolName == "AskUserQuestion" &&
-                    !string.IsNullOrEmpty(content.ToolInput))
-                {
-                    await _toolInteraction.HandleAskUserQuestionTool(sessionId, session, content, cancellationToken);
-                }
+            _logger.LogWarning(
+                "Session {SessionId} encountered error: subtype={Subtype}, message={Message}, recoverable={Recoverable}",
+                sessionId, resultMsg.Subtype, errorMessage, isRecoverable);
 
-                if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    await _toolInteraction.HandleExitPlanModeCompletedAsync(sessionId, session, content, cancellationToken);
-                }
+            await _hubContext.BroadcastSessionError(
+                sessionId, errorMessage, resultMsg.Subtype, isRecoverable);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
-                if (content.Type == ClaudeContentType.ToolUse &&
-                    content.ToolName == "workflow_signal" &&
-                    !string.IsNullOrEmpty(content.ToolInput))
-                {
-                    await _toolInteraction.HandleWorkflowSignalToolAsync(sessionId, content, cancellationToken);
-                }
+            // Run error is broadcast as a SessionEventEnvelope by SessionEventIngestor
+            // when it observes the failed A2A StatusUpdate event.
 
-                if (content.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    _toolInteraction.TryCaptureWrittenPlanContent(session, content);
-                }
-            }
-            _logger.LogDebug("Populated assistant message from SdkAssistantMessage ({Count} blocks)",
-                assistantMsg.Message.Content.Count);
+            await _workflowSessionCallback.Value.HandleSessionFailedAsync(
+                sessionId, errorMessage, CancellationToken.None);
         }
 
-        if (context.CurrentAssistantMessage.Content.Count > 0 && !context.HasCachedCurrentMessage)
+        if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
         {
-            session.Messages.Add(context.CurrentAssistantMessage);
-            await _messageCache.AppendMessageAsync(sessionId, context.CurrentAssistantMessage, cancellationToken);
-            context.HasCachedCurrentMessage = true;
+            var metadata = new SessionMetadata(
+                SessionId: resultMsg.SessionId,
+                EntityId: session.EntityId,
+                ProjectId: session.ProjectId,
+                WorkingDirectory: session.WorkingDirectory,
+                Mode: session.Mode,
+                Model: session.Model,
+                SystemPrompt: session.SystemPrompt,
+                CreatedAt: session.CreatedAt
+            );
+            await _metadataStore.SaveAsync(metadata, cancellationToken);
         }
 
-        context.Assembler.Clear();
-    }
+        await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
 
-    private async Task ProcessUserMessageAsync(
-        string sessionId,
-        ClaudeSession session,
-        MessageProcessingContext context,
-        SdkUserMessage userMsg,
-        CancellationToken cancellationToken)
-    {
-        var toolResultContents = new List<ClaudeMessageContent>();
-
-        foreach (var block in userMsg.Message.Content)
+        if (!resultMsg.IsError)
         {
-            if (block is SdkToolResultBlock toolResult)
-            {
-                var content = ConvertSdkToolResult(sessionId, toolResult);
-                toolResultContents.Add(content);
-            }
+            // Run finished is broadcast as a SessionEventEnvelope by SessionEventIngestor
+            // when it observes the completed A2A StatusUpdate.
+            _stateManager.GetRunId(sessionId);
+            await _workflowSessionCallback.Value.HandleSessionCompletedAsync(
+                sessionId, CancellationToken.None);
         }
-
-        if (toolResultContents.Count > 0)
-        {
-            var toolResultMessage = new ClaudeMessage
-            {
-                SessionId = sessionId,
-                Role = ClaudeMessageRole.User,
-                Content = toolResultContents
-            };
-            session.Messages.Add(toolResultMessage);
-            await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
-
-            foreach (var toolResult in toolResultContents)
-            {
-                if (!string.IsNullOrEmpty(toolResult.ToolUseId))
-                {
-                    var toolResultEvent = AGUIEvents.AGUIEventFactory.CreateToolCallResult(
-                        toolResult.ToolUseId,
-                        toolResult.ToolResult ?? "",
-                        toolResultMessage.Id);
-                    _ = _hubContext.BroadcastAGUIToolCallResult(sessionId, toolResultEvent);
-                }
-            }
-
-            foreach (var toolResult in toolResultContents)
-            {
-                if (toolResult.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    _toolInteraction.TryCaptureWrittenPlanContentFromResult(session, toolResult);
-                }
-
-                if (toolResult.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    var exitPlanBlock = new ClaudeMessageContent
-                    {
-                        Type = ClaudeContentType.ToolUse,
-                        ToolName = "ExitPlanMode"
-                    };
-                    await _toolInteraction.HandleExitPlanModeCompletedAsync(sessionId, session, exitPlanBlock, cancellationToken);
-                }
-            }
-
-            context.CurrentAssistantMessage = new ClaudeMessage
-            {
-                SessionId = sessionId,
-                Role = ClaudeMessageRole.Assistant,
-                Content = []
-            };
-            context.HasCachedCurrentMessage = false;
-            context.Assembler.Clear();
-        }
-    }
-
-    private ClaudeMessageContent ConvertBlockStateToContent(string sessionId, ContentBlockState block)
-    {
-        return block.Type switch
-        {
-            "text" => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.Text,
-                Text = block.Text,
-                Index = block.Index
-            },
-            "thinking" => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.Thinking,
-                Text = block.Thinking,
-                Index = block.Index
-            },
-            "tool_use" => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.ToolUse,
-                ToolUseId = block.ToolUseId,
-                ToolName = block.ToolName,
-                ToolInput = block.PartialJson,
-                Index = block.Index
-            },
-            _ => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.Text,
-                Text = block.Text,
-                Index = block.Index
-            }
-        };
-    }
-
-    private ClaudeMessageContent ConvertSdkContentBlock(string sessionId, SdkContentBlock block)
-    {
-        switch (block)
-        {
-            case SdkTextBlock textBlock:
-                return new ClaudeMessageContent
-                {
-                    Type = ClaudeContentType.Text,
-                    Text = textBlock.Text
-                };
-
-            case SdkThinkingBlock thinkingBlock:
-                return new ClaudeMessageContent
-                {
-                    Type = ClaudeContentType.Thinking,
-                    Text = thinkingBlock.Thinking
-                };
-
-            case SdkToolUseBlock toolUseBlock:
-            {
-                var sessionToolUses = _stateManager.GetOrCreateSessionToolUses(sessionId);
-                sessionToolUses[toolUseBlock.Id] = toolUseBlock.Name;
-
-                return new ClaudeMessageContent
-                {
-                    Type = ClaudeContentType.ToolUse,
-                    ToolUseId = toolUseBlock.Id,
-                    ToolName = toolUseBlock.Name,
-                    ToolInput = toolUseBlock.Input.ValueKind != JsonValueKind.Undefined
-                        ? toolUseBlock.Input.GetRawText()
-                        : null
-                };
-            }
-
-            case SdkToolResultBlock toolResultBlock:
-                return ConvertSdkToolResult(sessionId, toolResultBlock);
-
-            default:
-                return new ClaudeMessageContent { Type = ClaudeContentType.Text };
-        }
-    }
-
-    private ClaudeMessageContent ConvertSdkToolResult(string sessionId, SdkToolResultBlock toolResult)
-    {
-        string? toolName = null;
-        var toolUses = _stateManager.GetOrCreateSessionToolUses(sessionId);
-        toolUses.TryGetValue(toolResult.ToolUseId, out toolName);
-
-        var contentText = toolResult.Content.ValueKind == JsonValueKind.String
-            ? toolResult.Content.GetString()
-            : toolResult.Content.ValueKind != JsonValueKind.Undefined
-                ? toolResult.Content.GetRawText()
-                : null;
-
-        var content = new ClaudeMessageContent
-        {
-            Type = ClaudeContentType.ToolResult,
-            ToolUseId = toolResult.ToolUseId,
-            ToolName = toolName,
-            Text = contentText,
-            ToolSuccess = toolResult.IsError == true ? false : true
-        };
-
-        if (!string.IsNullOrEmpty(toolName))
-        {
-            content.ParsedToolResult = _toolResultParser.Parse(toolName, contentText, toolResult.IsError == true);
-        }
-
-        return content;
     }
 
     private static string BuildErrorMessage(SdkResultMessage resultMsg)

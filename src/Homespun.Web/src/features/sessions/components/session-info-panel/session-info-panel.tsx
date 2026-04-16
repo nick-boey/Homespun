@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks/use-mobile'
 import type { ClaudeSession } from '@/types/signalr'
+import type { AGUIMessage } from '../../utils/agui-reducer'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { BottomSheet } from '../bottom-sheet'
@@ -16,6 +17,12 @@ import { SessionHistoryTab } from './session-history-tab'
 
 interface SessionInfoPanelProps {
   session: ClaudeSession
+  /**
+   * Current AG-UI reducer messages for the session. Used by the Todos tab to parse
+   * the latest TodoWrite tool input. Optional (default `[]`) because some tests
+   * render the panel without driving the envelope stream.
+   */
+  messages?: AGUIMessage[]
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   defaultOpen?: boolean
@@ -25,6 +32,7 @@ interface SessionInfoPanelProps {
 
 export function SessionInfoPanel({
   session,
+  messages = [],
   isOpen,
   onOpenChange,
   defaultOpen = false,
@@ -89,7 +97,7 @@ export function SessionInfoPanel({
           <SessionPrTab session={session} />
         </TabsContent>
         <TabsContent value="todos" className="mt-0 p-4">
-          <SessionTodosTab session={session} />
+          <SessionTodosTab messages={messages} />
         </TabsContent>
         <TabsContent value="files" className="mt-0 p-4">
           <SessionFilesTab session={session} />

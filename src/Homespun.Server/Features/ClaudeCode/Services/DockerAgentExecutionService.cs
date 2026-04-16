@@ -90,8 +90,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     // Session-to-issue mapping for routing
     private readonly ConcurrentDictionary<string, string> _sessionToIssue = new();
 
-    private static readonly JsonSerializerOptions SdkJsonOptions = SdkMessageParser.CreateJsonOptions();
-
     private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -106,7 +104,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? WorkerSessionId,
         CancellationTokenSource Cts,
         DateTime CreatedAt,
-        string? IssueId = null)
+        string? IssueId = null,
+        string? ProjectId = null)
     {
         public string? ConversationId { get; set; }
         public DateTime LastActivityAt { get; set; } = CreatedAt;
@@ -144,14 +143,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageType,
         string? LastMessageSubtype);
 
+    private readonly ISessionEventIngestor _eventIngestor;
+
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
-        ISecretsService secretsService)
+        ISecretsService secretsService,
+        ISessionEventIngestor eventIngestor)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
+        _eventIngestor = eventIngestor;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
@@ -266,7 +269,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var session = new DockerSession(
                     sessionId, containerId, containerName, workerUrl, request.WorkingDirectory,
-                    null, cts, DateTime.UtcNow, request.IssueId);
+                    null, cts, DateTime.UtcNow, request.IssueId, request.ProjectId);
 
                 _sessions[sessionId] = session;
 
@@ -290,7 +293,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     ResumeSessionId = request.ResumeSessionId
                 };
 
-                await foreach (var msg in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
+                await foreach (var msg in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, request.ProjectId, cts.Token))
                 {
                     // Capture the worker session ID from session_started lifecycle event
                     if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started" &&
@@ -390,7 +393,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         await foreach (var msg in SendSseRequestAsync(
             $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message",
-            messageRequest, request.SessionId, linkedCts.Token))
+            messageRequest, request.SessionId, session.ProjectId, linkedCts.Token))
         {
             var remapped = RemapSessionId(msg, request.SessionId);
             yield return remapped;
@@ -2083,6 +2086,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string url,
         object requestBody,
         string sessionId,
+        string? projectId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
@@ -2142,7 +2146,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             {
                 if (!string.IsNullOrEmpty(currentEventType) && dataBuffer.Length > 0)
                 {
-                    var msg = ParseSseEvent(currentEventType, dataBuffer.ToString(), sessionId);
+                    var rawData = dataBuffer.ToString();
+
+                    // Tap the A2A-native path: persist + translate + broadcast a
+                    // SessionEventEnvelope before we do anything legacy-SDK with the event.
+                    // Append-before-legacy-broadcast preserves the refresh-fidelity invariant.
+                    await TryIngestA2AEventAsync(
+                        currentEventType, rawData, sessionId, projectId, cancellationToken);
+
+                    var msg = ParseSseEvent(currentEventType, rawData, sessionId);
                     if (msg != null)
                     {
                         yield return msg;
@@ -2157,6 +2169,55 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 currentEventType = null;
                 dataBuffer.Clear();
             }
+        }
+    }
+
+    /// <summary>
+    /// Non-destructive tap that forwards A2A-kind SSE events to the
+    /// <see cref="ISessionEventIngestor"/> (A2AEventStore append + translate + envelope
+    /// broadcast). Non-A2A events (<c>session_started</c>, <c>question_pending</c>,
+    /// <c>plan_pending</c>, <c>error</c>, raw SDK-shaped events emitted for backwards
+    /// compatibility) are skipped here — they reach the client via the legacy per-type
+    /// broadcast path until that path is retired in the dead-code-deletion phase.
+    ///
+    /// <para>
+    /// Failures are logged and swallowed so the ingestion side effect never tears down the
+    /// SSE consumer — the legacy SdkMessage yield must continue regardless.
+    /// </para>
+    /// </summary>
+    private async Task TryIngestA2AEventAsync(
+        string eventKind,
+        string rawData,
+        string sessionId,
+        string? projectId,
+        CancellationToken cancellationToken)
+    {
+        if (!A2AMessageParser.IsA2AEventKind(eventKind))
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawData);
+            // Clone so the JsonElement outlives the JsonDocument's `using` scope — the
+            // ingestor persists the element and the store may keep it alive beyond this
+            // method's stack frame when bursts are in flight.
+            var payload = doc.RootElement.Clone();
+
+            // projectId is best-effort; when not available (legacy non-issue sessions) we
+            // fall back to a stable "unknown" bucket so the event log still writes. The
+            // replay endpoint does not need projectId in its URL — it only uses sessionId.
+            var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
+
+            await _eventIngestor.IngestAsync(
+                effectiveProjectId, sessionId, eventKind, payload, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SessionEventIngestor tap failed for session {SessionId} kind {EventKind}; legacy path continues",
+                sessionId, eventKind);
         }
     }
 
@@ -2227,8 +2288,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 return null;
             }
 
-            // All other events are raw SDK messages — deserialize using SdkMessage converters
-            return JsonSerializer.Deserialize<SdkMessage>(data, SdkJsonOptions);
+            // Unknown event type. A2A-native workers only emit A2A events plus the four
+            // legacy control events handled above; anything else is dropped.
+            _logger.LogDebug("Dropping unknown SSE event type: {EventType}", eventType);
+            return null;
         }
         catch (JsonException ex)
         {
@@ -2244,11 +2307,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     {
         return msg switch
         {
-            SdkAssistantMessage m => m with { SessionId = sessionId },
-            SdkUserMessage m => m with { SessionId = sessionId },
             SdkResultMessage m => m with { SessionId = sessionId },
             SdkSystemMessage m => m with { SessionId = sessionId },
-            SdkStreamEvent m => m with { SessionId = sessionId },
             SdkQuestionPendingMessage m => m with { SessionId = sessionId },
             SdkPlanPendingMessage m => m with { SessionId = sessionId },
             _ => msg

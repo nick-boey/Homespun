@@ -5,53 +5,14 @@ import { QuestionPanel } from '@/features/questions'
 import { useResponsiveProse } from '@/hooks/use-responsive-prose'
 import { Card, CardContent } from '@/components/ui/card'
 import { Loader2 } from 'lucide-react'
-import type {
-  ClaudeMessage,
-  ClaudeMessageContent,
-  ClaudeContentType,
-  ClaudeMessageRole,
-  PendingQuestion,
-} from '@/types/signalr'
-import { ClaudeContentType as ContentTypeEnum, ClaudeMessageRole as RoleEnum } from '@/api'
+import type { AGUIMessage, AGUIContentBlock } from '../utils/agui-reducer'
+import type { PendingQuestion } from '@/types/signalr'
 import { useMemo } from 'react'
-import { groupToolExecutions } from '../utils/tool-execution-grouper'
-import { convertSignalRMessages } from '../utils/signalr-message-adapter'
+import { aguiMessagesToDisplayItems } from '../utils/agui-to-display-items'
 import { ToolExecutionGroupDisplay } from './tool-execution-group'
 
-// Backend sends camelCase string enum values from both API and SignalR.
-// These maps normalize all forms to camelCase for internal use.
-const ContentTypeMap: Record<string, ClaudeContentType> = {
-  // camelCase (canonical)
-  [ContentTypeEnum.TEXT]: 'text',
-  [ContentTypeEnum.THINKING]: 'thinking',
-  [ContentTypeEnum.TOOL_USE]: 'toolUse',
-  [ContentTypeEnum.TOOL_RESULT]: 'toolResult',
-  // PascalCase (legacy fallback)
-  Text: 'text',
-  Thinking: 'thinking',
-  ToolUse: 'toolUse',
-  ToolResult: 'toolResult',
-}
-
-const RoleMap: Record<string, ClaudeMessageRole> = {
-  // camelCase (canonical)
-  [RoleEnum.USER]: 'user',
-  [RoleEnum.ASSISTANT]: 'assistant',
-  // PascalCase (legacy fallback)
-  User: 'user',
-  Assistant: 'assistant',
-}
-
-function normalizeContentType(type: string): ClaudeContentType {
-  return ContentTypeMap[type] ?? 'text'
-}
-
-function normalizeRole(role: string): ClaudeMessageRole {
-  return RoleMap[role] ?? 'user'
-}
-
 export interface MessageListProps {
-  messages: ClaudeMessage[]
+  messages: AGUIMessage[]
   isLoading?: boolean
   className?: string
   pendingQuestion?: PendingQuestion
@@ -69,11 +30,10 @@ export function MessageList({
   isSubmittingAnswer,
   isProcessingAnswer,
 }: MessageListProps) {
-  // Process messages through the grouping utility - must be before early returns
-  const displayItems = useMemo(() => {
-    const convertedMessages = convertSignalRMessages(messages)
-    return groupToolExecutions(convertedMessages)
-  }, [messages])
+  // Partition AG-UI messages into display items — chat bubbles for text/thinking
+  // blocks and grouped tool-execution cards for tool_use blocks. Must run before any
+  // early returns to keep hook order stable.
+  const displayItems = useMemo(() => aguiMessagesToDisplayItems(messages), [messages])
 
   if (isLoading) {
     return <MessageListSkeleton />
@@ -89,24 +49,19 @@ export function MessageList({
 
   return (
     <div className={cn('flex flex-col gap-4 p-4', className)}>
-      {displayItems.map((item, _index) => {
+      {displayItems.map((item) => {
         if (item.type === 'message') {
-          // Convert back to SignalR format for existing MessageItem
-          const signalRMessage = messages.find((m) => m.id === item.message.id)
-          if (signalRMessage) {
-            return <MessageItem key={signalRMessage.id} message={signalRMessage} />
-          }
-          return null
-        } else {
-          // Render tool group
-          return (
-            <div key={item.group.id} className="flex w-full justify-start">
-              <div className="max-w-[90%] md:max-w-[80%]">
-                <ToolExecutionGroupDisplay group={item.group} />
-              </div>
-            </div>
-          )
+          const original = messages.find((m) => m.id === item.message.id)
+          if (!original) return null
+          return <MessageItem key={original.id} message={original} />
         }
+        return (
+          <div key={item.group.id} className="flex w-full justify-start">
+            <div className="max-w-[90%] md:max-w-[80%]">
+              <ToolExecutionGroupDisplay group={item.group} />
+            </div>
+          </div>
+        )
       })}
       {pendingQuestion && onAnswerQuestion && (
         <div className="flex w-full justify-start">
@@ -134,44 +89,24 @@ export function MessageList({
 }
 
 interface MessageItemProps {
-  message: ClaudeMessage
-}
-
-/**
- * Determines if a message should be displayed on the assistant side.
- * Tool result messages should appear on the assistant side even though
- * they technically have a "User" role from the backend.
- */
-function isAssistantSideMessage(message: ClaudeMessage): boolean {
-  const role = normalizeRole(message.role)
-  if (role === 'assistant') return true
-
-  // Tool result messages should be displayed on the assistant side
-  // They contain results from tool calls made by the assistant
-  const hasOnlyToolResults = message.content.every(
-    (c) => normalizeContentType(c.type) === 'toolResult'
-  )
-  if (hasOnlyToolResults && message.content.length > 0) return true
-
-  return false
+  message: AGUIMessage
 }
 
 function MessageItem({ message }: MessageItemProps) {
-  const isAssistant = isAssistantSideMessage(message)
-
-  // Filter out tool-related content and empty text/thinking blocks
-  const nonToolContent = message.content.filter((c) => {
-    const type = normalizeContentType(c.type)
-    if (type === 'toolUse' || type === 'toolResult') return false
-    if (type === 'text' && !c.text?.trim() && !c.isStreaming) return false
-    if (type === 'thinking' && !c.thinking?.trim()) return false
-    return true
+  // Tool-use blocks are rendered separately as grouped tool-execution cards. Only
+  // text/thinking blocks belong in the chat bubble. Drop empty/whitespace-only blocks
+  // (except text still streaming — keep so the streaming indicator has something to anchor).
+  const renderableBlocks = message.content.filter((b): b is Exclude<AGUIContentBlock, never> => {
+    if (b.kind === 'toolUse') return false
+    if (b.kind === 'text') return b.text.trim().length > 0 || b.isStreaming
+    if (b.kind === 'thinking') return b.text.trim().length > 0
+    return false
   })
 
-  // Don't render if only tool content
-  if (nonToolContent.length === 0) {
-    return null
-  }
+  if (renderableBlocks.length === 0) return null
+
+  const isAssistant = message.role === 'assistant' || message.role === 'tool'
+  const hasStreamingText = renderableBlocks.some((b) => b.kind === 'text' && b.isStreaming)
 
   return (
     <div
@@ -193,10 +128,10 @@ function MessageItem({ message }: MessageItemProps) {
               : 'bg-primary text-primary-foreground'
           )}
         >
-          {nonToolContent.map((content, index) => (
-            <ContentBlock key={index} content={content} />
+          {renderableBlocks.map((block, index) => (
+            <ContentBlock key={index} block={block} />
           ))}
-          {message.isStreaming && (
+          {hasStreamingText && (
             <span
               data-testid="streaming-indicator"
               className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-current"
@@ -212,52 +147,25 @@ function MessageItem({ message }: MessageItemProps) {
 }
 
 interface ContentBlockProps {
-  content: ClaudeMessageContent
+  block: AGUIContentBlock
 }
 
-function ContentBlock({ content }: ContentBlockProps) {
-  const contentType = normalizeContentType(content.type)
-  const responsiveProse = useResponsiveProse({
-    includeBase: true,
-  })
+function ContentBlock({ block }: ContentBlockProps) {
+  const responsiveProse = useResponsiveProse({ includeBase: true })
 
-  switch (contentType) {
-    case 'text':
-      // All text messages are rendered with Markdown for consistent styling
-      return (
-        <Markdown className={cn(responsiveProse, 'max-w-none break-words')}>
-          {content.text ?? ''}
-        </Markdown>
-      )
-
-    case 'toolUse':
-      return (
-        <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
-          <span className="font-mono text-xs break-all">🔧 {content.toolName}</span>
-        </div>
-      )
-
-    case 'toolResult':
-      return (
-        <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
-          <span className="text-muted-foreground text-xs">Tool result</span>
-        </div>
-      )
-
-    case 'thinking':
-      return (
-        <div className="text-muted-foreground my-1 text-sm break-words italic">
-          {content.thinking}
-        </div>
-      )
-
-    default:
-      return null
+  if (block.kind === 'text') {
+    return (
+      <Markdown className={cn(responsiveProse, 'max-w-none break-words')}>{block.text}</Markdown>
+    )
   }
+  if (block.kind === 'thinking') {
+    return <div className="text-muted-foreground my-1 text-sm break-words italic">{block.text}</div>
+  }
+  return null
 }
 
-function formatTimestamp(isoString: string): string {
-  const date = new Date(isoString)
+function formatTimestamp(createdAt: number): string {
+  const date = new Date(createdAt)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 

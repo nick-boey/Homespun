@@ -53,11 +53,6 @@ public class ClaudeSession
     public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Messages exchanged in this session.
-    /// </summary>
-    public List<ClaudeMessage> Messages { get; init; } = [];
-
-    /// <summary>
     /// Optional error message if the session is in error state.
     /// </summary>
     public string? ErrorMessage { get; set; }

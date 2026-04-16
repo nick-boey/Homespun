@@ -47,72 +47,21 @@ Task SessionStatusChanged(string sessionId, ClaudeSessionStatus status, bool has
     /// <param name="session">The updated session with new container info</param>
     Task SessionContainerRestarted(string sessionId, ClaudeSession session);
 
-    #region AG-UI Events
-
     /// <summary>
-    /// Notifies clients when an agent run starts.
+    /// Delivers a session event (AG-UI envelope) to clients. This is the single broadcast
+    /// channel for all AG-UI events — canonical AG-UI events and Homespun-specific
+    /// <c>Custom</c> events alike flow through this one method wrapped in
+    /// <see cref="SessionEventEnvelope"/>.
     /// </summary>
-    Task AGUIRunStarted(RunStartedEvent evt);
+    /// <param name="sessionId">The session id the envelope belongs to.</param>
+    /// <param name="envelope">The envelope carrying <c>seq</c>, <c>eventId</c>, and the AG-UI event payload.</param>
+    Task ReceiveSessionEvent(string sessionId, SessionEventEnvelope envelope);
 
     /// <summary>
-    /// Notifies clients when an agent run finishes successfully.
-    /// </summary>
-    Task AGUIRunFinished(RunFinishedEvent evt);
-
-    /// <summary>
-    /// Notifies clients when an agent run encounters an error.
-    /// </summary>
-    Task AGUIRunError(RunErrorEvent evt);
-
-    /// <summary>
-    /// Notifies clients when a text message starts streaming.
-    /// </summary>
-    Task AGUITextMessageStart(TextMessageStartEvent evt);
-
-    /// <summary>
-    /// Notifies clients with streaming text content.
-    /// </summary>
-    Task AGUITextMessageContent(TextMessageContentEvent evt);
-
-    /// <summary>
-    /// Notifies clients when a text message finishes streaming.
-    /// </summary>
-    Task AGUITextMessageEnd(TextMessageEndEvent evt);
-
-    /// <summary>
-    /// Notifies clients when a tool call starts.
-    /// </summary>
-    Task AGUIToolCallStart(ToolCallStartEvent evt);
-
-    /// <summary>
-    /// Notifies clients with streaming tool call arguments.
-    /// </summary>
-    Task AGUIToolCallArgs(ToolCallArgsEvent evt);
-
-    /// <summary>
-    /// Notifies clients when a tool call finishes.
-    /// </summary>
-    Task AGUIToolCallEnd(ToolCallEndEvent evt);
-
-    /// <summary>
-    /// Notifies clients when a tool call result is available.
-    /// </summary>
-    Task AGUIToolCallResult(ToolCallResultEvent evt);
-
-    /// <summary>
-    /// Sends a full state snapshot to clients.
-    /// </summary>
-    Task AGUIStateSnapshot(StateSnapshotEvent evt);
-
-    /// <summary>
-    /// Sends an incremental state delta to clients.
-    /// </summary>
-    Task AGUIStateDelta(StateDeltaEvent evt);
-
-    /// <summary>
-    /// Sends a custom AG-UI event to clients.
+    /// Sends a custom AG-UI event to clients. Retained as a fallback channel for server-initiated
+    /// custom events that do not originate from an A2A event (e.g. context.cleared). All
+    /// A2A-derived traffic flows through <see cref="ReceiveSessionEvent"/> as a
+    /// <see cref="SessionEventEnvelope"/>.
     /// </summary>
     Task AGUICustomEvent(CustomEvent evt);
-
-    #endregion
 }

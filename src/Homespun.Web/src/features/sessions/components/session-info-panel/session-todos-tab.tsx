@@ -1,14 +1,14 @@
 import { Circle, CheckCircle, Loader } from 'lucide-react'
-import type { ClaudeSession } from '@/types/signalr'
+import type { AGUIMessage } from '../../utils/agui-reducer'
 import { parseTodosFromMessages } from '../../utils/todo-parser'
 import { cn } from '@/lib/utils'
 
 interface SessionTodosTabProps {
-  session: ClaudeSession
+  messages: AGUIMessage[]
 }
 
-export function SessionTodosTab({ session }: SessionTodosTabProps) {
-  const todos = parseTodosFromMessages(session.messages || [])
+export function SessionTodosTab({ messages }: SessionTodosTabProps) {
+  const todos = parseTodosFromMessages(messages)
   const completedCount = todos.filter((t) => t.status === 'completed').length
 
   if (todos.length === 0) {

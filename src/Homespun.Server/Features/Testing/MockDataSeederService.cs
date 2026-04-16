@@ -15,38 +15,19 @@ public class MockDataSeederService : IHostedService
     private readonly ITempDataFolderService _tempFolderService;
     private readonly FleeceIssueSeeder _fleeceIssueSeeder;
     private readonly IAgentPromptService _agentPromptService;
-    private readonly IClaudeSessionStore _sessionStore;
-    private readonly IJsonlSessionLoader _jsonlSessionLoader;
     private readonly ILogger<MockDataSeederService> _logger;
-
-    /// <summary>
-    /// Default path to look for JSONL session files when running in container.
-    /// The Dockerfile copies tests/data/sessions to /app/test-sessions during build.
-    /// Note: We use /app/test-sessions instead of /data/sessions because /data is
-    /// mounted as a volume at runtime, which would hide files copied during build.
-    /// </summary>
-    private const string ContainerSessionDataPath = "/app/test-sessions";
-
-    /// <summary>
-    /// Fallback path for local development - looks for test data relative to working directory.
-    /// </summary>
-    private const string LocalTestSessionDataPath = "tests/data/sessions";
 
     public MockDataSeederService(
         IDataStore dataStore,
         ITempDataFolderService tempFolderService,
         FleeceIssueSeeder fleeceIssueSeeder,
         IAgentPromptService agentPromptService,
-        IClaudeSessionStore sessionStore,
-        IJsonlSessionLoader jsonlSessionLoader,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
         _tempFolderService = tempFolderService;
         _fleeceIssueSeeder = fleeceIssueSeeder;
         _agentPromptService = agentPromptService;
-        _sessionStore = sessionStore;
-        _jsonlSessionLoader = jsonlSessionLoader;
         _logger = logger;
     }
 
@@ -61,7 +42,9 @@ public class MockDataSeederService : IHostedService
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
             await SeedAgentPromptsAsync();
-            await SeedSessionsAsync(cancellationToken);
+            // Session seeding from legacy JSONL ClaudeMessage fixtures was removed along
+            // with the JsonlSessionLoader / MessageCacheStore pipeline. Mock mode now
+            // relies on the A2A event stream for any session content.
 
             // Initialize git repos in all project folders after all files are seeded
             InitializeGitRepositories();
@@ -72,74 +55,6 @@ public class MockDataSeederService : IHostedService
         {
             _logger.LogError(ex, "Failed to seed mock data");
         }
-    }
-
-    /// <summary>
-    /// Seeds sessions from JSONL files if available, otherwise falls back to hardcoded demo data.
-    /// Checks both container path (/app/test-sessions) and local dev path (tests/data/sessions).
-    /// </summary>
-    private async Task SeedSessionsAsync(CancellationToken cancellationToken)
-    {
-        // Determine which path to use for session data
-        var sessionDataPath = GetSessionDataPath();
-
-        if (sessionDataPath != null)
-        {
-            var sessions = await _jsonlSessionLoader.LoadAllSessionsAsync(sessionDataPath, cancellationToken);
-            if (sessions.Count > 0)
-            {
-                foreach (var session in sessions)
-                {
-                    _sessionStore.Add(session);
-                    _logger.LogDebug("Loaded session {SessionId} from JSONL with {MessageCount} messages",
-                        session.Id, session.Messages.Count);
-                }
-                _logger.LogInformation("Loaded {Count} sessions from JSONL files at {Path}",
-                    sessions.Count, sessionDataPath);
-                return;
-            }
-        }
-
-        // No JSONL sessions found - no sessions will be seeded
-        _logger.LogDebug("No JSONL sessions found, no sessions seeded");
-    }
-
-    /// <summary>
-    /// Determines the correct path for session data based on environment:
-    /// - Container: /app/test-sessions (test data copied during Docker build)
-    /// - Local dev: tests/data/sessions (source test data)
-    /// Returns null if no valid session data path is found.
-    /// </summary>
-    private string? GetSessionDataPath()
-    {
-        // First, try the local development path (tests/data/sessions)
-        // This takes precedence because it contains the known test data
-        if (Directory.Exists(LocalTestSessionDataPath))
-        {
-            // Verify it has the expected structure (subdirectories with .jsonl files)
-            var projectDirs = Directory.GetDirectories(LocalTestSessionDataPath);
-            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
-            {
-                _logger.LogDebug("Using local test session data path: {Path}", LocalTestSessionDataPath);
-                return LocalTestSessionDataPath;
-            }
-        }
-
-        // Try the container path (/data/sessions) - used when running in Docker
-        if (Directory.Exists(ContainerSessionDataPath))
-        {
-            // Verify it has the expected structure (subdirectories with .jsonl files)
-            var projectDirs = Directory.GetDirectories(ContainerSessionDataPath);
-            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
-            {
-                _logger.LogDebug("Using container session data path: {Path}", ContainerSessionDataPath);
-                return ContainerSessionDataPath;
-            }
-        }
-
-        _logger.LogWarning("No session data path found. Checked: {LocalPath}, {ContainerPath}",
-            LocalTestSessionDataPath, ContainerSessionDataPath);
-        return null;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

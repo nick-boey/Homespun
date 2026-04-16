@@ -10,7 +10,7 @@ namespace Homespun.Features.ClaudeCode.Hubs;
 /// <summary>
 /// SignalR hub for Claude Code session real-time communication.
 /// </summary>
-public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheStore messageCacheStore) : Hub
+public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
 {
     /// <summary>
     /// Join a session group to receive session-specific messages.
@@ -148,18 +148,6 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
             request.Model,
             terminateExisting,
             request.SystemPrompt);
-    }
-
-    /// <summary>
-    /// Gets the number of cached messages for a session.
-    /// Used by clients to determine if historical messages are available.
-    /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <returns>The number of cached messages, or 0 if no cache exists</returns>
-    public async Task<int> GetCachedMessageCount(string sessionId)
-    {
-        var summary = await messageCacheStore.GetSessionSummaryAsync(sessionId);
-        return summary?.MessageCount ?? 0;
     }
 
     /// <summary>
@@ -363,131 +351,39 @@ public static class ClaudeCodeHubExtensions
 
     #endregion
 
-    #region AG-UI Event Broadcasting
-    // These methods broadcast AG-UI protocol events for message streaming.
+    #region AG-UI Envelope Broadcast (single channel)
 
     /// <summary>
-    /// Broadcasts an AG-UI RunStarted event when a new agent run begins.
+    /// Broadcasts a <see cref="SessionEventEnvelope"/> to the session group.
+    /// This is the single broadcast channel for all AG-UI events — canonical AG-UI events
+    /// and Homespun <c>Custom</c> variants alike flow through this one method.
+    ///
+    /// <para>
+    /// Callers MUST persist the underlying A2A event (via <c>IA2AEventStore.AppendAsync</c>)
+    /// BEFORE invoking this method so that a refresh served while the broadcast is in flight
+    /// is guaranteed to see the event in its replay log. That ordering invariant is the
+    /// reason we don't have a "broadcast then append" convenience overload.
+    /// </para>
     /// </summary>
-    public static async Task BroadcastAGUIRunStarted(
+    public static async Task BroadcastSessionEvent(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        RunStartedEvent evt)
+        SessionEventEnvelope envelope)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.RunStarted, evt);
+            .SendAsync(AGUIEventType.ReceiveSessionEvent, sessionId, envelope);
     }
 
-    /// <summary>
-    /// Broadcasts an AG-UI RunFinished event when an agent run completes.
-    /// </summary>
-    public static async Task BroadcastAGUIRunFinished(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        RunFinishedEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.RunFinished, evt);
-    }
+    #endregion
+
+    #region AG-UI Legacy Custom Event Broadcasting
+    // BroadcastAGUICustomEvent remains as a fallback broadcast channel for server-initiated
+    // custom events (e.g. context.cleared) that are not derived from an A2A event. All
+    // A2A-derived traffic flows through BroadcastSessionEvent above.
 
     /// <summary>
-    /// Broadcasts an AG-UI RunError event when an agent run encounters an error.
-    /// </summary>
-    public static async Task BroadcastAGUIRunError(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        RunErrorEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.RunError, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI TextMessageStart event when a new text message begins.
-    /// </summary>
-    public static async Task BroadcastAGUITextMessageStart(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        TextMessageStartEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.TextMessageStart, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI TextMessageContent event for streaming text content.
-    /// </summary>
-    public static async Task BroadcastAGUITextMessageContent(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        TextMessageContentEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.TextMessageContent, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI TextMessageEnd event when a text message finishes.
-    /// </summary>
-    public static async Task BroadcastAGUITextMessageEnd(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        TextMessageEndEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.TextMessageEnd, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI ToolCallStart event when a tool call begins.
-    /// </summary>
-    public static async Task BroadcastAGUIToolCallStart(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ToolCallStartEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.ToolCallStart, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI ToolCallArgs event for streaming tool call arguments.
-    /// </summary>
-    public static async Task BroadcastAGUIToolCallArgs(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ToolCallArgsEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.ToolCallArgs, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI ToolCallEnd event when a tool call finishes.
-    /// </summary>
-    public static async Task BroadcastAGUIToolCallEnd(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ToolCallEndEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.ToolCallEnd, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI ToolCallResult event when a tool call result is available.
-    /// </summary>
-    public static async Task BroadcastAGUIToolCallResult(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ToolCallResultEvent evt)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(AGUIEventType.ToolCallResult, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts an AG-UI Custom event for application-specific events.
+    /// Broadcasts an AG-UI Custom event for application-specific events that do not originate
+    /// from an A2A event (e.g. server-initiated context.cleared notifications).
     /// </summary>
     public static async Task BroadcastAGUICustomEvent(
         this IHubContext<ClaudeCodeHub> hubContext,
@@ -496,36 +392,6 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync(AGUIEventType.Custom, evt);
-    }
-
-    /// <summary>
-    /// Broadcasts any AG-UI event.
-    /// </summary>
-    public static async Task BroadcastAGUIEvent(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        AGUIBaseEvent evt)
-    {
-        var eventType = evt switch
-        {
-            RunStartedEvent => AGUIEventType.RunStarted,
-            RunFinishedEvent => AGUIEventType.RunFinished,
-            RunErrorEvent => AGUIEventType.RunError,
-            TextMessageStartEvent => AGUIEventType.TextMessageStart,
-            TextMessageContentEvent => AGUIEventType.TextMessageContent,
-            TextMessageEndEvent => AGUIEventType.TextMessageEnd,
-            ToolCallStartEvent => AGUIEventType.ToolCallStart,
-            ToolCallArgsEvent => AGUIEventType.ToolCallArgs,
-            ToolCallEndEvent => AGUIEventType.ToolCallEnd,
-            ToolCallResultEvent => AGUIEventType.ToolCallResult,
-            CustomEvent => AGUIEventType.Custom,
-            StateSnapshotEvent => AGUIEventType.StateSnapshot,
-            StateDeltaEvent => AGUIEventType.StateDelta,
-            _ => "AGUI_Unknown"
-        };
-
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(eventType, evt);
     }
 
     #endregion

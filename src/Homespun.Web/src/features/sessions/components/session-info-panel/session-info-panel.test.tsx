@@ -41,8 +41,8 @@ vi.mock('./session-pr-tab', () => ({
 }))
 
 vi.mock('./session-todos-tab', () => ({
-  SessionTodosTab: ({ session }: { session: ClaudeSession }) => (
-    <div data-testid="session-todos-tab">Todos Tab - {session.messages?.length || 0} messages</div>
+  SessionTodosTab: ({ messages }: { messages?: unknown[] }) => (
+    <div data-testid="session-todos-tab">Todos Tab - {messages?.length ?? 0} messages</div>
   ),
 }))
 
@@ -317,10 +317,22 @@ describe('SessionInfoPanel', () => {
 
   describe('Session Data', () => {
     it('passes session data to all tabs', () => {
-      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
+      render(
+        <SessionInfoPanel
+          session={mockSession}
+          messages={[
+            // @ts-expect-error — the SessionTodosTab mock only reads `.length`, not the shape.
+            {},
+            // @ts-expect-error — see above.
+            {},
+          ]}
+          isOpen={true}
+          onOpenChange={() => {}}
+        />
+      )
 
       expect(screen.getByText('Issue Tab - issue-456')).toBeInTheDocument()
-      expect(screen.getByText('Todos Tab - 1 messages')).toBeInTheDocument()
+      expect(screen.getByText('Todos Tab - 2 messages')).toBeInTheDocument()
     })
   })
 

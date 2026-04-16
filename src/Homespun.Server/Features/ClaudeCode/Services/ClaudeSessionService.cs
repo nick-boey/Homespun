@@ -1,84 +1,6 @@
-using System.Text.Json;
 using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
-
-/// <summary>
-/// Tracks content blocks being assembled from stream events during a single message turn.
-/// </summary>
-internal class ContentBlockAssembler
-{
-    private readonly List<ContentBlockState> _blocks = new();
-    private readonly Dictionary<string, string> _toolUseNames = new();
-
-    public IReadOnlyList<ContentBlockState> Blocks => _blocks;
-
-    public void StartBlock(int index, JsonElement contentBlock)
-    {
-        var type = contentBlock.TryGetProperty("type", out var t) ? t.GetString() : null;
-        var state = new ContentBlockState { Index = index, Type = type };
-
-        if (type == "tool_use")
-        {
-            state.ToolUseId = contentBlock.TryGetProperty("id", out var id) ? id.GetString() : null;
-            state.ToolName = contentBlock.TryGetProperty("name", out var name) ? name.GetString() : null;
-            if (state.ToolUseId != null && state.ToolName != null)
-            {
-                _toolUseNames[state.ToolUseId] = state.ToolName;
-            }
-        }
-
-        // Ensure the list is large enough
-        while (_blocks.Count <= index) _blocks.Add(new ContentBlockState());
-        _blocks[index] = state;
-    }
-
-    public void ApplyDelta(int index, JsonElement delta)
-    {
-        if (index < 0 || index >= _blocks.Count) return;
-        var block = _blocks[index];
-        var deltaType = delta.TryGetProperty("type", out var t) ? t.GetString() : null;
-
-        switch (deltaType)
-        {
-            case "text_delta":
-                block.Text += delta.TryGetProperty("text", out var text) ? text.GetString() : null;
-                break;
-            case "thinking_delta":
-                block.Thinking += delta.TryGetProperty("thinking", out var thinking) ? thinking.GetString() : null;
-                break;
-            case "input_json_delta":
-                block.PartialJson += delta.TryGetProperty("partial_json", out var pj) ? pj.GetString() : null;
-                break;
-        }
-    }
-
-    public void StopBlock(int index)
-    {
-        if (index < 0 || index >= _blocks.Count) return;
-        _blocks[index].IsComplete = true;
-    }
-
-    public string? GetToolName(string toolUseId) =>
-        _toolUseNames.TryGetValue(toolUseId, out var name) ? name : null;
-
-    public void Clear()
-    {
-        _blocks.Clear();
-    }
-}
-
-internal class ContentBlockState
-{
-    public int Index { get; set; }
-    public string? Type { get; set; }
-    public string? Text { get; set; }
-    public string? Thinking { get; set; }
-    public string? ToolUseId { get; set; }
-    public string? ToolName { get; set; }
-    public string? PartialJson { get; set; }
-    public bool IsComplete { get; set; }
-}
 
 /// <summary>
 /// Thin facade over the decomposed session services.
@@ -162,14 +84,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
     public Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
         => _lifecycle.CancelIssueChangesAsync(sessionId, cancellationToken);
-
-    public Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
-        string sessionId, CancellationToken cancellationToken = default)
-        => _lifecycle.GetCachedMessagesAsync(sessionId, cancellationToken);
-
-    public Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
-        string projectId, string entityId, CancellationToken cancellationToken = default)
-        => _lifecycle.GetSessionHistoryAsync(projectId, entityId, cancellationToken);
 
     // --- Messaging ---
 

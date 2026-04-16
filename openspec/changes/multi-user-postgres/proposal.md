@@ -6,7 +6,7 @@ Homespun is currently single-user-per-instance: every deployment has one GitHub 
 
 - **BREAKING**: Replace `JsonDataStore` (`homespun-data.json`) with a Postgres-backed store accessed via EF Core 10.
 - **BREAKING**: Replace `secrets.env` per-project files with per-user secrets stored (encrypted) in Postgres.
-- **BREAKING**: Move `session-metadata.json` and `.sessions/*.jsonl` message cache to Postgres tables.
+- **BREAKING**: Move `session-metadata.json` and the per-session A2A event log (`{baseDir}/{projectId}/{sessionId}.events.jsonl`, introduced by `a2a-native-messaging`) to Postgres tables.
 - **BREAKING**: Introduce explicit user identity on every owned resource (projects, prompts, pull requests, secrets) — existing deployments start fresh, no data migration.
 - Introduce a `User` entity with OIDC-sourced identity (Entra ID on ACA; optional OIDC / no-auth single-user shim on VM).
 - Introduce project visibility: `private` (visible only to creator) or `public` (visible to all users on the instance). Configurable per project.
@@ -29,7 +29,7 @@ Homespun is currently single-user-per-instance: every deployment has one GitHub 
 
 ## Impact
 
-- **Backend**: Every service that injects `IDataStore` today (~20 files across `Features/*`) migrates to EF Core repositories or `DbContext` access. `SecretsService` loses its file-based implementation and becomes DB-backed. `SessionMetadataStore` and `MessageCacheStore` become EF-backed.
+- **Backend**: Every service that injects `IDataStore` today (~20 files across `Features/*`) migrates to EF Core repositories or `DbContext` access. `SecretsService` loses its file-based implementation and becomes DB-backed. `SessionMetadataStore` and `A2AEventStore` (introduced by `a2a-native-messaging`, replacing the legacy `MessageCacheStore`) become EF-backed.
 - **Auth surface**: New `Microsoft.Identity.Web` pipeline on ACA builds; a development `no-auth` shim for VM mode that treats the single local developer as User #1.
 - **API**: All controllers gain implicit user scoping via `ClaimsPrincipal`. Public endpoints for login, admin user management, and per-user credential CRUD are added.
 - **Frontend**: MSAL React integration for ACA builds; login screen, current-user indicator, per-user settings page (tokens, secrets), project visibility toggle.
@@ -38,3 +38,7 @@ Homespun is currently single-user-per-instance: every deployment has one GitHub 
 - **Dependencies added**: `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.EntityFrameworkCore.Design`, `Microsoft.Identity.Web`, `@azure/msal-browser`, `@azure/msal-react`.
 - **Dependencies removed**: None immediately; `JsonDataStore` kept only for test fixtures during transition.
 - **Testing**: Test harness switches to Testcontainers-Postgres or an in-memory Postgres (Npgsql + ephemeral DB). Existing `MockDataStore` replaced with an in-memory `DbContext` variant.
+
+## Dependencies
+
+- **Hard prerequisite**: `a2a-native-messaging` must land first. That change defines the `A2AEventRecord` / `SessionEventEnvelope` shape this proposal persists to Postgres. Until it is in, the session-message table schema cannot be finalised — the old `ClaudeMessage` shape has been deleted.
