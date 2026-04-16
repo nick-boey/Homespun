@@ -134,7 +134,7 @@ public static class MockServiceExtensions
         }
 
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
-        services.AddSingleton<IAgentPromptService, AgentPromptService>();
+        services.AddSingleton<ISkillDiscoveryService, SkillDiscoveryService>();
 
         // Agent Orchestration services - configure options and HTTP client first
         services.Configure<MiniPromptOptions>(options => { });  // Empty config - uses defaults

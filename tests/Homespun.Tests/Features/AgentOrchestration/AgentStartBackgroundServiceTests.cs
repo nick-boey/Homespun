@@ -22,8 +22,7 @@ public class AgentStartBackgroundServiceTests
     private Mock<IServiceScopeFactory> _mockServiceScopeFactory = null!;
     private Mock<IGitCloneService> _mockCloneService = null!;
     private Mock<IClaudeSessionService> _mockSessionService = null!;
-    private Mock<IAgentPromptService> _mockAgentPromptService = null!;
-    private Mock<IProjectFleeceService> _mockFleeceService = null!;
+    private Mock<ISkillDiscoveryService> _mockSkillDiscovery = null!;
     private Mock<IFleeceIssuesSyncService> _mockIssuesSyncService = null!;
     private Mock<IBaseBranchResolver> _mockBaseBranchResolver = null!;
     private Mock<IHubContext<NotificationHub>> _mockHubContext = null!;
@@ -41,8 +40,7 @@ public class AgentStartBackgroundServiceTests
         _mockServiceScopeFactory = new Mock<IServiceScopeFactory>();
         _mockCloneService = new Mock<IGitCloneService>();
         _mockSessionService = new Mock<IClaudeSessionService>();
-        _mockAgentPromptService = new Mock<IAgentPromptService>();
-        _mockFleeceService = new Mock<IProjectFleeceService>();
+        _mockSkillDiscovery = new Mock<ISkillDiscoveryService>();
         _mockIssuesSyncService = new Mock<IFleeceIssuesSyncService>();
         _mockBaseBranchResolver = new Mock<IBaseBranchResolver>();
         _mockHubContext = new Mock<IHubContext<NotificationHub>>();
@@ -57,10 +55,8 @@ public class AgentStartBackgroundServiceTests
             .Returns(_mockCloneService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IClaudeSessionService)))
             .Returns(_mockSessionService.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IAgentPromptService)))
-            .Returns(_mockAgentPromptService.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IProjectFleeceService)))
-            .Returns(_mockFleeceService.Object);
+        scopedServiceProvider.Setup(x => x.GetService(typeof(ISkillDiscoveryService)))
+            .Returns(_mockSkillDiscovery.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IFleeceIssuesSyncService)))
             .Returns(_mockIssuesSyncService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IBaseBranchResolver)))
@@ -83,6 +79,11 @@ public class AgentStartBackgroundServiceTests
                 It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((AgentStartRequest req, CancellationToken ct) =>
                 new BaseBranchResolutionResult(req.BaseBranch ?? req.ProjectDefaultBranch, null));
+
+        // Skill discovery returns null unless a specific test overrides it
+        _mockSkillDiscovery.Setup(x => x.GetSkillAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SkillDescriptor?)null);
 
         _service = new AgentStartBackgroundService(
             _mockServiceProvider.Object,
@@ -107,10 +108,11 @@ public class AgentStartBackgroundServiceTests
                 Type = IssueType.Task,
                 LastUpdate = ts
             },
-            PromptName = "prompt123",
+            SkillName = null,
             BaseBranch = null,
             Model = "sonnet",
-            BranchName = "task/test-issue+issue123"
+            BranchName = "task/test-issue+issue123",
+            Mode = SessionMode.Build
         };
     }
 
@@ -145,18 +147,6 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName, true, "main"))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
                 SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
@@ -190,7 +180,7 @@ public class AgentStartBackgroundServiceTests
     public async Task QueueAgentStartAsync_UsesExistingClone_WhenCloneExists()
     {
         // Arrange
-        var request = CreateTestRequest();
+        var request = CreateTestRequest() with { Mode = SessionMode.Plan };
         var existingClonePath = "/path/to/existing/clone";
         var session = new ClaudeSession
         {
@@ -206,18 +196,6 @@ public class AgentStartBackgroundServiceTests
         _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(existingClonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Plan",
-                Mode = SessionMode.Plan,
-                InitialMessage = "Plan for {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
 
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, existingClonePath,
@@ -286,18 +264,6 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
                 SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
@@ -325,7 +291,7 @@ public class AgentStartBackgroundServiceTests
     public async Task QueueAgentStartAsync_SkipsDuplicate_WhenAlreadyStarting()
     {
         // Arrange
-        var request = CreateTestRequest();
+        var request = CreateTestRequest() with { Mode = SessionMode.Plan };
         var clonePath = "/path/to/clone";
         var session = new ClaudeSession
         {
@@ -346,13 +312,6 @@ public class AgentStartBackgroundServiceTests
                 return clonePath;
             });
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
                 SessionMode.Plan, "sonnet", null, It.IsAny<CancellationToken>()))
@@ -372,11 +331,10 @@ public class AgentStartBackgroundServiceTests
     }
 
     [Test]
-    public async Task QueueAgentStartAsync_DefaultsToPlanMode_WhenNoPromptProvided()
+    public async Task QueueAgentStartAsync_DefaultsToPlanMode_WhenNoSkillOrModeProvided()
     {
         // Arrange
-        var request = CreateTestRequest();
-        request = request with { PromptName = null };
+        var request = CreateTestRequest() with { Mode = null, SkillName = null };
         var clonePath = "/path/to/clone";
         var session = new ClaudeSession
         {
@@ -406,18 +364,13 @@ public class AgentStartBackgroundServiceTests
         _mockSessionService.Verify(x => x.StartSessionAsync(
             request.IssueId, request.ProjectId, clonePath,
             SessionMode.Plan, "sonnet", null, It.IsAny<CancellationToken>()), Times.Once);
-
-        // No prompt rendering should have happened
-        _mockAgentPromptService.Verify(x => x.RenderTemplate(
-            It.IsAny<string>(), It.IsAny<PromptContext>()), Times.Never);
     }
 
     [Test]
     public async Task QueueAgentStartAsync_UsesSpecifiedBaseBranch_WhenProvided()
     {
         // Arrange
-        var request = CreateTestRequest();
-        request = request with { BaseBranch = "develop" };
+        var request = CreateTestRequest() with { BaseBranch = "develop", Mode = SessionMode.Plan };
         var clonePath = "/path/to/clone";
         var session = new ClaudeSession
         {
@@ -441,13 +394,6 @@ public class AgentStartBackgroundServiceTests
         _mockCloneService.Setup(x => x.CreateCloneAsync(
                 request.ProjectLocalPath, request.BranchName, true, "develop"))
             .ReturnsAsync(clonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
 
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
@@ -506,7 +452,7 @@ public class AgentStartBackgroundServiceTests
     public async Task QueueAgentStartAsync_UsesStackedPrBranch_WhenResolverReturnsIt()
     {
         // Arrange
-        var request = CreateTestRequest();
+        var request = CreateTestRequest() with { Mode = SessionMode.Plan };
         var clonePath = "/path/to/clone";
         var stackedBranch = "task/prior-issue+prior123";
         var session = new ClaudeSession
@@ -536,13 +482,6 @@ public class AgentStartBackgroundServiceTests
         _mockCloneService.Setup(x => x.CreateCloneAsync(
                 request.ProjectLocalPath, request.BranchName, true, stackedBranch))
             .ReturnsAsync(clonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt { Name = "Plan", Mode = SessionMode.Plan });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
 
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
@@ -584,15 +523,6 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        // Prompt is still provided but should NOT be used for template rendering
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
                 SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
@@ -602,30 +532,22 @@ public class AgentStartBackgroundServiceTests
         await _service.QueueAgentStartAsync(request);
         await Task.Delay(200);
 
-        // Assert - Session should use Build mode from prompt
+        // Assert - Session should use Build mode as requested
         _mockSessionService.Verify(x => x.StartSessionAsync(
             request.IssueId, request.ProjectId, clonePath,
             SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()), Times.Once);
-
-        // Verify RenderTemplate was NOT called (user instructions bypass template rendering)
-        _mockAgentPromptService.Verify(x => x.RenderTemplate(
-            It.IsAny<string>(), It.IsAny<PromptContext>()), Times.Never);
-
-        // Verify ListIssuesAsync was NOT called (no tree context needed)
-        _mockFleeceService.Verify(x => x.ListIssuesAsync(
-            It.IsAny<string>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(),
-            It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
 
         _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
     }
 
     [Test]
-    public async Task QueueAgentStartAsync_FallsBackToPromptRendering_WhenUserInstructionsEmpty()
+    public async Task QueueAgentStartAsync_UsesSkillMode_WhenSkillProvidedAndNoExplicitMode()
     {
         // Arrange
         var request = CreateTestRequest() with
         {
-            UserInstructions = null
+            Mode = null,
+            SkillName = "fix-bug"
         };
         var clonePath = "/path/to/clone";
         var session = new ClaudeSession
@@ -643,18 +565,15 @@ public class AgentStartBackgroundServiceTests
                 request.ProjectLocalPath, request.BranchName))
             .ReturnsAsync(clonePath);
 
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
+        _mockSkillDiscovery.Setup(x => x.GetSkillAsync(
+                clonePath, "fix-bug", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SkillDescriptor
             {
-                Name = "Build",
+                Name = "fix-bug",
+                Category = SkillCategory.Homespun,
                 Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
+                SkillBody = "Fix the bug.",
             });
-
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
 
         _mockSessionService.Setup(x => x.StartSessionAsync(
                 request.IssueId, request.ProjectId, clonePath,
@@ -665,11 +584,200 @@ public class AgentStartBackgroundServiceTests
         await _service.QueueAgentStartAsync(request);
         await Task.Delay(200);
 
-        // Assert - RenderTemplate SHOULD be called (fallback to prompt rendering)
-        _mockAgentPromptService.Verify(x => x.RenderTemplate(
-            "Work on {{title}}", It.IsAny<PromptContext>()), Times.Once);
+        // Assert - Session should use Build mode derived from the skill
+        _mockSessionService.Verify(x => x.StartSessionAsync(
+            request.IssueId, request.ProjectId, clonePath,
+            SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()), Times.Once);
 
         _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
+    }
+
+    [Test]
+    public async Task QueueAgentStartAsync_PassesSystemPromptOverride_WhenProvided()
+    {
+        // Arrange
+        var request = CreateTestRequest() with
+        {
+            SystemPromptOverride = "Use openspec-integration schema: custom-schema"
+        };
+        var clonePath = "/path/to/clone";
+        var session = new ClaudeSession
+        {
+            Id = "session123",
+            EntityId = request.IssueId,
+            ProjectId = request.ProjectId,
+            WorkingDirectory = clonePath,
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
+                request.ProjectLocalPath, request.BranchName))
+            .ReturnsAsync(clonePath);
+
+        _mockSessionService.Setup(x => x.StartSessionAsync(
+                request.IssueId, request.ProjectId, clonePath,
+                SessionMode.Build, "sonnet",
+                "Use openspec-integration schema: custom-schema",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(session);
+
+        // Act
+        await _service.QueueAgentStartAsync(request);
+        await Task.Delay(200);
+
+        // Assert
+        _mockSessionService.Verify(x => x.StartSessionAsync(
+            request.IssueId, request.ProjectId, clonePath,
+            SessionMode.Build, "sonnet",
+            "Use openspec-integration schema: custom-schema",
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    #endregion
+
+    #region ComposeInitialMessage Tests (3.4, 3.5, 3.6 coverage)
+
+    [Test]
+    public void ComposeInitialMessage_ReturnsNull_WhenNoSkillAndNoUserInstructions()
+    {
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill: null, args: null, userInstructions: null);
+
+        Assert.That(msg, Is.Null);
+    }
+
+    [Test]
+    public void ComposeInitialMessage_ReturnsNull_WhenAllInputsBlank()
+    {
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill: new SkillDescriptor { SkillBody = "   " },
+            args: new Dictionary<string, string> { ["x"] = "  " },
+            userInstructions: "");
+
+        Assert.That(msg, Is.Null);
+    }
+
+    [Test]
+    public void ComposeInitialMessage_ReturnsUserInstructionsOnly_WhenNoSkill()
+    {
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill: null,
+            args: null,
+            userInstructions: "Please fix it");
+
+        Assert.That(msg, Is.EqualTo("Please fix it"));
+    }
+
+    [Test]
+    public void ComposeInitialMessage_ComposesSkillBodyWithArgs_ForHomespunSkill()
+    {
+        var skill = new SkillDescriptor
+        {
+            Name = "fix-bug",
+            Category = SkillCategory.Homespun,
+            SkillBody = "Fix the bug described in the issue.",
+        };
+        var args = new Dictionary<string, string> { ["issue-id"] = "abc123" };
+
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill, args, userInstructions: null);
+
+        Assert.That(msg, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg, Does.StartWith("Fix the bug described in the issue."));
+            Assert.That(msg, Does.Contain("## Args"));
+            Assert.That(msg, Does.Contain("issue-id: abc123"));
+        });
+    }
+
+    [Test]
+    public void ComposeInitialMessage_IncludesChangeNameArg_ForOpenSpecSkill()
+    {
+        var skill = new SkillDescriptor
+        {
+            Name = "openspec-apply-change",
+            Category = SkillCategory.OpenSpec,
+            SkillBody = "Implement tasks from an OpenSpec change.",
+        };
+        var args = new Dictionary<string, string> { ["change-name"] = "skills-catalogue" };
+
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill, args, userInstructions: null);
+
+        Assert.That(msg, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg, Does.StartWith("Implement tasks from an OpenSpec change."));
+            Assert.That(msg, Does.Contain("change-name: skills-catalogue"));
+        });
+    }
+
+    [Test]
+    public void ComposeInitialMessage_AppendsUserInstructions_AfterSkillBody()
+    {
+        var skill = new SkillDescriptor
+        {
+            Name = "fix-bug",
+            Category = SkillCategory.Homespun,
+            SkillBody = "Fix the bug.",
+        };
+
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill, args: null, userInstructions: "Extra context from user");
+
+        Assert.That(msg, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg, Does.StartWith("Fix the bug."));
+            Assert.That(msg, Does.EndWith("Extra context from user"));
+        });
+    }
+
+    [Test]
+    public void ComposeInitialMessage_SkipsArgsWithBlankValues()
+    {
+        var skill = new SkillDescriptor
+        {
+            Name = "my-skill",
+            SkillBody = "Body",
+        };
+        var args = new Dictionary<string, string>
+        {
+            ["a"] = "1",
+            ["b"] = "",
+            ["c"] = "   ",
+            ["d"] = "4",
+        };
+
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill, args, userInstructions: null);
+
+        Assert.That(msg, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg, Does.Contain("a: 1"));
+            Assert.That(msg, Does.Not.Contain("b:"));
+            Assert.That(msg, Does.Not.Contain("c:"));
+            Assert.That(msg, Does.Contain("d: 4"));
+        });
+    }
+
+    [Test]
+    public void ComposeInitialMessage_ReturnsSkillBodyOnly_WhenNoArgsAndNoUserInstructions()
+    {
+        var skill = new SkillDescriptor
+        {
+            Name = "my-skill",
+            SkillBody = "Just the body.",
+        };
+
+        var msg = AgentStartBackgroundService.ComposeInitialMessage(
+            skill, args: null, userInstructions: null);
+
+        Assert.That(msg, Is.EqualTo("Just the body."));
     }
 
     #endregion

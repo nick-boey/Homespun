@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
 
@@ -14,20 +13,17 @@ public class MockDataSeederService : IHostedService
     private readonly IDataStore _dataStore;
     private readonly ITempDataFolderService _tempFolderService;
     private readonly FleeceIssueSeeder _fleeceIssueSeeder;
-    private readonly IAgentPromptService _agentPromptService;
     private readonly ILogger<MockDataSeederService> _logger;
 
     public MockDataSeederService(
         IDataStore dataStore,
         ITempDataFolderService tempFolderService,
         FleeceIssueSeeder fleeceIssueSeeder,
-        IAgentPromptService agentPromptService,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
         _tempFolderService = tempFolderService;
         _fleeceIssueSeeder = fleeceIssueSeeder;
-        _agentPromptService = agentPromptService;
         _logger = logger;
     }
 
@@ -41,7 +37,7 @@ public class MockDataSeederService : IHostedService
             await SeedProjectsAsync();
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
-            await SeedAgentPromptsAsync();
+            // Agent prompts are now filesystem skills (auto-discovered, no seeding).
             // Session seeding from legacy JSONL ClaudeMessage fixtures was removed along
             // with the JsonlSessionLoader / MessageCacheStore pipeline. Mock mode now
             // relies on the A2A event stream for any session content.
@@ -543,35 +539,6 @@ public class MockDataSeederService : IHostedService
         await _fleeceIssueSeeder.SeedIssuesAsync(demoProjectPath, demoIssues);
         _logger.LogDebug("Seeded {Count} issues to {ProjectPath}", demoIssues.Count, demoProjectPath);
 
-    }
-
-    private async Task SeedAgentPromptsAsync()
-    {
-        // Ensure default prompts exist (Plan and Build)
-        await _agentPromptService.EnsureDefaultPromptsAsync();
-
-        // Add a custom prompt
-        var customPrompt = new AgentPrompt
-        {
-            Name = "Code Review",
-            InitialMessage = """
-                ## Code Review: {{title}}
-
-                **Branch:** {{branch}}
-
-                Please review this code change and provide feedback on:
-                - Code quality and best practices
-                - Potential bugs or edge cases
-                - Performance considerations
-                - Test coverage
-                """,
-            Mode = SessionMode.Plan,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await _dataStore.AddAgentPromptAsync(customPrompt);
-        _logger.LogDebug("Seeded custom agent prompt: {PromptName}", customPrompt.Name);
     }
 
 }

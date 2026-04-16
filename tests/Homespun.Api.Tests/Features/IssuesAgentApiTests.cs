@@ -26,9 +26,6 @@ public class IssuesAgentApiTests
         _factory = new HomespunWebApplicationFactory();
         _client = _factory.CreateClient();
 
-        // Ensure default prompts exist
-        await _client.PostAsync("/api/agent-prompts/ensure-defaults", null);
-
         // Create a project to use in tests
         var createProjectRequest = new { Name = "IssuesAgentTest", DefaultBranch = "main" };
         var projectResponse = await _client.PostAsJsonAsync("/api/projects", createProjectRequest, JsonOptions);

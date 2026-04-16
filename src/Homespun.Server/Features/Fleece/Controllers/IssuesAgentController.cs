@@ -29,7 +29,6 @@ public class IssuesAgentController(
     IDataStore dataStore,
     IGitCloneService cloneService,
     IClaudeSessionService sessionService,
-    IAgentPromptService agentPromptService,
     IGraphService graphService,
     IHubContext<NotificationHub> notificationHub,
     ILogger<IssuesAgentController> logger) : ControllerBase
@@ -108,16 +107,6 @@ public class IssuesAgentController(
         // Session mode: use explicit mode from request, default to Build
         var sessionMode = request.Mode ?? SessionMode.Build;
 
-        // Ensure default prompts exist (needed for system prompt lookup)
-        await agentPromptService.EnsureDefaultPromptsAsync();
-
-        // Get the IssueAgentSystem prompt for system prompt
-        var systemPromptTemplate = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentSystem);
-
-        logger.LogInformation(
-            "Issues Agent session mode={SessionMode}, system prompt found={Found}",
-            sessionMode, systemPromptTemplate != null);
-
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "opus";
 
@@ -130,16 +119,17 @@ public class IssuesAgentController(
             "Starting Issues Agent session: branch={BranchName}, project={ProjectId}, mode={SessionMode}, model={Model}, clonePath={ClonePath}",
             branchName, request.ProjectId, sessionMode, model, clonePath);
 
-        // Create session with resolved mode and system prompt
+        // Create session. The Issues Agent tab is skill-less per the
+        // skills-catalogue design (OQ1 resolved): no system prompt is injected.
         var session = await sessionService.StartSessionAsync(
             entityId,
             request.ProjectId,
             clonePath,
             sessionMode,
             model,
-            systemPrompt: systemPromptTemplate?.InitialMessage);
+            systemPrompt: null);
 
-        // Set session type to IssueAgentModification
+        // Tag the session as an Issues Agent session for the diff/accept flow.
         session.SessionType = SessionType.IssueAgentModification;
 
         logger.LogInformation(

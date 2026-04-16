@@ -46,9 +46,26 @@ public record AgentStartRequest
     public required Issue Issue { get; init; }
 
     /// <summary>
-    /// The prompt name to use for the agent, or null for None.
+    /// The name of the skill (directory under <c>.claude/skills/</c>) to
+    /// dispatch with. When set, the skill's SKILL.md body is used as the
+    /// session's initial message and the skill's declared mode (if any)
+    /// is applied when the caller did not set <see cref="Mode"/>.
     /// </summary>
-    public string? PromptName { get; init; }
+    public string? SkillName { get; init; }
+
+    /// <summary>
+    /// Optional named arguments to append to the skill body when composing
+    /// the initial message. Each entry becomes an <c>arg-name: value</c>
+    /// line after the skill body.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? SkillArgs { get; init; }
+
+    /// <summary>
+    /// Optional system prompt override (e.g. for injecting schema context
+    /// when an OpenSpec skill runs against a non-default schema). Passed
+    /// verbatim to <c>StartSessionAsync</c>.
+    /// </summary>
+    public string? SystemPromptOverride { get; init; }
 
     /// <summary>
     /// The base branch to create the working branch from.
@@ -73,13 +90,7 @@ public record AgentStartRequest
 
     /// <summary>
     /// The session mode explicitly requested by the caller.
-    /// When provided, takes precedence over prompt-based mode resolution.
+    /// When provided, takes precedence over any mode declared by the skill.
     /// </summary>
     public SessionMode? Mode { get; init; }
-
-    /// <summary>
-    /// Pre-rendered instructions from the frontend.
-    /// When provided, the server skips prompt template rendering and uses these instructions directly.
-    /// </summary>
-    public string? Instructions { get; init; }
 }

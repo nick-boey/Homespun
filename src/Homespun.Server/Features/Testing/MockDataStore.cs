@@ -13,7 +13,6 @@ public class MockDataStore : IDataStore
     private readonly List<Project> _projects = [];
     private readonly List<PullRequest> _pullRequests = [];
     private readonly List<string> _favoriteModels = [];
-    private readonly List<AgentPrompt> _agentPrompts = [];
     private string? _userEmail;
 
     public IReadOnlyList<Project> Projects
@@ -45,17 +44,6 @@ public class MockDataStore : IDataStore
             lock (_lock)
             {
                 return _favoriteModels.ToList().AsReadOnly();
-            }
-        }
-    }
-
-    public IReadOnlyList<AgentPrompt> AgentPrompts
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _agentPrompts.ToList().AsReadOnly();
             }
         }
     }
@@ -95,9 +83,8 @@ public class MockDataStore : IDataStore
         lock (_lock)
         {
             _projects.RemoveAll(p => p.Id == projectId);
-            // Cascade delete pull requests and project-specific prompts for the project
+            // Cascade delete pull requests for the project
             _pullRequests.RemoveAll(pr => pr.ProjectId == projectId);
-            _agentPrompts.RemoveAll(ap => ap.ProjectId == projectId);
         }
         return Task.CompletedTask;
     }
@@ -178,56 +165,6 @@ public class MockDataStore : IDataStore
         }
     }
 
-    public AgentPrompt? GetAgentPrompt(string name, string? projectId)
-    {
-        lock (_lock)
-        {
-            return _agentPrompts.FirstOrDefault(p =>
-                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
-        }
-    }
-
-    public IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId)
-    {
-        lock (_lock)
-        {
-            return _agentPrompts.Where(p => p.ProjectId == projectId).ToList().AsReadOnly();
-        }
-    }
-
-    public Task AddAgentPromptAsync(AgentPrompt prompt)
-    {
-        lock (_lock)
-        {
-            _agentPrompts.Add(prompt);
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task UpdateAgentPromptAsync(AgentPrompt prompt)
-    {
-        lock (_lock)
-        {
-            var index = _agentPrompts.FindIndex(p =>
-                p.Name.Equals(prompt.Name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == prompt.ProjectId);
-            if (index >= 0)
-            {
-                _agentPrompts[index] = prompt;
-            }
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task RemoveAgentPromptAsync(string name, string? projectId)
-    {
-        lock (_lock)
-        {
-            _agentPrompts.RemoveAll(p =>
-                p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && p.ProjectId == projectId);
-        }
-        return Task.CompletedTask;
-    }
-
     public string? UserEmail
     {
         get
@@ -260,7 +197,6 @@ public class MockDataStore : IDataStore
             _projects.Clear();
             _pullRequests.Clear();
             _favoriteModels.Clear();
-            _agentPrompts.Clear();
         }
     }
 
@@ -283,17 +219,6 @@ public class MockDataStore : IDataStore
         lock (_lock)
         {
             _pullRequests.Add(pullRequest);
-        }
-    }
-
-    /// <summary>
-    /// Seeds an agent prompt directly. Useful for testing and demo data.
-    /// </summary>
-    public void SeedAgentPrompt(AgentPrompt prompt)
-    {
-        lock (_lock)
-        {
-            _agentPrompts.Add(prompt);
         }
     }
 

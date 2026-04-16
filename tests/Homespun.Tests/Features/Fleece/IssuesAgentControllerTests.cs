@@ -30,7 +30,6 @@ public class IssuesAgentControllerTests
     private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
-    private Mock<IAgentPromptService> _agentPromptServiceMock = null!;
     private Mock<IGraphService> _graphServiceMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
     private Mock<ILogger<IssuesAgentController>> _loggerMock = null!;
@@ -56,7 +55,6 @@ public class IssuesAgentControllerTests
         _dataStoreMock = new Mock<IDataStore>();
         _cloneServiceMock = new Mock<IGitCloneService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
-        _agentPromptServiceMock = new Mock<IAgentPromptService>();
         _graphServiceMock = new Mock<IGraphService>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
         _loggerMock = new Mock<ILogger<IssuesAgentController>>();
@@ -71,7 +69,6 @@ public class IssuesAgentControllerTests
             _dataStoreMock.Object,
             _cloneServiceMock.Object,
             _sessionServiceMock.Object,
-            _agentPromptServiceMock.Object,
             _graphServiceMock.Object,
             _notificationHubMock.Object,
             _loggerMock.Object);
@@ -115,10 +112,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithExplicitBuildMode_UsesBuildSessionMode()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Build,
@@ -138,10 +132,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithExplicitPlanMode_UsesPlanSessionMode()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Plan,
@@ -161,10 +152,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithoutMode_DefaultsToBuildMode()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             UserInstructions = "Do something"
@@ -183,10 +171,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_SendsUserInstructionsVerbatim()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Build,
@@ -210,9 +195,6 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithNoInstructions_DoesNotSendMessage()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns((AgentPrompt?)null);
-
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id
@@ -231,17 +213,10 @@ public class IssuesAgentControllerTests
     }
 
     [Test]
-    public async Task CreateSession_AlwaysUsesIssueAgentSystemPrompt()
+    public async Task CreateSession_IsSkillLess_PassesNullSystemPrompt()
     {
-        // Arrange
-        var systemPrompt = new AgentPrompt
-        {
-            InitialMessage = "You are the system prompt"
-        };
-
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(systemPrompt);
-
+        // Issues Agent tab is skill-less per the skills-catalogue design (OQ1):
+        // no system prompt is injected at session start.
         var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
@@ -251,21 +226,18 @@ public class IssuesAgentControllerTests
         // Act
         await _controller.CreateSession(request);
 
-        // Assert - system prompt is always the IssueAgentSystem one
+        // Assert - session started with a null system prompt
         _sessionServiceMock.Verify(s => s.StartSessionAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<SessionMode>(), It.IsAny<string>(),
-            "You are the system prompt"), Times.Once);
+            (string?)null), Times.Once);
     }
 
     [Test]
     public async Task CreateSession_WithSelectedIssueId_UsesIssueIdAsEntityId()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Build,
@@ -286,10 +258,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithSelectedIssueId_IncludesIssueIdInBranchName()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Build,
@@ -312,10 +281,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_WithoutSelectedIssueId_UsesBranchNameAsEntityId()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             UserInstructions = "Do something"
@@ -335,10 +301,7 @@ public class IssuesAgentControllerTests
     public async Task CreateSession_SendsMessageWithExplicitMode()
     {
         // Arrange
-        _agentPromptServiceMock.Setup(a => a.GetPromptBySessionType(SessionType.IssueAgentSystem))
-            .Returns(new AgentPrompt { InitialMessage = "System prompt" });
-
-        var request = new CreateIssuesAgentSessionRequest
+var request = new CreateIssuesAgentSessionRequest
         {
             ProjectId = TestProject.Id,
             Mode = SessionMode.Plan,

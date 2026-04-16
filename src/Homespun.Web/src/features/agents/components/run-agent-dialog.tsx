@@ -21,18 +21,16 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader } from '@/components/ui/loader'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useRunAgent, useAgentPrompts } from '../hooks'
+import { useRunAgent } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
-import { useIssueContext } from '@/features/sessions/hooks/use-issue-context'
-import { renderPromptTemplate } from '@/features/sessions/utils/render-prompt-template'
 import { useCreateIssuesAgentSession } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
-import { useIssueAgentAvailablePrompts } from '@/features/issues-agent/hooks/use-issue-agent-available-prompts'
+import { SkillPicker } from '@/features/skills'
+import { useProjectSkills } from '@/features/skills/hooks/use-project-skills'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 import type { CreateIssuesAgentSessionResult } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
-import { SessionMode } from '@/api'
-import type { AgentPrompt } from '@/api/generated/types.gen'
+import { SessionMode, SkillCategory } from '@/api'
 
 const TASK_MODELS = [
   { value: 'opus', label: 'Opus' },
@@ -46,39 +44,31 @@ const ISSUES_MODELS = [
   { value: 'haiku', label: 'Haiku' },
 ] as const
 
-// localStorage keys - kept separate for backward compatibility
+// localStorage keys
 const TASK_MODEL_STORAGE_KEY = 'agent-launcher-model'
-const TASK_PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
+const TASK_SKILL_STORAGE_KEY = 'agent-launcher-skill'
 const TASK_BASE_BRANCH_STORAGE_KEY = 'agent-launcher-base-branch'
 const TASK_MODE_STORAGE_KEY = 'agent-launcher-mode'
 const ISSUES_MODEL_STORAGE_KEY = 'issues-agent-model'
-const ISSUES_PROMPT_STORAGE_KEY = 'issues-agent-prompt'
 const ISSUES_MODE_STORAGE_KEY = 'issues-agent-mode'
-const NONE_PROMPT_ID = '__none__'
 
 export interface RunAgentDialogProps {
-  /** Whether the dialog is open */
   open: boolean
-  /** Callback when open state changes */
   onOpenChange: (open: boolean) => void
-  /** The project ID */
   projectId: string
-  /** The issue ID - pre-selects task tab with this issue */
   issueId?: string
-  /** Optional selected issue ID passed to issues agent tab */
   selectedIssueId?: string | null
-  /** Default tab selection - defaults based on issueId presence */
   defaultTab?: 'task' | 'issues'
-  /** Callback when a task agent is started */
   onAgentStart?: (result: RunAgentResult) => void
-  /** Callback when an issues agent session is created */
   onSessionCreated?: (result: CreateIssuesAgentSessionResult) => void
-  /** Callback when there's an error */
   onError?: (error: Error) => void
 }
 
 /**
  * Unified dialog for launching both Task Agent and Issues Agent sessions.
+ *
+ * Task Agent dispatches via an optional Homespun skill (skills-catalogue).
+ * Issues Agent is skill-less — it takes free-text instructions only.
  */
 export function RunAgentDialog({
   open,
@@ -91,32 +81,21 @@ export function RunAgentDialog({
   onSessionCreated,
   onError,
 }: RunAgentDialogProps) {
-  // Determine initial tab - use a key to reset state when dialog context changes
   const computedDefaultTab = defaultTab ?? (issueId ? 'task' : 'issues')
   const [activeTab, setActiveTab] = useState<string>(computedDefaultTab)
 
-  // Track the last computed default to detect changes
   const [lastDefault, setLastDefault] = useState(computedDefaultTab)
   if (computedDefaultTab !== lastDefault) {
     setLastDefault(computedDefaultTab)
     setActiveTab(computedDefaultTab)
   }
 
-  // Wrap onOpenChange to clear issues tab instructions when dialog closes
-  const handleOpenChange = useCallback(
-    (newOpen: boolean) => {
-      onOpenChange(newOpen)
-    },
-    [onOpenChange]
-  )
-
-  // Don't render dialog content when closed
   if (!open) {
     return null
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[80vh] w-[80vw] max-w-none flex-col overflow-hidden sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
@@ -189,22 +168,19 @@ function TaskAgentTabContent({
 }: TaskAgentTabContentProps) {
   const navigate = useNavigate()
 
-  // Project data for repo path and default branch
-  const { project, isLoading: projectLoading } = useProject(projectId)
+  const { project } = useProject(projectId)
+  const { data: skillsData } = useProjectSkills(projectId)
 
-  // Issue context for rendering prompt placeholders
-  const { data: issueContext } = useIssueContext(issueId, projectId)
-
-  // Selection state
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(TASK_MODEL_STORAGE_KEY) ?? TASK_MODELS[0].value
-  })
-  const [selectedPromptName, setSelectedPromptName] = useState<string>(() => {
-    return localStorage.getItem(TASK_PROMPT_STORAGE_KEY) ?? ''
-  })
-  const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {
-    return localStorage.getItem(TASK_BASE_BRANCH_STORAGE_KEY) ?? ''
-  })
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem(TASK_MODEL_STORAGE_KEY) ?? TASK_MODELS[0].value
+  )
+  const [selectedSkillName, setSelectedSkillName] = useState<string | null>(
+    () => localStorage.getItem(TASK_SKILL_STORAGE_KEY) || null
+  )
+  const [skillArgs, setSkillArgs] = useState<Record<string, string>>({})
+  const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(
+    () => localStorage.getItem(TASK_BASE_BRANCH_STORAGE_KEY) ?? ''
+  )
   const [selectedMode, setSelectedMode] = useState<SessionMode>(() => {
     const stored = localStorage.getItem(TASK_MODE_STORAGE_KEY)
     return stored === SessionMode.BUILD ? SessionMode.BUILD : SessionMode.PLAN
@@ -212,28 +188,27 @@ function TaskAgentTabContent({
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [userInstructions, setUserInstructions] = useState('')
 
-  // Conflict state
   const [conflictSessionId, setConflictSessionId] = useState<string | null>(null)
 
-  // Effective base branch
-  const effectiveBaseBranch = useMemo(() => {
-    return selectedBaseBranch || project?.defaultBranch || ''
-  }, [selectedBaseBranch, project?.defaultBranch])
+  const effectiveBaseBranch = useMemo(
+    () => selectedBaseBranch || project?.defaultBranch || '',
+    [selectedBaseBranch, project?.defaultBranch]
+  )
 
-  // Agent prompts
-  const { data: prompts, isLoading: promptsLoading, isError, error } = useAgentPrompts(projectId)
   const runAgent = useRunAgent()
 
-  // Persist selections to localStorage
+  // Persist selections
   useEffect(() => {
     localStorage.setItem(TASK_MODEL_STORAGE_KEY, selectedModel)
   }, [selectedModel])
 
   useEffect(() => {
-    if (selectedPromptName) {
-      localStorage.setItem(TASK_PROMPT_STORAGE_KEY, selectedPromptName)
+    if (selectedSkillName) {
+      localStorage.setItem(TASK_SKILL_STORAGE_KEY, selectedSkillName)
+    } else {
+      localStorage.removeItem(TASK_SKILL_STORAGE_KEY)
     }
-  }, [selectedPromptName])
+  }, [selectedSkillName])
 
   useEffect(() => {
     if (selectedBaseBranch) {
@@ -245,57 +220,23 @@ function TaskAgentTabContent({
     localStorage.setItem(TASK_MODE_STORAGE_KEY, selectedMode)
   }, [selectedMode])
 
-  // Compute effective prompt name
-  const effectivePromptName = useMemo(() => {
-    if (selectedPromptName === NONE_PROMPT_ID) {
-      return NONE_PROMPT_ID
-    }
-    if (!prompts || prompts.length === 0) {
-      return ''
-    }
-    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
-    if (selectedExists) {
-      return selectedPromptName
-    }
-    return prompts[0].name ?? ''
-  }, [prompts, selectedPromptName])
-
-  // Sync mode from selected prompt
+  // When the selected skill changes, sync the mode to the skill's declared mode
   useEffect(() => {
-    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
-      setSelectedMode(SessionMode.PLAN)
-      return
+    if (!selectedSkillName || !skillsData?.homespun) return
+    const skill = skillsData.homespun.find((s) => s.name === selectedSkillName)
+    if (skill?.mode) {
+      setSelectedMode(skill.mode)
     }
-    const prompt = prompts.find((p) => p.name === effectivePromptName)
-    if (prompt?.mode) {
-      setSelectedMode(prompt.mode)
-    }
-  }, [effectivePromptName, prompts])
+  }, [selectedSkillName, skillsData])
 
-  // Populate textarea when prompt or issue context changes
-  useEffect(() => {
-    if (
-      effectivePromptName === NONE_PROMPT_ID ||
-      !effectivePromptName ||
-      !prompts ||
-      !issueContext
-    ) {
-      setUserInstructions('')
-      return
-    }
-    const prompt = prompts.find((p) => p.name === effectivePromptName)
-    if (prompt?.initialMessage) {
-      setUserInstructions(renderPromptTemplate(prompt.initialMessage, issueContext))
-    } else {
-      setUserInstructions('')
-    }
-  }, [effectivePromptName, prompts, issueContext])
-
-  // Handle start
   const handleStart = useCallback(async () => {
     setConflictSessionId(null)
 
     try {
+      const nonEmptyArgs = Object.fromEntries(
+        Object.entries(skillArgs).filter(([, v]) => v.trim().length > 0)
+      )
+
       const result = await runAgent.mutateAsync({
         issueId,
         projectId,
@@ -303,6 +244,8 @@ function TaskAgentTabContent({
         model: selectedModel,
         baseBranch: effectiveBaseBranch || undefined,
         userInstructions: userInstructions.trim() || undefined,
+        skillName: selectedSkillName ?? undefined,
+        skillArgs: Object.keys(nonEmptyArgs).length > 0 ? nonEmptyArgs : undefined,
       })
 
       onAgentStart?.(result)
@@ -322,12 +265,13 @@ function TaskAgentTabContent({
     selectedModel,
     effectiveBaseBranch,
     userInstructions,
+    selectedSkillName,
+    skillArgs,
     onAgentStart,
     onOpenChange,
     onError,
   ])
 
-  // Handle navigating to existing session
   const handleOpenExistingSession = useCallback(() => {
     if (conflictSessionId) {
       navigate({ to: '/sessions/$sessionId', params: { sessionId: conflictSessionId } })
@@ -335,31 +279,10 @@ function TaskAgentTabContent({
     }
   }, [conflictSessionId, navigate, onOpenChange])
 
-  // Combined loading states
-  const isLoading = projectLoading || promptsLoading || runAgent.isPending
-  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptName
+  const isStarting = runAgent.isPending
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-hidden py-4">
-      {/* Loading state */}
-      {(projectLoading || promptsLoading) && (
-        <div className="flex items-center justify-center gap-2 py-8">
-          <Loader variant="circular" size="sm" />
-          <span className="text-muted-foreground text-sm">Loading prompts...</span>
-        </div>
-      )}
-
-      {/* Error state */}
-      {isError && error && (
-        <div className="border-destructive/50 bg-destructive/10 flex items-center gap-2 rounded-md border p-4">
-          <AlertCircle className="text-destructive h-5 w-5 flex-shrink-0" />
-          <div>
-            <p className="text-destructive text-sm font-medium">Failed to load prompts</p>
-            <p className="text-muted-foreground text-xs">{error.message}</p>
-          </div>
-        </div>
-      )}
-
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-4">
       {/* Conflict state */}
       {conflictSessionId && (
         <div className="flex flex-col gap-3 rounded-md border border-amber-500/50 bg-amber-500/10 p-4">
@@ -386,114 +309,107 @@ function TaskAgentTabContent({
         </div>
       )}
 
-      {/* Controls */}
-      {!projectLoading && !promptsLoading && !isError && (
-        <>
-          {/* Main controls row */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Prompt selector */}
-            <PromptSelector
-              prompts={prompts}
-              effectivePromptName={effectivePromptName}
-              onValueChange={setSelectedPromptName}
-              disabled={isLoading || !prompts?.length}
-              noneLabel="None - Start without prompt"
+      {/* Skill picker with dynamic args */}
+      <SkillPicker
+        projectId={projectId}
+        category={SkillCategory.HOMESPUN}
+        selectedSkillName={selectedSkillName}
+        onSkillChange={(name) => {
+          setSelectedSkillName(name)
+          setSkillArgs({})
+        }}
+        argValues={skillArgs}
+        onArgValuesChange={setSkillArgs}
+        disabled={isStarting}
+      />
+
+      {/* Main controls row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ModeSelector value={selectedMode} onValueChange={setSelectedMode} disabled={isStarting} />
+
+        <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isStarting}>
+          <SelectTrigger className="w-24" aria-label="Select model">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TASK_MODELS.map((model) => (
+              <SelectItem key={model.value} value={model.value}>
+                {model.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          size="sm"
+          onClick={handleStart}
+          disabled={isStarting}
+          className="w-full gap-1.5 sm:w-auto"
+        >
+          {runAgent.isPending ? (
+            <Loader variant="circular" size="sm" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+          Start Agent
+        </Button>
+      </div>
+
+      {/* Instructions textarea */}
+      <Textarea
+        placeholder="Additional instructions (optional)"
+        value={userInstructions}
+        onChange={(e) => setUserInstructions(e.target.value)}
+        disabled={isStarting}
+        className="min-h-32 flex-1 resize-none overflow-y-auto"
+      />
+
+      {/* Advanced settings */}
+      <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground gap-1 p-0 text-xs"
+          >
+            {showAdvancedSettings ? (
+              <>
+                <ChevronUp className="h-3 w-3" />
+                Hide settings
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" />
+                More settings
+              </>
+            )}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3 space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="base-branch" className="text-sm">
+              Base Branch
+            </Label>
+            <BaseBranchSelector
+              repoPath={project?.localPath ?? undefined}
+              defaultBranch={project?.defaultBranch}
+              value={effectiveBaseBranch}
+              onChange={setSelectedBaseBranch}
+              disabled={isStarting}
+              aria-label="Select base branch"
             />
-
-            {/* Mode selector */}
-            <ModeSelector
-              value={selectedMode}
-              onValueChange={setSelectedMode}
-              disabled={isLoading}
-            />
-
-            {/* Model selector */}
-            <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isLoading}>
-              <SelectTrigger className="w-24" aria-label="Select model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TASK_MODELS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Start button */}
-            <Button
-              size="sm"
-              onClick={handleStart}
-              disabled={isLoading || !isReady}
-              className="w-full gap-1.5 sm:w-auto"
-            >
-              {runAgent.isPending ? (
-                <Loader variant="circular" size="sm" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )}
-              Start Agent
-            </Button>
+            <p className="text-muted-foreground text-xs">
+              The branch to create the working branch from
+            </p>
           </div>
-
-          {/* Instructions textarea */}
-          <Textarea
-            placeholder="Additional instructions (optional)"
-            value={userInstructions}
-            onChange={(e) => setUserInstructions(e.target.value)}
-            disabled={isLoading}
-            className="flex-1 resize-none overflow-y-auto"
-          />
-
-          {/* Advanced settings */}
-          <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground gap-1 p-0 text-xs"
-              >
-                {showAdvancedSettings ? (
-                  <>
-                    <ChevronUp className="h-3 w-3" />
-                    Hide settings
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3 w-3" />
-                    More settings
-                  </>
-                )}
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="base-branch" className="text-sm">
-                  Base Branch
-                </Label>
-                <BaseBranchSelector
-                  repoPath={project?.localPath ?? undefined}
-                  defaultBranch={project?.defaultBranch}
-                  value={effectiveBaseBranch}
-                  onChange={setSelectedBaseBranch}
-                  disabled={isLoading}
-                  aria-label="Select base branch"
-                />
-                <p className="text-muted-foreground text-xs">
-                  The branch to create the working branch from
-                </p>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </>
-      )}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }
 
 // ============================================================================
-// Issues Agent Tab
+// Issues Agent Tab (skill-less)
 // ============================================================================
 
 interface IssuesAgentTabContentProps {
@@ -514,94 +430,24 @@ function IssuesAgentTabContent({
   const navigate = useNavigate()
   const createSession = useCreateIssuesAgentSession()
 
-  // Issue context for rendering prompt placeholders
-  const { data: issueContext } = useIssueContext(selectedIssueId, projectId)
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem(ISSUES_MODEL_STORAGE_KEY) ?? ISSUES_MODELS[0].value
+  )
 
-  // Fetch available issue agent prompts
-  const { data: prompts, isLoading: promptsLoading } = useIssueAgentAvailablePrompts(projectId)
-
-  // Model selection state
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(ISSUES_MODEL_STORAGE_KEY) ?? ISSUES_MODELS[0].value
-  })
-
-  // Prompt selection state
-  const [selectedPromptName, setSelectedPromptName] = useState<string>(() => {
-    return localStorage.getItem(ISSUES_PROMPT_STORAGE_KEY) ?? ''
-  })
-
-  // Mode selection state
   const [selectedMode, setSelectedMode] = useState<SessionMode>(() => {
     const stored = localStorage.getItem(ISSUES_MODE_STORAGE_KEY)
     return stored === SessionMode.PLAN ? SessionMode.PLAN : SessionMode.BUILD
   })
 
-  // User instructions state
   const [userInstructions, setUserInstructions] = useState('')
 
-  // Persist model selection
   useEffect(() => {
     localStorage.setItem(ISSUES_MODEL_STORAGE_KEY, selectedModel)
   }, [selectedModel])
 
-  // Persist prompt selection
-  useEffect(() => {
-    if (selectedPromptName) {
-      localStorage.setItem(ISSUES_PROMPT_STORAGE_KEY, selectedPromptName)
-    }
-  }, [selectedPromptName])
-
   useEffect(() => {
     localStorage.setItem(ISSUES_MODE_STORAGE_KEY, selectedMode)
   }, [selectedMode])
-
-  // Compute effective prompt name
-  const effectivePromptName = useMemo(() => {
-    if (selectedPromptName === NONE_PROMPT_ID) {
-      return NONE_PROMPT_ID
-    }
-    if (!prompts || prompts.length === 0) {
-      return NONE_PROMPT_ID
-    }
-    const selectedExists = prompts.some((p) => p.name === selectedPromptName)
-    if (selectedExists) {
-      return selectedPromptName
-    }
-    return prompts[0].name ?? ''
-  }, [prompts, selectedPromptName])
-
-  // Sync mode from selected prompt
-  useEffect(() => {
-    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
-      setSelectedMode(SessionMode.BUILD)
-      return
-    }
-    const prompt = prompts.find((p) => p.name === effectivePromptName)
-    if (prompt?.mode) {
-      setSelectedMode(prompt.mode)
-    }
-  }, [effectivePromptName, prompts])
-
-  // Populate textarea when prompt or issue context changes
-  useEffect(() => {
-    if (effectivePromptName === NONE_PROMPT_ID || !effectivePromptName || !prompts) {
-      setUserInstructions('')
-      return
-    }
-    const prompt = prompts.find((p) => p.name === effectivePromptName)
-    if (prompt?.initialMessage && issueContext) {
-      setUserInstructions(renderPromptTemplate(prompt.initialMessage, issueContext))
-    } else if (prompt?.initialMessage) {
-      // No issue context available yet - show template without placeholders filled
-      setUserInstructions(prompt.initialMessage)
-    } else {
-      setUserInstructions('')
-    }
-  }, [effectivePromptName, prompts, issueContext])
-
-  const hasPromptOrInstructions = useMemo(() => {
-    return effectivePromptName !== NONE_PROMPT_ID || userInstructions.trim().length > 0
-  }, [effectivePromptName, userInstructions])
 
   const handleStart = useCallback(async () => {
     try {
@@ -615,8 +461,7 @@ function IssuesAgentTabContent({
 
       onSessionCreated?.(result)
 
-      if (!hasPromptOrInstructions) {
-        // Navigate to session when no prompt/instructions (interactive mode)
+      if (!userInstructions.trim()) {
         navigate({ to: '/sessions/$sessionId', params: { sessionId: result.sessionId } })
       }
 
@@ -631,7 +476,6 @@ function IssuesAgentTabContent({
     selectedIssueId,
     userInstructions,
     selectedMode,
-    hasPromptOrInstructions,
     onSessionCreated,
     navigate,
     onOpenChange,
@@ -640,68 +484,45 @@ function IssuesAgentTabContent({
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-hidden py-4">
-      {/* Prompt selector */}
-      <div className="space-y-2">
-        {promptsLoading ? (
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <ModeSelector
+          value={selectedMode}
+          onValueChange={setSelectedMode}
+          disabled={createSession.isPending}
+        />
+
+        <Select
+          value={selectedModel}
+          onValueChange={setSelectedModel}
+          disabled={createSession.isPending}
+        >
+          <SelectTrigger className="w-32" aria-label="Select model">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ISSUES_MODELS.map((model) => (
+              <SelectItem key={model.value} value={model.value}>
+                {model.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          size="sm"
+          onClick={handleStart}
+          disabled={createSession.isPending}
+          className="w-full gap-1.5 sm:w-auto"
+        >
+          {createSession.isPending ? (
             <Loader variant="circular" size="sm" />
-            <span className="text-muted-foreground text-sm">Loading prompts...</span>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <PromptSelector
-              prompts={prompts}
-              effectivePromptName={effectivePromptName}
-              onValueChange={setSelectedPromptName}
-              disabled={createSession.isPending}
-              noneLabel="None - Start without prompt"
-              showMode
-            />
-
-            {/* Mode selector */}
-            <ModeSelector
-              value={selectedMode}
-              onValueChange={setSelectedMode}
-              disabled={createSession.isPending}
-            />
-
-            {/* Model selector */}
-            <Select
-              value={selectedModel}
-              onValueChange={setSelectedModel}
-              disabled={createSession.isPending}
-            >
-              <SelectTrigger className="w-32" aria-label="Select model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ISSUES_MODELS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Start button */}
-            <Button
-              size="sm"
-              onClick={handleStart}
-              disabled={createSession.isPending}
-              className="w-full gap-1.5 sm:w-auto"
-            >
-              {createSession.isPending ? (
-                <Loader variant="circular" size="sm" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )}
-              Start Agent
-            </Button>
-          </div>
-        )}
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+          Start Agent
+        </Button>
       </div>
 
-      {/* Instructions textarea */}
       <Textarea
         placeholder="Additional instructions (optional)"
         value={userInstructions}
@@ -722,42 +543,6 @@ function IssuesAgentTabContent({
 // ============================================================================
 // Shared Components
 // ============================================================================
-
-interface PromptSelectorProps {
-  prompts: AgentPrompt[] | undefined
-  effectivePromptName: string
-  onValueChange: (value: string) => void
-  disabled: boolean
-  noneLabel: string
-  showMode?: boolean
-}
-
-function PromptSelector({
-  prompts,
-  effectivePromptName,
-  onValueChange,
-  disabled,
-  noneLabel,
-  showMode,
-}: PromptSelectorProps) {
-  return (
-    <Select value={effectivePromptName} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger className="w-40" aria-label="Select prompt">
-        <SelectValue placeholder="Select prompt" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_PROMPT_ID}>{noneLabel}</SelectItem>
-        {prompts?.map((prompt) => (
-          <SelectItem key={prompt.name} value={prompt.name ?? ''}>
-            {prompt.name}
-            {showMode && prompt.mode ? ` (${prompt.mode})` : ''}
-            {prompt.isOverride && ' (project)'}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
 
 interface ModeSelectorProps {
   value: SessionMode

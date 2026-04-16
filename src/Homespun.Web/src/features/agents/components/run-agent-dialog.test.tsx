@@ -3,17 +3,16 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RunAgentDialog } from './run-agent-dialog'
-import { AgentPrompts, Issues, IssuesAgent, SessionMode } from '@/api'
+import { Issues, IssuesAgent, Skills, SessionMode, SkillCategory, SkillArgKind } from '@/api'
 import type { ReactNode } from 'react'
-import type { AgentPrompt, RunAgentAcceptedResponse } from '@/api/generated/types.gen'
+import type { DiscoveredSkills, RunAgentAcceptedResponse } from '@/api/generated/types.gen'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
   return {
     ...actual,
-    AgentPrompts: {
-      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
-      getApiAgentPromptsIssueAgentAvailableByProjectId: vi.fn(),
+    Skills: {
+      getApiSkillsProjectByProjectId: vi.fn(),
     },
     Issues: {
       postApiIssuesByIssueIdRun: vi.fn(),
@@ -25,21 +24,15 @@ vi.mock('@/api', async (importOriginal) => {
   }
 })
 
-// Mock useNavigate from tanstack router
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
 }))
 
-const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
-const mockGetIssueAgentPrompts = vi.mocked(
-  AgentPrompts.getApiAgentPromptsIssueAgentAvailableByProjectId
-)
-const mockGetIssue = vi.mocked(Issues.getApiIssuesByIssueId)
+const mockGetSkills = vi.mocked(Skills.getApiSkillsProjectByProjectId)
 const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 const mockCreateIssuesAgentSession = vi.mocked(IssuesAgent.postApiIssuesAgentSession)
 
-// Helper to create mock API response
 function createMockResponse<T>(data: T) {
   return {
     data,
@@ -61,33 +54,19 @@ function createWrapper() {
   }
 }
 
-const mockTaskPrompts: AgentPrompt[] = [
-  {
-    name: 'Build Feature',
-    initialMessage: 'Build the feature for {{title}}',
-    mode: SessionMode.BUILD,
-  },
-  {
-    name: 'Plan Task',
-    initialMessage: 'Create a plan',
-    mode: SessionMode.PLAN,
-  },
-]
-
-const mockIssuePrompts: AgentPrompt[] = [
-  {
-    name: 'Default Prompt',
-    initialMessage: 'Work on issues',
-    mode: SessionMode.BUILD,
-    isOverride: false,
-  },
-  {
-    name: 'Plan Prompt',
-    initialMessage: 'Plan the issues',
-    mode: SessionMode.PLAN,
-    isOverride: false,
-  },
-]
+const MOCK_SKILLS: DiscoveredSkills = {
+  openSpec: [],
+  general: [],
+  homespun: [
+    {
+      name: 'fix-bug',
+      description: 'Fix a bug',
+      category: SkillCategory.HOMESPUN,
+      mode: SessionMode.BUILD,
+      args: [{ name: 'issue-id', kind: SkillArgKind.ISSUE, label: 'Issue ID' }],
+    },
+  ],
+}
 
 function createMockRunAgentResponse(
   overrides: Partial<RunAgentAcceptedResponse> = {}
@@ -100,12 +79,10 @@ function createMockRunAgentResponse(
   }
 }
 
-/** Get the task tab content container */
 function getTaskTab() {
   return screen.getByTestId('task-tab-content')
 }
 
-/** Get the issues tab content container */
 function getIssuesTab() {
   return screen.getByTestId('issues-tab-content')
 }
@@ -115,18 +92,8 @@ describe('RunAgentDialog', () => {
     vi.clearAllMocks()
     localStorage.clear()
 
-    // Setup default mock responses
-    mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockTaskPrompts))
-    mockGetIssueAgentPrompts.mockResolvedValue(createMockResponse(mockIssuePrompts))
+    mockGetSkills.mockResolvedValue(createMockResponse(MOCK_SKILLS))
     mockRunAgent.mockResolvedValue(createMockResponse(createMockRunAgentResponse()))
-    mockGetIssue.mockResolvedValue(
-      createMockResponse({
-        id: 'issue-456',
-        title: 'Test Issue',
-        description: 'A test issue description',
-        type: 'task',
-      })
-    )
   })
 
   it('renders nothing when closed', () => {
@@ -143,7 +110,7 @@ describe('RunAgentDialog', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders dialog with tabs when open', async () => {
+  it('renders dialog with both tabs when open', async () => {
     render(
       <RunAgentDialog
         open={true}
@@ -157,8 +124,6 @@ describe('RunAgentDialog', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
-
-    // Should have both tabs
     expect(screen.getByRole('tab', { name: /task agent/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /issues agent/i })).toBeInTheDocument()
   })
@@ -175,8 +140,10 @@ describe('RunAgentDialog', () => {
     )
 
     await waitFor(() => {
-      const taskTab = screen.getByRole('tab', { name: /task agent/i })
-      expect(taskTab).toHaveAttribute('data-state', 'active')
+      expect(screen.getByRole('tab', { name: /task agent/i })).toHaveAttribute(
+        'data-state',
+        'active'
+      )
     })
   })
 
@@ -186,31 +153,15 @@ describe('RunAgentDialog', () => {
     })
 
     await waitFor(() => {
-      const issuesTab = screen.getByRole('tab', { name: /issues agent/i })
-      expect(issuesTab).toHaveAttribute('data-state', 'active')
-    })
-  })
-
-  it('respects defaultTab prop', async () => {
-    render(
-      <RunAgentDialog
-        open={true}
-        onOpenChange={() => {}}
-        projectId="project-123"
-        issueId="issue-456"
-        defaultTab="issues"
-      />,
-      { wrapper: createWrapper() }
-    )
-
-    await waitFor(() => {
-      const issuesTab = screen.getByRole('tab', { name: /issues agent/i })
-      expect(issuesTab).toHaveAttribute('data-state', 'active')
+      expect(screen.getByRole('tab', { name: /issues agent/i })).toHaveAttribute(
+        'data-state',
+        'active'
+      )
     })
   })
 
   describe('Task Agent Tab', () => {
-    it('shows prompt dropdown, mode dropdown, model dropdown, and start button', async () => {
+    it('shows skill picker, mode, model, and start button', async () => {
       render(
         <RunAgentDialog
           open={true}
@@ -224,14 +175,14 @@ describe('RunAgentDialog', () => {
       const taskTab = getTaskTab()
 
       await waitFor(() => {
-        expect(within(taskTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+        expect(within(taskTab).getByRole('combobox', { name: /select skill/i })).toBeInTheDocument()
       })
       expect(within(taskTab).getByRole('combobox', { name: 'Select mode' })).toBeInTheDocument()
-      expect(within(taskTab).getByRole('combobox', { name: /model/i })).toBeInTheDocument()
+      expect(within(taskTab).getByRole('combobox', { name: 'Select model' })).toBeInTheDocument()
       expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
     })
 
-    it('sends mode instead of promptName on start', async () => {
+    it('sends skillName and skillArgs when a skill is selected', async () => {
       const user = userEvent.setup()
       const onAgentStart = vi.fn()
 
@@ -248,35 +199,94 @@ describe('RunAgentDialog', () => {
 
       const taskTab = getTaskTab()
 
-      // Wait for controls to be ready
-      await waitFor(() => {
-        expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
-      })
+      // Wait for skills loaded
+      const skillTrigger = await within(taskTab).findByRole('combobox', { name: /select skill/i })
+      await user.click(skillTrigger)
 
-      // Click start agent
+      // Select fix-bug
+      const listbox = await screen.findByRole('listbox')
+      await user.click(within(listbox).getByText(/fix-bug/))
+
+      // Fill in the arg
+      const issueIdInput = await within(taskTab).findByLabelText('Issue ID')
+      await user.type(issueIdInput, 'ABC123')
+
       await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
 
-      // Should have called the run agent endpoint with mode, not promptName
       await waitFor(() => {
         expect(mockRunAgent).toHaveBeenCalledWith({
           path: { issueId: 'issue-456' },
           body: expect.objectContaining({
             projectId: 'project-123',
-            mode: SessionMode.BUILD,
+            skillName: 'fix-bug',
+            skillArgs: { 'issue-id': 'ABC123' },
           }),
         })
       })
 
-      // Verify promptName is NOT in the request
-      const callBody = mockRunAgent.mock.calls[0]?.[0]?.body
-      expect(callBody).not.toHaveProperty('promptName')
+      expect(onAgentStart).toHaveBeenCalledWith({
+        issueId: 'issue-456',
+        branchName: 'feature/test-123',
+        message: 'Agent is starting',
+      })
+    })
 
-      // Should have called onAgentStart
+    it('sends no skillName / skillArgs when no skill selected', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
       await waitFor(() => {
-        expect(onAgentStart).toHaveBeenCalledWith({
-          issueId: 'issue-456',
-          branchName: 'feature/test-123',
-          message: 'Agent is starting',
+        expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
+      })
+
+      await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockRunAgent).toHaveBeenCalled()
+      })
+
+      const body = mockRunAgent.mock.calls[0]?.[0]?.body
+      expect(body?.skillName).toBeUndefined()
+      expect(body?.skillArgs).toBeUndefined()
+    })
+
+    it('includes user instructions in the dispatch', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
+      const textarea = await within(taskTab).findByPlaceholderText(/additional instructions/i)
+      await user.type(textarea, 'Do the thing')
+
+      await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockRunAgent).toHaveBeenCalledWith({
+          path: { issueId: 'issue-456' },
+          body: expect.objectContaining({
+            userInstructions: 'Do the thing',
+          }),
         })
       })
     })
@@ -284,7 +294,6 @@ describe('RunAgentDialog', () => {
     it('shows conflict state when agent already running', async () => {
       const user = userEvent.setup()
 
-      // Mock 409 conflict response
       mockRunAgent.mockResolvedValue({
         data: undefined,
         error: { sessionId: 'existing-session', status: 'Running', message: 'Already running' },
@@ -340,68 +349,42 @@ describe('RunAgentDialog', () => {
         expect(within(taskTab).getByText(/base branch/i)).toBeInTheDocument()
       })
     })
-
-    it('prompt selection populates textarea with rendered template text', async () => {
-      render(
-        <RunAgentDialog
-          open={true}
-          onOpenChange={() => {}}
-          projectId="project-123"
-          issueId="issue-456"
-        />,
-        { wrapper: createWrapper() }
-      )
-
-      const taskTab = getTaskTab()
-
-      // Wait for prompts to load
-      await waitFor(() => {
-        expect(within(taskTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-      })
-
-      // The textarea should have the rendered template from first prompt with issue context
-      // 'Build the feature for {{title}}' -> 'Build the feature for Test Issue'
-      await waitFor(() => {
-        const textarea = within(taskTab).getByPlaceholderText(/additional instructions/i)
-        expect(textarea).toHaveValue('Build the feature for Test Issue')
-      })
-    })
   })
 
-  describe('Issues Agent Tab', () => {
-    it('shows prompt dropdown, mode dropdown, model selector, and instructions textarea', async () => {
+  describe('Issues Agent Tab (skill-less)', () => {
+    it('has no skill picker — only mode, model, textarea, start button', async () => {
       render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
         wrapper: createWrapper(),
       })
 
       const issuesTab = getIssuesTab()
 
-      // Should default to issues tab when no issueId
       await waitFor(() => {
-        const tab = screen.getByRole('tab', { name: /issues agent/i })
-        expect(tab).toHaveAttribute('data-state', 'active')
+        expect(screen.getByRole('tab', { name: /issues agent/i })).toHaveAttribute(
+          'data-state',
+          'active'
+        )
       })
 
-      await waitFor(() => {
-        expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-      })
+      expect(
+        within(issuesTab).queryByRole('combobox', { name: /select skill/i })
+      ).not.toBeInTheDocument()
       expect(within(issuesTab).getByRole('combobox', { name: 'Select mode' })).toBeInTheDocument()
-      expect(within(issuesTab).getByRole('combobox', { name: /model/i })).toBeInTheDocument()
+      expect(within(issuesTab).getByRole('combobox', { name: 'Select model' })).toBeInTheDocument()
       expect(within(issuesTab).getByPlaceholderText(/additional instructions/i)).toBeInTheDocument()
+      expect(within(issuesTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
     })
 
-    it('stays on page when prompt is selected and instructions provided', async () => {
+    it('stays on page when user instructions are provided', async () => {
       const user = userEvent.setup()
       const onOpenChange = vi.fn()
 
-      const mockResult = {
-        sessionId: 'session-123',
-        branchName: 'issues-agent-123',
-        clonePath: '/tmp/clone',
-      }
-
       mockCreateIssuesAgentSession.mockResolvedValue({
-        data: mockResult,
+        data: {
+          sessionId: 'session-123',
+          branchName: 'issues-agent-123',
+          clonePath: '/tmp/clone',
+        },
       } as never)
 
       render(<RunAgentDialog open={true} onOpenChange={onOpenChange} projectId="project-123" />, {
@@ -410,43 +393,27 @@ describe('RunAgentDialog', () => {
 
       const issuesTab = getIssuesTab()
 
-      // Wait for prompts to load
-      await waitFor(() => {
-        expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-      })
-
-      // Type instructions
       const textarea = within(issuesTab).getByPlaceholderText(/additional instructions/i)
-      await user.clear(textarea)
       await user.type(textarea, 'Do something specific')
 
-      // Click start
       await user.click(within(issuesTab).getByRole('button', { name: /start agent/i }))
 
-      // Should close dialog
       await waitFor(() => {
         expect(onOpenChange).toHaveBeenCalledWith(false)
       })
-
-      // Should NOT navigate (has prompt + instructions)
       expect(mockNavigate).not.toHaveBeenCalled()
     })
 
-    it('navigates to session when no prompt selected and no instructions', async () => {
+    it('navigates to session when no instructions are provided', async () => {
       const user = userEvent.setup()
       const onOpenChange = vi.fn()
 
-      // Pre-set "None" prompt in localStorage
-      localStorage.setItem('issues-agent-prompt', '__none__')
-
-      const mockResult = {
-        sessionId: 'session-123',
-        branchName: 'issues-agent-123',
-        clonePath: '/tmp/clone',
-      }
-
       mockCreateIssuesAgentSession.mockResolvedValue({
-        data: mockResult,
+        data: {
+          sessionId: 'session-123',
+          branchName: 'issues-agent-123',
+          clonePath: '/tmp/clone',
+        },
       } as never)
 
       render(<RunAgentDialog open={true} onOpenChange={onOpenChange} projectId="project-123" />, {
@@ -455,15 +422,8 @@ describe('RunAgentDialog', () => {
 
       const issuesTab = getIssuesTab()
 
-      // Wait for prompts to load
-      await waitFor(() => {
-        expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-      })
-
-      // Click start (with None prompt, no instructions)
       await user.click(within(issuesTab).getByRole('button', { name: /start agent/i }))
 
-      // Should navigate to session page
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith({
           to: '/sessions/$sessionId',
@@ -471,124 +431,5 @@ describe('RunAgentDialog', () => {
         })
       })
     })
-
-    it('sends mode in request instead of promptName', async () => {
-      const user = userEvent.setup()
-
-      const mockResult = {
-        sessionId: 'session-123',
-        branchName: 'issues-agent-123',
-        clonePath: '/tmp/clone',
-      }
-
-      mockCreateIssuesAgentSession.mockResolvedValue({
-        data: mockResult,
-      } as never)
-
-      render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
-        wrapper: createWrapper(),
-      })
-
-      const issuesTab = getIssuesTab()
-
-      await waitFor(() => {
-        expect(within(issuesTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-      })
-
-      // Type instructions
-      const textarea = within(issuesTab).getByPlaceholderText(/additional instructions/i)
-      await user.clear(textarea)
-      await user.type(textarea, 'Test instructions')
-
-      await user.click(within(issuesTab).getByRole('button', { name: /start agent/i }))
-
-      await waitFor(() => {
-        expect(mockCreateIssuesAgentSession).toHaveBeenCalledWith({
-          body: expect.objectContaining({
-            projectId: 'project-123',
-            mode: SessionMode.BUILD,
-          }),
-        })
-      })
-
-      // Verify promptName is NOT in the request
-      const callBody = mockCreateIssuesAgentSession.mock.calls[0]?.[0]?.body
-      expect(callBody).not.toHaveProperty('promptName')
-    })
-  })
-
-  it('dialog sizing uses responsive width classes', async () => {
-    render(
-      <RunAgentDialog
-        open={true}
-        onOpenChange={() => {}}
-        projectId="project-123"
-        issueId="issue-456"
-      />,
-      { wrapper: createWrapper() }
-    )
-
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-    })
-
-    const dialogContent = screen.getByRole('dialog')
-    expect(dialogContent.className).toMatch(/w-\[80vw\]/)
-  })
-
-  it('tab switching preserves state', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <RunAgentDialog
-        open={true}
-        onOpenChange={() => {}}
-        projectId="project-123"
-        issueId="issue-456"
-      />,
-      { wrapper: createWrapper() }
-    )
-
-    const taskTab = getTaskTab()
-
-    // Wait for task tab to be ready
-    await waitFor(() => {
-      expect(within(taskTab).getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
-    })
-
-    // Clear then type in textarea on task tab
-    const taskTextarea = within(taskTab).getByPlaceholderText(/additional instructions/i)
-    await user.clear(taskTextarea)
-    await user.type(taskTextarea, 'Task instructions')
-
-    // Switch to issues tab
-    await user.click(screen.getByRole('tab', { name: /issues agent/i }))
-
-    // Switch back to task tab
-    await user.click(screen.getByRole('tab', { name: /task agent/i }))
-
-    // Task instructions should be preserved
-    await waitFor(() => {
-      const textarea = within(taskTab).getByPlaceholderText(/additional instructions/i)
-      expect(textarea).toHaveValue('Task instructions')
-    })
-  })
-
-  it('applies responsive classes to start button for mobile layout', async () => {
-    mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockTaskPrompts))
-
-    render(<RunAgentDialog projectId="proj-1" open={true} onOpenChange={vi.fn()} />, {
-      wrapper: createWrapper(),
-    })
-
-    const taskTab = getTaskTab()
-
-    await waitFor(() => {
-      expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
-    })
-
-    const startButton = within(taskTab).getByRole('button', { name: /start agent/i })
-    expect(startButton.className).toMatch(/w-full/)
-    expect(startButton.className).toMatch(/sm:w-auto/)
   })
 })

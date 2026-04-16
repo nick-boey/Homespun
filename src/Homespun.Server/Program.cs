@@ -257,7 +257,7 @@ else
         new Lazy<ISessionLifecycleService>(() => sp.GetRequiredService<ISessionLifecycleService>()));
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
-    builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
+    builder.Services.AddSingleton<ISkillDiscoveryService, SkillDiscoveryService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
 
     // Agent Orchestration services (mini-prompts, branch ID generation, agent startup)
@@ -275,9 +275,6 @@ else
     builder.Services.Configure<GitHubSyncPollingOptions>(
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
-
-    // Initialize default agent prompts on startup
-    builder.Services.AddHostedService<DefaultPromptsInitializationService>();
 
     builder.Services.AddSingleton(TimeProvider.System);
 }

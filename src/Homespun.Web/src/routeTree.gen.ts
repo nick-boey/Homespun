@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
-import { Route as PromptsRouteImport } from './routes/prompts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SessionsIndexRouteImport } from './routes/sessions.index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
@@ -23,7 +22,6 @@ import { Route as SessionsSessionIdIssueDiffRouteImport } from './routes/session
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdSecretsRouteImport } from './routes/projects.$projectId.secrets'
 import { Route as ProjectsProjectIdPullRequestsRouteImport } from './routes/projects.$projectId.pull-requests'
-import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
 import { Route as ProjectsProjectIdIssuesRouteImport } from './routes/projects.$projectId.issues'
 import { Route as ProjectsProjectIdClonesRouteImport } from './routes/projects.$projectId.clones'
 import { Route as ProjectsProjectIdBranchesRouteImport } from './routes/projects.$projectId.branches'
@@ -38,11 +36,6 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PromptsRoute = PromptsRouteImport.update({
-  id: '/prompts',
-  path: '/prompts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -104,12 +97,6 @@ const ProjectsProjectIdPullRequestsRoute =
     path: '/pull-requests',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
-const ProjectsProjectIdPromptsRoute =
-  ProjectsProjectIdPromptsRouteImport.update({
-    id: '/prompts',
-    path: '/prompts',
-    getParentRoute: () => ProjectsProjectIdRoute,
-  } as any)
 const ProjectsProjectIdIssuesRoute = ProjectsProjectIdIssuesRouteImport.update({
   id: '/issues',
   path: '/issues',
@@ -141,7 +128,6 @@ const ProjectsProjectIdIssuesIssueIdEditRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/prompts': typeof PromptsRoute
   '/sessions': typeof SessionsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -152,7 +138,6 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/clones': typeof ProjectsProjectIdClonesRoute
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesRouteWithChildren
-  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -163,7 +148,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/prompts': typeof PromptsRoute
   '/settings': typeof SettingsRoute
   '/projects/new': typeof ProjectsNewRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRouteWithChildren
@@ -171,7 +155,6 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsIndexRoute
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/clones': typeof ProjectsProjectIdClonesRoute
-  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -183,7 +166,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/prompts': typeof PromptsRoute
   '/sessions': typeof SessionsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -194,7 +176,6 @@ export interface FileRoutesById {
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/clones': typeof ProjectsProjectIdClonesRoute
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesRouteWithChildren
-  '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
@@ -207,7 +188,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/prompts'
     | '/sessions'
     | '/settings'
     | '/projects/$projectId'
@@ -218,7 +198,6 @@ export interface FileRouteTypes {
     | '/projects/$projectId/branches'
     | '/projects/$projectId/clones'
     | '/projects/$projectId/issues'
-    | '/projects/$projectId/prompts'
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
@@ -229,7 +208,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/prompts'
     | '/settings'
     | '/projects/new'
     | '/sessions/$sessionId'
@@ -237,7 +215,6 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/projects/$projectId/branches'
     | '/projects/$projectId/clones'
-    | '/projects/$projectId/prompts'
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
@@ -248,7 +225,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/prompts'
     | '/sessions'
     | '/settings'
     | '/projects/$projectId'
@@ -259,7 +235,6 @@ export interface FileRouteTypes {
     | '/projects/$projectId/branches'
     | '/projects/$projectId/clones'
     | '/projects/$projectId/issues'
-    | '/projects/$projectId/prompts'
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
@@ -271,7 +246,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PromptsRoute: typeof PromptsRoute
   SessionsRoute: typeof SessionsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
@@ -293,13 +267,6 @@ declare module '@tanstack/react-router' {
       path: '/sessions'
       fullPath: '/sessions'
       preLoaderRoute: typeof SessionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/prompts': {
-      id: '/prompts'
-      path: '/prompts'
-      fullPath: '/prompts'
-      preLoaderRoute: typeof PromptsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -377,13 +344,6 @@ declare module '@tanstack/react-router' {
       path: '/pull-requests'
       fullPath: '/projects/$projectId/pull-requests'
       preLoaderRoute: typeof ProjectsProjectIdPullRequestsRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
-    '/projects/$projectId/prompts': {
-      id: '/projects/$projectId/prompts'
-      path: '/prompts'
-      fullPath: '/projects/$projectId/prompts'
-      preLoaderRoute: typeof ProjectsProjectIdPromptsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/issues': {
@@ -470,7 +430,6 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdBranchesRoute: typeof ProjectsProjectIdBranchesRoute
   ProjectsProjectIdClonesRoute: typeof ProjectsProjectIdClonesRoute
   ProjectsProjectIdIssuesRoute: typeof ProjectsProjectIdIssuesRouteWithChildren
-  ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
   ProjectsProjectIdPullRequestsRoute: typeof ProjectsProjectIdPullRequestsRoute
   ProjectsProjectIdSecretsRoute: typeof ProjectsProjectIdSecretsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
@@ -481,7 +440,6 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdBranchesRoute: ProjectsProjectIdBranchesRoute,
   ProjectsProjectIdClonesRoute: ProjectsProjectIdClonesRoute,
   ProjectsProjectIdIssuesRoute: ProjectsProjectIdIssuesRouteWithChildren,
-  ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
   ProjectsProjectIdPullRequestsRoute: ProjectsProjectIdPullRequestsRoute,
   ProjectsProjectIdSecretsRoute: ProjectsProjectIdSecretsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
@@ -493,7 +451,6 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PromptsRoute: PromptsRoute,
   SessionsRoute: SessionsRouteWithChildren,
   SettingsRoute: SettingsRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
