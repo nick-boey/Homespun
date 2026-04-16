@@ -3,6 +3,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.GitHub;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
@@ -25,6 +26,7 @@ public class GraphService(
     PullRequestWorkflowService workflowService,
     IGraphCacheService cacheService,
     IPRStatusResolver prStatusResolver,
+    IIssueGraphOpenSpecEnricher openSpecEnricher,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -695,9 +697,12 @@ public class GraphService(
                 }
             }
 
+            // Enrich with OpenSpec per-issue state and main-branch orphans.
+            await openSpecEnricher.EnrichAsync(projectId, response);
+
             logger.LogDebug(
-                "Built enhanced task graph for project {ProjectId}: {NodeCount} nodes, {PrCount} merged PRs, {AgentCount} agent statuses, {LinkedPrCount} linked PRs",
-                projectId, response.Nodes.Count, response.MergedPrs.Count, response.AgentStatuses.Count, response.LinkedPrs.Count);
+                "Built enhanced task graph for project {ProjectId}: {NodeCount} nodes, {PrCount} merged PRs, {AgentCount} agent statuses, {LinkedPrCount} linked PRs, {OpenSpecStateCount} OpenSpec states",
+                projectId, response.Nodes.Count, response.MergedPrs.Count, response.AgentStatuses.Count, response.LinkedPrs.Count, response.OpenSpecStates.Count);
 
             return response;
         }

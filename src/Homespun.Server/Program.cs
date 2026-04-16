@@ -14,6 +14,7 @@ using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Observability;
 using Homespun.Features.Observability.HealthChecks;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -275,8 +276,6 @@ else
     builder.Services.Configure<GitHubSyncPollingOptions>(
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
-
-    builder.Services.AddSingleton(TimeProvider.System);
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)
@@ -286,6 +285,17 @@ builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
 
 // Plans service (reads plan files from .claude/plans directory)
 builder.Services.AddSingleton<IPlansService, PlansService>();
+
+// TimeProvider is required by OpenSpec services and may not be registered under mock mode.
+builder.Services.AddSingleton(TimeProvider.System);
+
+// OpenSpec services (read/write .homespun.yaml sidecars linking changes to Fleece issues)
+builder.Services.AddSingleton<ISidecarService, SidecarService>();
+builder.Services.AddScoped<IChangeScannerService, ChangeScannerService>();
+builder.Services.AddScoped<IChangeReconciliationService, ChangeReconciliationService>();
+builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>();
+builder.Services.AddScoped<IBranchStateResolverService, BranchStateResolverService>();
+builder.Services.AddScoped<IIssueGraphOpenSpecEnricher, IssueGraphOpenSpecEnricher>();
 
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>

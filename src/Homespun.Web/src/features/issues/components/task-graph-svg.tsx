@@ -88,6 +88,12 @@ export function getRowCenterY(): number {
 interface TaskGraphNodeSvgProps {
   line: TaskGraphIssueRenderLine
   maxLanes: number
+  /**
+   * When true, the node renders as a square instead of a circle. Used to
+   * signal that the issue has a linked OpenSpec change (see
+   * openspec-integration spec §Issue node shape).
+   */
+  squareNode?: boolean
 }
 
 /**
@@ -96,6 +102,7 @@ interface TaskGraphNodeSvgProps {
 export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
   line,
   maxLanes,
+  squareNode = false,
 }: TaskGraphNodeSvgProps) {
   const width = calculateSvgWidth(maxLanes)
   const cx = getLaneCenterX(line.lane)
@@ -319,8 +326,19 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           ) : null
         })()}
 
-      {/* Node circle */}
-      {isOutlineOnly ? (
+      {/* Node shape: square when linked to an OpenSpec change, round otherwise */}
+      {squareNode ? (
+        <rect
+          x={cx - NODE_RADIUS}
+          y={cy - NODE_RADIUS}
+          width={NODE_RADIUS * 2}
+          height={NODE_RADIUS * 2}
+          fill={isOutlineOnly ? 'none' : nodeColor}
+          stroke={nodeColor}
+          strokeWidth={2}
+          data-testid="task-graph-node-square"
+        />
+      ) : isOutlineOnly ? (
         <circle cx={cx} cy={cy} r={NODE_RADIUS} fill="none" stroke={nodeColor} strokeWidth={2} />
       ) : (
         <circle cx={cx} cy={cy} r={NODE_RADIUS} fill={nodeColor} />

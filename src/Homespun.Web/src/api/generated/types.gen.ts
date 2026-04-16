@@ -4,6 +4,10 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type AguiBaseEvent = {
+  timestamp?: number
+}
+
 export type AcceptIssuesAgentChangesResponse = {
   success?: boolean
   message?: string | null
@@ -53,6 +57,31 @@ export type BranchInfo = {
   lastCommitDate?: string | null
 }
 
+export const BranchPresence = {
+  NONE: 'none',
+  EXISTS: 'exists',
+  WITH_CHANGE: 'withChange',
+} as const
+
+export type BranchPresence = (typeof BranchPresence)[keyof typeof BranchPresence]
+
+export type BranchStateRequest = {
+  projectId: string | null
+  branch: string | null
+  fleeceId: string | null
+  changes?: Array<SnapshotChange> | null
+  orphans?: Array<SnapshotOrphan> | null
+}
+
+export type BranchStateSnapshot = {
+  projectId: string | null
+  branch: string | null
+  fleeceId: string | null
+  changes?: Array<SnapshotChange> | null
+  orphans?: Array<SnapshotOrphan> | null
+  capturedAt?: string
+}
+
 export type BranchStatusResult = {
   success?: boolean
   isOnCorrectBranch?: boolean
@@ -77,6 +106,30 @@ export type BulkDeleteResult = {
   error?: string | null
 }
 
+export type ChangeArtifact = {
+  id: string | null
+  outputPath: string | null
+  status: string | null
+}
+
+export type ChangeArtifactState = {
+  changeName: string | null
+  schemaName: string | null
+  isComplete?: boolean
+  applyRequires?: Array<string> | null
+  artifacts?: Array<ChangeArtifact> | null
+}
+
+export const ChangePhase = {
+  NONE: 'none',
+  INCOMPLETE: 'incomplete',
+  READY_TO_APPLY: 'readyToApply',
+  READY_TO_ARCHIVE: 'readyToArchive',
+  ARCHIVED: 'archived',
+} as const
+
+export type ChangePhase = (typeof ChangePhase)[keyof typeof ChangePhase]
+
 export const ChangeType = {
   CREATED: 'created',
   UPDATED: 'updated',
@@ -84,42 +137,6 @@ export const ChangeType = {
 } as const
 
 export type ChangeType = (typeof ChangeType)[keyof typeof ChangeType]
-
-export const ClaudeContentType = {
-  TEXT: 'text',
-  THINKING: 'thinking',
-  TOOL_USE: 'toolUse',
-  TOOL_RESULT: 'toolResult',
-} as const
-
-export type ClaudeContentType = (typeof ClaudeContentType)[keyof typeof ClaudeContentType]
-
-export type ClaudeMessage = {
-  id?: string | null
-  sessionId: string | null
-  role: ClaudeMessageRole
-  content?: Array<ClaudeMessageContent> | null
-  createdAt?: string
-  isStreaming?: boolean
-}
-
-export type ClaudeMessageContent = {
-  type: ClaudeContentType
-  text?: string | null
-  thinking?: string | null
-  toolName?: string | null
-  toolInput?: string | null
-  toolResult?: string | null
-  toolSuccess?: boolean | null
-  toolUseId?: string | null
-  parsedToolResult?: ToolResultData
-  isStreaming?: boolean
-  index?: number
-}
-
-export const ClaudeMessageRole = { USER: 'user', ASSISTANT: 'assistant' } as const
-
-export type ClaudeMessageRole = (typeof ClaudeMessageRole)[keyof typeof ClaudeMessageRole]
 
 export type ClaudeSession = {
   id: string | null
@@ -131,7 +148,6 @@ export type ClaudeSession = {
   status?: ClaudeSessionStatus
   createdAt?: string
   lastActivityAt?: string
-  messages?: Array<ClaudeMessage> | null
   errorMessage?: string | null
   conversationId?: string | null
   systemPrompt?: string | null
@@ -551,6 +567,15 @@ export type IssueHistoryState = {
   redoDescription?: string | null
 }
 
+export type IssueOpenSpecState = {
+  branchState: BranchPresence
+  changeState: ChangePhase
+  changeName?: string | null
+  schemaName?: string | null
+  phases?: Array<PhaseSummary> | null
+  orphans?: Array<SnapshotOrphan> | null
+}
+
 export type IssuePullRequestStatus = {
   prNumber?: number
   prUrl: string | null
@@ -610,6 +635,13 @@ export const IssueType = {
 } as const
 
 export type IssueType = (typeof IssueType)[keyof typeof IssueType]
+
+export type LinkOrphanRequest = {
+  projectId: string | null
+  branch?: string | null
+  changeName: string | null
+  fleeceId: string | null
+}
 
 export type MergedPullRequestDetails = {
   pullRequest: PullRequestInfo
@@ -674,6 +706,30 @@ export type PendingQuestion = {
   toolUseId: string | null
   questions: Array<UserQuestion> | null
   createdAt?: string
+}
+
+export type PhaseState = {
+  name: string | null
+  done?: number
+  total?: number
+  tasks?: Array<PhaseTask> | null
+}
+
+export type PhaseSummary = {
+  name: string | null
+  done?: number
+  total?: number
+  tasks?: Array<PhaseTaskSummary> | null
+}
+
+export type PhaseTask = {
+  description: string | null
+  done?: boolean
+}
+
+export type PhaseTaskSummary = {
+  description: string | null
+  done?: boolean
 }
 
 export type PlanFileInfo = {
@@ -897,15 +953,11 @@ export type SessionBranchInfo = {
   hasUncommittedChanges?: boolean
 }
 
-export type SessionCacheSummary = {
+export type SessionEventEnvelope = {
+  seq?: number
   sessionId?: string | null
-  entityId?: string | null
-  projectId?: string | null
-  messageCount?: number
-  createdAt?: string
-  lastMessageAt?: string
-  mode?: SessionMode
-  model?: string | null
+  eventId?: string | null
+  event?: AguiBaseEvent
 }
 
 export const SessionMode = { PLAN: 'plan', BUILD: 'build' } as const
@@ -975,6 +1027,23 @@ export type SkillDescriptor = {
   args?: Array<SkillArgDescriptor> | null
 }
 
+export type SnapshotChange = {
+  name: string | null
+  createdBy: string | null
+  isArchived?: boolean
+  archivedFolderName?: string | null
+  artifactState?: ChangeArtifactState
+  tasksDone?: number
+  tasksTotal?: number
+  nextIncomplete?: string | null
+  phases?: Array<PhaseState> | null
+}
+
+export type SnapshotOrphan = {
+  name: string | null
+  createdOnBranch?: boolean
+}
+
 export type StartQueueRequest = {
   issueId: string | null
 }
@@ -1021,6 +1090,10 @@ export type TaskGraphResponse = {
   linkedPrs?: {
     [key: string]: TaskGraphLinkedPr
   } | null
+  openSpecStates?: {
+    [key: string]: IssueOpenSpecState
+  } | null
+  mainOrphanChanges?: Array<SnapshotOrphan> | null
 }
 
 export type TelemetryConfigDto = {
@@ -1036,13 +1109,6 @@ export const TelemetryEventType = {
 } as const
 
 export type TelemetryEventType = (typeof TelemetryEventType)[keyof typeof TelemetryEventType]
-
-export type ToolResultData = {
-  toolName: string | null
-  summary: string | null
-  isSuccess?: boolean
-  typedData?: unknown
-}
 
 export type UpdateIssueRequest = {
   projectId: string | null
@@ -1188,6 +1254,124 @@ export type PullRequestWithTimeWritable = {
   pullRequest?: PullRequestInfoWritable
   time?: number
 }
+
+export type GetApiOpenspecBranchStateData = {
+  body?: never
+  path?: never
+  query?: {
+    projectId?: string
+    branch?: string
+  }
+  url: '/api/openspec/branch-state'
+}
+
+export type GetApiOpenspecBranchStateErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiOpenspecBranchStateError =
+  GetApiOpenspecBranchStateErrors[keyof GetApiOpenspecBranchStateErrors]
+
+export type GetApiOpenspecBranchStateResponses = {
+  /**
+   * OK
+   */
+  200: BranchStateSnapshot
+}
+
+export type GetApiOpenspecBranchStateResponse =
+  GetApiOpenspecBranchStateResponses[keyof GetApiOpenspecBranchStateResponses]
+
+export type PostApiOpenspecBranchStateData = {
+  body?: BranchStateRequest
+  path?: never
+  query?: never
+  url: '/api/openspec/branch-state'
+}
+
+export type PostApiOpenspecBranchStateErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+}
+
+export type PostApiOpenspecBranchStateError =
+  PostApiOpenspecBranchStateErrors[keyof PostApiOpenspecBranchStateErrors]
+
+export type PostApiOpenspecBranchStateResponses = {
+  /**
+   * OK
+   */
+  200: BranchStateSnapshot
+}
+
+export type PostApiOpenspecBranchStateResponse =
+  PostApiOpenspecBranchStateResponses[keyof PostApiOpenspecBranchStateResponses]
+
+export type GetApiOpenspecBranchStateResolveData = {
+  body?: never
+  path?: never
+  query?: {
+    projectId?: string
+    branch?: string
+  }
+  url: '/api/openspec/branch-state/resolve'
+}
+
+export type GetApiOpenspecBranchStateResolveErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiOpenspecBranchStateResolveError =
+  GetApiOpenspecBranchStateResolveErrors[keyof GetApiOpenspecBranchStateResolveErrors]
+
+export type GetApiOpenspecBranchStateResolveResponses = {
+  /**
+   * OK
+   */
+  200: BranchStateSnapshot
+}
+
+export type GetApiOpenspecBranchStateResolveResponse =
+  GetApiOpenspecBranchStateResolveResponses[keyof GetApiOpenspecBranchStateResolveResponses]
+
+export type PostApiOpenspecChangesLinkData = {
+  body?: LinkOrphanRequest
+  path?: never
+  query?: never
+  url: '/api/openspec/changes/link'
+}
+
+export type PostApiOpenspecChangesLinkErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiOpenspecChangesLinkError =
+  PostApiOpenspecChangesLinkErrors[keyof PostApiOpenspecChangesLinkErrors]
+
+export type PostApiOpenspecChangesLinkResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type PostApiOpenspecChangesLinkResponse =
+  PostApiOpenspecChangesLinkResponses[keyof PostApiOpenspecChangesLinkResponses]
 
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
@@ -3493,92 +3677,37 @@ export type PutApiProjectsByProjectIdSecretsByNameResponses = {
 export type PutApiProjectsByProjectIdSecretsByNameResponse =
   PutApiProjectsByProjectIdSecretsByNameResponses[keyof PutApiProjectsByProjectIdSecretsByNameResponses]
 
-export type GetApiSessionsBySessionIdCacheMessagesData = {
+export type GetApiSessionsBySessionIdEventsData = {
   body?: never
   path: {
     sessionId: string
   }
-  query?: never
-  url: '/api/sessions/{sessionId}/cache/messages'
-}
-
-export type GetApiSessionsBySessionIdCacheMessagesResponses = {
-  /**
-   * OK
-   */
-  200: Array<ClaudeMessage>
-}
-
-export type GetApiSessionsBySessionIdCacheMessagesResponse =
-  GetApiSessionsBySessionIdCacheMessagesResponses[keyof GetApiSessionsBySessionIdCacheMessagesResponses]
-
-export type GetApiSessionsBySessionIdCacheSummaryData = {
-  body?: never
-  path: {
-    sessionId: string
+  query?: {
+    since?: number
+    mode?: string
   }
-  query?: never
-  url: '/api/sessions/{sessionId}/cache/summary'
+  url: '/api/sessions/{sessionId}/events'
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryErrors = {
+export type GetApiSessionsBySessionIdEventsErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryError =
-  GetApiSessionsBySessionIdCacheSummaryErrors[keyof GetApiSessionsBySessionIdCacheSummaryErrors]
+export type GetApiSessionsBySessionIdEventsError =
+  GetApiSessionsBySessionIdEventsErrors[keyof GetApiSessionsBySessionIdEventsErrors]
 
-export type GetApiSessionsBySessionIdCacheSummaryResponses = {
+export type GetApiSessionsBySessionIdEventsResponses = {
   /**
    * OK
    */
-  200: SessionCacheSummary
+  200: Array<SessionEventEnvelope>
 }
 
-export type GetApiSessionsBySessionIdCacheSummaryResponse =
-  GetApiSessionsBySessionIdCacheSummaryResponses[keyof GetApiSessionsBySessionIdCacheSummaryResponses]
-
-export type GetApiSessionsCacheProjectByProjectIdData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/sessions/cache/project/{projectId}'
-}
-
-export type GetApiSessionsCacheProjectByProjectIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<SessionCacheSummary>
-}
-
-export type GetApiSessionsCacheProjectByProjectIdResponse =
-  GetApiSessionsCacheProjectByProjectIdResponses[keyof GetApiSessionsCacheProjectByProjectIdResponses]
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdData = {
-  body?: never
-  path: {
-    projectId: string
-    entityId: string
-  }
-  query?: never
-  url: '/api/sessions/cache/entity/{projectId}/{entityId}'
-}
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<string>
-}
-
-export type GetApiSessionsCacheEntityByProjectIdByEntityIdResponse =
-  GetApiSessionsCacheEntityByProjectIdByEntityIdResponses[keyof GetApiSessionsCacheEntityByProjectIdByEntityIdResponses]
+export type GetApiSessionsBySessionIdEventsResponse =
+  GetApiSessionsBySessionIdEventsResponses[keyof GetApiSessionsBySessionIdEventsResponses]
 
 export type GetApiSessionsData = {
   body?: never
@@ -3769,45 +3898,6 @@ export type GetApiSessionsEntityByEntityIdResumableResponses = {
 
 export type GetApiSessionsEntityByEntityIdResumableResponse =
   GetApiSessionsEntityByEntityIdResumableResponses[keyof GetApiSessionsEntityByEntityIdResumableResponses]
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdData = {
-  body?: never
-  path: {
-    projectId: string
-    entityId: string
-  }
-  query?: never
-  url: '/api/sessions/history/{projectId}/{entityId}'
-}
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<SessionCacheSummary>
-}
-
-export type GetApiSessionsHistoryByProjectIdByEntityIdResponse =
-  GetApiSessionsHistoryByProjectIdByEntityIdResponses[keyof GetApiSessionsHistoryByProjectIdByEntityIdResponses]
-
-export type GetApiSessionsByIdCachedMessagesData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: never
-  url: '/api/sessions/{id}/cached-messages'
-}
-
-export type GetApiSessionsByIdCachedMessagesResponses = {
-  /**
-   * OK
-   */
-  200: Array<ClaudeMessage>
-}
-
-export type GetApiSessionsByIdCachedMessagesResponse =
-  GetApiSessionsByIdCachedMessagesResponses[keyof GetApiSessionsByIdCachedMessagesResponses]
 
 export type PostApiSessionsByIdResumeData = {
   body?: ResumeSessionRequest

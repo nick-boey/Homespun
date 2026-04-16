@@ -25,6 +25,7 @@ import { useRunAgent } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
+import { OpenSpecTabContent } from './openspec-tab'
 import { useCreateIssuesAgentSession } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
 import { SkillPicker } from '@/features/skills'
 import { useProjectSkills } from '@/features/skills/hooks/use-project-skills'
@@ -58,7 +59,7 @@ export interface RunAgentDialogProps {
   projectId: string
   issueId?: string
   selectedIssueId?: string | null
-  defaultTab?: 'task' | 'issues'
+  defaultTab?: 'task' | 'issues' | 'openspec'
   onAgentStart?: (result: RunAgentResult) => void
   onSessionCreated?: (result: CreateIssuesAgentSessionResult) => void
   onError?: (error: Error) => void
@@ -110,6 +111,7 @@ export function RunAgentDialog({
           <TabsList variant="line">
             <TabsTrigger value="task">Task Agent</TabsTrigger>
             <TabsTrigger value="issues">Issues Agent</TabsTrigger>
+            {issueId ? <TabsTrigger value="openspec">OpenSpec</TabsTrigger> : null}
           </TabsList>
 
           <TabsContent
@@ -141,6 +143,23 @@ export function RunAgentDialog({
               onError={onError}
             />
           </TabsContent>
+
+          {issueId ? (
+            <TabsContent
+              value="openspec"
+              forceMount
+              data-testid="openspec-tab-content"
+              className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+            >
+              <OpenSpecTabContent
+                projectId={projectId}
+                issueId={issueId}
+                onAgentStart={onAgentStart}
+                onOpenChange={onOpenChange}
+                onError={onError}
+              />
+            </TabsContent>
+          ) : null}
         </Tabs>
       </DialogContent>
     </Dialog>
@@ -220,14 +239,18 @@ function TaskAgentTabContent({
     localStorage.setItem(TASK_MODE_STORAGE_KEY, selectedMode)
   }, [selectedMode])
 
-  // When the selected skill changes, sync the mode to the skill's declared mode
-  useEffect(() => {
-    if (!selectedSkillName || !skillsData?.homespun) return
+  // Sync mode to the selected skill's declared mode. Adjusted during render (vs. in an
+  // effect) to avoid cascading renders. Triggers once per selectedSkillName change — covers
+  // user-driven skill picks and the initial-mount case where selectedSkillName is restored
+  // from localStorage and skillsData loads asynchronously.
+  const [lastSyncedSkillName, setLastSyncedSkillName] = useState<string | null>(null)
+  if (selectedSkillName && selectedSkillName !== lastSyncedSkillName && skillsData?.homespun) {
+    setLastSyncedSkillName(selectedSkillName)
     const skill = skillsData.homespun.find((s) => s.name === selectedSkillName)
     if (skill?.mode) {
       setSelectedMode(skill.mode)
     }
-  }, [selectedSkillName, skillsData])
+  }
 
   const handleStart = useCallback(async () => {
     setConflictSessionId(null)

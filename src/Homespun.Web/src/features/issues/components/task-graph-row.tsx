@@ -4,12 +4,15 @@
 
 import { memo, forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
-import { IssueType, IssueStatus, ExecutionMode } from '@/api'
+import { BranchPresence, IssueType, IssueStatus, ExecutionMode } from '@/api'
+import type { IssueOpenSpecState } from '@/api/generated/types.gen'
 import {
   ISSUE_STATUS_LABELS,
   ISSUE_STATUS_COMPACT_LABELS,
   ISSUE_TYPE_LABELS,
 } from '@/lib/issue-constants'
+import { OpenSpecIndicators } from './openspec-indicators'
+import { PhaseRollupBadges } from './phase-rollup'
 import {
   TaskGraphNodeSvg,
   TaskGraphPrSvg,
@@ -67,6 +70,12 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   onExecutionModeChange?: (issueId: string, newMode: ExecutionMode) => void
   /** Called when clicking a multi-parent badge to navigate to the first instance */
   onSelectFirstInstance?: (issueId: string) => void
+  /**
+   * OpenSpec state for this issue (branch + linked-change info). When present,
+   * the row renders branch/change indicator symbols and the node shape flips
+   * to a square for issues with a linked change.
+   */
+  openSpecState?: IssueOpenSpecState | null
 }
 
 /**
@@ -92,6 +101,7 @@ export const TaskGraphIssueRow = memo(
       onStatusChange,
       onExecutionModeChange,
       onSelectFirstInstance,
+      openSpecState,
       className,
       ...props
     },
@@ -145,7 +155,11 @@ export const TaskGraphIssueRow = memo(
         {...props}
       >
         {/* SVG graph visualization */}
-        <TaskGraphNodeSvg line={line} maxLanes={maxLanes} />
+        <TaskGraphNodeSvg
+          line={line}
+          maxLanes={maxLanes}
+          squareNode={openSpecState?.branchState === BranchPresence.WITH_CHANGE}
+        />
 
         {/* Issue content */}
         <div className="flex flex-1 items-center gap-2 pr-2">
@@ -209,6 +223,17 @@ export const TaskGraphIssueRow = memo(
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* OpenSpec indicators */}
+          {openSpecState ? <OpenSpecIndicators state={openSpecState} /> : null}
+
+          {/* Phase roll-up badges for linked OpenSpec change */}
+          {openSpecState?.phases && openSpecState.phases.length > 0 ? (
+            <PhaseRollupBadges
+              changeName={openSpecState.changeName}
+              phases={openSpecState.phases}
+            />
+          ) : null}
 
           {/* Execution mode toggle */}
           <ExecutionModeToggle

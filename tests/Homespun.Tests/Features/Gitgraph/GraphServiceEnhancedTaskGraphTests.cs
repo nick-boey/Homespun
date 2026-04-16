@@ -86,6 +86,7 @@ public class GraphServiceEnhancedTaskGraphTests
             _mockWorkflowService.Object,
             _mockCacheService.Object,
             new Mock<IPRStatusResolver>().Object,
+            new Mock<Homespun.Features.OpenSpec.Services.IIssueGraphOpenSpecEnricher>().Object,
             _mockLogger.Object);
     }
 

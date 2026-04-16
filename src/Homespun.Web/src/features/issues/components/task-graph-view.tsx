@@ -52,6 +52,7 @@ import {
   TaskGraphExpandedDetails,
 } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
+import { BranchOrphanList, MainOrphanList } from './orphan-changes'
 import { ROW_HEIGHT, LANE_WIDTH, getTypeColor } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
@@ -1053,6 +1054,7 @@ export const TaskGraphView = memo(
                     onStatusChange={handleStatusChange}
                     onExecutionModeChange={handleExecutionModeChange}
                     onSelectFirstInstance={handleSelectFirstInstance}
+                    openSpecState={taskGraph?.openSpecStates?.[line.issueId] ?? null}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                     aria-rowindex={index + 1}
@@ -1072,6 +1074,21 @@ export const TaskGraphView = memo(
                     onClose={() => toggleExpanded(line.issueId)}
                   />
                 )}
+
+                {/* Branch-scoped orphan changes under the issue */}
+                {(() => {
+                  const state = taskGraph?.openSpecStates?.[line.issueId]
+                  const orphans = state?.orphans
+                  if (!orphans || orphans.length === 0) return null
+                  return (
+                    <BranchOrphanList
+                      projectId={projectId}
+                      branch={line.branchName}
+                      fleeceId={line.issueId}
+                      orphans={orphans}
+                    />
+                  )
+                })()}
 
                 {/* Insert inline editor BELOW if creating below this issue */}
                 {shouldInsertBelow && renderInlineEditor(line.lane)}
@@ -1109,6 +1126,9 @@ export const TaskGraphView = memo(
 
           return null
         })}
+
+        {/* Main-branch orphan changes section */}
+        <MainOrphanList projectId={projectId} orphans={taskGraph?.mainOrphanChanges ?? []} />
 
         {/* Search match count indicator (hidden, for accessibility) */}
         {searchQuery && (

@@ -73,6 +73,12 @@ import type {
   GetApiIssuesByIssueIdResponses,
   GetApiNotificationsData,
   GetApiNotificationsResponses,
+  GetApiOpenspecBranchStateData,
+  GetApiOpenspecBranchStateErrors,
+  GetApiOpenspecBranchStateResolveData,
+  GetApiOpenspecBranchStateResolveErrors,
+  GetApiOpenspecBranchStateResolveResponses,
+  GetApiOpenspecBranchStateResponses,
   GetApiPlansContentData,
   GetApiPlansContentErrors,
   GetApiPlansContentResponses,
@@ -215,6 +221,12 @@ import type {
   PostApiNotificationsData,
   PostApiNotificationsErrors,
   PostApiNotificationsResponses,
+  PostApiOpenspecBranchStateData,
+  PostApiOpenspecBranchStateErrors,
+  PostApiOpenspecBranchStateResponses,
+  PostApiOpenspecChangesLinkData,
+  PostApiOpenspecChangesLinkErrors,
+  PostApiOpenspecChangesLinkResponses,
   PostApiOrchestrationGenerateBranchIdData,
   PostApiOrchestrationGenerateBranchIdErrors,
   PostApiOrchestrationGenerateBranchIdResponses,
@@ -301,6 +313,62 @@ export type Options<
    * used to access values that aren't defined as part of the SDK function.
    */
   meta?: Record<string, unknown>
+}
+
+export class ChangeSnapshot {
+  public static getApiOpenspecBranchState<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiOpenspecBranchStateData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).get<
+      GetApiOpenspecBranchStateResponses,
+      GetApiOpenspecBranchStateErrors,
+      ThrowOnError
+    >({ url: '/api/openspec/branch-state', ...options })
+  }
+
+  public static postApiOpenspecBranchState<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiOpenspecBranchStateData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiOpenspecBranchStateResponses,
+      PostApiOpenspecBranchStateErrors,
+      ThrowOnError
+    >({
+      url: '/api/openspec/branch-state',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+
+  public static getApiOpenspecBranchStateResolve<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiOpenspecBranchStateResolveData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).get<
+      GetApiOpenspecBranchStateResolveResponses,
+      GetApiOpenspecBranchStateResolveErrors,
+      ThrowOnError
+    >({ url: '/api/openspec/branch-state/resolve', ...options })
+  }
+
+  public static postApiOpenspecChangesLink<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiOpenspecChangesLinkData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiOpenspecChangesLinkResponses,
+      PostApiOpenspecChangesLinkErrors,
+      ThrowOnError
+    >({
+      url: '/api/openspec/changes/link',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
 }
 
 export class ClientTelemetry {
