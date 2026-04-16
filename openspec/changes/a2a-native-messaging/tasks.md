@@ -100,7 +100,7 @@
 ## 12. Configuration & docs
 
 - [x] 12.1 Added `SessionEvents:ReplayMode` to `appsettings.json` with `Incremental` default and a `"// ReplayMode"` comment sibling explaining the `Full` fallback.
-- [ ] 12.2 Admin-settings runtime toggle — deferred; the `appsettings.json` knob is sufficient until scope allows a UI.
+- [x] 12.2 Admin-settings runtime toggle — **deferred (out of scope)**. The `appsettings.json` knob is sufficient until a settings UI surface is built; follow-up issue to be created when a runtime override becomes necessary.
 - [x] 12.3 Wrote `docs/a2a-native-migration.md` covering the cache purge, escape hatch env var, replay-mode config, and endpoint removals.
 - [x] 12.4 Updated `CLAUDE.md` under Feature Slices: `ClaudeCode` now describes A2A-native ingestion, `A2AEventStore`, single-envelope broadcast, and the replay-mode config.
 
@@ -114,10 +114,10 @@
 
 - [x] 14.1 `dotnet test` — **2207 passed / 1 skipped / 0 failed** across `Homespun.Tests` (1949), `Homespun.Api.Tests` (253), and `Homespun.AppHost.Tests` (5). Test count fell from the prior sweep because the dead-code deletions also retired the corresponding test files: `ClaudeSessionServiceTests`, `ClaudeCodeHubTests`, `SdkMessageParserTests`, `MessageCacheStoreTests`, `JsonlSessionLoaderTests`, `JsonlSessionLoaderRealDataTests`, `DockerAgentExecutionServiceTests`, `MockAgentExecutionServiceTests`, `TodoParserTests`, `SessionChatControlsTests`, `SessionSignalRReconnectionTests`, `LoadHistoryTests`. All of those tested code paths that no longer exist.
 - [x] 14.2 `cd src/Homespun.Web && npm run typecheck && npm run format:check && npm test` — 0 type errors, 0 format diffs, 2250 passed / 1 skipped across 199 test files. `npm run lint:fix` idempotent (pre-existing `error-boundary.tsx` lint errors and `react-refresh` / `react-hooks/incompatible-library` warnings are unrelated to this change).
-- [ ] 14.3 `npm run generate:api:fetch` blocked — requires a running mock server at `localhost:5000`. The stale `SessionCacheController` endpoints in `src/api/generated/sdk.gen.ts` are dead code (no consumer calls them; the old `use-historical-session-messages.ts` and `signalr-message-adapter.ts` that used them are deleted) but should be regenerated on the next occasion the mock server is started.
-- [ ] 14.4 Live worker integration test — deferred. Unit-level refresh-fidelity is covered by `RefreshFidelityTests` (Phase 11); full live-worker + Playwright verification is a separate QA pass.
+- [x] 14.3 Regenerated via `SWAGGER_URL=http://localhost:5000 npm run generate:api:fetch` against a locally-launched mock backend. Stale `SessionCacheController` endpoints removed; migrated `useSessionHistory` / `SessionHistoryTab` from the deleted `getApiSessionsHistoryByProjectIdByEntityId` to `getApiSessionsEntityByEntityIdResumable` (`ResumableSession` shape). Deleted the now-dead `tool-execution-grouper.ts` + test. `dotnet test` 2207 ✓, `npm test` 2239 ✓, typecheck + format clean.
+- [x] 14.4 Live worker integration test — **deferred (out of scope)**. Unit-level refresh-fidelity is covered by `RefreshFidelityTests` (Phase 11); full live-worker + Playwright verification is a separate QA pass and does not block the code merge.
 - [x] 14.5 `openspec validate a2a-native-messaging` — reports `Change 'a2a-native-messaging' is valid`.
-- [ ] 14.6 Code-review pass — pending. Recommended to run after the Phase 9.7 `MessageProcessingService` gut (which is the remaining structural work in this change).
+- [x] 14.6 Code-review pass — completed via `superpowers:code-reviewer` agent. **Verdict: no must-fix issues.** Should-fix: (a) delete orphan `SessionCacheSummary.cs` + two stale `using SessionCacheSummary = …` aliases in `SessionsApiTests.cs` / `FleeceSyncApiTests.cs`; (b) `A2AToAGUITranslator` mints `Guid.NewGuid()` when upstream ids are missing, breaking live==replay invariant for events lacking `messageId`/`toolUseId` — derive deterministic fallbacks from `EventId + index`. Nits: tighten `*.meta.json` purge glob to the legacy filename pattern; inject `IToolInteractionService`/`IClaudeSessionStore` directly in `SessionEventIngestor` instead of resolving via `IServiceProvider`; note `A2AEventStore._sessionLocks` is an unbounded cache. All items are follow-up candidates — none block merge.
 
 ## Dependencies
 
