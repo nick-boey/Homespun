@@ -23,7 +23,8 @@ public record AgentStartRequest(
     string? ResumeSessionId = null,
     string? IssueId = null,
     string? ProjectId = null,
-    string? ProjectName = null
+    string? ProjectName = null,
+    string? HomespunSessionId = null
 );
 
 /// <summary>

@@ -130,7 +130,8 @@ public class MessageProcessingService : IMessageProcessingService
                     SystemPrompt: session.SystemPrompt,
                     ResumeSessionId: session.ConversationId,
                     IssueId: session.EntityId,
-                    ProjectId: session.ProjectId
+                    ProjectId: session.ProjectId,
+                    HomespunSessionId: sessionId
                 );
 
                 if (!string.IsNullOrEmpty(session.EntityId) && !string.IsNullOrEmpty(session.ProjectId))

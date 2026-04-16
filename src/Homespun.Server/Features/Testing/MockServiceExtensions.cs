@@ -157,6 +157,7 @@ public static class MockServiceExtensions
             return new A2AEventStore(tempFolder.SessionsPath, logger);
         });
         services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
+        services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
         services.Configure<Homespun.Features.ClaudeCode.Settings.SessionEventsOptions>(_ => { });
 
         // Pull request workflow service (needed by GraphService)

@@ -121,6 +121,12 @@ export interface AGUISessionState {
   lastError: { message: string; code?: string } | null
   /** Collected `raw` and unknown envelopes (for diagnostics; not normally rendered). */
   unknownEvents: Array<{ seq: number; eventId: string; event: AGUIEvent }>
+  /**
+   * Composite keys (`${eventId}::${event.type}`) of envelopes already folded into state.
+   * Lets the reducer stay idempotent when the same envelope arrives twice without
+   * dropping sibling envelopes that share `eventId` but differ in `event.type`.
+   */
+  appliedEnvelopeKeys: Set<string>
 }
 
 export const initialAGUISessionState: AGUISessionState = {
@@ -134,6 +140,7 @@ export const initialAGUISessionState: AGUISessionState = {
   isRunning: false,
   lastError: null,
   unknownEvents: [],
+  appliedEnvelopeKeys: new Set<string>(),
 }
 
 // ============================================================================
@@ -153,12 +160,26 @@ export function applyEnvelope(
   state: AGUISessionState,
   envelope: SessionEventEnvelope
 ): AGUISessionState {
-  if (envelope.seq <= state.lastSeenSeq) {
+  // A parent A2A event can translate into multiple AG-UI envelopes that share the same
+  // `seq` and `eventId` (e.g. text start/content/end). Dedup by composite key so siblings
+  // still apply, while true duplicates are idempotent.
+  const key = `${envelope.eventId}::${envelope.event.type}`
+  if (state.appliedEnvelopeKeys.has(key)) {
+    return state
+  }
+  // Drift safety: strictly older seqs rewind the stream and are dropped.
+  if (envelope.seq < state.lastSeenSeq) {
     return state
   }
 
   const next = applyEvent(state, envelope.event)
-  return { ...next, lastSeenSeq: envelope.seq }
+  const appliedEnvelopeKeys = new Set(state.appliedEnvelopeKeys)
+  appliedEnvelopeKeys.add(key)
+  return {
+    ...next,
+    lastSeenSeq: Math.max(state.lastSeenSeq, envelope.seq),
+    appliedEnvelopeKeys,
+  }
 }
 
 function applyEvent(state: AGUISessionState, event: AGUIEvent): AGUISessionState {

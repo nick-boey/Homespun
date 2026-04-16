@@ -97,12 +97,16 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
   const applyOne = useCallback(
     (envelope: SessionEventEnvelope) => {
       if (!sessionId || envelope.sessionId !== sessionId) return
-      if (dedupRef.current.has(envelope.eventId)) return
+      // A single A2A event can translate to multiple AG-UI envelopes (e.g. an agent text
+      // message produces start/content/end), all sharing parent `eventId`. Key dedup on
+      // (eventId, event.type) so we drop true duplicates without dropping siblings.
+      const dedupKey = `${envelope.eventId}::${envelope.event.type}`
+      if (dedupRef.current.has(dedupKey)) return
       if (isReplayingRef.current) {
         replayBufferRef.current.push(envelope)
         return
       }
-      dedupRef.current.add(envelope.eventId)
+      dedupRef.current.add(dedupKey)
       const next = applyEnvelope(stateRef.current, envelope)
       stateRef.current = next
       setRenderState(next)
