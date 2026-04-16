@@ -67,7 +67,13 @@ public class RefreshFidelityTests
         _hub.SetupGet(h => h.Clients).Returns(hubClients.Object);
 
         _ingestor = new SessionEventIngestor(
-            _store, _translator, _hub.Object, NullLogger<SessionEventIngestor>.Instance);
+            _store, _translator, _hub.Object, NullLogger<SessionEventIngestor>.Instance,
+            new NullServiceProvider());
+    }
+
+    private sealed class NullServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
     }
 
     [TearDown]

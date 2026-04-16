@@ -47,7 +47,7 @@
 - [x] 6.3 Preserve append-before-broadcast ordering: `await store.AppendAsync(...); var agui = translate(...); await hub.ReceiveSessionEvent(...)`
 - [x] 6.4 Preserve existing lifecycle side effects (status transitions, fleece transitions, workflow callbacks, error handling) — *legacy `MessageProcessingService` still owns these; ingestor tap runs alongside until Phase 9 fully retires the SDK path*
 - [x] 6.5 Add unit tests for `SessionEventIngestor` that assert ordering via a fake store + fake hub (store must be appended before hub is called)
-- [ ] 6.6 Reduce `MessageProcessingService` to just the session lifecycle state it still needs (turn id, cancellation, send-message bookkeeping); delete the assembly code and stream-event/content-block paths *— deferred to Phase 9 (Delete dead code); the ingestor runs in parallel with the current assembly code so the live path is safe*
+- [x] 6.6 Reduced `MessageProcessingService` to lifecycle state (turn id, cancellation, send-message bookkeeping + control-plane dispatch to `question_pending`, `plan_pending`, `SdkResultMessage`). All assembly (`ProcessStreamEventAsync`, assistant-message assembly, user-message tool-result assembly, `ConvertBlockStateToContent`, `ConvertSdkContentBlock`, `ConvertSdkToolResult`, `MessageProcessingContext.Assembler`, `HasCachedCurrentMessage`, `CurrentAssistantMessage`) was deleted.
 
 ## 7. Client rewire — new hook + reducer
 
@@ -70,17 +70,17 @@
 
 ## 9. Delete dead code
 
-- [ ] 9.1 Delete `Homespun.Shared/Models/Sessions/ClaudeMessage.cs`, `ClaudeMessageContent.cs`, `ClaudeContentType` enum, `ClaudeMessageRole` enum
-- [ ] 9.2 Delete `A2AMessageParser.ConvertToSdkMessage` and all the conversion helpers (`ConvertMessage`, `ConvertSystemMessage`, `ConvertResult`, `ConvertPartsToContentBlocks`, etc.) — keep parsing of incoming A2A events only
-- [ ] 9.3 Delete `SdkMessageParser.cs` (server-side)
-- [ ] 9.4 Delete `ContentBlockAssembler`
-- [ ] 9.5 Delete `MessageCacheStore.cs` and `IMessageCacheStore.cs`
+- [x] 9.1 Deleted `ClaudeMessage.cs`, `ClaudeMessageContent.cs`, `ClaudeContentType`, `ClaudeMessageRole`. Deleted the downstream `ToolExecution`/`ToolExecutionGroup` + `TodoParser`/`ITodoParser` + `MessageDisplayItem.cs` along with them (all dependent on `ClaudeMessage*`). `ClaudeSession.Messages` collection removed. Global-using aliases cleaned up in both server + tests.
+- [x] 9.2 Stripped `A2AMessageParser.ConvertToSdkMessage` to only convert control-plane variants (Task → `SdkSystemMessage` `session_started`, StatusUpdate → `SdkQuestionPending`/`SdkPlanPending`/`SdkResultMessage`). `ConvertMessage`, `ConvertSystemMessage`, `ConvertStreamEvent`, `ConvertPartsToContentBlocks` deleted — content-bearing A2A Message events now flow only through `SessionEventIngestor` as AG-UI envelopes.
+- [x] 9.3 Deleted `SdkMessageParser.cs` + `SdkMessageConverter` + `SdkContentBlockConverter` — the SDK-JSON fallback in `DockerAgentExecutionService.ParseSseEvent` was unreachable because the worker only emits A2A events and the four legacy control event kinds.
+- [x] 9.4 Deleted the `ContentBlockAssembler` + `ContentBlockState` types (they lived at the top of `ClaudeSessionService.cs`).
+- [x] 9.5 Deleted `MessageCacheStore.cs` and `IMessageCacheStore.cs`. Replacement coverage is `A2AEventStore`; stale caches are purged at startup by `SessionCachePurgeHostedService` (9.6).
 - [x] 9.6 Deleted `SessionCacheController.cs` and its API tests in `FleeceSyncApiTests` (`/cache/messages`, `/cache/summary`, `/cache/project/{id}`, `/cache/entity/{project}/{entity}`). Replay now lives on `SessionEventsController` — see `SessionEventsApiTests` for the replacement coverage.
-- [ ] 9.7 Delete `ProcessStreamEventAsync`, `ProcessAssistantMessageAsync` (assembly parts), `ProcessUserMessageAsync` (assembly parts), `ConvertBlockStateToContent`, `ConvertSdkContentBlock`, `ConvertSdkToolResult`, `MessageProcessingContext.Assembler`, `HasCachedCurrentMessage`, `CurrentAssistantMessage` from `MessageProcessingService.cs`
-- [ ] 9.8 Delete `SdkMessages.cs` DTOs (server-side) — `SdkAssistantMessage`, `SdkUserMessage`, `SdkToolUseBlock`, `SdkToolResultBlock`, `SdkThinkingBlock`, `SdkStreamEvent`, `SdkSystemMessage`, `SdkResultMessage` — wherever server-side code owned them
+- [x] 9.7 Covered by 6.6. `MessageProcessingService` only retains `SendMessageAsync` plus control-plane dispatch (`SdkSystemMessage`/`SdkQuestionPendingMessage`/`SdkPlanPendingMessage`/`SdkResultMessage`).
+- [x] 9.8 Trimmed `SdkMessages.cs` to the minimal control-plane: `SdkMessage` (abstract), `SdkSystemMessage`, `SdkResultMessage`, `SdkQuestionPendingMessage`, `SdkPlanPendingMessage`. `SdkAssistantMessage`, `SdkUserMessage`, `SdkStreamEvent`, `SdkApiMessage`, `SdkContentBlock`, `SdkTextBlock`, `SdkThinkingBlock`, `SdkToolUseBlock`, `SdkToolResultBlock` were deleted. Tool-use side effects (`workflow_signal`, `Write`-plan capture) now run inside `SessionEventIngestor.DispatchToolUsesAsync`, which taps A2A Message events directly — no SDK intermediates.
 - [x] 9.9 Deleted every per-type `BroadcastAGUI*` method from `ClaudeCodeHubExtensions` (RunStarted/Finished/Error, TextMessage{Start,Content,End}, ToolCall{Start,Args,End,Result}, plus the `BroadcastAGUIEvent` dispatcher). `BroadcastAGUICustomEvent` retained — see note on 5.2.
-- [ ] 9.10 Remove `IMessageCacheStore` registration from DI in `Program.cs`; add `IA2AEventStore`, `IA2AToAGUITranslator`, `SessionEventIngestor`
-- [ ] 9.11 Grep-sweep `using` statements that became unused
+- [x] 9.10 `IMessageCacheStore` registration removed from `Program.cs` and `MockServiceExtensions.cs`. `IA2AEventStore` + `IA2AToAGUITranslator` + `ISessionEventIngestor` were already registered; `SessionEventIngestor` now also resolves `IToolInteractionService` + `IClaudeSessionStore` lazily through `IServiceProvider` to dispatch tool-use side effects.
+- [x] 9.11 Sweep complete. `SdkMessageParser.CreateJsonOptions`-shaped JsonSerializerOptions + `SdkJsonOptions` field removed from `DockerAgentExecutionService`. `Homespun.Shared.Models.Sessions` still imported where control-plane types are referenced; a few vestigial imports remain in files that gained their types via global usings but are harmless and left to avoid churn.
 
 ## 10. Cache purge on startup
 
@@ -112,7 +112,7 @@
 
 ## 14. Verification
 
-- [x] 14.1 `dotnet test` — 2581 passed / 7 skipped across `Homespun.Tests` (2325) + `Homespun.Api.Tests` (256) after the Phase 9.6 (`SessionCacheController`), Phase 10 (purge service), and Phase 11 (refresh-fidelity) changes. The 7 skipped are existing `RealData` JSONL fixture tests that only run under explicit opt-in.
+- [x] 14.1 `dotnet test` — **2207 passed / 1 skipped / 0 failed** across `Homespun.Tests` (1949), `Homespun.Api.Tests` (253), and `Homespun.AppHost.Tests` (5). Test count fell from the prior sweep because the dead-code deletions also retired the corresponding test files: `ClaudeSessionServiceTests`, `ClaudeCodeHubTests`, `SdkMessageParserTests`, `MessageCacheStoreTests`, `JsonlSessionLoaderTests`, `JsonlSessionLoaderRealDataTests`, `DockerAgentExecutionServiceTests`, `MockAgentExecutionServiceTests`, `TodoParserTests`, `SessionChatControlsTests`, `SessionSignalRReconnectionTests`, `LoadHistoryTests`. All of those tested code paths that no longer exist.
 - [x] 14.2 `cd src/Homespun.Web && npm run typecheck && npm run format:check && npm test` — 0 type errors, 0 format diffs, 2250 passed / 1 skipped across 199 test files. `npm run lint:fix` idempotent (pre-existing `error-boundary.tsx` lint errors and `react-refresh` / `react-hooks/incompatible-library` warnings are unrelated to this change).
 - [ ] 14.3 `npm run generate:api:fetch` blocked — requires a running mock server at `localhost:5000`. The stale `SessionCacheController` endpoints in `src/api/generated/sdk.gen.ts` are dead code (no consumer calls them; the old `use-historical-session-messages.ts` and `signalr-message-adapter.ts` that used them are deleted) but should be regenerated on the next occasion the mock server is started.
 - [ ] 14.4 Live worker integration test — deferred. Unit-level refresh-fidelity is covered by `RefreshFidelityTests` (Phase 11); full live-worker + Playwright verification is a separate QA pass.

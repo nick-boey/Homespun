@@ -90,8 +90,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     // Session-to-issue mapping for routing
     private readonly ConcurrentDictionary<string, string> _sessionToIssue = new();
 
-    private static readonly JsonSerializerOptions SdkJsonOptions = SdkMessageParser.CreateJsonOptions();
-
     private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -2290,8 +2288,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 return null;
             }
 
-            // All other events are raw SDK messages — deserialize using SdkMessage converters
-            return JsonSerializer.Deserialize<SdkMessage>(data, SdkJsonOptions);
+            // Unknown event type. A2A-native workers only emit A2A events plus the four
+            // legacy control events handled above; anything else is dropped.
+            _logger.LogDebug("Dropping unknown SSE event type: {EventType}", eventType);
+            return null;
         }
         catch (JsonException ex)
         {
@@ -2307,11 +2307,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     {
         return msg switch
         {
-            SdkAssistantMessage m => m with { SessionId = sessionId },
-            SdkUserMessage m => m with { SessionId = sessionId },
             SdkResultMessage m => m with { SessionId = sessionId },
             SdkSystemMessage m => m with { SessionId = sessionId },
-            SdkStreamEvent m => m with { SessionId = sessionId },
             SdkQuestionPendingMessage m => m with { SessionId = sessionId },
             SdkPlanPendingMessage m => m with { SessionId = sessionId },
             _ => msg

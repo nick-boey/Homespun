@@ -149,14 +149,6 @@ public static class MockServiceExtensions
         services.AddSingleton<IAgentStartBackgroundService, MockAgentStartBackgroundService>();
         services.AddSingleton<IQueueCoordinator, QueueCoordinator>();
 
-        // Message cache store - use temp folder's sessions directory
-        services.AddSingleton<IMessageCacheStore>(sp =>
-        {
-            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
-            var logger = sp.GetRequiredService<ILogger<MessageCacheStore>>();
-            return new MessageCacheStore(tempFolder.SessionsPath, logger);
-        });
-
         // A2A event store + translator — shared between mock and production modes.
         services.AddSingleton<IA2AEventStore>(sp =>
         {
@@ -194,7 +186,6 @@ public static class MockServiceExtensions
             new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 
         // JSONL session loader for loading real session data
-        services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();
 
         // Seed data service (if enabled)
         if (options.SeedData)

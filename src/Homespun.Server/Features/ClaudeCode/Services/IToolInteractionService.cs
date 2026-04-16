@@ -1,3 +1,4 @@
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -15,17 +16,34 @@ public interface IToolInteractionService
     Task ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
         CancellationToken cancellationToken = default);
 
-    Task HandleWorkflowSignalToolAsync(string sessionId, ClaudeMessageContent toolUseContent, CancellationToken cancellationToken);
+    /// <summary>
+    /// Handles a <c>workflow_signal</c> tool call emitted by the agent. <paramref name="toolInputJson"/>
+    /// is the raw JSON the agent passed to the tool (contains <c>status</c>, optional <c>message</c>,
+    /// optional <c>data</c>).
+    /// </summary>
+    Task HandleWorkflowSignalToolAsync(string sessionId, string? toolInputJson, CancellationToken cancellationToken);
 
-    Task HandleAskUserQuestionTool(string sessionId, ClaudeSession session, ClaudeMessageContent toolUseContent, CancellationToken cancellationToken);
+    /// <summary>
+    /// Fallback handler for <c>AskUserQuestion</c> tool calls that reach the server without
+    /// being intercepted by the worker's <c>canUseTool</c>. The worker's interception path is
+    /// the default; this handler exists for older workers or degraded modes.
+    /// </summary>
+    Task HandleAskUserQuestionTool(string sessionId, ClaudeSession session, string toolUseId, string? toolInputJson, CancellationToken cancellationToken);
 
     Task HandleQuestionPendingFromWorkerAsync(string sessionId, ClaudeSession session, SdkQuestionPendingMessage questionMsg, Guid turnId, CancellationToken cancellationToken);
 
     Task HandlePlanPendingFromWorkerAsync(string sessionId, ClaudeSession session, SdkPlanPendingMessage planMsg, Guid turnId, CancellationToken cancellationToken);
 
-    Task HandleExitPlanModeCompletedAsync(string sessionId, ClaudeSession session, ClaudeMessageContent toolUseBlock, CancellationToken cancellationToken);
+    /// <summary>
+    /// Fallback handler for <c>ExitPlanMode</c> tool calls that reach the server without
+    /// being intercepted by the worker's <c>canUseTool</c>.
+    /// </summary>
+    Task HandleExitPlanModeCompletedAsync(string sessionId, ClaudeSession session, string? toolInputJson, CancellationToken cancellationToken);
 
-    void TryCaptureWrittenPlanContent(ClaudeSession session, ClaudeMessageContent toolUseBlock);
-
-    void TryCaptureWrittenPlanContentFromResult(ClaudeSession session, ClaudeMessageContent toolResultBlock);
+    /// <summary>
+    /// Inspects a <c>Write</c> tool call's input and, if it looks like a plan file being
+    /// written (path under <c>/plans/</c> or <c>/.claude/</c> with a <c>plan.md</c>-ish name),
+    /// captures the plan content on the session so a later <c>plan_pending</c> event can use it.
+    /// </summary>
+    void TryCaptureWrittenPlanContent(ClaudeSession session, string? toolInputJson);
 }

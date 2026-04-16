@@ -95,15 +95,17 @@ public static class A2AMessageParser
     }
 
     /// <summary>
-    /// Converts an A2A event to the legacy SdkMessage format for backward compatibility.
-    /// This allows the existing ClaudeSessionService processing pipeline to work unchanged.
+    /// Converts an A2A event to a minimal control-plane <see cref="SdkMessage"/> for the
+    /// server-side lifecycle loop in <c>MessageProcessingService</c>. Content-bearing A2A
+    /// Message events are NOT converted here — they flow through
+    /// <c>SessionEventIngestor</c> as AG-UI envelopes and (for tool-use side effects)
+    /// its tool-use dispatch tap.
     /// </summary>
     public static SdkMessage? ConvertToSdkMessage(ParsedA2AEvent a2aEvent, string sessionId)
     {
         return a2aEvent switch
         {
             ParsedAgentTask parsed => ConvertTask(parsed.Task, sessionId),
-            ParsedAgentMessage parsed => ConvertMessage(parsed.Message, sessionId),
             ParsedTaskStatusUpdateEvent parsed => ConvertStatusUpdate(parsed.StatusUpdate, sessionId),
             _ => null
         };
@@ -118,113 +120,6 @@ public static class A2AMessageParser
             Subtype: "session_started",
             Model: null,
             Tools: null
-        );
-    }
-
-    private static SdkMessage? ConvertMessage(AgentMessage message, string sessionId)
-    {
-        // Extract SDK message type from metadata
-        var sdkMessageType = message.Metadata.GetMetadataString("sdkMessageType");
-
-        // Build content blocks from parts
-        var contentBlocks = ConvertPartsToContentBlocks(message.Parts);
-
-        // Get the role as a string for SdkApiMessage
-        var roleString = message.Role.ToSdkRole();
-
-        return sdkMessageType switch
-        {
-            "assistant" => new SdkAssistantMessage(
-                SessionId: sessionId,
-                Uuid: message.MessageId,
-                Message: new SdkApiMessage(roleString, contentBlocks),
-                ParentToolUseId: message.Metadata.GetMetadataString("parentToolUseId")
-            ),
-            "user" => new SdkUserMessage(
-                SessionId: sessionId,
-                Uuid: message.MessageId,
-                Message: new SdkApiMessage(roleString, contentBlocks),
-                ParentToolUseId: message.Metadata.GetMetadataString("parentToolUseId")
-            ),
-            "system" => ConvertSystemMessage(message, sessionId),
-            "stream_event" => ConvertStreamEvent(message, sessionId),
-            _ => message.Role switch
-            {
-                // Fall back to role-based mapping
-                MessageRole.Agent => new SdkAssistantMessage(
-                    SessionId: sessionId,
-                    Uuid: message.MessageId,
-                    Message: new SdkApiMessage("assistant", contentBlocks),
-                    ParentToolUseId: null
-                ),
-                MessageRole.User => new SdkUserMessage(
-                    SessionId: sessionId,
-                    Uuid: message.MessageId,
-                    Message: new SdkApiMessage("user", contentBlocks),
-                    ParentToolUseId: null
-                ),
-                _ => null
-            }
-        };
-    }
-
-    private static SdkSystemMessage ConvertSystemMessage(AgentMessage message, string sessionId)
-    {
-        // Extract system message data from data part
-        string? subtype = null;
-        string? model = null;
-        List<string>? tools = null;
-
-        foreach (var part in message.Parts ?? [])
-        {
-            if (part is DataPart dataPart)
-            {
-                subtype = dataPart.GetDataString("subtype");
-                model = dataPart.GetDataString("model");
-
-                if (dataPart.HasDataProperty("tools"))
-                {
-                    var toolsElement = dataPart.GetDataElement("tools");
-                    if (toolsElement?.ValueKind == JsonValueKind.Array)
-                    {
-                        tools = new List<string>();
-                        foreach (var tool in toolsElement.Value.EnumerateArray())
-                        {
-                            var toolName = tool.GetString();
-                            if (toolName != null) tools.Add(toolName);
-                        }
-                    }
-                }
-            }
-        }
-
-        return new SdkSystemMessage(
-            SessionId: sessionId,
-            Uuid: message.MessageId,
-            Subtype: subtype,
-            Model: model,
-            Tools: tools
-        );
-    }
-
-    private static SdkStreamEvent ConvertStreamEvent(AgentMessage message, string sessionId)
-    {
-        // Extract stream event data
-        JsonElement? eventElement = null;
-        foreach (var part in message.Parts ?? [])
-        {
-            if (part is DataPart dataPart)
-            {
-                eventElement = dataPart.ToJsonElement();
-                break;
-            }
-        }
-
-        return new SdkStreamEvent(
-            SessionId: sessionId,
-            Uuid: message.MessageId,
-            Event: eventElement,
-            ParentToolUseId: message.Metadata.GetMetadataString("parentToolUseId")
         );
     }
 
@@ -325,48 +220,6 @@ public static class A2AMessageParser
             Result: result,
             Errors: errors
         );
-    }
-
-    private static List<SdkContentBlock> ConvertPartsToContentBlocks(IReadOnlyList<Part>? parts)
-    {
-        var blocks = new List<SdkContentBlock>();
-
-        foreach (var part in parts ?? [])
-        {
-            switch (part)
-            {
-                case TextPart textPart:
-                    blocks.Add(new SdkTextBlock(textPart.Text ?? ""));
-                    break;
-
-                case DataPart dataPart:
-                    var kind = dataPart.Metadata.GetMetadataString("kind");
-                    switch (kind)
-                    {
-                        case "thinking":
-                            var thinking = dataPart.GetDataString("thinking");
-                            blocks.Add(new SdkThinkingBlock(thinking));
-                            break;
-
-                        case "tool_use":
-                            var toolName = dataPart.GetDataString("toolName");
-                            var toolUseId = dataPart.GetDataString("toolUseId");
-                            var input = dataPart.GetDataElement("input") ?? default;
-                            blocks.Add(new SdkToolUseBlock(toolUseId ?? "", toolName ?? "", input));
-                            break;
-
-                        case "tool_result":
-                            var resultToolUseId = dataPart.GetDataString("toolUseId");
-                            var content = dataPart.GetDataElement("content") ?? default;
-                            var isErr = dataPart.GetDataBool("isError");
-                            blocks.Add(new SdkToolResultBlock(resultToolUseId ?? "", content, isErr));
-                            break;
-                    }
-                    break;
-            }
-        }
-
-        return blocks;
     }
 
     private static string ExtractQuestionsJson(TaskStatusUpdateEvent statusUpdate)

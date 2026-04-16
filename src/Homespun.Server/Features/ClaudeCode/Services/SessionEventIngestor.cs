@@ -1,4 +1,6 @@
 using System.Text.Json;
+using A2A;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
@@ -36,17 +38,20 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
     private readonly IA2AToAGUITranslator _translator;
     private readonly IHubContext<ClaudeCodeHub> _hub;
     private readonly ILogger<SessionEventIngestor> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     public SessionEventIngestor(
         IA2AEventStore store,
         IA2AToAGUITranslator translator,
         IHubContext<ClaudeCodeHub> hub,
-        ILogger<SessionEventIngestor> logger)
+        ILogger<SessionEventIngestor> logger,
+        IServiceProvider serviceProvider)
     {
         _store = store;
         _translator = translator;
         _hub = hub;
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     /// <inheritdoc />
@@ -78,6 +83,16 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         else
         {
             aguiEvents = _translator.Translate(parsed, ctx);
+
+            // Tool-use dispatch: for A2A Message events carrying tool_use blocks,
+            // route workflow_signal and Write (plan-capture) side effects through
+            // ToolInteractionService. AskUserQuestion/ExitPlanMode are intercepted by
+            // the worker's canUseTool and surface as input-required status-updates, so
+            // they fall outside this tap.
+            if (parsed is ParsedAgentMessage agentMsg)
+            {
+                await DispatchToolUsesAsync(sessionId, agentMsg, cancellationToken);
+            }
         }
 
         // Step 3: broadcast. One envelope per translated AG-UI event, all sharing the parent
@@ -102,6 +117,72 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
             _logger.LogWarning(ex,
                 "Failed to broadcast SessionEventEnvelope seq={Seq} eventId={EventId} for session {SessionId}",
                 record.Seq, record.EventId, sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Walks an agent message's tool_use data parts and dispatches side-effect handlers
+    /// (<c>workflow_signal</c> → <see cref="IToolInteractionService.HandleWorkflowSignalToolAsync"/>,
+    /// <c>Write</c> → <see cref="IToolInteractionService.TryCaptureWrittenPlanContent"/>).
+    /// Dependencies are resolved lazily per-call to keep the ingestor's constructor thin
+    /// and side-step any circularity between ingestor and tool-interaction graph.
+    /// </summary>
+    private async Task DispatchToolUsesAsync(
+        string sessionId,
+        ParsedAgentMessage agentMsg,
+        CancellationToken cancellationToken)
+    {
+        var parts = agentMsg.Message.Parts;
+        if (parts is null || parts.Count == 0) return;
+
+        IToolInteractionService? toolInteraction = null;
+        IClaudeSessionStore? sessionStore = null;
+        ClaudeSession? session = null;
+
+        foreach (var part in parts)
+        {
+            if (part is not DataPart dataPart) continue;
+            if (dataPart.Metadata.GetMetadataString("kind") != "tool_use") continue;
+
+            var toolName = dataPart.GetDataString("toolName");
+            if (string.IsNullOrEmpty(toolName)) continue;
+
+            var inputElement = dataPart.GetDataElement("input");
+            var inputJson = inputElement.HasValue ? inputElement.Value.GetRawText() : null;
+
+            toolInteraction ??= _serviceProvider.GetService(typeof(IToolInteractionService)) as IToolInteractionService;
+            if (toolInteraction is null)
+            {
+                _logger.LogDebug("No IToolInteractionService registered; skipping tool-use dispatch for session {SessionId}", sessionId);
+                return;
+            }
+
+            if (session is null)
+            {
+                sessionStore ??= _serviceProvider.GetService(typeof(IClaudeSessionStore)) as IClaudeSessionStore;
+                session = sessionStore?.GetById(sessionId);
+                if (session is null)
+                {
+                    _logger.LogDebug("Session {SessionId} not found in store; tool-use dispatch skipped", sessionId);
+                    return;
+                }
+            }
+
+            try
+            {
+                if (toolName == "workflow_signal")
+                {
+                    await toolInteraction.HandleWorkflowSignalToolAsync(sessionId, inputJson, cancellationToken);
+                }
+                else if (toolName.Equals("Write", StringComparison.OrdinalIgnoreCase))
+                {
+                    toolInteraction.TryCaptureWrittenPlanContent(session, inputJson);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Tool-use dispatch failed for {ToolName} in session {SessionId}", toolName, sessionId);
+            }
         }
     }
 }

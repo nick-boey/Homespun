@@ -65,13 +65,4 @@ public interface ISessionLifecycleService : IAsyncDisposable
     Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default);
 
     Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
-        string projectId,
-        string entityId,
-        CancellationToken cancellationToken = default);
 }

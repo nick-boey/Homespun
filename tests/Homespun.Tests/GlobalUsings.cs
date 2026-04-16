@@ -3,10 +3,6 @@
 
 // Sessions
 global using ClaudeSession = Homespun.Shared.Models.Sessions.ClaudeSession;
-global using ClaudeMessage = Homespun.Shared.Models.Sessions.ClaudeMessage;
-global using ClaudeMessageRole = Homespun.Shared.Models.Sessions.ClaudeMessageRole;
-global using ClaudeMessageContent = Homespun.Shared.Models.Sessions.ClaudeMessageContent;
-global using ClaudeContentType = Homespun.Shared.Models.Sessions.ClaudeContentType;
 global using ClaudeSessionStatus = Homespun.Shared.Models.Sessions.ClaudeSessionStatus;
 global using SessionMode = Homespun.Shared.Models.Sessions.SessionMode;
 global using FileChangeInfo = Homespun.Shared.Models.Sessions.FileChangeInfo;
@@ -33,11 +29,7 @@ global using AgentPrompt = Homespun.Shared.Models.Sessions.AgentPrompt;
 global using SessionSummary = Homespun.Shared.Models.Sessions.SessionSummary;
 global using SessionTodoItem = Homespun.Shared.Models.Sessions.SessionTodoItem;
 global using TodoStatus = Homespun.Shared.Models.Sessions.TodoStatus;
-global using ITodoParser = Homespun.Shared.Models.Sessions.ITodoParser;
-global using TodoParser = Homespun.Shared.Models.Sessions.TodoParser;
 global using ResumableSession = Homespun.Shared.Models.Sessions.ResumableSession;
-global using ToolExecution = Homespun.Shared.Models.Sessions.ToolExecution;
-global using ToolExecutionGroup = Homespun.Shared.Models.Sessions.ToolExecutionGroup;
 global using AgentStartupState = Homespun.Shared.Models.Sessions.AgentStartupState;
 global using AgentStartupStatus = Homespun.Shared.Models.Sessions.AgentStartupStatus;
 global using PromptContext = Homespun.Shared.Models.Sessions.PromptContext;

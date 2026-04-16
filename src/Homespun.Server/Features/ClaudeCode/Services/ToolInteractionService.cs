@@ -46,19 +46,19 @@ public class ToolInteractionService : IToolInteractionService
 
     public async Task HandleWorkflowSignalToolAsync(
         string sessionId,
-        ClaudeMessageContent toolUseContent,
+        string? toolInputJson,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("workflow_signal tool detected in session {SessionId}", sessionId);
 
         try
         {
-            if (string.IsNullOrEmpty(toolUseContent.ToolInput))
+            if (string.IsNullOrEmpty(toolInputJson))
             {
                 return;
             }
 
-            var input = JsonSerializer.Deserialize<JsonElement>(toolUseContent.ToolInput);
+            var input = JsonSerializer.Deserialize<JsonElement>(toolInputJson);
 
             var status = input.TryGetProperty("status", out var statusProp)
                 ? statusProp.GetString() ?? "success"
@@ -92,14 +92,21 @@ public class ToolInteractionService : IToolInteractionService
     public async Task HandleAskUserQuestionTool(
         string sessionId,
         ClaudeSession session,
-        ClaudeMessageContent toolUseContent,
+        string toolUseId,
+        string? toolInputJson,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("AskUserQuestion tool detected in session {SessionId}, parsing questions", sessionId);
 
+        if (string.IsNullOrEmpty(toolInputJson))
+        {
+            _logger.LogWarning("AskUserQuestion tool had empty input for session {SessionId}", sessionId);
+            return;
+        }
+
         try
         {
-            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseContent.ToolInput!);
+            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolInputJson);
             if (toolInput == null || !toolInput.TryGetValue("questions", out var questionsElement))
             {
                 _logger.LogWarning("AskUserQuestion tool input missing 'questions' array");
@@ -116,7 +123,7 @@ public class ToolInteractionService : IToolInteractionService
             var pendingQuestion = new PendingQuestion
             {
                 Id = Guid.NewGuid().ToString(),
-                ToolUseId = toolUseContent.ToolUseId ?? "",
+                ToolUseId = toolUseId ?? "",
                 Questions = questions
             };
 
@@ -250,22 +257,6 @@ public class ToolInteractionService : IToolInteractionService
             {
                 session.PlanContent = planContent;
 
-                var planMessage = new ClaudeMessage
-                {
-                    SessionId = sessionId,
-                    Role = ClaudeMessageRole.Assistant,
-                    Content =
-                    [
-                        new ClaudeMessageContent
-                        {
-                            Type = ClaudeContentType.Text,
-                            Text = $"## 📋 Implementation Plan\n\n{planContent}"
-                        }
-                    ]
-                };
-
-                session.Messages.Add(planMessage);
-
                 var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, session.PlanFilePath);
                 await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
             }
@@ -290,17 +281,17 @@ public class ToolInteractionService : IToolInteractionService
     public async Task HandleExitPlanModeCompletedAsync(
         string sessionId,
         ClaudeSession session,
-        ClaudeMessageContent toolUseBlock,
+        string? toolInputJson,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("ExitPlanMode detected for session {SessionId}", sessionId);
 
         string? planFilePath = null;
-        if (!string.IsNullOrEmpty(toolUseBlock.ToolInput))
+        if (!string.IsNullOrEmpty(toolInputJson))
         {
             try
             {
-                var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseBlock.ToolInput);
+                var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolInputJson);
                 planFilePath = TryGetPlanFilePath(inputParams, session.WorkingDirectory);
             }
             catch (JsonException ex)
@@ -352,22 +343,6 @@ public class ToolInteractionService : IToolInteractionService
         {
             session.PlanFilePath = foundPath;
             session.PlanContent = planContent;
-
-            var planMessage = new ClaudeMessage
-            {
-                SessionId = sessionId,
-                Role = ClaudeMessageRole.Assistant,
-                Content =
-                [
-                    new ClaudeMessageContent
-                    {
-                        Type = ClaudeContentType.Text,
-                        Text = $"## 📋 Implementation Plan\n\n{planContent}"
-                    }
-                ]
-            };
-
-            session.Messages.Add(planMessage);
 
             var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, foundPath);
             await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
@@ -581,14 +556,14 @@ public class ToolInteractionService : IToolInteractionService
         }
     }
 
-    public void TryCaptureWrittenPlanContent(ClaudeSession session, ClaudeMessageContent toolUseBlock)
+    public void TryCaptureWrittenPlanContent(ClaudeSession session, string? toolInputJson)
     {
-        if (string.IsNullOrEmpty(toolUseBlock.ToolInput))
+        if (string.IsNullOrEmpty(toolInputJson))
             return;
 
         try
         {
-            var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseBlock.ToolInput);
+            var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolInputJson);
             if (inputParams == null)
                 return;
 
@@ -623,39 +598,6 @@ public class ToolInteractionService : IToolInteractionService
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to parse Write tool input for plan content capture");
-        }
-    }
-
-    public void TryCaptureWrittenPlanContentFromResult(ClaudeSession session, ClaudeMessageContent toolResultBlock)
-    {
-        if (toolResultBlock.ParsedToolResult?.TypedData is not WriteToolData writeData)
-            return;
-
-        var filePath = writeData.FilePath;
-        if (string.IsNullOrEmpty(filePath))
-            return;
-
-        var normalizedPath = filePath.Replace('\\', '/').ToLowerInvariant();
-        var isPlanFile = normalizedPath.Contains("/plans/") ||
-                         (normalizedPath.Contains("/.claude/") && normalizedPath.EndsWith("plan.md"));
-
-        if (!isPlanFile)
-            return;
-
-        session.PlanFilePath = filePath;
-        _logger.LogInformation("Captured plan file path from Write tool result: {FilePath}", filePath);
-
-        try
-        {
-            if (File.Exists(filePath))
-            {
-                session.PlanContent = File.ReadAllText(filePath);
-                _logger.LogInformation("Read plan content from local disk ({Length} chars)", session.PlanContent.Length);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Could not read plan file from local disk at {FilePath}", filePath);
         }
     }
 

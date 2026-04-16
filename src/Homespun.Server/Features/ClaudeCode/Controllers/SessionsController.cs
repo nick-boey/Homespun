@@ -104,30 +104,6 @@ public class SessionsController(
     }
 
     /// <summary>
-    /// Get session history for an entity.
-    /// </summary>
-    [HttpGet("history/{projectId}/{entityId}")]
-    [ProducesResponseType<IReadOnlyList<SessionCacheSummary>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<SessionCacheSummary>>> GetSessionHistory(
-        string projectId,
-        string entityId)
-    {
-        var history = await sessionService.GetSessionHistoryAsync(projectId, entityId);
-        return Ok(history);
-    }
-
-    /// <summary>
-    /// Get cached messages for a session.
-    /// </summary>
-    [HttpGet("{id}/cached-messages")]
-    [ProducesResponseType<IReadOnlyList<ClaudeMessage>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<ClaudeMessage>>> GetCachedMessages(string id)
-    {
-        var messages = await sessionService.GetCachedMessagesAsync(id);
-        return Ok(messages);
-    }
-
-    /// <summary>
     /// Start a new Claude Code session.
     /// </summary>
     [HttpPost]
@@ -388,7 +364,7 @@ public class SessionsController(
             Status = status,
             CreatedAt = session.CreatedAt,
             LastActivityAt = container?.LastActivityAt ?? session.LastActivityAt,
-            MessageCount = session.Messages.Count,
+            MessageCount = 0,
             TotalCostUsd = session.TotalCostUsd,
             ContainerId = container?.ContainerId,
             ContainerName = container?.ContainerName,

@@ -48,7 +48,13 @@ public class SessionEventIngestorTests
             _storeMock.Object,
             _translatorMock.Object,
             _hubMock.Object,
-            _loggerMock.Object);
+            _loggerMock.Object,
+            new NullServiceProvider());
+    }
+
+    private sealed class NullServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
     }
 
     private static JsonElement Payload(string kind) =>

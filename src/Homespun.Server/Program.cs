@@ -97,7 +97,6 @@ if (mockModeOptions.Enabled)
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddScoped<PullRequestWorkflowService>();
-    builder.Services.AddSingleton<ITodoParser, TodoParser>();
 }
 else
 {
@@ -206,13 +205,11 @@ else
     builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
-    // Message cache store - persists session messages to JSONL files
-    var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
-    builder.Services.AddSingleton<IMessageCacheStore>(sp =>
-        new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
-
     // A2A event store — append-only JSONL of raw A2A events per session,
     // the source of truth for both live broadcast and replay.
+    // Legacy MessageCacheStore (ClaudeMessage JSONL) has been retired;
+    // SessionCachePurgeHostedService below wipes its residue on startup.
+    var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
     builder.Services.AddSingleton<IA2AEventStore>(sp =>
         new A2AEventStore(messageCacheDir, sp.GetRequiredService<ILogger<A2AEventStore>>()));
 
@@ -264,7 +261,6 @@ else
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
-    builder.Services.AddSingleton<ITodoParser, TodoParser>();
 
     // Agent Orchestration services (mini-prompts, branch ID generation, agent startup)
     builder.Services.Configure<MiniPromptOptions>(

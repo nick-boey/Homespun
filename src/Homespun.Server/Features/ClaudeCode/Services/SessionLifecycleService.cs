@@ -17,7 +17,6 @@ public class SessionLifecycleService : ISessionLifecycleService
     private readonly IClaudeSessionDiscovery _sessionDiscovery;
     private readonly ISessionMetadataStore _metadataStore;
     private readonly IHooksService _hooksService;
-    private readonly IMessageCacheStore _messageCache;
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IAGUIEventService _agUIEventService;
     private readonly ISessionStateManager _stateManager;
@@ -30,7 +29,6 @@ public class SessionLifecycleService : ISessionLifecycleService
         IClaudeSessionDiscovery sessionDiscovery,
         ISessionMetadataStore metadataStore,
         IHooksService hooksService,
-        IMessageCacheStore messageCache,
         IAgentExecutionService agentExecutionService,
         IAGUIEventService agUIEventService,
         ISessionStateManager stateManager,
@@ -42,7 +40,6 @@ public class SessionLifecycleService : ISessionLifecycleService
         _sessionDiscovery = sessionDiscovery;
         _metadataStore = metadataStore;
         _hooksService = hooksService;
-        _messageCache = messageCache;
         _agentExecutionService = agentExecutionService;
         _agUIEventService = agUIEventService;
         _stateManager = stateManager;
@@ -133,10 +130,6 @@ public class SessionLifecycleService : ISessionLifecycleService
         );
         await _metadataStore.SaveAsync(metadata, cancellationToken);
 
-        // Initialize message cache for this session
-        await _messageCache.InitializeSessionAsync(
-            sessionId, entityId, projectId, mode, model, cancellationToken);
-
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
 
@@ -172,8 +165,7 @@ public class SessionLifecycleService : ISessionLifecycleService
             SystemPrompt = metadata?.SystemPrompt,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow,
-            LastActivityAt = DateTime.UtcNow,
-            Messages = []
+            LastActivityAt = DateTime.UtcNow
         };
 
         _stateManager.GetOrCreateCts(newSessionId);
@@ -616,33 +608,6 @@ public class SessionLifecycleService : ISessionLifecycleService
             _logger.LogError(ex, "Error canceling issue changes for session {SessionId}", sessionId);
             throw;
         }
-    }
-
-    public async Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default)
-    {
-        return await _messageCache.GetMessagesAsync(sessionId, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
-        string projectId,
-        string entityId,
-        CancellationToken cancellationToken = default)
-    {
-        var sessionIds = await _messageCache.GetSessionIdsForEntityAsync(projectId, entityId, cancellationToken);
-        var summaries = new List<SessionCacheSummary>();
-
-        foreach (var sessionId in sessionIds)
-        {
-            var summary = await _messageCache.GetSessionSummaryAsync(sessionId, cancellationToken);
-            if (summary != null)
-            {
-                summaries.Add(summary);
-            }
-        }
-
-        return summaries.OrderByDescending(s => s.LastMessageAt).ToList();
     }
 
     public async ValueTask DisposeAsync()
