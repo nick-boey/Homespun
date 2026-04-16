@@ -12,7 +12,7 @@ export { SessionInfoPanel } from './components/session-info-panel'
 
 // Hooks
 export { useSession } from './hooks/use-session'
-export { useSessionMessages } from './hooks/use-session-messages'
+export { useSessionEvents } from './hooks/use-session-events'
 export {
   useSessions,
   useStopSession,

@@ -1,4 +1,4 @@
-import type { ClaudeMessage } from '@/types/signalr'
+import type { AGUIMessage } from './agui-reducer'
 
 export interface SessionTodoItem {
   content: string
@@ -18,24 +18,21 @@ interface TodoWriteWrapper {
  * Extracts the current todo list from session messages by parsing TodoWrite tool calls.
  * Returns the most recent state of todos (from the last TodoWrite call).
  */
-export function parseTodosFromMessages(messages: ClaudeMessage[]): SessionTodoItem[] {
-  // Find all TodoWrite tool use blocks across all messages
+export function parseTodosFromMessages(messages: AGUIMessage[]): SessionTodoItem[] {
   const allTodoWrites = messages
-    .flatMap((msg) => msg.content || [])
-    .filter((content) => content.type === 'toolUse' && content.toolName === 'TodoWrite')
+    .flatMap((msg) => msg.content)
+    .filter((block) => block.kind === 'toolUse' && block.toolName === 'TodoWrite')
 
   if (allTodoWrites.length === 0) {
     return []
   }
 
-  // Get the last TodoWrite to get the most recent todo state
   const lastTodoWrite = allTodoWrites[allTodoWrites.length - 1]
-
-  if (!lastTodoWrite.toolInput) {
+  if (lastTodoWrite.kind !== 'toolUse' || !lastTodoWrite.input) {
     return []
   }
 
-  return parseTodoJson(lastTodoWrite.toolInput)
+  return parseTodoJson(lastTodoWrite.input)
 }
 
 function parseTodoJson(json: string): SessionTodoItem[] {
@@ -52,7 +49,6 @@ function parseTodoJson(json: string): SessionTodoItem[] {
       status: parseStatus(todo.status),
     }))
   } catch {
-    // Return empty array on JSON parse error
     return []
   }
 }

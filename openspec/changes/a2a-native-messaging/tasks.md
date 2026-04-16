@@ -56,10 +56,10 @@
 - [x] 7.3 Implement client-side dedup: bounded `Set<string>` of seen `eventId`s, evict oldest beyond 10k
 - [x] 7.4 On mount / SignalR reconnect: call `GET /api/sessions/{id}/events?since={lastSeenSeq ?? 0}` and feed the response through the same reducer before processing buffered live envelopes
 - [x] 7.5 Store `lastSeenSeq` in session-scoped state (Zustand) for resilience across unmounts
-- [ ] 7.6 Delete `use-historical-session-messages.ts` *— deferred to Phase 9; the new hook is ready and no consumer points at it yet because the route wiring (7.8) is also deferred*
-- [ ] 7.7 Delete `signalr-message-adapter.ts` *— deferred to Phase 9 alongside 7.6*
-- [ ] 7.8 Update route `sessions.$sessionId.tsx` to use the new hook *— deferred to Phase 9; the route still uses `use-session-messages` / `use-historical-session-messages` and the blast radius for retargeting every consumer is too large for this pass*
-- [ ] 7.9 Update `message-list.tsx`, `tool-result-renderer.tsx`, and every other consumer to render from the reducer's state shape *— deferred to Phase 9 alongside 7.8*
+- [x] 7.6 Deleted `use-historical-session-messages.ts`.
+- [x] 7.7 Deleted `signalr-message-adapter.ts`.
+- [x] 7.8 Updated route `sessions.$sessionId.tsx` to drive the session chat and history view from `useSessionEvents`; dropped the optimistic `addUserMessage` path — the server echoes user messages as `user.message` custom envelopes.
+- [x] 7.9 Updated `message-list.tsx` + `session-todos-tab.tsx` to consume `AGUIMessage[]` via `aguiMessagesToDisplayItems`. `tool-result-renderer.tsx` keeps its existing shape (the adapter feeds it the same `ToolExecution` structure).
 
 ## 8. Client unit tests
 
