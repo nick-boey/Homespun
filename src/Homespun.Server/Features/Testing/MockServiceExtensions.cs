@@ -11,7 +11,6 @@ using Homespun.Features.Search;
 using Homespun.Features.Secrets;
 using Homespun.Features.Commands;
 using Homespun.Features.Testing.Services;
-using Homespun.Features.Workflows.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -173,18 +172,6 @@ public static class MockServiceExtensions
 
         // Issue PR status service
         services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
-
-        // Workflow services
-        services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
-        services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
-        services.AddSingleton<IStepExecutor, AgentStepExecutor>();
-        services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
-        services.AddSingleton<IStepExecutor, GateStepExecutor>();
-        services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
-        services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
-        services.AddSingleton<IWorkflowSessionCallback, WorkflowSessionCallback>();
-        services.AddSingleton(sp =>
-            new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 
         // JSONL session loader for loading real session data
 

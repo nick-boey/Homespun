@@ -24,8 +24,6 @@ using Homespun.Features.Shared;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
-using Homespun.Features.Workflows.Hubs;
-using Homespun.Features.Workflows.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Console;
 
@@ -281,20 +279,7 @@ else
     // Initialize default agent prompts on startup
     builder.Services.AddHostedService<DefaultPromptsInitializationService>();
 
-    // Workflow services
-    builder.Services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
-    builder.Services.AddScoped<IWorkflowService, WorkflowService>();
-    builder.Services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
     builder.Services.AddSingleton(TimeProvider.System);
-    builder.Services.AddSingleton<IServerActionHandler, CiMergeStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, AgentStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, GateStepExecutor>();
-    builder.Services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
-    builder.Services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
-    builder.Services.AddSingleton<IWorkflowSessionCallback, WorkflowSessionCallback>();
-    builder.Services.AddSingleton(sp =>
-        new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)
@@ -367,7 +352,6 @@ app.UseCors();
 // Map SignalR hubs
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
-app.MapHub<WorkflowHub>("/hubs/workflows");
 
 // Map health check endpoints (/health for readiness, /alive for liveness)
 app.MapDefaultEndpoints();

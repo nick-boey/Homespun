@@ -24,7 +24,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useRunAgent, useAgentPrompts } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
 import { useProject } from '@/features/projects'
-import { useWorkflows, useExecuteWorkflow } from '@/features/workflows'
 import { BaseBranchSelector } from './base-branch-selector'
 import { useIssueContext } from '@/features/sessions/hooks/use-issue-context'
 import { renderPromptTemplate } from '@/features/sessions/utils/render-prompt-template'
@@ -69,7 +68,7 @@ export interface RunAgentDialogProps {
   /** Optional selected issue ID passed to issues agent tab */
   selectedIssueId?: string | null
   /** Default tab selection - defaults based on issueId presence */
-  defaultTab?: 'task' | 'issues' | 'workflow'
+  defaultTab?: 'task' | 'issues'
   /** Callback when a task agent is started */
   onAgentStart?: (result: RunAgentResult) => void
   /** Callback when an issues agent session is created */
@@ -132,7 +131,6 @@ export function RunAgentDialog({
           <TabsList variant="line">
             <TabsTrigger value="task">Task Agent</TabsTrigger>
             <TabsTrigger value="issues">Issues Agent</TabsTrigger>
-            <TabsTrigger value="workflow">Workflow</TabsTrigger>
           </TabsList>
 
           <TabsContent
@@ -162,19 +160,6 @@ export function RunAgentDialog({
               onSessionCreated={onSessionCreated}
               onOpenChange={onOpenChange}
               onError={onError}
-            />
-          </TabsContent>
-
-          <TabsContent
-            value="workflow"
-            forceMount
-            data-testid="workflow-tab-content"
-            className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
-          >
-            <WorkflowTabContent
-              projectId={projectId}
-              issueId={issueId}
-              onOpenChange={onOpenChange}
             />
           </TabsContent>
         </Tabs>
@@ -730,139 +715,6 @@ function IssuesAgentTabContent({
           ? 'The agent will start with these instructions.'
           : 'Leave empty to start an interactive session.'}
       </p>
-    </div>
-  )
-}
-
-// ============================================================================
-// Workflow Tab
-// ============================================================================
-
-const WORKFLOW_STORAGE_KEY = 'workflow-launcher-workflow'
-
-interface WorkflowTabContentProps {
-  projectId: string
-  issueId?: string
-  onOpenChange: (open: boolean) => void
-}
-
-function WorkflowTabContent({ projectId, issueId, onOpenChange }: WorkflowTabContentProps) {
-  const { workflows, isLoading, isError, error } = useWorkflows(projectId)
-  const executeWorkflow = useExecuteWorkflow()
-
-  const enabledWorkflows = useMemo(() => workflows.filter((w) => w.enabled), [workflows])
-
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(() => {
-    return localStorage.getItem(WORKFLOW_STORAGE_KEY) ?? ''
-  })
-
-  // Compute effective workflow ID (ensure selection is valid)
-  const effectiveWorkflowId = useMemo(() => {
-    if (enabledWorkflows.length === 0) return ''
-    const exists = enabledWorkflows.some((w) => w.id === selectedWorkflowId)
-    if (exists) return selectedWorkflowId
-    return enabledWorkflows[0].id ?? ''
-  }, [enabledWorkflows, selectedWorkflowId])
-
-  // Persist selection
-  useEffect(() => {
-    if (effectiveWorkflowId) {
-      localStorage.setItem(WORKFLOW_STORAGE_KEY, effectiveWorkflowId)
-    }
-  }, [effectiveWorkflowId])
-
-  const selectedWorkflow = useMemo(
-    () => enabledWorkflows.find((w) => w.id === effectiveWorkflowId),
-    [enabledWorkflows, effectiveWorkflowId]
-  )
-
-  const handleStart = useCallback(async () => {
-    if (!effectiveWorkflowId) return
-
-    try {
-      const params: { workflowId: string; projectId: string; input?: Record<string, unknown> } = {
-        workflowId: effectiveWorkflowId,
-        projectId,
-      }
-      if (issueId) {
-        params.input = { issueId }
-      }
-      await executeWorkflow.mutateAsync(params)
-      onOpenChange(false)
-    } catch {
-      // Error is handled by mutation state
-    }
-  }, [effectiveWorkflowId, projectId, issueId, executeWorkflow, onOpenChange])
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-8">
-        <Loader variant="circular" size="sm" />
-        <span className="text-muted-foreground text-sm">Loading workflows...</span>
-      </div>
-    )
-  }
-
-  if (isError && error) {
-    return (
-      <div className="border-destructive/50 bg-destructive/10 flex items-center gap-2 rounded-md border p-4">
-        <AlertCircle className="text-destructive h-5 w-5 flex-shrink-0" />
-        <div>
-          <p className="text-destructive text-sm font-medium">Failed to load workflows</p>
-          <p className="text-muted-foreground text-xs">{error.message}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (enabledWorkflows.length === 0) {
-    return (
-      <div className="py-8 text-center">
-        <p className="text-muted-foreground text-sm">
-          No enabled workflows available for this project.
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4 py-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={effectiveWorkflowId}
-          onValueChange={setSelectedWorkflowId}
-          disabled={executeWorkflow.isPending}
-        >
-          <SelectTrigger className="flex-1" aria-label="Select workflow">
-            <SelectValue placeholder="Select workflow" />
-          </SelectTrigger>
-          <SelectContent>
-            {enabledWorkflows.map((wf) => (
-              <SelectItem key={wf.id} value={wf.id!}>
-                {wf.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button
-          size="sm"
-          onClick={handleStart}
-          disabled={executeWorkflow.isPending || !effectiveWorkflowId}
-          className="w-full gap-1.5 sm:w-auto"
-        >
-          {executeWorkflow.isPending ? (
-            <Loader variant="circular" size="sm" />
-          ) : (
-            <Play className="h-3.5 w-3.5" />
-          )}
-          Start Workflow
-        </Button>
-      </div>
-
-      {selectedWorkflow?.description && (
-        <p className="text-muted-foreground text-xs">{selectedWorkflow.description}</p>
-      )}
     </div>
   )
 }

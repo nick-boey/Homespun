@@ -4,9 +4,7 @@ using FleeceIssueType = global::Fleece.Core.Models.IssueType;
 using Homespun.Features.AgentOrchestration.Controllers;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.Projects;
-using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Projects;
-using Homespun.Shared.Models.Workflows;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +18,6 @@ public class QueueControllerTests
 {
     private Mock<IQueueCoordinator> _queueCoordinatorMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
-    private Mock<IWorkflowStorageService> _workflowStorageServiceMock = null!;
     private QueueController _controller = null!;
 
     private static readonly Project TestProject = new()
@@ -36,12 +33,10 @@ public class QueueControllerTests
     {
         _queueCoordinatorMock = new Mock<IQueueCoordinator>();
         _projectServiceMock = new Mock<IProjectService>();
-        _workflowStorageServiceMock = new Mock<IWorkflowStorageService>();
 
         _controller = new QueueController(
             _queueCoordinatorMock.Object,
             _projectServiceMock.Object,
-            _workflowStorageServiceMock.Object,
             NullLogger<QueueController>.Instance);
 
         _controller.ControllerContext = new ControllerContext
@@ -75,35 +70,13 @@ public class QueueControllerTests
     }
 
     [Test]
-    public async Task Start_ReturnsBadRequest_WhenWorkflowIdNotFound()
-    {
-        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
-        _workflowStorageServiceMock
-            .Setup(s => s.GetWorkflowAsync(TestProject.LocalPath, "bad-wf", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((WorkflowDefinition?)null);
-
-        var request = new StartQueueRequest
-        {
-            IssueId = "issue1",
-            WorkflowMappings = new Dictionary<string, string> { { "task", "bad-wf" } }
-        };
-
-        var result = await _controller.Start(TestProject.Id, request, CancellationToken.None);
-
-        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
-        var message = ((BadRequestObjectResult)result.Result!).Value as string;
-        Assert.That(message, Does.Contain("bad-wf"));
-        Assert.That(message, Does.Contain("task"));
-    }
-
-    [Test]
     public async Task Start_ReturnsNotFound_WhenIssueNotFound()
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
         _queueCoordinatorMock
             .Setup(c => c.StartExecution(
                 TestProject.Id, "missing-issue", TestProject.LocalPath, TestProject.DefaultBranch,
-                It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException("Issue missing-issue not found."));
 
         var request = new StartQueueRequest { IssueId = "missing-issue" };
@@ -142,95 +115,6 @@ public class QueueControllerTests
             Assert.That(response.Status, Is.EqualTo("Running"));
             Assert.That(response.RootIssueId, Is.EqualTo("issue1"));
         });
-    }
-
-    [Test]
-    public async Task Start_ValidatesAllWorkflowMappings()
-    {
-        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
-
-        var validWorkflow = new WorkflowDefinition
-        {
-            Id = "wf-1",
-            ProjectId = TestProject.Id,
-            Title = "Task Workflow",
-            Steps = [],
-            Enabled = true,
-            Version = 1,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _workflowStorageServiceMock
-            .Setup(s => s.GetWorkflowAsync(TestProject.LocalPath, "wf-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(validWorkflow);
-        _workflowStorageServiceMock
-            .Setup(s => s.GetWorkflowAsync(TestProject.LocalPath, "wf-bad", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((WorkflowDefinition?)null);
-
-        var request = new StartQueueRequest
-        {
-            IssueId = "issue1",
-            WorkflowMappings = new Dictionary<string, string>
-            {
-                { "task", "wf-1" },
-                { "bug", "wf-bad" }
-            }
-        };
-
-        var result = await _controller.Start(TestProject.Id, request, CancellationToken.None);
-
-        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
-        var message = ((BadRequestObjectResult)result.Result!).Value as string;
-        Assert.That(message, Does.Contain("wf-bad"));
-        Assert.That(message, Does.Contain("bug"));
-    }
-
-    [Test]
-    public async Task Start_PassesWorkflowMappingsToCoordinator()
-    {
-        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
-
-        var workflow = new WorkflowDefinition
-        {
-            Id = "wf-1",
-            ProjectId = TestProject.Id,
-            Title = "Workflow",
-            Steps = [],
-            Enabled = true,
-            Version = 1,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _workflowStorageServiceMock
-            .Setup(s => s.GetWorkflowAsync(TestProject.LocalPath, "wf-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        _queueCoordinatorMock
-            .Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
-            {
-                ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
-                ActiveQueues = new List<ITaskQueue>(),
-                MaxConcurrency = 5,
-                RunningQueueCount = 0,
-                RootIssueId = "issue1"
-            });
-
-        var mappings = new Dictionary<string, string> { { "task", "wf-1" } };
-        var request = new StartQueueRequest { IssueId = "issue1", WorkflowMappings = mappings };
-
-        await _controller.Start(TestProject.Id, request, CancellationToken.None);
-
-        _queueCoordinatorMock.Verify(c => c.StartExecution(
-            TestProject.Id,
-            "issue1",
-            TestProject.LocalPath,
-            TestProject.DefaultBranch,
-            It.Is<Dictionary<string, string>>(d => d.ContainsKey("task") && d["task"] == "wf-1"),
-            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion

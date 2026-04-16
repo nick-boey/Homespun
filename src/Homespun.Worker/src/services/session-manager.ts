@@ -10,16 +10,7 @@ import type {
   ExitPlanModeInput,
   UserQuestion,
   LastMessageType,
-  WorkflowSessionContext,
 } from "../types/index.js";
-import {
-  WORKFLOW_COMPLETE_TOOL,
-  isValidWorkflowCompleteInput,
-  type WorkflowCompleteInput,
-  WORKFLOW_SIGNAL_TOOL,
-  isValidWorkflowSignalInput,
-  type WorkflowSignalInput,
-} from "../tools/workflow-tools.js";
 import { randomUUID } from "node:crypto";
 import {
   info,
@@ -60,38 +51,11 @@ export function mapMode(value: string | undefined): SdkPermissionMode {
 
 // --- OutputChannel types ---
 
-/**
- * Data payload for workflow_complete control event.
- */
-export interface WorkflowCompleteEventData {
-  /** The workflow context from the session */
-  workflowContext: WorkflowSessionContext;
-  /** The completion data from the agent */
-  completion: WorkflowCompleteInput;
-}
-
-/**
- * Data payload for workflow_signal control event.
- */
-export interface WorkflowSignalEventData {
-  /** The workflow context from the session */
-  workflowContext: WorkflowSessionContext;
-  /** The signal data from the agent */
-  signal: WorkflowSignalInput;
-}
-
 export interface ControlEvent {
-  type:
-    | "question_pending"
-    | "plan_pending"
-    | "status_resumed"
-    | "workflow_complete"
-    | "workflow_signal";
+  type: "question_pending" | "plan_pending" | "status_resumed";
   data:
     | { questions: UserQuestion[] }
     | { plan: string }
-    | WorkflowCompleteEventData
-    | WorkflowSignalEventData
     | Record<string, never>;
 }
 
@@ -103,9 +67,7 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
   return (
     t === "question_pending" ||
     t === "plan_pending" ||
-    t === "status_resumed" ||
-    t === "workflow_complete" ||
-    t === "workflow_signal"
+    t === "status_resumed"
   );
 }
 
@@ -255,8 +217,6 @@ interface WorkerSession {
   lastMessageSubtype?: string;
   systemPrompt?: string;
   workingDirectory?: string;
-  /** Workflow context when running as part of a workflow execution */
-  workflowContext?: WorkflowSessionContext;
   /**
    * First `system`/`init` message observed on this session. Used by
    * `canUseTool` to resolve tool origin without re-awaiting the SDK.
@@ -523,95 +483,9 @@ const exitPlanModeHandler: ToolHandler = async (input, session, ctx) => {
   return result;
 };
 
-const workflowCompleteHandler: ToolHandler = async (input, session, ctx) => {
-  if (!session.workflowContext) {
-    info(
-      `WorkflowComplete denied - no workflow context (sessionId: ${ctx.sessionId})`,
-    );
-    return {
-      behavior: "deny",
-      message: "WorkflowComplete tool can only be used in workflow sessions",
-    };
-  }
-
-  if (!isValidWorkflowCompleteInput(input)) {
-    info(
-      `WorkflowComplete denied - invalid input (sessionId: ${ctx.sessionId})`,
-    );
-    return {
-      behavior: "deny",
-      message:
-        "Invalid WorkflowComplete input: requires status, outputs, and summary",
-    };
-  }
-
-  const completionInput = input as WorkflowCompleteInput;
-
-  session.outputChannel.push({
-    type: "workflow_complete",
-    data: {
-      workflowContext: session.workflowContext,
-      completion: completionInput,
-    },
-  });
-
-  info(
-    `emitted workflow_complete for session '${ctx.sessionId}' - status='${completionInput.status}', stepId='${session.workflowContext.stepId}'`,
-  );
-
-  return {
-    behavior: "allow",
-    updatedInput: input,
-  };
-};
-
-const workflowSignalHandler: ToolHandler = async (input, session, ctx) => {
-  if (!session.workflowContext) {
-    info(
-      `workflow_signal denied - no workflow context (sessionId: ${ctx.sessionId})`,
-    );
-    return {
-      behavior: "deny",
-      message: "workflow_signal tool can only be used in workflow sessions",
-    };
-  }
-
-  if (!isValidWorkflowSignalInput(input)) {
-    info(
-      `workflow_signal denied - invalid input (sessionId: ${ctx.sessionId})`,
-    );
-    return {
-      behavior: "deny",
-      message:
-        "Invalid workflow_signal input: requires status (success or fail)",
-    };
-  }
-
-  const signalInput = input as WorkflowSignalInput;
-
-  session.outputChannel.push({
-    type: "workflow_signal",
-    data: {
-      workflowContext: session.workflowContext,
-      signal: signalInput,
-    },
-  });
-
-  info(
-    `emitted workflow_signal for session '${ctx.sessionId}' - status='${signalInput.status}', stepId='${session.workflowContext.stepId}'`,
-  );
-
-  return {
-    behavior: "allow",
-    updatedInput: input,
-  };
-};
-
 const TOOL_HANDLERS: Record<string, ToolHandler> = {
   AskUserQuestion: askUserQuestionHandler,
   ExitPlanMode: exitPlanModeHandler,
-  [WORKFLOW_COMPLETE_TOOL]: workflowCompleteHandler,
-  [WORKFLOW_SIGNAL_TOOL]: workflowSignalHandler,
 };
 
 export class SessionManager {
@@ -679,14 +553,13 @@ export class SessionManager {
     systemPrompt?: string;
     workingDirectory?: string;
     resumeSessionId?: string;
-    workflowContext?: WorkflowSessionContext;
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === "plan";
     const startTime = Date.now();
 
     info(
-      `Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || "/workdir"}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}', hasWorkflowContext=${!!opts.workflowContext}`,
+      `Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || "/workdir"}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}'`,
     );
 
     const common = buildCommonOptions(
@@ -779,7 +652,6 @@ export class SessionManager {
       lastActivityAt: new Date(),
       systemPrompt: opts.systemPrompt,
       workingDirectory: opts.workingDirectory,
-      workflowContext: opts.workflowContext,
     };
 
     this.sessions.set(id, workerSession);

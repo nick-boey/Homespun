@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.Workflows.Services;
 
 namespace Homespun.Features.AgentOrchestration.Services;
 
@@ -67,27 +66,6 @@ public record AgentStartRequest
     public required string BranchName { get; init; }
 
     /// <summary>
-    /// The workflow ID to start for this issue, when dispatched via workflow mapping.
-    /// Set by QueueCoordinator when the issue's type has a workflow mapping configured.
-    /// </summary>
-    public string? WorkflowId { get; init; }
-
-    /// <summary>
-    /// The workflow execution ID, if this agent is being started as part of a workflow.
-    /// </summary>
-    public string? WorkflowExecutionId { get; init; }
-
-    /// <summary>
-    /// The index of the current workflow step being executed.
-    /// </summary>
-    public int? WorkflowStepIndex { get; init; }
-
-    /// <summary>
-    /// The ID of the current workflow step being executed.
-    /// </summary>
-    public string? WorkflowStepId { get; init; }
-
-    /// <summary>
     /// Optional user instructions that override the prompt template.
     /// When provided, this text is sent as the initial message instead of rendering the prompt template.
     /// </summary>
@@ -98,11 +76,6 @@ public record AgentStartRequest
     /// When provided, takes precedence over prompt-based mode resolution.
     /// </summary>
     public SessionMode? Mode { get; init; }
-
-    /// <summary>
-    /// Whether this request is part of a workflow execution.
-    /// </summary>
-    public bool IsWorkflowRequest => WorkflowExecutionId != null && WorkflowStepId != null;
 
     /// <summary>
     /// Pre-rendered instructions from the frontend.

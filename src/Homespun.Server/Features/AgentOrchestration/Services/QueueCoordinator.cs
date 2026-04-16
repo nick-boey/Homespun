@@ -1,7 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Notifications;
-using Homespun.Features.Workflows.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.AgentOrchestration.Services;
@@ -16,7 +15,6 @@ internal class ProjectExecution
     public required string ProjectPath { get; init; }
     public required string DefaultBranch { get; init; }
     public QueueCoordinatorStatus Status { get; set; } = QueueCoordinatorStatus.Running;
-    public Dictionary<string, string> WorkflowMappings { get; init; } = new();
     public List<ITaskQueue> Queues { get; } = new();
 
     /// <summary>
@@ -66,7 +64,6 @@ public class QueueCoordinator : IQueueCoordinator
 {
     private readonly IProjectFleeceService _fleeceService;
     private readonly IAgentStartBackgroundService _agentStartService;
-    private readonly IWorkflowExecutionService? _workflowExecutionService;
     private readonly IHubContext<NotificationHub> _notificationHub;
     private readonly ILogger<QueueCoordinator> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -83,25 +80,13 @@ public class QueueCoordinator : IQueueCoordinator
         IHubContext<NotificationHub> notificationHub,
         ILogger<QueueCoordinator> logger,
         ILoggerFactory loggerFactory)
-        : this(fleeceService, agentStartService, null, notificationHub, logger, loggerFactory, maxConcurrency: 5)
+        : this(fleeceService, agentStartService, notificationHub, logger, loggerFactory, maxConcurrency: 5)
     {
     }
 
     public QueueCoordinator(
         IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
-        IHubContext<NotificationHub> notificationHub,
-        ILogger<QueueCoordinator> logger,
-        ILoggerFactory loggerFactory,
-        int maxConcurrency)
-        : this(fleeceService, agentStartService, null, notificationHub, logger, loggerFactory, maxConcurrency)
-    {
-    }
-
-    public QueueCoordinator(
-        IProjectFleeceService fleeceService,
-        IAgentStartBackgroundService agentStartService,
-        IWorkflowExecutionService? workflowExecutionService,
         IHubContext<NotificationHub> notificationHub,
         ILogger<QueueCoordinator> logger,
         ILoggerFactory loggerFactory,
@@ -109,26 +94,15 @@ public class QueueCoordinator : IQueueCoordinator
     {
         _fleeceService = fleeceService;
         _agentStartService = agentStartService;
-        _workflowExecutionService = workflowExecutionService;
         _notificationHub = notificationHub;
         _logger = logger;
         _loggerFactory = loggerFactory;
         _maxConcurrency = maxConcurrency;
-
-        if (_workflowExecutionService != null)
-        {
-            _workflowExecutionService.OnExecutionCompleted += HandleWorkflowExecutionCompleted;
-        }
     }
 
     public event Action<QueueCoordinatorEvent>? OnEvent;
 
-    public Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default)
-    {
-        return StartExecution(projectId, issueId, projectPath, defaultBranch, new Dictionary<string, string>(), ct);
-    }
-
-    public async Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, Dictionary<string, string> workflowMappings, CancellationToken ct = default)
+    public async Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default)
     {
         var issue = await _fleeceService.GetIssueAsync(projectPath, issueId, ct);
         if (issue == null)
@@ -139,8 +113,7 @@ public class QueueCoordinator : IQueueCoordinator
             ProjectId = projectId,
             RootIssueId = issueId,
             ProjectPath = projectPath,
-            DefaultBranch = defaultBranch,
-            WorkflowMappings = workflowMappings
+            DefaultBranch = defaultBranch
         };
 
         lock (_lock)
@@ -525,7 +498,7 @@ public class QueueCoordinator : IQueueCoordinator
     private TaskQueue CreateQueue(ProjectExecution execution)
     {
         var queueLogger = _loggerFactory.CreateLogger<TaskQueue>();
-        var queue = new TaskQueue(_agentStartService, _workflowExecutionService, queueLogger);
+        var queue = new TaskQueue(_agentStartService, queueLogger);
 
         bool shouldPause;
         lock (_lock)
@@ -671,13 +644,6 @@ public class QueueCoordinator : IQueueCoordinator
 
     private AgentStartRequest CreateRequest(ProjectExecution execution, Issue issue)
     {
-        string? workflowId = null;
-        var issueTypeName = issue.Type.ToString();
-        if (execution.WorkflowMappings.TryGetValue(issueTypeName, out var mappedWorkflowId))
-        {
-            workflowId = mappedWorkflowId;
-        }
-
         return new AgentStartRequest
         {
             IssueId = issue.Id,
@@ -685,26 +651,8 @@ public class QueueCoordinator : IQueueCoordinator
             ProjectLocalPath = execution.ProjectPath,
             ProjectDefaultBranch = execution.DefaultBranch,
             Issue = issue,
-            BranchName = $"task/{issue.Id}",
-            WorkflowId = workflowId
+            BranchName = $"task/{issue.Id}"
         };
-    }
-
-    private void HandleWorkflowExecutionCompleted(WorkflowExecutionCompletedEvent e)
-    {
-        List<ITaskQueue> allQueues;
-
-        lock (_lock)
-        {
-            allQueues = _executions.Values
-                .SelectMany(ex => ex.Queues)
-                .ToList();
-        }
-
-        foreach (var queue in allQueues)
-        {
-            queue.NotifyWorkflowCompleted(e.ExecutionId, e.Success, e.Error);
-        }
     }
 
     private void EmitEvent(

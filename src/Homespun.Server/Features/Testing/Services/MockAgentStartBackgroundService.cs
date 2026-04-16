@@ -36,7 +36,7 @@ public class MockAgentStartBackgroundService(
             string? renderedMessage = request.Instructions ?? request.UserInstructions;
             var mode = request.Mode ?? SessionMode.Plan;
 
-            // Workflow path: when no explicit mode or message, resolve from prompt
+            // When no explicit mode or message, resolve from prompt
             if (!request.Mode.HasValue && string.IsNullOrEmpty(renderedMessage) &&
                 !string.IsNullOrEmpty(request.PromptName))
             {

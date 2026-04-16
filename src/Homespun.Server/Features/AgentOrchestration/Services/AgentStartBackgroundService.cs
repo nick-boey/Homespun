@@ -4,7 +4,6 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
-using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 
@@ -202,25 +201,6 @@ public class AgentStartBackgroundService(
                 mode,
                 request.Model,
                 systemPrompt: null);
-
-            // Step 3.5: Register with workflow if this is a workflow request
-            if (request.IsWorkflowRequest)
-            {
-                var workflowSessionCallback = scope.ServiceProvider.GetRequiredService<IWorkflowSessionCallback>();
-                var workflowContext = new WorkflowSessionContext
-                {
-                    ExecutionId = request.WorkflowExecutionId!,
-                    StepId = request.WorkflowStepId!,
-                    WorkflowId = request.WorkflowExecutionId!,
-                    ProjectPath = request.ProjectLocalPath
-                };
-
-                workflowSessionCallback.RegisterSession(session.Id, workflowContext);
-
-                logger.LogInformation(
-                    "Registered session {SessionId} with workflow execution {ExecutionId}, step {StepId}",
-                    session.Id, request.WorkflowExecutionId, request.WorkflowStepId);
-            }
 
             // Step 4: Send the rendered initial message (fire and forget)
             if (!string.IsNullOrWhiteSpace(renderedMessage))

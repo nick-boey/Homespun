@@ -7,7 +7,7 @@ using AGUIEvents = Homespun.Shared.Models.Sessions;
 namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
-/// Handles question/answer flow, plan management, workflow signals,
+/// Handles question/answer flow, plan management,
 /// and ExitPlanMode processing.
 /// </summary>
 public class ToolInteractionService : IToolInteractionService
@@ -18,7 +18,6 @@ public class ToolInteractionService : IToolInteractionService
     private readonly IAGUIEventService _agUIEventService;
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly ISessionStateManager _stateManager;
-    private readonly Lazy<Features.Workflows.Services.IWorkflowSessionCallback> _workflowSessionCallback;
     private readonly Lazy<IMessageProcessingService> _messageProcessing;
     private readonly Lazy<ISessionLifecycleService> _lifecycle;
 
@@ -29,7 +28,6 @@ public class ToolInteractionService : IToolInteractionService
         IAGUIEventService agUIEventService,
         IAgentExecutionService agentExecutionService,
         ISessionStateManager stateManager,
-        Lazy<Features.Workflows.Services.IWorkflowSessionCallback> workflowSessionCallback,
         Lazy<IMessageProcessingService> messageProcessing,
         Lazy<ISessionLifecycleService> lifecycle)
     {
@@ -39,54 +37,8 @@ public class ToolInteractionService : IToolInteractionService
         _agUIEventService = agUIEventService;
         _agentExecutionService = agentExecutionService;
         _stateManager = stateManager;
-        _workflowSessionCallback = workflowSessionCallback;
         _messageProcessing = messageProcessing;
         _lifecycle = lifecycle;
-    }
-
-    public async Task HandleWorkflowSignalToolAsync(
-        string sessionId,
-        string? toolInputJson,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("workflow_signal tool detected in session {SessionId}", sessionId);
-
-        try
-        {
-            if (string.IsNullOrEmpty(toolInputJson))
-            {
-                return;
-            }
-
-            var input = JsonSerializer.Deserialize<JsonElement>(toolInputJson);
-
-            var status = input.TryGetProperty("status", out var statusProp)
-                ? statusProp.GetString() ?? "success"
-                : "success";
-
-            var message = input.TryGetProperty("message", out var messageProp)
-                ? messageProp.GetString()
-                : null;
-
-            Dictionary<string, object>? data = null;
-            if (input.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Object)
-            {
-                data = JsonSerializer.Deserialize<Dictionary<string, object>>(dataProp.GetRawText());
-            }
-
-            var signal = new Features.Workflows.Services.WorkflowSignalResult
-            {
-                Status = status,
-                Data = data,
-                Message = message
-            };
-
-            await _workflowSessionCallback.Value.HandleWorkflowSignalAsync(sessionId, signal, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error handling workflow_signal tool in session {SessionId}", sessionId);
-        }
     }
 
     public async Task HandleAskUserQuestionTool(

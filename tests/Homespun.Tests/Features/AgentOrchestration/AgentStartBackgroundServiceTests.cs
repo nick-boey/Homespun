@@ -4,7 +4,6 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
-using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
@@ -30,7 +29,6 @@ public class AgentStartBackgroundServiceTests
     private Mock<IHubContext<NotificationHub>> _mockHubContext = null!;
     private Mock<IHubClients> _mockHubClients = null!;
     private Mock<IClientProxy> _mockClientProxy = null!;
-    private Mock<IWorkflowSessionCallback> _mockWorkflowSessionCallback = null!;
     private Mock<IAgentStartupTracker> _mockStartupTracker = null!;
     private Mock<ILogger<AgentStartBackgroundService>> _mockLogger = null!;
     private AgentStartBackgroundService _service = null!;
@@ -47,7 +45,6 @@ public class AgentStartBackgroundServiceTests
         _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockIssuesSyncService = new Mock<IFleeceIssuesSyncService>();
         _mockBaseBranchResolver = new Mock<IBaseBranchResolver>();
-        _mockWorkflowSessionCallback = new Mock<IWorkflowSessionCallback>();
         _mockHubContext = new Mock<IHubContext<NotificationHub>>();
         _mockHubClients = new Mock<IHubClients>();
         _mockClientProxy = new Mock<IClientProxy>();
@@ -70,8 +67,6 @@ public class AgentStartBackgroundServiceTests
             .Returns(_mockBaseBranchResolver.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IHubContext<NotificationHub>)))
             .Returns(_mockHubContext.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IWorkflowSessionCallback)))
-            .Returns(_mockWorkflowSessionCallback.Object);
 
         _mockServiceScope.Setup(x => x.ServiceProvider).Returns(scopedServiceProvider.Object);
         _mockServiceScopeFactory.Setup(x => x.CreateScope()).Returns(_mockServiceScope.Object);
@@ -673,173 +668,6 @@ public class AgentStartBackgroundServiceTests
         // Assert - RenderTemplate SHOULD be called (fallback to prompt rendering)
         _mockAgentPromptService.Verify(x => x.RenderTemplate(
             "Work on {{title}}", It.IsAny<PromptContext>()), Times.Once);
-
-        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
-    }
-
-    #endregion
-
-    #region Workflow Context Tests
-
-    [Test]
-    public async Task QueueAgentStartAsync_WithWorkflowFields_RegistersSessionWithCallback()
-    {
-        // Arrange
-        var request = CreateTestRequest() with
-        {
-            WorkflowExecutionId = "exec-001",
-            WorkflowStepIndex = 2,
-            WorkflowStepId = "step-abc"
-        };
-        var clonePath = "/path/to/clone";
-        var session = new ClaudeSession
-        {
-            Id = "session123",
-            EntityId = request.IssueId,
-            ProjectId = request.ProjectId,
-            WorkingDirectory = clonePath,
-            Model = "sonnet",
-            Mode = SessionMode.Build,
-            Status = ClaudeSessionStatus.Running
-        };
-
-        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
-                request.ProjectLocalPath, request.BranchName))
-            .ReturnsAsync(clonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
-        _mockSessionService.Setup(x => x.StartSessionAsync(
-                request.IssueId, request.ProjectId, clonePath,
-                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(session);
-
-        // Act
-        await _service.QueueAgentStartAsync(request);
-        await Task.Delay(200);
-
-        // Assert - session should be registered with workflow callback
-        _mockWorkflowSessionCallback.Verify(x => x.RegisterSession(
-            "session123",
-            It.Is<WorkflowSessionContext>(ctx =>
-                ctx.ExecutionId == "exec-001" &&
-                ctx.StepId == "step-abc" &&
-                ctx.ProjectPath == request.ProjectLocalPath)),
-            Times.Once);
-
-        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
-    }
-
-    [Test]
-    public async Task QueueAgentStartAsync_WithoutWorkflowFields_DoesNotRegisterWithCallback()
-    {
-        // Arrange
-        var request = CreateTestRequest(); // No workflow fields
-        var clonePath = "/path/to/clone";
-        var session = new ClaudeSession
-        {
-            Id = "session123",
-            EntityId = request.IssueId,
-            ProjectId = request.ProjectId,
-            WorkingDirectory = clonePath,
-            Model = "sonnet",
-            Mode = SessionMode.Build,
-            Status = ClaudeSessionStatus.Running
-        };
-
-        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
-                request.ProjectLocalPath, request.BranchName))
-            .ReturnsAsync(clonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
-        _mockSessionService.Setup(x => x.StartSessionAsync(
-                request.IssueId, request.ProjectId, clonePath,
-                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(session);
-
-        // Act
-        await _service.QueueAgentStartAsync(request);
-        await Task.Delay(200);
-
-        // Assert - workflow callback should NOT be called
-        _mockWorkflowSessionCallback.Verify(x => x.RegisterSession(
-            It.IsAny<string>(), It.IsAny<WorkflowSessionContext>()),
-            Times.Never);
-
-        _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
-    }
-
-    [Test]
-    public async Task QueueAgentStartAsync_WithPartialWorkflowFields_DoesNotRegisterWithCallback()
-    {
-        // Arrange - only WorkflowExecutionId set, no StepId
-        var request = CreateTestRequest() with
-        {
-            WorkflowExecutionId = "exec-001",
-            WorkflowStepId = null
-        };
-        var clonePath = "/path/to/clone";
-        var session = new ClaudeSession
-        {
-            Id = "session123",
-            EntityId = request.IssueId,
-            ProjectId = request.ProjectId,
-            WorkingDirectory = clonePath,
-            Model = "sonnet",
-            Mode = SessionMode.Build,
-            Status = ClaudeSessionStatus.Running
-        };
-
-        _mockCloneService.Setup(x => x.GetClonePathForBranchAsync(
-                request.ProjectLocalPath, request.BranchName))
-            .ReturnsAsync(clonePath);
-
-        _mockAgentPromptService.Setup(x => x.GetPrompt("prompt123", null))
-            .Returns(new AgentPrompt
-            {
-                Name = "Build",
-                Mode = SessionMode.Build,
-                InitialMessage = "Work on {{title}}"
-            });
-
-        _mockFleeceService.Setup(x => x.ListIssuesAsync(
-                request.ProjectLocalPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
-
-        _mockSessionService.Setup(x => x.StartSessionAsync(
-                request.IssueId, request.ProjectId, clonePath,
-                SessionMode.Build, "sonnet", null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(session);
-
-        // Act
-        await _service.QueueAgentStartAsync(request);
-        await Task.Delay(200);
-
-        // Assert - workflow callback should NOT be called with partial fields
-        _mockWorkflowSessionCallback.Verify(x => x.RegisterSession(
-            It.IsAny<string>(), It.IsAny<WorkflowSessionContext>()),
-            Times.Never);
 
         _mockStartupTracker.Verify(x => x.MarkAsStarted(request.IssueId), Times.Once);
     }
