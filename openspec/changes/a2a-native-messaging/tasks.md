@@ -99,16 +99,16 @@
 
 ## 12. Configuration & docs
 
-- [ ] 12.1 Add `SessionEvents:ReplayMode` to `appsettings.json` with `Incremental` default and a comment explaining the `Full` fallback
-- [ ] 12.2 Add a runtime toggle in admin-settings (optional — nice to have; defer if frontend scope grows)
-- [ ] 12.3 Write a short migration note in `docs/`: "On upgrade, session caches are reset. Restart any in-progress agents."
-- [ ] 12.4 Update `CLAUDE.md` under Feature Slices: `ClaudeCode` now describes A2A-native ingestion, `A2AEventStore`, and the single AG-UI broadcast channel
+- [x] 12.1 Added `SessionEvents:ReplayMode` to `appsettings.json` with `Incremental` default and a `"// ReplayMode"` comment sibling explaining the `Full` fallback.
+- [ ] 12.2 Admin-settings runtime toggle — deferred; the `appsettings.json` knob is sufficient until scope allows a UI.
+- [x] 12.3 Wrote `docs/a2a-native-migration.md` covering the cache purge, escape hatch env var, replay-mode config, and endpoint removals.
+- [x] 12.4 Updated `CLAUDE.md` under Feature Slices: `ClaudeCode` now describes A2A-native ingestion, `A2AEventStore`, single-envelope broadcast, and the replay-mode config.
 
 ## 13. Dependent-proposal updates (already applied as part of this change)
 
-- [ ] 13.1 Verify `openspec/changes/multi-user-postgres/proposal.md` / `design.md` / `tasks.md` reflect the new `A2AEventStore` schema (A2A envelope + seq) rather than `ClaudeMessage`
-- [ ] 13.2 Verify `openspec/changes/claude-agent-sessions/proposal.md` notes that this change rewrites the AG-UI streaming and session-resume requirements
-- [ ] 13.3 Confirm no update needed to `agent-dispatch` (SignalR usage there is about active-agent counts, not session events)
+- [x] 13.1 Verified `openspec/changes/multi-user-postgres/proposal.md`, `design.md`, and `tasks.md` all reference `A2AEventRecord` / `SessionEventEnvelope` / `A2AEventStore`. The `session_events` Postgres schema (design.md D6) matches the `A2AEventRecord` shape (seq + event_id + received_at + raw event JSON). Tasks.md §10.2 explicitly depends on this change.
+- [x] 13.2 Verified `openspec/changes/claude-agent-sessions/proposal.md` notes (§ Rewrite Note, 2026-04-16) that this change rewrites AG-UI streaming, final-message persistence, and session-resume. Session lifecycle / plan-approval / Q&A / mode-model / container reconciliation semantics remain unchanged.
+- [x] 13.3 Confirmed no update needed to `agent-dispatch`. Its SignalR usage is scoped to the active-agents indicator (running/waiting/error counts) — not session event content.
 
 ## 14. Verification
 
