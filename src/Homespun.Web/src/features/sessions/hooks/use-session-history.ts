@@ -1,32 +1,28 @@
 import { useQuery } from '@tanstack/react-query'
-import { Sessions, type SessionCacheSummary } from '@/api'
+import { Sessions, type ResumableSession } from '@/api'
 
-export const sessionHistoryQueryKey = (projectId?: string, entityId?: string) =>
-  ['session-history', projectId, entityId] as const
+export const sessionHistoryQueryKey = (entityId?: string) => ['session-history', entityId] as const
 
 export interface UseSessionHistoryResult {
-  data: SessionCacheSummary[] | undefined
+  data: ResumableSession[] | undefined
   isLoading: boolean
   error: Error | null
 }
 
 /**
- * Fetches session history for a specific entity (issue or PR) within a project.
- * Returns all past sessions ordered by creation date.
+ * Fetches resumable session history for a specific entity.
+ * Returns past sessions ordered by last activity.
  */
-export function useSessionHistory(
-  projectId: string | undefined | null,
-  entityId: string | undefined | null
-): UseSessionHistoryResult {
+export function useSessionHistory(entityId: string | undefined | null): UseSessionHistoryResult {
   const query = useQuery({
-    queryKey: sessionHistoryQueryKey(projectId ?? undefined, entityId ?? undefined),
+    queryKey: sessionHistoryQueryKey(entityId ?? undefined),
     queryFn: async () => {
-      const response = await Sessions.getApiSessionsHistoryByProjectIdByEntityId({
-        path: { projectId: projectId!, entityId: entityId! },
+      const response = await Sessions.getApiSessionsEntityByEntityIdResumable({
+        path: { entityId: entityId! },
       })
       return response.data
     },
-    enabled: !!projectId && !!entityId,
+    enabled: !!entityId,
   })
 
   return {

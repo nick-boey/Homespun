@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { SessionHistoryTab } from './session-history-tab'
 import { useSessionHistory } from '@/features/sessions/hooks/use-session-history'
-import type { SessionCacheSummary } from '@/api/generated'
+import type { ResumableSession } from '@/api/generated'
 import { SessionMode } from '@/api/generated'
 import { createMockSession } from '@/test/test-utils'
 
@@ -10,25 +10,19 @@ vi.mock('@/features/sessions/hooks/use-session-history', () => ({
   useSessionHistory: vi.fn(),
 }))
 
-const mockSessions: SessionCacheSummary[] = [
+const mockSessions: ResumableSession[] = [
   {
     sessionId: 'session-1',
-    entityId: 'issue-1',
-    projectId: 'project-1',
     model: 'sonnet',
     mode: SessionMode.BUILD,
-    createdAt: new Date().toISOString(),
-    lastMessageAt: new Date().toISOString(),
+    lastActivityAt: new Date().toISOString(),
     messageCount: 15,
   },
   {
     sessionId: 'session-2',
-    entityId: 'issue-1',
-    projectId: 'project-1',
     model: 'opus',
     mode: SessionMode.PLAN,
-    createdAt: new Date(Date.now() - 3600 * 1000).toISOString(), // 1 hour ago
-    lastMessageAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+    lastActivityAt: new Date(Date.now() - 3600 * 1000).toISOString(), // 1 hour ago
     messageCount: 5,
   },
 ]

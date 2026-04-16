@@ -1,6 +1,6 @@
 import { History, Clock } from 'lucide-react'
 import type { ClaudeSession } from '@/types/signalr'
-import type { SessionCacheSummary } from '@/api/generated'
+import type { ResumableSession } from '@/api/generated'
 import { useSessionHistory } from '@/features/sessions/hooks/use-session-history'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -41,7 +41,7 @@ function getModeColor(mode?: string): string {
 }
 
 interface SessionItemProps {
-  session: SessionCacheSummary
+  session: ResumableSession
   isActive: boolean
   isViewing: boolean
   onClick?: () => void
@@ -70,7 +70,9 @@ function SessionItem({ session, isActive, isViewing, onClick }: SessionItemProps
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Clock className="text-muted-foreground h-3 w-3 shrink-0" />
-            <span className="text-sm font-medium">{formatRelativeTime(session.createdAt)}</span>
+            <span className="text-sm font-medium">
+              {formatRelativeTime(session.lastActivityAt)}
+            </span>
             {isActive && (
               <Badge variant="outline" className="border-green-500/50 text-xs text-green-600">
                 Active
@@ -84,7 +86,7 @@ function SessionItem({ session, isActive, isViewing, onClick }: SessionItemProps
             >
               {session.mode || 'unknown'}
             </Badge>
-            {session.messageCount !== undefined && session.messageCount > 0 && (
+            {session.messageCount != null && session.messageCount > 0 && (
               <span className="text-muted-foreground text-xs">
                 {session.messageCount} message{session.messageCount !== 1 ? 's' : ''}
               </span>
@@ -102,11 +104,7 @@ export function SessionHistoryTab({
   viewingHistoricalSessionId,
   onSelectSession,
 }: SessionHistoryTabProps) {
-  const {
-    data: sessions,
-    isLoading,
-    error,
-  } = useSessionHistory(session.projectId, session.entityId)
+  const { data: sessions, isLoading, error } = useSessionHistory(session.entityId)
   const activeSessionId = currentSessionId ?? session.id
 
   if (isLoading) {
