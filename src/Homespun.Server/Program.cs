@@ -14,6 +14,7 @@ using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Observability;
 using Homespun.Features.Observability.HealthChecks;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -24,8 +25,6 @@ using Homespun.Features.Shared;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
-using Homespun.Features.Workflows.Hubs;
-using Homespun.Features.Workflows.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Console;
 
@@ -302,7 +301,7 @@ else
         new Lazy<ISessionLifecycleService>(() => sp.GetRequiredService<ISessionLifecycleService>()));
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
-    builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
+    builder.Services.AddSingleton<ISkillDiscoveryService, SkillDiscoveryService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
 
     // Agent Orchestration services (mini-prompts, branch ID generation, agent startup)
@@ -320,24 +319,6 @@ else
     builder.Services.Configure<GitHubSyncPollingOptions>(
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
-
-    // Initialize default agent prompts on startup
-    builder.Services.AddHostedService<DefaultPromptsInitializationService>();
-
-    // Workflow services
-    builder.Services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
-    builder.Services.AddScoped<IWorkflowService, WorkflowService>();
-    builder.Services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
-    builder.Services.AddSingleton(TimeProvider.System);
-    builder.Services.AddSingleton<IServerActionHandler, CiMergeStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, AgentStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
-    builder.Services.AddSingleton<IStepExecutor, GateStepExecutor>();
-    builder.Services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
-    builder.Services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
-    builder.Services.AddSingleton<IWorkflowSessionCallback, WorkflowSessionCallback>();
-    builder.Services.AddSingleton(sp =>
-        new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)
@@ -347,6 +328,17 @@ builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
 
 // Plans service (reads plan files from .claude/plans directory)
 builder.Services.AddSingleton<IPlansService, PlansService>();
+
+// TimeProvider is required by OpenSpec services and may not be registered under mock mode.
+builder.Services.AddSingleton(TimeProvider.System);
+
+// OpenSpec services (read/write .homespun.yaml sidecars linking changes to Fleece issues)
+builder.Services.AddSingleton<ISidecarService, SidecarService>();
+builder.Services.AddScoped<IChangeScannerService, ChangeScannerService>();
+builder.Services.AddScoped<IChangeReconciliationService, ChangeReconciliationService>();
+builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>();
+builder.Services.AddScoped<IBranchStateResolverService, BranchStateResolverService>();
+builder.Services.AddScoped<IIssueGraphOpenSpecEnricher, IssueGraphOpenSpecEnricher>();
 
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
@@ -423,7 +415,6 @@ app.UseCors();
 // Map SignalR hubs
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
-app.MapHub<WorkflowHub>("/hubs/workflows");
 
 // Map health check endpoints (/health for readiness, /alive for liveness)
 app.MapDefaultEndpoints();

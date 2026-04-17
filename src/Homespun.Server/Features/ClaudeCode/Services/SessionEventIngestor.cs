@@ -197,8 +197,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
     /// <summary>
     /// Walks an agent message's tool_use data parts and dispatches side-effect handlers
-    /// (<c>workflow_signal</c> → <see cref="IToolInteractionService.HandleWorkflowSignalToolAsync"/>,
-    /// <c>Write</c> → <see cref="IToolInteractionService.TryCaptureWrittenPlanContent"/>).
+    /// (<c>Write</c> → <see cref="IToolInteractionService.TryCaptureWrittenPlanContent"/>).
     /// Dependencies are resolved lazily per-call to keep the ingestor's constructor thin
     /// and side-step any circularity between ingestor and tool-interaction graph.
     /// </summary>
@@ -245,11 +244,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
             try
             {
-                if (toolName == "workflow_signal")
-                {
-                    await toolInteraction.HandleWorkflowSignalToolAsync(sessionId, inputJson, cancellationToken);
-                }
-                else if (toolName.Equals("Write", StringComparison.OrdinalIgnoreCase))
+                if (toolName.Equals("Write", StringComparison.OrdinalIgnoreCase))
                 {
                     toolInteraction.TryCaptureWrittenPlanContent(session, inputJson);
                 }

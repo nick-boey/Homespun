@@ -113,15 +113,6 @@ public interface ITaskQueue
     Task UnblockAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Notifies the queue that a workflow execution completed for the current issue.
-    /// Routes the completion to the standard NotifyCompleted flow using the tracked issue ID.
-    /// </summary>
-    /// <param name="executionId">The workflow execution ID.</param>
-    /// <param name="success">Whether the workflow succeeded.</param>
-    /// <param name="error">Error message if failed.</param>
-    void NotifyWorkflowCompleted(string executionId, bool success, string? error = null);
-
-    /// <summary>
     /// Event raised when queue events occur.
     /// </summary>
     event Action<TaskQueueEvent>? OnEvent;

@@ -3,14 +3,6 @@
 import type { Client, Options as Options2, TDataShape } from './client'
 import { client } from './client.gen'
 import type {
-  DeleteApiAgentPromptsByNameByNameData,
-  DeleteApiAgentPromptsByNameByNameErrors,
-  DeleteApiAgentPromptsByNameByNameOverrideData,
-  DeleteApiAgentPromptsByNameByNameOverrideErrors,
-  DeleteApiAgentPromptsByNameByNameOverrideResponses,
-  DeleteApiAgentPromptsByNameByNameResponses,
-  DeleteApiAgentPromptsProjectByProjectIdAllData,
-  DeleteApiAgentPromptsProjectByProjectIdAllResponses,
   DeleteApiContainersByContainerIdData,
   DeleteApiContainersByContainerIdResponses,
   DeleteApiIssuesByIssueIdData,
@@ -40,22 +32,6 @@ import type {
   DeleteApiSessionsByIdResponses,
   DeleteApiSessionsEntityByEntityIdData,
   DeleteApiSessionsEntityByEntityIdResponses,
-  DeleteApiWorkflowsByWorkflowIdData,
-  DeleteApiWorkflowsByWorkflowIdErrors,
-  DeleteApiWorkflowsByWorkflowIdResponses,
-  GetApiAgentPromptsAvailableForProjectByProjectIdData,
-  GetApiAgentPromptsAvailableForProjectByProjectIdResponses,
-  GetApiAgentPromptsByNameByNameData,
-  GetApiAgentPromptsByNameByNameErrors,
-  GetApiAgentPromptsByNameByNameResponses,
-  GetApiAgentPromptsData,
-  GetApiAgentPromptsIssueAgentAvailableByProjectIdData,
-  GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
-  GetApiAgentPromptsIssueAgentPromptsData,
-  GetApiAgentPromptsIssueAgentPromptsResponses,
-  GetApiAgentPromptsProjectByProjectIdData,
-  GetApiAgentPromptsProjectByProjectIdResponses,
-  GetApiAgentPromptsResponses,
   GetApiClonesBranchesData,
   GetApiClonesBranchesErrors,
   GetApiClonesBranchesResponses,
@@ -66,12 +42,6 @@ import type {
   GetApiClonesSessionBranchInfoResponses,
   GetApiContainersData,
   GetApiContainersResponses,
-  GetApiExecutionsByExecutionIdContextData,
-  GetApiExecutionsByExecutionIdContextErrors,
-  GetApiExecutionsByExecutionIdContextResponses,
-  GetApiExecutionsByExecutionIdData,
-  GetApiExecutionsByExecutionIdErrors,
-  GetApiExecutionsByExecutionIdResponses,
   GetApiFleeceSyncByProjectIdBranchStatusData,
   GetApiFleeceSyncByProjectIdBranchStatusErrors,
   GetApiFleeceSyncByProjectIdBranchStatusResponses,
@@ -103,6 +73,12 @@ import type {
   GetApiIssuesByIssueIdResponses,
   GetApiNotificationsData,
   GetApiNotificationsResponses,
+  GetApiOpenspecBranchStateData,
+  GetApiOpenspecBranchStateErrors,
+  GetApiOpenspecBranchStateResolveData,
+  GetApiOpenspecBranchStateResolveErrors,
+  GetApiOpenspecBranchStateResolveResponses,
+  GetApiOpenspecBranchStateResponses,
   GetApiPlansContentData,
   GetApiPlansContentErrors,
   GetApiPlansContentResponses,
@@ -159,9 +135,6 @@ import type {
   GetApiProjectsByProjectIdSearchPrsResponses,
   GetApiProjectsByProjectIdSecretsData,
   GetApiProjectsByProjectIdSecretsResponses,
-  GetApiProjectsByProjectIdWorkflowsData,
-  GetApiProjectsByProjectIdWorkflowsErrors,
-  GetApiProjectsByProjectIdWorkflowsResponses,
   GetApiProjectsData,
   GetApiProjectsResponses,
   GetApiPullRequestsByIdData,
@@ -184,26 +157,11 @@ import type {
   GetApiSessionsResponses,
   GetApiSettingsUserData,
   GetApiSettingsUserResponses,
+  GetApiSkillsProjectByProjectIdData,
+  GetApiSkillsProjectByProjectIdErrors,
+  GetApiSkillsProjectByProjectIdResponses,
   GetApiTelemetryConfigData,
   GetApiTelemetryConfigResponses,
-  GetApiWorkflowsByWorkflowIdData,
-  GetApiWorkflowsByWorkflowIdErrors,
-  GetApiWorkflowsByWorkflowIdExecutionsData,
-  GetApiWorkflowsByWorkflowIdExecutionsErrors,
-  GetApiWorkflowsByWorkflowIdExecutionsResponses,
-  GetApiWorkflowsByWorkflowIdResponses,
-  GetApiWorkflowTemplatesData,
-  GetApiWorkflowTemplatesResponses,
-  PostApiAgentPromptsCreateOverrideData,
-  PostApiAgentPromptsCreateOverrideErrors,
-  PostApiAgentPromptsCreateOverrideResponses,
-  PostApiAgentPromptsData,
-  PostApiAgentPromptsEnsureDefaultsData,
-  PostApiAgentPromptsEnsureDefaultsResponses,
-  PostApiAgentPromptsErrors,
-  PostApiAgentPromptsResponses,
-  PostApiAgentPromptsRestoreDefaultsData,
-  PostApiAgentPromptsRestoreDefaultsResponses,
   PostApiClientTelemetryData,
   PostApiClientTelemetryErrors,
   PostApiClientTelemetryResponses,
@@ -213,12 +171,6 @@ import type {
   PostApiClonesSessionData,
   PostApiClonesSessionErrors,
   PostApiClonesSessionResponses,
-  PostApiExecutionsByExecutionIdCancelData,
-  PostApiExecutionsByExecutionIdCancelErrors,
-  PostApiExecutionsByExecutionIdCancelResponses,
-  PostApiExecutionsByExecutionIdStepsByStepIdSignalData,
-  PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
-  PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullData,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullErrors,
   PostApiFleeceSyncByProjectIdDiscardNonFleeceAndPullResponses,
@@ -269,6 +221,12 @@ import type {
   PostApiNotificationsData,
   PostApiNotificationsErrors,
   PostApiNotificationsResponses,
+  PostApiOpenspecBranchStateData,
+  PostApiOpenspecBranchStateErrors,
+  PostApiOpenspecBranchStateResponses,
+  PostApiOpenspecChangesLinkData,
+  PostApiOpenspecChangesLinkErrors,
+  PostApiOpenspecChangesLinkResponses,
   PostApiOrchestrationGenerateBranchIdData,
   PostApiOrchestrationGenerateBranchIdErrors,
   PostApiOrchestrationGenerateBranchIdResponses,
@@ -323,18 +281,6 @@ import type {
   PostApiSessionsData,
   PostApiSessionsErrors,
   PostApiSessionsResponses,
-  PostApiWorkflowsByWorkflowIdExecuteData,
-  PostApiWorkflowsByWorkflowIdExecuteErrors,
-  PostApiWorkflowsByWorkflowIdExecuteResponses,
-  PostApiWorkflowsData,
-  PostApiWorkflowsErrors,
-  PostApiWorkflowsResponses,
-  PostApiWorkflowTemplatesByTemplateIdCreateData,
-  PostApiWorkflowTemplatesByTemplateIdCreateErrors,
-  PostApiWorkflowTemplatesByTemplateIdCreateResponses,
-  PutApiAgentPromptsByNameByNameData,
-  PutApiAgentPromptsByNameByNameErrors,
-  PutApiAgentPromptsByNameByNameResponses,
   PutApiIssuesByIssueIdData,
   PutApiIssuesByIssueIdErrors,
   PutApiIssuesByIssueIdResponses,
@@ -350,9 +296,6 @@ import type {
   PutApiSettingsUserEmailData,
   PutApiSettingsUserEmailErrors,
   PutApiSettingsUserEmailResponses,
-  PutApiWorkflowsByWorkflowIdData,
-  PutApiWorkflowsByWorkflowIdErrors,
-  PutApiWorkflowsByWorkflowIdResponses,
 } from './types.gen'
 
 export type Options<
@@ -372,149 +315,26 @@ export type Options<
   meta?: Record<string, unknown>
 }
 
-export class AgentPrompts {
-  public static getApiAgentPrompts<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiAgentPromptsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<GetApiAgentPromptsResponses, unknown, ThrowOnError>({
-      url: '/api/agent-prompts',
-      ...options,
-    })
-  }
-
-  public static postApiAgentPrompts<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiAgentPromptsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiAgentPromptsResponses,
-      PostApiAgentPromptsErrors,
-      ThrowOnError
-    >({
-      url: '/api/agent-prompts',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static deleteApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByNameByNameData, ThrowOnError>
-  ) {
-    return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByNameByNameResponses,
-      DeleteApiAgentPromptsByNameByNameErrors,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
-  }
-
-  public static getApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
-    options: Options<GetApiAgentPromptsByNameByNameData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiAgentPromptsByNameByNameResponses,
-      GetApiAgentPromptsByNameByNameErrors,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/by-name/{name}', ...options })
-  }
-
-  public static putApiAgentPromptsByNameByName<ThrowOnError extends boolean = false>(
-    options: Options<PutApiAgentPromptsByNameByNameData, ThrowOnError>
-  ) {
-    return (options.client ?? client).put<
-      PutApiAgentPromptsByNameByNameResponses,
-      PutApiAgentPromptsByNameByNameErrors,
-      ThrowOnError
-    >({
-      url: '/api/agent-prompts/by-name/{name}',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-  }
-
-  public static getApiAgentPromptsProjectByProjectId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiAgentPromptsProjectByProjectIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiAgentPromptsProjectByProjectIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/project/{projectId}', ...options })
-  }
-
-  public static getApiAgentPromptsAvailableForProjectByProjectId<
-    ThrowOnError extends boolean = false,
-  >(options: Options<GetApiAgentPromptsAvailableForProjectByProjectIdData, ThrowOnError>) {
-    return (options.client ?? client).get<
-      GetApiAgentPromptsAvailableForProjectByProjectIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/available-for-project/{projectId}', ...options })
-  }
-
-  public static postApiAgentPromptsEnsureDefaults<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiAgentPromptsEnsureDefaultsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiAgentPromptsEnsureDefaultsResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/ensure-defaults', ...options })
-  }
-
-  public static postApiAgentPromptsRestoreDefaults<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiAgentPromptsRestoreDefaultsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiAgentPromptsRestoreDefaultsResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/restore-defaults', ...options })
-  }
-
-  public static deleteApiAgentPromptsProjectByProjectIdAll<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsProjectByProjectIdAllData, ThrowOnError>
-  ) {
-    return (options.client ?? client).delete<
-      DeleteApiAgentPromptsProjectByProjectIdAllResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/project/{projectId}/all', ...options })
-  }
-
-  public static getApiAgentPromptsIssueAgentPrompts<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiAgentPromptsIssueAgentPromptsData, ThrowOnError>
+export class ChangeSnapshot {
+  public static getApiOpenspecBranchState<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiOpenspecBranchStateData, ThrowOnError>
   ) {
     return (options?.client ?? client).get<
-      GetApiAgentPromptsIssueAgentPromptsResponses,
-      unknown,
+      GetApiOpenspecBranchStateResponses,
+      GetApiOpenspecBranchStateErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/issue-agent-prompts', ...options })
+    >({ url: '/api/openspec/branch-state', ...options })
   }
 
-  public static getApiAgentPromptsIssueAgentAvailableByProjectId<
-    ThrowOnError extends boolean = false,
-  >(options: Options<GetApiAgentPromptsIssueAgentAvailableByProjectIdData, ThrowOnError>) {
-    return (options.client ?? client).get<
-      GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/api/agent-prompts/issue-agent/available/{projectId}', ...options })
-  }
-
-  public static postApiAgentPromptsCreateOverride<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiAgentPromptsCreateOverrideData, ThrowOnError>
+  public static postApiOpenspecBranchState<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiOpenspecBranchStateData, ThrowOnError>
   ) {
     return (options?.client ?? client).post<
-      PostApiAgentPromptsCreateOverrideResponses,
-      PostApiAgentPromptsCreateOverrideErrors,
+      PostApiOpenspecBranchStateResponses,
+      PostApiOpenspecBranchStateErrors,
       ThrowOnError
     >({
-      url: '/api/agent-prompts/create-override',
+      url: '/api/openspec/branch-state',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -523,14 +343,31 @@ export class AgentPrompts {
     })
   }
 
-  public static deleteApiAgentPromptsByNameByNameOverride<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiAgentPromptsByNameByNameOverrideData, ThrowOnError>
+  public static getApiOpenspecBranchStateResolve<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiOpenspecBranchStateResolveData, ThrowOnError>
   ) {
-    return (options.client ?? client).delete<
-      DeleteApiAgentPromptsByNameByNameOverrideResponses,
-      DeleteApiAgentPromptsByNameByNameOverrideErrors,
+    return (options?.client ?? client).get<
+      GetApiOpenspecBranchStateResolveResponses,
+      GetApiOpenspecBranchStateResolveErrors,
       ThrowOnError
-    >({ url: '/api/agent-prompts/by-name/{name}/override', ...options })
+    >({ url: '/api/openspec/branch-state/resolve', ...options })
+  }
+
+  public static postApiOpenspecChangesLink<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiOpenspecChangesLinkData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiOpenspecChangesLinkResponses,
+      PostApiOpenspecChangesLinkErrors,
+      ThrowOnError
+    >({
+      url: '/api/openspec/changes/link',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
   }
 }
 
@@ -1735,6 +1572,18 @@ export class Settings {
   }
 }
 
+export class Skills {
+  public static getApiSkillsProjectByProjectId<ThrowOnError extends boolean = false>(
+    options: Options<GetApiSkillsProjectByProjectIdData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiSkillsProjectByProjectIdResponses,
+      GetApiSkillsProjectByProjectIdErrors,
+      ThrowOnError
+    >({ url: '/api/skills/project/{projectId}', ...options })
+  }
+}
+
 export class TelemetryConfig {
   public static getApiTelemetryConfig<ThrowOnError extends boolean = false>(
     options?: Options<GetApiTelemetryConfigData, ThrowOnError>
@@ -1743,172 +1592,5 @@ export class TelemetryConfig {
       url: '/api/telemetry-config',
       ...options,
     })
-  }
-}
-
-export class Workflows {
-  public static postApiWorkflows<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiWorkflowsData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiWorkflowsResponses,
-      PostApiWorkflowsErrors,
-      ThrowOnError
-    >({
-      url: '/api/workflows',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static getApiProjectsByProjectIdWorkflows<ThrowOnError extends boolean = false>(
-    options: Options<GetApiProjectsByProjectIdWorkflowsData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiProjectsByProjectIdWorkflowsResponses,
-      GetApiProjectsByProjectIdWorkflowsErrors,
-      ThrowOnError
-    >({ url: '/api/projects/{projectId}/workflows', ...options })
-  }
-
-  public static deleteApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
-    options: Options<DeleteApiWorkflowsByWorkflowIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).delete<
-      DeleteApiWorkflowsByWorkflowIdResponses,
-      DeleteApiWorkflowsByWorkflowIdErrors,
-      ThrowOnError
-    >({ url: '/api/workflows/{workflowId}', ...options })
-  }
-
-  public static getApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiWorkflowsByWorkflowIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiWorkflowsByWorkflowIdResponses,
-      GetApiWorkflowsByWorkflowIdErrors,
-      ThrowOnError
-    >({ url: '/api/workflows/{workflowId}', ...options })
-  }
-
-  public static putApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
-    options: Options<PutApiWorkflowsByWorkflowIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).put<
-      PutApiWorkflowsByWorkflowIdResponses,
-      PutApiWorkflowsByWorkflowIdErrors,
-      ThrowOnError
-    >({
-      url: '/api/workflows/{workflowId}',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-  }
-
-  public static postApiWorkflowsByWorkflowIdExecute<ThrowOnError extends boolean = false>(
-    options: Options<PostApiWorkflowsByWorkflowIdExecuteData, ThrowOnError>
-  ) {
-    return (options.client ?? client).post<
-      PostApiWorkflowsByWorkflowIdExecuteResponses,
-      PostApiWorkflowsByWorkflowIdExecuteErrors,
-      ThrowOnError
-    >({
-      url: '/api/workflows/{workflowId}/execute',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-  }
-
-  public static getApiWorkflowsByWorkflowIdExecutions<ThrowOnError extends boolean = false>(
-    options: Options<GetApiWorkflowsByWorkflowIdExecutionsData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiWorkflowsByWorkflowIdExecutionsResponses,
-      GetApiWorkflowsByWorkflowIdExecutionsErrors,
-      ThrowOnError
-    >({ url: '/api/workflows/{workflowId}/executions', ...options })
-  }
-
-  public static getApiExecutionsByExecutionId<ThrowOnError extends boolean = false>(
-    options: Options<GetApiExecutionsByExecutionIdData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiExecutionsByExecutionIdResponses,
-      GetApiExecutionsByExecutionIdErrors,
-      ThrowOnError
-    >({ url: '/api/executions/{executionId}', ...options })
-  }
-
-  public static postApiExecutionsByExecutionIdCancel<ThrowOnError extends boolean = false>(
-    options: Options<PostApiExecutionsByExecutionIdCancelData, ThrowOnError>
-  ) {
-    return (options.client ?? client).post<
-      PostApiExecutionsByExecutionIdCancelResponses,
-      PostApiExecutionsByExecutionIdCancelErrors,
-      ThrowOnError
-    >({
-      url: '/api/executions/{executionId}/cancel',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-  }
-
-  public static getApiExecutionsByExecutionIdContext<ThrowOnError extends boolean = false>(
-    options: Options<GetApiExecutionsByExecutionIdContextData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiExecutionsByExecutionIdContextResponses,
-      GetApiExecutionsByExecutionIdContextErrors,
-      ThrowOnError
-    >({ url: '/api/executions/{executionId}/context', ...options })
-  }
-
-  public static postApiExecutionsByExecutionIdStepsByStepIdSignal<
-    ThrowOnError extends boolean = false,
-  >(options: Options<PostApiExecutionsByExecutionIdStepsByStepIdSignalData, ThrowOnError>) {
-    return (options.client ?? client).post<
-      PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses,
-      PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors,
-      ThrowOnError
-    >({
-      url: '/api/executions/{executionId}/steps/{stepId}/signal',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-  }
-}
-
-export class WorkflowTemplate {
-  public static getApiWorkflowTemplates<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiWorkflowTemplatesData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<GetApiWorkflowTemplatesResponses, unknown, ThrowOnError>(
-      { url: '/api/workflow-templates', ...options }
-    )
-  }
-
-  public static postApiWorkflowTemplatesByTemplateIdCreate<ThrowOnError extends boolean = false>(
-    options: Options<PostApiWorkflowTemplatesByTemplateIdCreateData, ThrowOnError>
-  ) {
-    return (options.client ?? client).post<
-      PostApiWorkflowTemplatesByTemplateIdCreateResponses,
-      PostApiWorkflowTemplatesByTemplateIdCreateErrors,
-      ThrowOnError
-    >({ url: '/api/workflow-templates/{templateId}/create', ...options })
   }
 }

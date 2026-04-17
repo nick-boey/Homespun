@@ -14,6 +14,7 @@ import { SessionFilesTab } from './session-files-tab'
 import { SessionPlansTab } from './session-plans-tab'
 import { SessionBranchTab } from './session-branch-tab'
 import { SessionHistoryTab } from './session-history-tab'
+import { SessionSkillsTab } from './session-skills-tab'
 
 interface SessionInfoPanelProps {
   session: ClaudeSession
@@ -87,6 +88,9 @@ export function SessionInfoPanel({
         <TabsTrigger value="sessions" className="shrink-0">
           Sessions
         </TabsTrigger>
+        <TabsTrigger value="skills" className="shrink-0">
+          Skills
+        </TabsTrigger>
       </TabsList>
 
       <div className="flex-1 overflow-y-auto">
@@ -115,6 +119,9 @@ export function SessionInfoPanel({
             viewingHistoricalSessionId={viewingHistoricalSessionId}
             onSelectSession={onSelectHistoricalSession}
           />
+        </TabsContent>
+        <TabsContent value="skills" className="mt-0 p-4">
+          <SessionSkillsTab session={session} />
         </TabsContent>
       </div>
     </Tabs>

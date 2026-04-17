@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { clearIssueFilter } from './utils/test-helpers'
 
 test.describe.serial('Agent and Issue Agent Launching', () => {
-  test('selecting an issue and running a task agent with default prompt', async ({
+  test('selecting an issue and running a task agent with default skill', async ({
     page,
   }, testInfo) => {
     testInfo.setTimeout(60000)
@@ -33,15 +33,15 @@ test.describe.serial('Agent and Issue Agent Launching', () => {
     const taskTab = agentDialog.locator('[data-testid="task-tab-content"]')
     await expect(taskTab).toBeVisible()
 
-    // Verify prompt selector is present and loaded
-    const promptSelector = taskTab.locator('[aria-label="Select prompt"]')
-    await expect(promptSelector).toBeVisible({ timeout: 10000 })
-    await expect(promptSelector).toBeEnabled()
+    // Verify skill picker is present and loaded
+    const skillSelector = taskTab.locator('[aria-label="Select skill"]')
+    await expect(skillSelector).toBeVisible({ timeout: 10000 })
+    await expect(skillSelector).toBeEnabled()
 
-    // Ensure a prompt is selected
-    await promptSelector.click()
-    const promptOption = page.getByRole('option').first()
-    await promptOption.click()
+    // Open and pick the first skill option (None — free-text only, always first)
+    await skillSelector.click()
+    const skillOption = page.getByRole('option').first()
+    await skillOption.click()
 
     // Verify mode selector is present (added by PR #731)
     const modeSelector = taskTab.locator('[aria-label="Select mode"]')
@@ -88,13 +88,9 @@ test.describe.serial('Agent and Issue Agent Launching', () => {
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Verify we're on the Issues Agent tab
+    // Verify we're on the Issues Agent tab (now skill-less — free-text only)
     const issuesTab = agentDialog.locator('[data-testid="issues-tab-content"]')
     await expect(issuesTab).toBeVisible()
-
-    // Verify prompt selector is present
-    const promptSelector = issuesTab.locator('[aria-label="Select prompt"]')
-    await expect(promptSelector).toBeVisible({ timeout: 10000 })
 
     // Verify mode selector is present (added by PR #731)
     const modeSelector = issuesTab.locator('[aria-label="Select mode"]')

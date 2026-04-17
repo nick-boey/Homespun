@@ -13,7 +13,7 @@ namespace Homespun.Features.Testing.Services;
 /// </summary>
 public class MockAgentStartBackgroundService(
     IClaudeSessionService sessionService,
-    IAgentPromptService agentPromptService,
+    ISkillDiscoveryService skillDiscovery,
     IAgentStartupTracker startupTracker,
     IHubContext<ClaudeCodeHub> claudeCodeHub,
     IHubContext<NotificationHub> notificationHub,
@@ -32,35 +32,12 @@ public class MockAgentStartBackgroundService(
             // Broadcast agent starting
             await notificationHub.BroadcastAgentStarting(request.IssueId, request.ProjectId, request.BranchName);
 
-            // Resolve mode and initial message
-            string? renderedMessage = request.Instructions ?? request.UserInstructions;
-            var mode = request.Mode ?? SessionMode.Plan;
-
-            // Workflow path: when no explicit mode or message, resolve from prompt
-            if (!request.Mode.HasValue && string.IsNullOrEmpty(renderedMessage) &&
-                !string.IsNullOrEmpty(request.PromptName))
-            {
-                var prompt = agentPromptService.GetPrompt(request.PromptName, null);
-                if (prompt != null)
-                {
-                    mode = prompt.Mode;
-
-                    var promptContext = new PromptContext
-                    {
-                        Title = request.Issue.Title,
-                        Id = request.Issue.Id,
-                        Description = request.Issue.Description,
-                        Branch = request.BranchName,
-                        Type = request.Issue.Type.ToString()
-                    };
-
-                    renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
-                }
-            }
-
-            // Create session using the mock session service
             // Use a mock working directory since we don't have real clones in mock mode
             var mockWorkingDirectory = $"/mock/clones/{request.BranchName}";
+
+            // Resolve mode and initial message using the shared skill-dispatch path
+            var (initialMessage, mode) = await AgentStartBackgroundService
+                .ResolveDispatchAsync(request, skillDiscovery, mockWorkingDirectory, CancellationToken.None);
 
             var session = await sessionService.StartSessionAsync(
                 request.IssueId,
@@ -72,14 +49,14 @@ public class MockAgentStartBackgroundService(
             // Broadcast session started
             await claudeCodeHub.BroadcastSessionStarted(session);
 
-            // Send the rendered initial message if present
-            if (!string.IsNullOrWhiteSpace(renderedMessage))
+            // Send the composed initial message if present
+            if (!string.IsNullOrWhiteSpace(initialMessage))
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await sessionService.SendMessageAsync(session.Id, renderedMessage, mode);
+                        await sessionService.SendMessageAsync(session.Id, initialMessage, mode);
                     }
                     catch (Exception ex)
                     {

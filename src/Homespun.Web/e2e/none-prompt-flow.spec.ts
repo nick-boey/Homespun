@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { clearIssueFilter } from './utils/test-helpers'
 
-test.describe('None Prompt Flow', () => {
+test.describe('None Skill Flow', () => {
   // Each test uses a different issue to avoid conflicts from concurrent agent prevention
   test('None option is always available in agent launcher dialog', async ({ page }) => {
     // Navigate to projects page
@@ -27,16 +27,16 @@ test.describe('None Prompt Flow', () => {
     // Wait for the dialog to appear
     await expect(page.getByRole('dialog')).toBeVisible()
 
-    // Open the prompt dropdown
-    await page.click('[aria-label="Select prompt"]')
+    // Open the skill dropdown on the Task Agent tab
+    await page.locator('[data-testid="task-tab-content"] [aria-label="Select skill"]').click()
 
     // None option should always be visible and first
-    const noneOption = page.locator('text=None - Start without prompt')
+    const noneOption = page.getByRole('option', { name: 'None — free-text only' })
     await expect(noneOption).toBeVisible()
 
     // Verify it's the first option
     const firstOption = page.getByRole('option').first()
-    await expect(firstOption).toHaveText('None - Start without prompt')
+    await expect(firstOption).toHaveText('None — free-text only')
   })
 
   // Skip: This test needs to be updated for async agent starting behavior

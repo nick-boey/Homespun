@@ -533,7 +533,9 @@ public class IssuesController(
             Model = model,
             BranchName = branchName,
             UserInstructions = request.UserInstructions,
-            Mode = request.Mode
+            Mode = request.Mode,
+            SkillName = request.SkillName,
+            SkillArgs = request.SkillArgs
         });
 
         logger.LogInformation(

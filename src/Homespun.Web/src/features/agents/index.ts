@@ -9,12 +9,10 @@ export {
 // Hooks
 export {
   useStartAgent,
-  useAgentPrompts,
   useProjectSessions,
   useActiveSessionCount,
   useGenerateBranchId,
   useBranches,
-  agentPromptsQueryKey,
   projectSessionsQueryKey,
   branchesQueryKey,
   type StartAgentParams,

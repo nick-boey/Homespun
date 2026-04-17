@@ -20,18 +20,6 @@ export type AgentAlreadyRunningResponse = {
   message: string | null
 }
 
-export type AgentPrompt = {
-  name?: string | null
-  initialMessage?: string | null
-  mode?: SessionMode
-  projectId?: string | null
-  createdAt?: string
-  updatedAt?: string
-  sessionType?: SessionType
-  category?: PromptCategory
-  isOverride?: boolean
-}
-
 export type AgentStatusData = {
   isActive?: boolean
   status: ClaudeSessionStatus
@@ -69,6 +57,31 @@ export type BranchInfo = {
   lastCommitDate?: string | null
 }
 
+export const BranchPresence = {
+  NONE: 'none',
+  EXISTS: 'exists',
+  WITH_CHANGE: 'withChange',
+} as const
+
+export type BranchPresence = (typeof BranchPresence)[keyof typeof BranchPresence]
+
+export type BranchStateRequest = {
+  projectId: string | null
+  branch: string | null
+  fleeceId: string | null
+  changes?: Array<SnapshotChange> | null
+  orphans?: Array<SnapshotOrphan> | null
+}
+
+export type BranchStateSnapshot = {
+  projectId: string | null
+  branch: string | null
+  fleeceId: string | null
+  changes?: Array<SnapshotChange> | null
+  orphans?: Array<SnapshotOrphan> | null
+  capturedAt?: string
+}
+
 export type BranchStatusResult = {
   success?: boolean
   isOnCorrectBranch?: boolean
@@ -93,10 +106,29 @@ export type BulkDeleteResult = {
   error?: string | null
 }
 
-export type CancelWorkflowExecutionRequest = {
-  projectId: string | null
-  reason?: string | null
+export type ChangeArtifact = {
+  id: string | null
+  outputPath: string | null
+  status: string | null
 }
+
+export type ChangeArtifactState = {
+  changeName: string | null
+  schemaName: string | null
+  isComplete?: boolean
+  applyRequires?: Array<string> | null
+  artifacts?: Array<ChangeArtifact> | null
+}
+
+export const ChangePhase = {
+  NONE: 'none',
+  INCOMPLETE: 'incomplete',
+  READY_TO_APPLY: 'readyToApply',
+  READY_TO_ARCHIVE: 'readyToArchive',
+  ARCHIVED: 'archived',
+} as const
+
+export type ChangePhase = (typeof ChangePhase)[keyof typeof ChangePhase]
 
 export const ChangeType = {
   CREATED: 'created',
@@ -202,14 +234,6 @@ export const ConflictResolutionStrategy = {
 export type ConflictResolutionStrategy =
   (typeof ConflictResolutionStrategy)[keyof typeof ConflictResolutionStrategy]
 
-export type CreateAgentPromptRequest = {
-  name: string | null
-  initialMessage?: string | null
-  mode?: SessionMode
-  projectId?: string | null
-  category?: PromptCategory
-}
-
 export type CreateBranchSessionRequest = {
   projectId: string | null
   branchName: string | null
@@ -271,12 +295,6 @@ export type CreateNotificationRequest = {
   deduplicationKey?: string | null
 }
 
-export type CreateOverrideRequest = {
-  globalPromptName: string | null
-  projectId: string | null
-  initialMessage?: string | null
-}
-
 export type CreateProjectRequest = {
   ownerRepo?: string | null
   name?: string | null
@@ -311,14 +329,10 @@ export type CreateSessionRequest = {
   } | null
 }
 
-export type CreateWorkflowRequest = {
-  projectId: string | null
-  title: string | null
-  description?: string | null
-  steps?: Array<WorkflowStep> | null
-  trigger?: WorkflowTrigger
-  settings?: WorkflowSettings
-  enabled?: boolean
+export type DiscoveredSkills = {
+  openSpec?: Array<SkillDescriptor> | null
+  homespun?: Array<SkillDescriptor> | null
+  general?: Array<SkillDescriptor> | null
 }
 
 export type EnrichedCloneInfo = {
@@ -345,61 +359,9 @@ export type EnrichedPrInfo = {
   htmlUrl?: string | null
 }
 
-export type EventFilter = {
-  issueTypes?: Array<string> | null
-  issueStatuses?: Array<string> | null
-  branchPatterns?: Array<string> | null
-  tags?: Array<string> | null
-  expression?: string | null
-}
-
-export type EventTriggerConfig = {
-  eventTypes?: Array<WorkflowEventType> | null
-  filter?: EventFilter
-}
-
-export type ExecuteWorkflowRequest = {
-  projectId: string | null
-  input?: {
-    [key: string]: unknown
-  } | null
-  environment?: {
-    [key: string]: string
-  } | null
-  dryRun?: boolean
-}
-
-export type ExecutionListResponse = {
-  executions?: Array<ExecutionSummary> | null
-  totalCount?: number
-}
-
 export const ExecutionMode = { SERIES: 'series', PARALLEL: 'parallel' } as const
 
 export type ExecutionMode = (typeof ExecutionMode)[keyof typeof ExecutionMode]
-
-export type ExecutionSummary = {
-  id: string | null
-  workflowId: string | null
-  workflowTitle: string | null
-  status?: WorkflowExecutionStatus
-  triggerType?: WorkflowTriggerType
-  createdAt?: string
-  startedAt?: string | null
-  completedAt?: string | null
-  durationMs?: number | null
-  triggeredBy?: string | null
-  errorMessage?: string | null
-}
-
-export type ExecutionTriggerInfo = {
-  type?: WorkflowTriggerType
-  eventType?: WorkflowEventType
-  eventData?: {
-    [key: string]: unknown
-  } | null
-  timestamp?: string
-}
 
 export type FieldChangeDto = {
   fieldName: string | null
@@ -605,6 +567,15 @@ export type IssueHistoryState = {
   redoDescription?: string | null
 }
 
+export type IssueOpenSpecState = {
+  branchState: BranchPresence
+  changeState: ChangePhase
+  changeName?: string | null
+  schemaName?: string | null
+  phases?: Array<PhaseSummary> | null
+  orphans?: Array<SnapshotOrphan> | null
+}
+
 export type IssuePullRequestStatus = {
   prNumber?: number
   prUrl: string | null
@@ -665,6 +636,13 @@ export const IssueType = {
 
 export type IssueType = (typeof IssueType)[keyof typeof IssueType]
 
+export type LinkOrphanRequest = {
+  projectId: string | null
+  branch?: string | null
+  changeName: string | null
+  fleeceId: string | null
+}
+
 export type MergedPullRequestDetails = {
   pullRequest: PullRequestInfo
   linkedIssueId?: string | null
@@ -678,15 +656,6 @@ export type MoveDirection = (typeof MoveDirection)[keyof typeof MoveDirection]
 export type MoveSeriesSiblingRequest = {
   projectId: string | null
   direction?: MoveDirection
-}
-
-export type NodeOutput = {
-  status: string | null
-  data?: {
-    [key: string]: unknown
-  } | null
-  error?: string | null
-  completedAt?: string
 }
 
 export type NotificationDto = {
@@ -739,6 +708,30 @@ export type PendingQuestion = {
   createdAt?: string
 }
 
+export type PhaseState = {
+  name: string | null
+  done?: number
+  total?: number
+  tasks?: Array<PhaseTask> | null
+}
+
+export type PhaseSummary = {
+  name: string | null
+  done?: number
+  total?: number
+  tasks?: Array<PhaseTaskSummary> | null
+}
+
+export type PhaseTask = {
+  description: string | null
+  done?: boolean
+}
+
+export type PhaseTaskSummary = {
+  description: string | null
+  done?: boolean
+}
+
 export type PlanFileInfo = {
   fileName: string | null
   filePath: string | null
@@ -772,10 +765,6 @@ export type Project = {
   createdAt?: string
   updatedAt?: string
 }
-
-export const PromptCategory = { STANDARD: 'standard', ISSUE_AGENT: 'issueAgent' } as const
-
-export type PromptCategory = (typeof PromptCategory)[keyof typeof PromptCategory]
 
 export type PullRequest = {
   id?: string | null
@@ -928,12 +917,10 @@ export type RunAgentRequest = {
   model?: string | null
   baseBranch?: string | null
   userInstructions?: string | null
-}
-
-export type ScheduleTriggerConfig = {
-  cronExpression: string | null
-  timezone?: string | null
-  skipIfRunning?: boolean
+  skillName?: string | null
+  skillArgs?: {
+    [key: string]: string
+  } | null
 }
 
 export type SearchablePrResponse = {
@@ -1007,67 +994,58 @@ export type SetParentRequest = {
   addToExisting?: boolean
 }
 
+export type SkillArgDescriptor = {
+  name?: string | null
+  kind?: SkillArgKind
+  label?: string | null
+  description?: string | null
+}
+
+export const SkillArgKind = {
+  FREE_TEXT: 'freeText',
+  ISSUE: 'issue',
+  CHANGE: 'change',
+  PHASE_LIST: 'phaseList',
+} as const
+
+export type SkillArgKind = (typeof SkillArgKind)[keyof typeof SkillArgKind]
+
+export const SkillCategory = {
+  OPEN_SPEC: 'openSpec',
+  HOMESPUN: 'homespun',
+  GENERAL: 'general',
+} as const
+
+export type SkillCategory = (typeof SkillCategory)[keyof typeof SkillCategory]
+
+export type SkillDescriptor = {
+  name?: string | null
+  description?: string | null
+  category?: SkillCategory
+  skillBody?: string | null
+  mode?: SessionMode
+  args?: Array<SkillArgDescriptor> | null
+}
+
+export type SnapshotChange = {
+  name: string | null
+  createdBy: string | null
+  isArchived?: boolean
+  archivedFolderName?: string | null
+  artifactState?: ChangeArtifactState
+  tasksDone?: number
+  tasksTotal?: number
+  nextIncomplete?: string | null
+  phases?: Array<PhaseState> | null
+}
+
+export type SnapshotOrphan = {
+  name: string | null
+  createdOnBranch?: boolean
+}
+
 export type StartQueueRequest = {
   issueId: string | null
-  workflowMappings?: {
-    [key: string]: string
-  } | null
-}
-
-export type StepExecution = {
-  stepId: string | null
-  stepIndex?: number
-  status?: StepExecutionStatus
-  retryCount?: number
-  startedAt?: string | null
-  completedAt?: string | null
-  durationMs?: number | null
-  output?: {
-    [key: string]: unknown
-  } | null
-  sessionId?: string | null
-  errorMessage?: string | null
-}
-
-export const StepExecutionStatus = {
-  PENDING: 'pending',
-  RUNNING: 'running',
-  WAITING_FOR_INPUT: 'waitingForInput',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  SKIPPED: 'skipped',
-} as const
-
-export type StepExecutionStatus = (typeof StepExecutionStatus)[keyof typeof StepExecutionStatus]
-
-export type StepTransition = {
-  type?: StepTransitionType
-  targetStepId?: string | null
-}
-
-export const StepTransitionType = {
-  NEXT_STEP: 'nextStep',
-  EXIT: 'exit',
-  GO_TO_STEP: 'goToStep',
-  RETRY: 'retry',
-} as const
-
-export type StepTransitionType = (typeof StepTransitionType)[keyof typeof StepTransitionType]
-
-export type StoredWorkflowContext = {
-  executionId: string | null
-  workflowId: string | null
-  workingDirectory: string | null
-  triggerData?: unknown
-  nodeOutputs?: {
-    [key: string]: NodeOutput
-  } | null
-  variables?: {
-    [key: string]: unknown
-  } | null
-  artifacts?: Array<WorkflowArtifact> | null
-  createdAt?: string
-  updatedAt?: string
 }
 
 export type SyncResult = {
@@ -1112,6 +1090,10 @@ export type TaskGraphResponse = {
   linkedPrs?: {
     [key: string]: TaskGraphLinkedPr
   } | null
+  openSpecStates?: {
+    [key: string]: IssueOpenSpecState
+  } | null
+  mainOrphanChanges?: Array<SnapshotOrphan> | null
 }
 
 export type TelemetryConfigDto = {
@@ -1127,12 +1109,6 @@ export const TelemetryEventType = {
 } as const
 
 export type TelemetryEventType = (typeof TelemetryEventType)[keyof typeof TelemetryEventType]
-
-export type UpdateAgentPromptRequest = {
-  initialMessage?: string | null
-  mode?: SessionMode
-  category?: PromptCategory
-}
 
 export type UpdateIssueRequest = {
   projectId: string | null
@@ -1166,16 +1142,6 @@ export type UpdateUserEmailRequest = {
   email: string | null
 }
 
-export type UpdateWorkflowRequest = {
-  projectId: string | null
-  title?: string | null
-  description?: string | null
-  steps?: Array<WorkflowStep> | null
-  trigger?: WorkflowTrigger
-  settings?: WorkflowSettings
-  enabled?: boolean | null
-}
-
 export type UserQuestion = {
   question: string | null
   header: string | null
@@ -1185,12 +1151,6 @@ export type UserQuestion = {
 
 export type UserSettingsResponse = {
   userEmail?: string | null
-}
-
-export type WebhookTriggerConfig = {
-  secret?: string | null
-  contentType?: string | null
-  pathParameters?: Array<string> | null
 }
 
 export type WorkerContainerDto = {
@@ -1208,184 +1168,6 @@ export type WorkerContainerDto = {
   hasPendingQuestion?: boolean
   hasPendingPlanApproval?: boolean
 }
-
-export type WorkflowArtifact = {
-  name: string | null
-  path: string | null
-  type: string | null
-  size?: number | null
-  contentType?: string | null
-  createdAt?: string
-  metadata?: {
-    [key: string]: unknown
-  } | null
-}
-
-export type WorkflowContext = {
-  input?: {
-    [key: string]: unknown
-  } | null
-  variables?: {
-    [key: string]: unknown
-  } | null
-  nodeOutputs?: {
-    [key: string]: NodeOutput
-  } | null
-  environment?: {
-    [key: string]: string
-  } | null
-  secrets?: {
-    [key: string]: string
-  } | null
-}
-
-export type WorkflowDefinition = {
-  id: string | null
-  projectId: string | null
-  title: string | null
-  description?: string | null
-  steps?: Array<WorkflowStep> | null
-  trigger?: WorkflowTrigger
-  settings?: WorkflowSettings
-  enabled?: boolean
-  version?: number
-  createdAt?: string
-  updatedAt?: string
-  createdBy?: string | null
-}
-
-export const WorkflowEventType = {
-  ISSUE_CREATED: 'issueCreated',
-  ISSUE_STATUS_CHANGED: 'issueStatusChanged',
-  ISSUE_ASSIGNED: 'issueAssigned',
-  PULL_REQUEST_OPENED: 'pullRequestOpened',
-  PULL_REQUEST_MERGED: 'pullRequestMerged',
-  PULL_REQUEST_REVIEW_REQUESTED: 'pullRequestReviewRequested',
-  PULL_REQUEST_CHECKS_COMPLETED: 'pullRequestChecksCompleted',
-  AGENT_SESSION_COMPLETED: 'agentSessionCompleted',
-  AGENT_SESSION_FAILED: 'agentSessionFailed',
-  BRANCH_CREATED: 'branchCreated',
-  BRANCH_MERGED: 'branchMerged',
-  CUSTOM: 'custom',
-} as const
-
-export type WorkflowEventType = (typeof WorkflowEventType)[keyof typeof WorkflowEventType]
-
-export type WorkflowExecution = {
-  id: string | null
-  workflowId: string | null
-  workflowVersion?: number
-  projectId: string | null
-  status?: WorkflowExecutionStatus
-  trigger: ExecutionTriggerInfo
-  context?: WorkflowContext
-  stepExecutions?: Array<StepExecution> | null
-  currentStepIndex?: number
-  createdAt?: string
-  startedAt?: string | null
-  completedAt?: string | null
-  errorMessage?: string | null
-  triggeredBy?: string | null
-}
-
-export type WorkflowExecutionResponse = {
-  executionId: string | null
-  workflowId: string | null
-  status?: WorkflowExecutionStatus
-  message?: string | null
-}
-
-export const WorkflowExecutionStatus = {
-  QUEUED: 'queued',
-  RUNNING: 'running',
-  PAUSED: 'paused',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  CANCELLED: 'cancelled',
-  TIMED_OUT: 'timedOut',
-} as const
-
-export type WorkflowExecutionStatus =
-  (typeof WorkflowExecutionStatus)[keyof typeof WorkflowExecutionStatus]
-
-export type WorkflowListResponse = {
-  workflows?: Array<WorkflowSummary> | null
-  totalCount?: number
-}
-
-export type WorkflowSettings = {
-  defaultTimeoutSeconds?: number
-  continueOnFailure?: boolean
-}
-
-export type WorkflowStep = {
-  id: string | null
-  name: string | null
-  stepType?: WorkflowStepType
-  prompt?: string | null
-  promptName?: string | null
-  sessionMode?: SessionMode
-  onSuccess?: StepTransition
-  onFailure?: StepTransition
-  maxRetries?: number
-  retryDelaySeconds?: number
-  condition?: string | null
-  config?: unknown
-}
-
-export type WorkflowStepSignalRequest = {
-  projectId: string | null
-  status: string | null
-  data?: {
-    [key: string]: unknown
-  } | null
-  message?: string | null
-}
-
-export const WorkflowStepType = {
-  AGENT: 'agent',
-  SERVER_ACTION: 'serverAction',
-  GATE: 'gate',
-} as const
-
-export type WorkflowStepType = (typeof WorkflowStepType)[keyof typeof WorkflowStepType]
-
-export type WorkflowSummary = {
-  id: string | null
-  title: string | null
-  description?: string | null
-  enabled?: boolean
-  triggerType?: WorkflowTriggerType
-  stepCount?: number
-  version?: number
-  updatedAt?: string
-  lastExecutionStatus?: WorkflowExecutionStatus
-  lastExecutedAt?: string | null
-}
-
-export type WorkflowTemplateSummary = {
-  id: string | null
-  title: string | null
-  description?: string | null
-  stepCount?: number
-}
-
-export type WorkflowTrigger = {
-  type?: WorkflowTriggerType
-  enabled?: boolean
-  eventConfig?: EventTriggerConfig
-  scheduleConfig?: ScheduleTriggerConfig
-  webhookConfig?: WebhookTriggerConfig
-}
-
-export const WorkflowTriggerType = {
-  MANUAL: 'manual',
-  EVENT: 'event',
-  SCHEDULED: 'scheduled',
-  WEBHOOK: 'webhook',
-} as const
-
-export type WorkflowTriggerType = (typeof WorkflowTriggerType)[keyof typeof WorkflowTriggerType]
 
 export type BranchInfoWritable = {
   name?: string | null
@@ -1473,316 +1255,101 @@ export type PullRequestWithTimeWritable = {
   time?: number
 }
 
-export type GetApiAgentPromptsData = {
+export type GetApiOpenspecBranchStateData = {
   body?: never
   path?: never
-  query?: never
-  url: '/api/agent-prompts'
-}
-
-export type GetApiAgentPromptsResponses = {
-  /**
-   * OK
-   */
-  200: Array<AgentPrompt>
-}
-
-export type GetApiAgentPromptsResponse =
-  GetApiAgentPromptsResponses[keyof GetApiAgentPromptsResponses]
-
-export type PostApiAgentPromptsData = {
-  body?: CreateAgentPromptRequest
-  path?: never
-  query?: never
-  url: '/api/agent-prompts'
-}
-
-export type PostApiAgentPromptsErrors = {
-  /**
-   * Conflict
-   */
-  409: ProblemDetails
-}
-
-export type PostApiAgentPromptsError = PostApiAgentPromptsErrors[keyof PostApiAgentPromptsErrors]
-
-export type PostApiAgentPromptsResponses = {
-  /**
-   * Created
-   */
-  201: AgentPrompt
-}
-
-export type PostApiAgentPromptsResponse =
-  PostApiAgentPromptsResponses[keyof PostApiAgentPromptsResponses]
-
-export type DeleteApiAgentPromptsByNameByNameData = {
-  body?: never
-  path: {
-    name: string
-  }
   query?: {
     projectId?: string
+    branch?: string
   }
-  url: '/api/agent-prompts/by-name/{name}'
+  url: '/api/openspec/branch-state'
 }
 
-export type DeleteApiAgentPromptsByNameByNameErrors = {
+export type GetApiOpenspecBranchStateErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
 }
 
-export type DeleteApiAgentPromptsByNameByNameError =
-  DeleteApiAgentPromptsByNameByNameErrors[keyof DeleteApiAgentPromptsByNameByNameErrors]
+export type GetApiOpenspecBranchStateError =
+  GetApiOpenspecBranchStateErrors[keyof GetApiOpenspecBranchStateErrors]
 
-export type DeleteApiAgentPromptsByNameByNameResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type DeleteApiAgentPromptsByNameByNameResponse =
-  DeleteApiAgentPromptsByNameByNameResponses[keyof DeleteApiAgentPromptsByNameByNameResponses]
-
-export type GetApiAgentPromptsByNameByNameData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/agent-prompts/by-name/{name}'
-}
-
-export type GetApiAgentPromptsByNameByNameErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiAgentPromptsByNameByNameError =
-  GetApiAgentPromptsByNameByNameErrors[keyof GetApiAgentPromptsByNameByNameErrors]
-
-export type GetApiAgentPromptsByNameByNameResponses = {
+export type GetApiOpenspecBranchStateResponses = {
   /**
    * OK
    */
-  200: AgentPrompt
+  200: BranchStateSnapshot
 }
 
-export type GetApiAgentPromptsByNameByNameResponse =
-  GetApiAgentPromptsByNameByNameResponses[keyof GetApiAgentPromptsByNameByNameResponses]
+export type GetApiOpenspecBranchStateResponse =
+  GetApiOpenspecBranchStateResponses[keyof GetApiOpenspecBranchStateResponses]
 
-export type PutApiAgentPromptsByNameByNameData = {
-  body?: UpdateAgentPromptRequest
-  path: {
-    name: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/agent-prompts/by-name/{name}'
-}
-
-export type PutApiAgentPromptsByNameByNameErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PutApiAgentPromptsByNameByNameError =
-  PutApiAgentPromptsByNameByNameErrors[keyof PutApiAgentPromptsByNameByNameErrors]
-
-export type PutApiAgentPromptsByNameByNameResponses = {
-  /**
-   * OK
-   */
-  200: AgentPrompt
-}
-
-export type PutApiAgentPromptsByNameByNameResponse =
-  PutApiAgentPromptsByNameByNameResponses[keyof PutApiAgentPromptsByNameByNameResponses]
-
-export type GetApiAgentPromptsProjectByProjectIdData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/agent-prompts/project/{projectId}'
-}
-
-export type GetApiAgentPromptsProjectByProjectIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<AgentPrompt>
-}
-
-export type GetApiAgentPromptsProjectByProjectIdResponse =
-  GetApiAgentPromptsProjectByProjectIdResponses[keyof GetApiAgentPromptsProjectByProjectIdResponses]
-
-export type GetApiAgentPromptsAvailableForProjectByProjectIdData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/agent-prompts/available-for-project/{projectId}'
-}
-
-export type GetApiAgentPromptsAvailableForProjectByProjectIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<AgentPrompt>
-}
-
-export type GetApiAgentPromptsAvailableForProjectByProjectIdResponse =
-  GetApiAgentPromptsAvailableForProjectByProjectIdResponses[keyof GetApiAgentPromptsAvailableForProjectByProjectIdResponses]
-
-export type PostApiAgentPromptsEnsureDefaultsData = {
-  body?: never
+export type PostApiOpenspecBranchStateData = {
+  body?: BranchStateRequest
   path?: never
   query?: never
-  url: '/api/agent-prompts/ensure-defaults'
+  url: '/api/openspec/branch-state'
 }
 
-export type PostApiAgentPromptsEnsureDefaultsResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type PostApiAgentPromptsEnsureDefaultsResponse =
-  PostApiAgentPromptsEnsureDefaultsResponses[keyof PostApiAgentPromptsEnsureDefaultsResponses]
-
-export type PostApiAgentPromptsRestoreDefaultsData = {
-  body?: never
-  path?: never
-  query?: never
-  url: '/api/agent-prompts/restore-defaults'
-}
-
-export type PostApiAgentPromptsRestoreDefaultsResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type PostApiAgentPromptsRestoreDefaultsResponse =
-  PostApiAgentPromptsRestoreDefaultsResponses[keyof PostApiAgentPromptsRestoreDefaultsResponses]
-
-export type DeleteApiAgentPromptsProjectByProjectIdAllData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/agent-prompts/project/{projectId}/all'
-}
-
-export type DeleteApiAgentPromptsProjectByProjectIdAllResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type DeleteApiAgentPromptsProjectByProjectIdAllResponse =
-  DeleteApiAgentPromptsProjectByProjectIdAllResponses[keyof DeleteApiAgentPromptsProjectByProjectIdAllResponses]
-
-export type GetApiAgentPromptsIssueAgentPromptsData = {
-  body?: never
-  path?: never
-  query?: never
-  url: '/api/agent-prompts/issue-agent-prompts'
-}
-
-export type GetApiAgentPromptsIssueAgentPromptsResponses = {
-  /**
-   * OK
-   */
-  200: Array<AgentPrompt>
-}
-
-export type GetApiAgentPromptsIssueAgentPromptsResponse =
-  GetApiAgentPromptsIssueAgentPromptsResponses[keyof GetApiAgentPromptsIssueAgentPromptsResponses]
-
-export type GetApiAgentPromptsIssueAgentAvailableByProjectIdData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/agent-prompts/issue-agent/available/{projectId}'
-}
-
-export type GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses = {
-  /**
-   * OK
-   */
-  200: Array<AgentPrompt>
-}
-
-export type GetApiAgentPromptsIssueAgentAvailableByProjectIdResponse =
-  GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses[keyof GetApiAgentPromptsIssueAgentAvailableByProjectIdResponses]
-
-export type PostApiAgentPromptsCreateOverrideData = {
-  body?: CreateOverrideRequest
-  path?: never
-  query?: never
-  url: '/api/agent-prompts/create-override'
-}
-
-export type PostApiAgentPromptsCreateOverrideErrors = {
+export type PostApiOpenspecBranchStateErrors = {
   /**
    * Bad Request
    */
   400: ProblemDetails
+}
+
+export type PostApiOpenspecBranchStateError =
+  PostApiOpenspecBranchStateErrors[keyof PostApiOpenspecBranchStateErrors]
+
+export type PostApiOpenspecBranchStateResponses = {
+  /**
+   * OK
+   */
+  200: BranchStateSnapshot
+}
+
+export type PostApiOpenspecBranchStateResponse =
+  PostApiOpenspecBranchStateResponses[keyof PostApiOpenspecBranchStateResponses]
+
+export type GetApiOpenspecBranchStateResolveData = {
+  body?: never
+  path?: never
+  query?: {
+    projectId?: string
+    branch?: string
+  }
+  url: '/api/openspec/branch-state/resolve'
+}
+
+export type GetApiOpenspecBranchStateResolveErrors = {
   /**
    * Not Found
    */
   404: ProblemDetails
+}
+
+export type GetApiOpenspecBranchStateResolveError =
+  GetApiOpenspecBranchStateResolveErrors[keyof GetApiOpenspecBranchStateResolveErrors]
+
+export type GetApiOpenspecBranchStateResolveResponses = {
   /**
-   * Conflict
+   * OK
    */
-  409: ProblemDetails
+  200: BranchStateSnapshot
 }
 
-export type PostApiAgentPromptsCreateOverrideError =
-  PostApiAgentPromptsCreateOverrideErrors[keyof PostApiAgentPromptsCreateOverrideErrors]
+export type GetApiOpenspecBranchStateResolveResponse =
+  GetApiOpenspecBranchStateResolveResponses[keyof GetApiOpenspecBranchStateResolveResponses]
 
-export type PostApiAgentPromptsCreateOverrideResponses = {
-  /**
-   * Created
-   */
-  201: AgentPrompt
+export type PostApiOpenspecChangesLinkData = {
+  body?: LinkOrphanRequest
+  path?: never
+  query?: never
+  url: '/api/openspec/changes/link'
 }
 
-export type PostApiAgentPromptsCreateOverrideResponse =
-  PostApiAgentPromptsCreateOverrideResponses[keyof PostApiAgentPromptsCreateOverrideResponses]
-
-export type DeleteApiAgentPromptsByNameByNameOverrideData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/agent-prompts/by-name/{name}/override'
-}
-
-export type DeleteApiAgentPromptsByNameByNameOverrideErrors = {
+export type PostApiOpenspecChangesLinkErrors = {
   /**
    * Bad Request
    */
@@ -1793,18 +1360,18 @@ export type DeleteApiAgentPromptsByNameByNameOverrideErrors = {
   404: ProblemDetails
 }
 
-export type DeleteApiAgentPromptsByNameByNameOverrideError =
-  DeleteApiAgentPromptsByNameByNameOverrideErrors[keyof DeleteApiAgentPromptsByNameByNameOverrideErrors]
+export type PostApiOpenspecChangesLinkError =
+  PostApiOpenspecChangesLinkErrors[keyof PostApiOpenspecChangesLinkErrors]
 
-export type DeleteApiAgentPromptsByNameByNameOverrideResponses = {
+export type PostApiOpenspecChangesLinkResponses = {
   /**
-   * OK
+   * No Content
    */
-  200: AgentPrompt
+  204: void
 }
 
-export type DeleteApiAgentPromptsByNameByNameOverrideResponse =
-  DeleteApiAgentPromptsByNameByNameOverrideResponses[keyof DeleteApiAgentPromptsByNameByNameOverrideResponses]
+export type PostApiOpenspecChangesLinkResponse =
+  PostApiOpenspecChangesLinkResponses[keyof PostApiOpenspecChangesLinkResponses]
 
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
@@ -4520,6 +4087,35 @@ export type PutApiSettingsUserEmailResponses = {
 export type PutApiSettingsUserEmailResponse =
   PutApiSettingsUserEmailResponses[keyof PutApiSettingsUserEmailResponses]
 
+export type GetApiSkillsProjectByProjectIdData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/skills/project/{projectId}'
+}
+
+export type GetApiSkillsProjectByProjectIdErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiSkillsProjectByProjectIdError =
+  GetApiSkillsProjectByProjectIdErrors[keyof GetApiSkillsProjectByProjectIdErrors]
+
+export type GetApiSkillsProjectByProjectIdResponses = {
+  /**
+   * OK
+   */
+  200: DiscoveredSkills
+}
+
+export type GetApiSkillsProjectByProjectIdResponse =
+  GetApiSkillsProjectByProjectIdResponses[keyof GetApiSkillsProjectByProjectIdResponses]
+
 export type GetApiTelemetryConfigData = {
   body?: never
   path?: never
@@ -4536,386 +4132,3 @@ export type GetApiTelemetryConfigResponses = {
 
 export type GetApiTelemetryConfigResponse =
   GetApiTelemetryConfigResponses[keyof GetApiTelemetryConfigResponses]
-
-export type PostApiWorkflowsData = {
-  body?: CreateWorkflowRequest
-  path?: never
-  query?: never
-  url: '/api/workflows'
-}
-
-export type PostApiWorkflowsErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiWorkflowsError = PostApiWorkflowsErrors[keyof PostApiWorkflowsErrors]
-
-export type PostApiWorkflowsResponses = {
-  /**
-   * Created
-   */
-  201: WorkflowDefinition
-}
-
-export type PostApiWorkflowsResponse = PostApiWorkflowsResponses[keyof PostApiWorkflowsResponses]
-
-export type GetApiProjectsByProjectIdWorkflowsData = {
-  body?: never
-  path: {
-    projectId: string
-  }
-  query?: never
-  url: '/api/projects/{projectId}/workflows'
-}
-
-export type GetApiProjectsByProjectIdWorkflowsErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiProjectsByProjectIdWorkflowsError =
-  GetApiProjectsByProjectIdWorkflowsErrors[keyof GetApiProjectsByProjectIdWorkflowsErrors]
-
-export type GetApiProjectsByProjectIdWorkflowsResponses = {
-  /**
-   * OK
-   */
-  200: WorkflowListResponse
-}
-
-export type GetApiProjectsByProjectIdWorkflowsResponse =
-  GetApiProjectsByProjectIdWorkflowsResponses[keyof GetApiProjectsByProjectIdWorkflowsResponses]
-
-export type DeleteApiWorkflowsByWorkflowIdData = {
-  body?: never
-  path: {
-    workflowId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/workflows/{workflowId}'
-}
-
-export type DeleteApiWorkflowsByWorkflowIdErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type DeleteApiWorkflowsByWorkflowIdError =
-  DeleteApiWorkflowsByWorkflowIdErrors[keyof DeleteApiWorkflowsByWorkflowIdErrors]
-
-export type DeleteApiWorkflowsByWorkflowIdResponses = {
-  /**
-   * No Content
-   */
-  204: void
-}
-
-export type DeleteApiWorkflowsByWorkflowIdResponse =
-  DeleteApiWorkflowsByWorkflowIdResponses[keyof DeleteApiWorkflowsByWorkflowIdResponses]
-
-export type GetApiWorkflowsByWorkflowIdData = {
-  body?: never
-  path: {
-    workflowId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/workflows/{workflowId}'
-}
-
-export type GetApiWorkflowsByWorkflowIdErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiWorkflowsByWorkflowIdError =
-  GetApiWorkflowsByWorkflowIdErrors[keyof GetApiWorkflowsByWorkflowIdErrors]
-
-export type GetApiWorkflowsByWorkflowIdResponses = {
-  /**
-   * OK
-   */
-  200: WorkflowDefinition
-}
-
-export type GetApiWorkflowsByWorkflowIdResponse =
-  GetApiWorkflowsByWorkflowIdResponses[keyof GetApiWorkflowsByWorkflowIdResponses]
-
-export type PutApiWorkflowsByWorkflowIdData = {
-  body?: UpdateWorkflowRequest
-  path: {
-    workflowId: string
-  }
-  query?: never
-  url: '/api/workflows/{workflowId}'
-}
-
-export type PutApiWorkflowsByWorkflowIdErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PutApiWorkflowsByWorkflowIdError =
-  PutApiWorkflowsByWorkflowIdErrors[keyof PutApiWorkflowsByWorkflowIdErrors]
-
-export type PutApiWorkflowsByWorkflowIdResponses = {
-  /**
-   * OK
-   */
-  200: WorkflowDefinition
-}
-
-export type PutApiWorkflowsByWorkflowIdResponse =
-  PutApiWorkflowsByWorkflowIdResponses[keyof PutApiWorkflowsByWorkflowIdResponses]
-
-export type PostApiWorkflowsByWorkflowIdExecuteData = {
-  body?: ExecuteWorkflowRequest
-  path: {
-    workflowId: string
-  }
-  query?: never
-  url: '/api/workflows/{workflowId}/execute'
-}
-
-export type PostApiWorkflowsByWorkflowIdExecuteErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiWorkflowsByWorkflowIdExecuteError =
-  PostApiWorkflowsByWorkflowIdExecuteErrors[keyof PostApiWorkflowsByWorkflowIdExecuteErrors]
-
-export type PostApiWorkflowsByWorkflowIdExecuteResponses = {
-  /**
-   * Accepted
-   */
-  202: WorkflowExecutionResponse
-}
-
-export type PostApiWorkflowsByWorkflowIdExecuteResponse =
-  PostApiWorkflowsByWorkflowIdExecuteResponses[keyof PostApiWorkflowsByWorkflowIdExecuteResponses]
-
-export type GetApiWorkflowsByWorkflowIdExecutionsData = {
-  body?: never
-  path: {
-    workflowId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/workflows/{workflowId}/executions'
-}
-
-export type GetApiWorkflowsByWorkflowIdExecutionsErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiWorkflowsByWorkflowIdExecutionsError =
-  GetApiWorkflowsByWorkflowIdExecutionsErrors[keyof GetApiWorkflowsByWorkflowIdExecutionsErrors]
-
-export type GetApiWorkflowsByWorkflowIdExecutionsResponses = {
-  /**
-   * OK
-   */
-  200: ExecutionListResponse
-}
-
-export type GetApiWorkflowsByWorkflowIdExecutionsResponse =
-  GetApiWorkflowsByWorkflowIdExecutionsResponses[keyof GetApiWorkflowsByWorkflowIdExecutionsResponses]
-
-export type GetApiExecutionsByExecutionIdData = {
-  body?: never
-  path: {
-    executionId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/executions/{executionId}'
-}
-
-export type GetApiExecutionsByExecutionIdErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiExecutionsByExecutionIdError =
-  GetApiExecutionsByExecutionIdErrors[keyof GetApiExecutionsByExecutionIdErrors]
-
-export type GetApiExecutionsByExecutionIdResponses = {
-  /**
-   * OK
-   */
-  200: WorkflowExecution
-}
-
-export type GetApiExecutionsByExecutionIdResponse =
-  GetApiExecutionsByExecutionIdResponses[keyof GetApiExecutionsByExecutionIdResponses]
-
-export type PostApiExecutionsByExecutionIdCancelData = {
-  body?: CancelWorkflowExecutionRequest
-  path: {
-    executionId: string
-  }
-  query?: never
-  url: '/api/executions/{executionId}/cancel'
-}
-
-export type PostApiExecutionsByExecutionIdCancelErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiExecutionsByExecutionIdCancelError =
-  PostApiExecutionsByExecutionIdCancelErrors[keyof PostApiExecutionsByExecutionIdCancelErrors]
-
-export type PostApiExecutionsByExecutionIdCancelResponses = {
-  /**
-   * OK
-   */
-  200: WorkflowExecutionResponse
-}
-
-export type PostApiExecutionsByExecutionIdCancelResponse =
-  PostApiExecutionsByExecutionIdCancelResponses[keyof PostApiExecutionsByExecutionIdCancelResponses]
-
-export type GetApiExecutionsByExecutionIdContextData = {
-  body?: never
-  path: {
-    executionId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/executions/{executionId}/context'
-}
-
-export type GetApiExecutionsByExecutionIdContextErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type GetApiExecutionsByExecutionIdContextError =
-  GetApiExecutionsByExecutionIdContextErrors[keyof GetApiExecutionsByExecutionIdContextErrors]
-
-export type GetApiExecutionsByExecutionIdContextResponses = {
-  /**
-   * OK
-   */
-  200: StoredWorkflowContext
-}
-
-export type GetApiExecutionsByExecutionIdContextResponse =
-  GetApiExecutionsByExecutionIdContextResponses[keyof GetApiExecutionsByExecutionIdContextResponses]
-
-export type PostApiExecutionsByExecutionIdStepsByStepIdSignalData = {
-  body?: WorkflowStepSignalRequest
-  path: {
-    executionId: string
-    stepId: string
-  }
-  query?: never
-  url: '/api/executions/{executionId}/steps/{stepId}/signal'
-}
-
-export type PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiExecutionsByExecutionIdStepsByStepIdSignalError =
-  PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors[keyof PostApiExecutionsByExecutionIdStepsByStepIdSignalErrors]
-
-export type PostApiExecutionsByExecutionIdStepsByStepIdSignalResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type GetApiWorkflowTemplatesData = {
-  body?: never
-  path?: never
-  query?: never
-  url: '/api/workflow-templates'
-}
-
-export type GetApiWorkflowTemplatesResponses = {
-  /**
-   * OK
-   */
-  200: Array<WorkflowTemplateSummary>
-}
-
-export type GetApiWorkflowTemplatesResponse =
-  GetApiWorkflowTemplatesResponses[keyof GetApiWorkflowTemplatesResponses]
-
-export type PostApiWorkflowTemplatesByTemplateIdCreateData = {
-  body?: never
-  path: {
-    templateId: string
-  }
-  query?: {
-    projectId?: string
-  }
-  url: '/api/workflow-templates/{templateId}/create'
-}
-
-export type PostApiWorkflowTemplatesByTemplateIdCreateErrors = {
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiWorkflowTemplatesByTemplateIdCreateError =
-  PostApiWorkflowTemplatesByTemplateIdCreateErrors[keyof PostApiWorkflowTemplatesByTemplateIdCreateErrors]
-
-export type PostApiWorkflowTemplatesByTemplateIdCreateResponses = {
-  /**
-   * Created
-   */
-  201: WorkflowDefinition
-}
-
-export type PostApiWorkflowTemplatesByTemplateIdCreateResponse =
-  PostApiWorkflowTemplatesByTemplateIdCreateResponses[keyof PostApiWorkflowTemplatesByTemplateIdCreateResponses]

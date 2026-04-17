@@ -69,9 +69,7 @@ function IssuesList() {
   // Run agent dialog state (consolidates agent launcher + issues agent)
   const [runAgentOpen, setRunAgentOpen] = useState(false)
   const [runAgentIssueId, setRunAgentIssueId] = useState<string | null>(null)
-  const [runAgentDefaultTab, setRunAgentDefaultTab] = useState<
-    'task' | 'issues' | 'workflow' | undefined
-  >()
+  const [runAgentDefaultTab, setRunAgentDefaultTab] = useState<'task' | 'issues' | undefined>()
 
   // Assign issue popover state
   const [assignPopoverOpen, setAssignPopoverOpen] = useState(false)
@@ -294,11 +292,6 @@ function IssuesList() {
     setRunAgentOpen(true)
   }, [])
 
-  const handleOpenWorkflow = useCallback(() => {
-    setRunAgentDefaultTab('workflow')
-    setRunAgentOpen(true)
-  }, [])
-
   // Handler for running agent on a specific issue (from row actions)
   const handleRunAgent = useCallback((issueId: string) => {
     setRunAgentIssueId(issueId)
@@ -431,7 +424,6 @@ function IssuesList() {
         onEditIssue={() => handleEditIssue()}
         onOpenAgentLauncher={handleOpenAgentLauncher}
         onOpenIssuesAgent={handleOpenIssuesAgent}
-        onOpenWorkflow={handleOpenWorkflow}
         onAssignIssue={handleAssignIssue}
         depth={depth}
         onDepthChange={setDepth}

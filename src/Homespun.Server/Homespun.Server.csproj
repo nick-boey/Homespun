@@ -22,18 +22,13 @@
         <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
         <PackageReference Include="Octokit" Version="14.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
+        <PackageReference Include="YamlDotNet" Version="16.2.1" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" />
         <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
         <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <Content Update="Features\ClaudeCode\Resources\default-prompts.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </Content>
     </ItemGroup>
 
 </Project>

@@ -25,14 +25,12 @@ global using QuestionAnswer = Homespun.Shared.Models.Sessions.QuestionAnswer;
 global using ClaudeModelInfo = Homespun.Shared.Models.Sessions.ClaudeModelInfo;
 global using DiscoveredSession = Homespun.Shared.Models.Sessions.DiscoveredSession;
 global using SessionMetadata = Homespun.Shared.Models.Sessions.SessionMetadata;
-global using AgentPrompt = Homespun.Shared.Models.Sessions.AgentPrompt;
 global using SessionSummary = Homespun.Shared.Models.Sessions.SessionSummary;
 global using SessionTodoItem = Homespun.Shared.Models.Sessions.SessionTodoItem;
 global using TodoStatus = Homespun.Shared.Models.Sessions.TodoStatus;
 global using ResumableSession = Homespun.Shared.Models.Sessions.ResumableSession;
 global using AgentStartupState = Homespun.Shared.Models.Sessions.AgentStartupState;
 global using AgentStartupStatus = Homespun.Shared.Models.Sessions.AgentStartupStatus;
-global using PromptContext = Homespun.Shared.Models.Sessions.PromptContext;
 global using ClaudeSessionStatusExtensions = Homespun.Shared.Models.Sessions.ClaudeSessionStatusExtensions;
 global using static Homespun.Shared.Models.Sessions.ClaudeSessionStatusExtensions;
 

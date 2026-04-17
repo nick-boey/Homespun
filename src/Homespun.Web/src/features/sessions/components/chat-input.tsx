@@ -1,12 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Send, Loader2, Shield, Sparkles, Hammer, ScrollText } from 'lucide-react'
+import { Send, Loader2, Shield, Sparkles, Hammer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import {
   PromptInput,
@@ -24,8 +23,6 @@ import {
   MentionSearchPopup,
   type MentionSelection,
 } from '@/features/search'
-import { useAgentPrompts } from '@/features/agents/hooks'
-import { renderPromptTemplate, type PromptContext } from '../utils/render-prompt-template'
 
 export interface ChatInputProps {
   onSend: (message: string, sessionMode: SessionMode, model: ModelSelection) => void
@@ -37,7 +34,6 @@ export interface ChatInputProps {
   disabled?: boolean
   isLoading?: boolean
   placeholder?: string
-  issueContext?: PromptContext | null
 }
 
 const MODEL_LABELS: Record<ModelSelection, string> = {
@@ -56,12 +52,8 @@ export function ChatInput({
   disabled = false,
   isLoading = false,
   placeholder = 'Type a message...',
-  issueContext,
 }: ChatInputProps) {
   const [value, setValue] = useState('')
-
-  // Fetch available prompts for the project
-  const { data: prompts, isLoading: promptsLoading } = useAgentPrompts(projectId || '')
 
   const handleSubmit = useCallback(() => {
     const trimmedValue = value.trim()
@@ -81,23 +73,6 @@ export function ChatInput({
       onModelChange(newModel)
     },
     [onModelChange]
-  )
-
-  // Handle prompt selection - appends rendered template to input
-  const handlePromptSelect = useCallback(
-    (promptId: string) => {
-      if (!prompts || !issueContext) return
-
-      const prompt = prompts.find((p) => p.name === promptId)
-      if (!prompt?.initialMessage) return
-
-      const rendered = renderPromptTemplate(prompt.initialMessage, issueContext)
-      if (!rendered) return
-
-      // Append to existing value with blank line separator
-      setValue((prev) => (prev ? `${prev}\n\n${rendered}` : rendered))
-    },
-    [prompts, issueContext]
   )
 
   const handleTextareaKeyDown = useCallback(
@@ -166,44 +141,6 @@ export function ChatInput({
               <DropdownMenuItem onClick={() => handleModelChange('haiku')}>Haiku</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Prompt Selector - only show when projectId and issueContext are available */}
-          {projectId && issueContext && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1"
-                  aria-label="Select prompt"
-                  disabled={disabled || promptsLoading}
-                >
-                  <ScrollText className="h-4 w-4" />
-                  <span>Prompt</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem disabled>
-                  <span className="text-muted-foreground">Select a prompt to fill</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {prompts?.map((prompt) => (
-                  <DropdownMenuItem
-                    key={prompt.name}
-                    onClick={() => handlePromptSelect(prompt.name ?? '')}
-                  >
-                    {prompt.name}
-                    {prompt.isOverride && ' (project)'}
-                  </DropdownMenuItem>
-                ))}
-                {(!prompts || prompts.length === 0) && (
-                  <DropdownMenuItem disabled>
-                    <span className="text-muted-foreground">No prompts available</span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </PromptInputActions>
 

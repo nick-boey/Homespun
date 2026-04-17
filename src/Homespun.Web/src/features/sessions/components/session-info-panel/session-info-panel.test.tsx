@@ -70,6 +70,12 @@ vi.mock('./session-history-tab', () => ({
   ),
 }))
 
+vi.mock('./session-skills-tab', () => ({
+  SessionSkillsTab: ({ session }: { session: ClaudeSession }) => (
+    <div data-testid="session-skills-tab">Skills Tab - {session.projectId}</div>
+  ),
+}))
+
 // Mock UI components
 vi.mock('@/components/ui/tabs', () => ({
   Tabs: ({

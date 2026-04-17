@@ -98,6 +98,7 @@ public class GraphServiceIncrementalRefreshTests
             _mockWorkflowService.Object,
             _mockCacheService.Object,
             _mockPrStatusResolver.Object,
+            new Mock<Homespun.Features.OpenSpec.Services.IIssueGraphOpenSpecEnricher>().Object,
             _mockLogger.Object);
     }
 

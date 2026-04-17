@@ -12,7 +12,6 @@ import {
   Redo2,
   Pencil,
   Play,
-  Workflow,
   Minus,
   Plus,
   Search,
@@ -62,7 +61,6 @@ export interface ProjectToolbarProps {
   onEditIssue: () => void
   onOpenAgentLauncher: () => void
   onOpenIssuesAgent: () => void
-  onOpenWorkflow: () => void
   onAssignIssue: () => void
   depth: number
   onDepthChange: (depth: number) => void
@@ -115,7 +113,6 @@ export function ProjectToolbar({
   onEditIssue,
   onOpenAgentLauncher,
   onOpenIssuesAgent,
-  onOpenWorkflow,
   onAssignIssue,
   depth,
   onDepthChange,
@@ -345,16 +342,6 @@ export function ProjectToolbar({
           data-testid="toolbar-issues-agent"
         >
           <ListTodo className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size={buttonSize}
-          onClick={onOpenWorkflow}
-          aria-label="Run Workflow"
-          title="Run Workflow"
-          data-testid="toolbar-workflow"
-        >
-          <Workflow className="h-4 w-4" />
         </Button>
       </ButtonGroup>
 

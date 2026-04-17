@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
-using Fleece.Core.Models;
+using System.Text;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
-using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 
@@ -68,8 +67,7 @@ public class AgentStartBackgroundService(
         using var scope = serviceProvider.CreateScope();
         var cloneService = scope.ServiceProvider.GetRequiredService<IGitCloneService>();
         var sessionService = scope.ServiceProvider.GetRequiredService<IClaudeSessionService>();
-        var agentPromptService = scope.ServiceProvider.GetRequiredService<IAgentPromptService>();
-        var fleeceService = scope.ServiceProvider.GetRequiredService<IProjectFleeceService>();
+        var skillDiscovery = scope.ServiceProvider.GetRequiredService<ISkillDiscoveryService>();
         var fleeceIssuesSyncService = scope.ServiceProvider.GetRequiredService<IFleeceIssuesSyncService>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
         var baseBranchResolver = scope.ServiceProvider.GetRequiredService<IBaseBranchResolver>();
@@ -160,39 +158,9 @@ public class AgentStartBackgroundService(
                     clonePath, request.BranchName);
             }
 
-            // Step 2: Resolve mode and initial message
-            string? renderedMessage = request.Instructions ?? request.UserInstructions;
-            var mode = request.Mode ?? SessionMode.Plan;
-
-            // Resolve mode from prompt when no explicit mode is set
-            if (!request.Mode.HasValue && !string.IsNullOrEmpty(request.PromptName))
-            {
-                var prompt = agentPromptService.GetPrompt(request.PromptName, null);
-                if (prompt != null)
-                {
-                    mode = prompt.Mode;
-
-                    // Only render template when no user-provided message
-                    if (string.IsNullOrEmpty(renderedMessage))
-                    {
-                        // Build hierarchical context (ancestors and direct children)
-                        var allIssues = await fleeceService.ListIssuesAsync(request.ProjectLocalPath);
-                        var treeContext = IssueTreeFormatter.FormatIssueTree(request.Issue, allIssues);
-
-                        var promptContext = new PromptContext
-                        {
-                            Title = request.Issue.Title,
-                            Id = request.Issue.Id,
-                            Description = request.Issue.Description,
-                            Branch = request.BranchName,
-                            Type = request.Issue.Type.ToString(),
-                            Context = treeContext
-                        };
-
-                        renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
-                    }
-                }
-            }
+            // Step 2: Resolve mode and initial message via skill (if any)
+            var (initialMessage, mode) = await ResolveDispatchAsync(
+                request, skillDiscovery, clonePath, cts.Token);
 
             // Step 3: Create session
             var session = await sessionService.StartSessionAsync(
@@ -201,35 +169,16 @@ public class AgentStartBackgroundService(
                 clonePath,
                 mode,
                 request.Model,
-                systemPrompt: null);
+                systemPrompt: request.SystemPromptOverride);
 
-            // Step 3.5: Register with workflow if this is a workflow request
-            if (request.IsWorkflowRequest)
-            {
-                var workflowSessionCallback = scope.ServiceProvider.GetRequiredService<IWorkflowSessionCallback>();
-                var workflowContext = new WorkflowSessionContext
-                {
-                    ExecutionId = request.WorkflowExecutionId!,
-                    StepId = request.WorkflowStepId!,
-                    WorkflowId = request.WorkflowExecutionId!,
-                    ProjectPath = request.ProjectLocalPath
-                };
-
-                workflowSessionCallback.RegisterSession(session.Id, workflowContext);
-
-                logger.LogInformation(
-                    "Registered session {SessionId} with workflow execution {ExecutionId}, step {StepId}",
-                    session.Id, request.WorkflowExecutionId, request.WorkflowStepId);
-            }
-
-            // Step 4: Send the rendered initial message (fire and forget)
-            if (!string.IsNullOrWhiteSpace(renderedMessage))
+            // Step 4: Send the composed initial message (fire and forget)
+            if (!string.IsNullOrWhiteSpace(initialMessage))
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await sessionService.SendMessageAsync(session.Id, renderedMessage, mode);
+                        await sessionService.SendMessageAsync(session.Id, initialMessage, mode);
                     }
                     catch (Exception ex)
                     {
@@ -262,5 +211,93 @@ public class AgentStartBackgroundService(
             await hubContext.BroadcastAgentStartFailed(
                 request.IssueId, request.ProjectId, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Resolve the initial message and session mode for a dispatch:
+    /// - If the request names a skill, compose the skill body + args + user instructions.
+    /// - Otherwise, use the user instructions as the initial message.
+    /// - Session mode: explicit request.Mode wins; else skill.Mode; else Plan.
+    /// </summary>
+    internal static async Task<(string? InitialMessage, SessionMode Mode)> ResolveDispatchAsync(
+        AgentStartRequest request,
+        ISkillDiscoveryService skillDiscovery,
+        string clonePath,
+        CancellationToken cancellationToken)
+    {
+        SkillDescriptor? skill = null;
+        if (!string.IsNullOrWhiteSpace(request.SkillName))
+        {
+            skill = await skillDiscovery
+                .GetSkillAsync(clonePath, request.SkillName, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var mode = request.Mode ?? skill?.Mode ?? SessionMode.Plan;
+        var message = ComposeInitialMessage(skill, request.SkillArgs, request.UserInstructions);
+        return (message, mode);
+    }
+
+    /// <summary>
+    /// Build the dispatch message. Shape:
+    /// <code>
+    /// {skill body}
+    ///
+    /// ## Args
+    /// arg-name: value
+    ///
+    /// {user instructions}
+    /// </code>
+    /// Each section is omitted when empty. When no skill is resolved, only
+    /// the user instructions are returned (or null when blank).
+    /// </summary>
+    internal static string? ComposeInitialMessage(
+        SkillDescriptor? skill,
+        IReadOnlyDictionary<string, string>? args,
+        string? userInstructions)
+    {
+        var hasSkill = skill is { SkillBody: { } body } && !string.IsNullOrWhiteSpace(body);
+        var hasUser = !string.IsNullOrWhiteSpace(userInstructions);
+        var argEntries = args?
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+            .ToList() ?? new List<KeyValuePair<string, string>>();
+
+        if (!hasSkill && !hasUser)
+        {
+            return null;
+        }
+
+        var sb = new StringBuilder();
+        if (hasSkill)
+        {
+            sb.Append(skill!.SkillBody!.TrimEnd());
+        }
+
+        if (argEntries.Count > 0)
+        {
+            if (sb.Length > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine();
+            }
+            sb.AppendLine("## Args");
+            foreach (var (name, value) in argEntries)
+            {
+                sb.Append(name);
+                sb.Append(": ");
+                sb.AppendLine(value);
+            }
+        }
+
+        if (hasUser)
+        {
+            if (sb.Length > 0)
+            {
+                sb.AppendLine();
+            }
+            sb.Append(userInstructions!.TrimEnd());
+        }
+
+        return sb.ToString();
     }
 }
