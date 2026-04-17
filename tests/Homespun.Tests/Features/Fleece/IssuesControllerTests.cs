@@ -813,6 +813,48 @@ public class IssuesControllerTests
             Times.Once);
     }
 
+    [Test]
+    public async Task RunAgent_PassesSkillNameAndArgsToBackgroundService()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            SkillName = "fix-bug",
+            SkillArgs = new Dictionary<string, string>
+            {
+                ["issue-id"] = issueId
+            }
+        };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<AcceptedResult>());
+
+        _agentStartBackgroundServiceMock.Verify(
+            x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(req =>
+                req.IssueId == issueId &&
+                req.SkillName == "fix-bug" &&
+                req.SkillArgs != null &&
+                req.SkillArgs["issue-id"] == issueId)),
+            Times.Once);
+    }
+
     #endregion
 
     #region Update Auto-Assign Tests

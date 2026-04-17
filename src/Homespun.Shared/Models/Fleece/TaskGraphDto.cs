@@ -1,4 +1,5 @@
 using Homespun.Shared.Models.Gitgraph;
+using Homespun.Shared.Models.OpenSpec;
 
 namespace Homespun.Shared.Models.Fleece;
 
@@ -31,6 +32,18 @@ public class TaskGraphResponse
     /// Linked PR information keyed by issue ID.
     /// </summary>
     public Dictionary<string, TaskGraphLinkedPr> LinkedPrs { get; set; } = new();
+
+    /// <summary>
+    /// OpenSpec state projection keyed by issue ID. Populated for issues whose branch is
+    /// present on disk; omitted otherwise.
+    /// </summary>
+    public Dictionary<string, IssueOpenSpecState> OpenSpecStates { get; set; } = new();
+
+    /// <summary>
+    /// Orphan OpenSpec changes that live on <c>main</c> (no owning issue).
+    /// Rendered as a separate "Orphaned Changes" section at the bottom of the graph.
+    /// </summary>
+    public List<SnapshotOrphan> MainOrphanChanges { get; set; } = [];
 }
 
 public class TaskGraphNodeResponse

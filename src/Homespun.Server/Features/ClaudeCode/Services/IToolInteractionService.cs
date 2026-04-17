@@ -5,7 +5,7 @@ namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
 /// Handles question/answer flow, plan management (capture, approval, execution),
-/// workflow signals, and ExitPlanMode processing.
+/// and ExitPlanMode processing.
 /// </summary>
 public interface IToolInteractionService
 {
@@ -15,13 +15,6 @@ public interface IToolInteractionService
 
     Task ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
         CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Handles a <c>workflow_signal</c> tool call emitted by the agent. <paramref name="toolInputJson"/>
-    /// is the raw JSON the agent passed to the tool (contains <c>status</c>, optional <c>message</c>,
-    /// optional <c>data</c>).
-    /// </summary>
-    Task HandleWorkflowSignalToolAsync(string sessionId, string? toolInputJson, CancellationToken cancellationToken);
 
     /// <summary>
     /// Fallback handler for <c>AskUserQuestion</c> tool calls that reach the server without

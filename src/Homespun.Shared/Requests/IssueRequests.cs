@@ -235,6 +235,19 @@ public class RunAgentRequest
     /// Optional user instructions to send as the initial message.
     /// </summary>
     public string? UserInstructions { get; set; }
+
+    /// <summary>
+    /// Optional skill name (directory under <c>.claude/skills/</c>) to dispatch with.
+    /// When set, the skill's SKILL.md body is composed into the initial message and
+    /// the skill's declared mode is applied when <see cref="Mode"/> is not set.
+    /// </summary>
+    public string? SkillName { get; set; }
+
+    /// <summary>
+    /// Optional named arguments to append to the skill body when composing the
+    /// initial message. Each entry becomes an <c>arg-name: value</c> line.
+    /// </summary>
+    public Dictionary<string, string>? SkillArgs { get; set; }
 }
 
 /// <summary>

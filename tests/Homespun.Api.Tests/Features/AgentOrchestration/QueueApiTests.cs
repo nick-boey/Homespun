@@ -121,31 +121,6 @@ public class QueueApiTests
     }
 
     [Test]
-    public async Task Start_ReturnsBadRequest_WhenWorkflowIdInvalid()
-    {
-        var projectId = await CreateTestProject("queue-start-bad-wf");
-        if (projectId == null)
-        {
-            Assert.Inconclusive("Could not create test project in mock mode");
-            return;
-        }
-
-        var request = new StartQueueRequest
-        {
-            IssueId = "issue1",
-            WorkflowMappings = new Dictionary<string, string>
-            {
-                { "task", "nonexistent-workflow" }
-            }
-        };
-
-        var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/queue/start", request, JsonOptions);
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    [Test]
     public async Task Start_Endpoints_DoNotReturn500()
     {
         var request = new StartQueueRequest { IssueId = "issue1" };

@@ -16,6 +16,10 @@ export interface RunAgentParams {
   baseBranch?: string
   /** Optional user instructions to send as the initial message */
   userInstructions?: string
+  /** Optional skill name to dispatch with (composes SKILL.md body + args) */
+  skillName?: string
+  /** Optional named arguments to append to the skill body */
+  skillArgs?: Record<string, string>
 }
 
 export interface RunAgentResult {
@@ -79,6 +83,8 @@ export function useRunAgent() {
           model: params.model,
           baseBranch: params.baseBranch,
           userInstructions: params.userInstructions,
+          skillName: params.skillName,
+          skillArgs: params.skillArgs,
         },
       })
 

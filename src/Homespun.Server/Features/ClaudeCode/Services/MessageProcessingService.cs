@@ -8,7 +8,7 @@ namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
 /// Handles sending messages and orchestrates the per-turn lifecycle (status transitions,
-/// turn id bookkeeping, session result aggregation, workflow callbacks, error handling).
+/// turn id bookkeeping, session result aggregation, error handling).
 ///
 /// <para>
 /// Content-block assembly, AG-UI broadcast, and message-cache persistence have moved to
@@ -28,7 +28,6 @@ public class MessageProcessingService : IMessageProcessingService
     private readonly IFleeceIssueTransitionService _fleeceTransitionService;
     private readonly ISessionStateManager _stateManager;
     private readonly IToolInteractionService _toolInteraction;
-    private readonly Lazy<Features.Workflows.Services.IWorkflowSessionCallback> _workflowSessionCallback;
     private readonly ISessionMetadataStore _metadataStore;
 
     public MessageProcessingService(
@@ -39,7 +38,6 @@ public class MessageProcessingService : IMessageProcessingService
         IFleeceIssueTransitionService fleeceTransitionService,
         ISessionStateManager stateManager,
         IToolInteractionService toolInteraction,
-        Lazy<Features.Workflows.Services.IWorkflowSessionCallback> workflowSessionCallback,
         ISessionMetadataStore metadataStore)
     {
         _sessionStore = sessionStore;
@@ -49,7 +47,6 @@ public class MessageProcessingService : IMessageProcessingService
         _fleeceTransitionService = fleeceTransitionService;
         _stateManager = stateManager;
         _toolInteraction = toolInteraction;
-        _workflowSessionCallback = workflowSessionCallback;
         _metadataStore = metadataStore;
     }
 
@@ -260,9 +257,6 @@ public class MessageProcessingService : IMessageProcessingService
 
             // Run error is broadcast as a SessionEventEnvelope by SessionEventIngestor
             // when it observes the failed A2A StatusUpdate event.
-
-            await _workflowSessionCallback.Value.HandleSessionFailedAsync(
-                sessionId, errorMessage, CancellationToken.None);
         }
 
         if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
@@ -281,15 +275,6 @@ public class MessageProcessingService : IMessageProcessingService
         }
 
         await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
-
-        if (!resultMsg.IsError)
-        {
-            // Run finished is broadcast as a SessionEventEnvelope by SessionEventIngestor
-            // when it observes the completed A2A StatusUpdate.
-            _stateManager.GetRunId(sessionId);
-            await _workflowSessionCallback.Value.HandleSessionCompletedAsync(
-                sessionId, CancellationToken.None);
-        }
     }
 
     private static string BuildErrorMessage(SdkResultMessage resultMsg)

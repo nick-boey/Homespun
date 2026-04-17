@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { FolderKanban, List, Settings, Bot, FolderGit2, MessageSquare } from 'lucide-react'
+import { FolderKanban, List, Settings, Bot, FolderGit2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjects } from '@/features/projects/hooks/use-projects'
 
@@ -105,13 +105,6 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             icon={<Bot className="h-4 w-4" />}
             label="Sessions"
             isActive={isActive('/sessions')}
-            onClick={onNavigate}
-          />
-          <NavItem
-            to="/prompts"
-            icon={<MessageSquare className="h-4 w-4" />}
-            label="Prompts"
-            isActive={isActive('/prompts')}
             onClick={onNavigate}
           />
           <NavItem

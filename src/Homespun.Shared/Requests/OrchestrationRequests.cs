@@ -28,12 +28,6 @@ public class StartQueueRequest
     /// The root issue ID to start execution from.
     /// </summary>
     public required string IssueId { get; set; }
-
-    /// <summary>
-    /// Per-issue-type workflow mapping: which workflow to run for each issue type.
-    /// Keys are issue types (e.g. "task", "bug"), values are workflow IDs.
-    /// </summary>
-    public Dictionary<string, string>? WorkflowMappings { get; set; }
 }
 
 /// <summary>

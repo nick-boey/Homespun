@@ -1,6 +1,5 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.Projects;
-using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,11 +14,10 @@ namespace Homespun.Features.AgentOrchestration.Controllers;
 public class QueueController(
     IQueueCoordinator queueCoordinator,
     IProjectService projectService,
-    IWorkflowStorageService workflowStorageService,
     ILogger<QueueController> logger) : ControllerBase
 {
     /// <summary>
-    /// Start queue execution on a root issue with optional per-issue-type workflow mappings.
+    /// Start queue execution on a root issue.
     /// </summary>
     [HttpPost("start")]
     [ProducesResponseType<QueueStatusResponse>(StatusCodes.Status200OK)]
@@ -37,17 +35,6 @@ public class QueueController(
         if (string.IsNullOrWhiteSpace(request.IssueId))
             return BadRequest("IssueId is required");
 
-        // Validate all referenced workflow IDs exist
-        if (request.WorkflowMappings is { Count: > 0 })
-        {
-            foreach (var (issueType, workflowId) in request.WorkflowMappings)
-            {
-                var workflow = await workflowStorageService.GetWorkflowAsync(project.LocalPath, workflowId, cancellationToken);
-                if (workflow == null)
-                    return BadRequest($"Workflow '{workflowId}' not found for issue type '{issueType}'");
-            }
-        }
-
         try
         {
             await queueCoordinator.StartExecution(
@@ -55,7 +42,6 @@ public class QueueController(
                 request.IssueId,
                 project.LocalPath,
                 project.DefaultBranch,
-                request.WorkflowMappings ?? new Dictionary<string, string>(),
                 cancellationToken);
         }
         catch (KeyNotFoundException ex)

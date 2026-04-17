@@ -24,7 +24,6 @@ import {
   useChangeSessionSettings,
   SessionInfoPanel,
   useSessionNavigation,
-  useIssueContext,
   useSessionShortcuts,
 } from '@/features/sessions'
 import { useSessionEvents } from '@/features/sessions/hooks/use-session-events'
@@ -115,9 +114,6 @@ function SessionChat({ sessionId }: { sessionId: string }) {
 
   // Fetch entity info
   const { data: entityInfo } = useEntityInfo(session?.entityId, session?.projectId)
-
-  // Fetch issue context for prompt template rendering
-  const { data: issueContext } = useIssueContext(session?.entityId, session?.projectId)
 
   // Stop session mutation
   const stopSession = useStopSession()
@@ -426,7 +422,6 @@ function SessionChat({ sessionId }: { sessionId: string }) {
                       ? 'Type feedback to modify the plan...'
                       : 'Type a message...'
             }
-            issueContext={issueContext}
           />
         </div>
       )}

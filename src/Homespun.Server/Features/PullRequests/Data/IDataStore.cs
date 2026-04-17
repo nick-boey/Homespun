@@ -93,40 +93,6 @@ public interface IDataStore
 
     #endregion
 
-    #region Agent Prompts
-
-    /// <summary>
-    /// Gets all agent prompts.
-    /// </summary>
-    IReadOnlyList<AgentPrompt> AgentPrompts { get; }
-
-    /// <summary>
-    /// Adds an agent prompt to the store.
-    /// </summary>
-    Task AddAgentPromptAsync(AgentPrompt prompt);
-
-    /// <summary>
-    /// Updates an agent prompt in the store.
-    /// </summary>
-    Task UpdateAgentPromptAsync(AgentPrompt prompt);
-
-    /// <summary>
-    /// Removes an agent prompt from the store by name and project scope.
-    /// </summary>
-    Task RemoveAgentPromptAsync(string name, string? projectId);
-
-    /// <summary>
-    /// Gets an agent prompt by name and project scope (composite key).
-    /// </summary>
-    AgentPrompt? GetAgentPrompt(string name, string? projectId);
-
-    /// <summary>
-    /// Gets agent prompts scoped to a specific project (not global prompts).
-    /// </summary>
-    IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId);
-
-    #endregion
-
     #region User Settings
 
     /// <summary>

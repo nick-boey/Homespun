@@ -37,17 +37,6 @@ public interface IQueueCoordinator
     Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default);
 
     /// <summary>
-    /// Starts execution from a root issue with per-issue-type workflow mappings.
-    /// </summary>
-    /// <param name="projectId">The project ID.</param>
-    /// <param name="issueId">The root issue ID to start from.</param>
-    /// <param name="projectPath">The local project path.</param>
-    /// <param name="defaultBranch">The default git branch.</param>
-    /// <param name="workflowMappings">Mapping of issue type to workflow ID.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, Dictionary<string, string> workflowMappings, CancellationToken ct = default);
-
-    /// <summary>
     /// Gets all active queues for a project.
     /// </summary>
     IReadOnlyList<ITaskQueue> GetActiveQueues(string projectId);

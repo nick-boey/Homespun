@@ -50,7 +50,6 @@ const defaultProps = {
   onNextMatch: vi.fn(),
   onPreviousMatch: vi.fn(),
   onEmbedSearch: vi.fn(),
-  onOpenWorkflow: vi.fn(),
   onApplyDefaultFilter: vi.fn(),
   onRemoveParent: vi.fn(),
   onRemoveAllParents: vi.fn(),
@@ -460,22 +459,6 @@ describe('ProjectToolbar', () => {
 
       await user.click(screen.getByRole('button', { name: /run agent/i }))
       expect(onOpenAgentLauncher).toHaveBeenCalled()
-    })
-  })
-
-  describe('Workflow button', () => {
-    it('renders workflow button', () => {
-      renderToolbar()
-      expect(screen.getByTestId('toolbar-workflow')).toBeInTheDocument()
-    })
-
-    it('calls onOpenWorkflow when workflow button is clicked', async () => {
-      const user = userEvent.setup()
-      const onOpenWorkflow = vi.fn()
-      renderToolbar({ onOpenWorkflow })
-
-      await user.click(screen.getByTestId('toolbar-workflow'))
-      expect(onOpenWorkflow).toHaveBeenCalled()
     })
   })
 
