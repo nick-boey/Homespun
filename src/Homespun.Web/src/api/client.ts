@@ -263,7 +263,7 @@ function getPathFromUrl(url: string): string {
 function isExcludedFromTelemetry(url: string): boolean {
   const path = getPathFromUrl(url)
   return (
-    path.includes('/api/clienttelemetry') || path.includes('/health') || path.includes('/metrics')
+    path.includes('/api/client-telemetry') || path.includes('/health') || path.includes('/metrics')
   )
 }
 

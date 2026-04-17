@@ -19,7 +19,7 @@ export class TelemetryService {
   constructor(config: TelemetryConfig = {}) {
     this.config = {
       enabled: true,
-      endpoint: '/api/clienttelemetry',
+      endpoint: '/api/client-telemetry',
       batchSize: 50,
       flushInterval: 10000,
       ...config,

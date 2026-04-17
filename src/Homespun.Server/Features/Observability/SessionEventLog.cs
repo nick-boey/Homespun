@@ -155,6 +155,50 @@ public static class SessionEventLog
     }
 
     /// <summary>
+    /// Logs a hub-lifecycle hop (connect / disconnect / join / leave). These are
+    /// diagnostic-only — they do not correspond to an A2A or AG-UI event — but
+    /// they share the log schema so one LogQL query pinned to <c>SessionId</c>
+    /// returns lifecycle + event hops together.
+    /// </summary>
+    public static void LogHubHop(
+        ILogger logger,
+        SessionEventLogOptions options,
+        string hop,
+        string sessionId,
+        string? connectionId = null,
+        string? detail = null)
+    {
+        if (!ShouldLog(logger, options, hop))
+        {
+            return;
+        }
+
+        var parts = new List<string> { hop };
+        if (!string.IsNullOrEmpty(connectionId))
+        {
+            parts.Add($"conn={ShortId(connectionId!)}");
+        }
+        if (!string.IsNullOrEmpty(detail))
+        {
+            parts.Add(detail!);
+        }
+
+        var entry = new SessionEventLogEntry
+        {
+            Timestamp = DateTimeOffset.UtcNow.ToString("O"),
+            Level = "Information",
+            Message = string.Join(' ', parts),
+            SourceContext = SessionEventSourceContexts.Server,
+            Component = SessionEventComponents.Server,
+            Hop = hop,
+            SessionId = sessionId,
+            ContentPreview = connectionId is null ? null : $"connectionId={connectionId}",
+        };
+
+        Emit(entry);
+    }
+
+    /// <summary>
     /// Writes a prebuilt entry to the server-side log stream under
     /// <see cref="SessionEventSourceContexts.Client"/>. Used by
     /// <c>POST /api/log/client</c> to forward browser-originated entries.

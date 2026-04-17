@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Data;
@@ -115,9 +116,11 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
             _slotLock.Release();
         }
 
+        var containerWorkingDirectory = TranslateWorkingDirectoryForContainer(request.WorkingDirectory);
+
         var startBody = new
         {
-            workingDirectory = request.WorkingDirectory,
+            workingDirectory = containerWorkingDirectory,
             mode = request.Mode.ToString(),
             model = request.Model,
             prompt = request.Prompt,
@@ -310,6 +313,57 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
             new StringContent(JsonSerializer.Serialize(new { approved, keepContext, feedback }, CamelCaseJsonOptions), Encoding.UTF8, "application/json"),
             cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>
+    /// Rewrites a host working-directory path to the path the worker container
+    /// sees after bind-mounting <see cref="SingleContainerAgentExecutionOptions.HostWorkspaceRoot"/>
+    /// at <see cref="SingleContainerAgentExecutionOptions.ContainerWorkspaceRoot"/>.
+    ///
+    /// <para>
+    /// Windows-only. On Linux/macOS the host path already resolves inside the
+    /// container (Docker Desktop shared filesystem on macOS; matching paths on
+    /// Linux) so the raw value is forwarded unchanged.
+    /// </para>
+    ///
+    /// <para>
+    /// Throws <see cref="InvalidOperationException"/> when the shim is running
+    /// on Windows and the caller's <paramref name="hostWorkingDirectory"/> is
+    /// not under <c>HostWorkspaceRoot</c> — forwarding a raw Windows path to a
+    /// Linux worker breaks the SDK's <c>cwd</c> resolution and produces the
+    /// misleading "Claude Code executable not found" error.
+    /// </para>
+    /// </summary>
+    internal string TranslateWorkingDirectoryForContainer(string hostWorkingDirectory)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return hostWorkingDirectory;
+        }
+
+        if (string.IsNullOrEmpty(_options.HostWorkspaceRoot))
+        {
+            throw new InvalidOperationException(
+                "AgentExecution:SingleContainer:HostWorkspaceRoot must be configured on Windows so the shim can rewrite host paths to the worker container's mount point.");
+        }
+
+        var hostRoot = Path.GetFullPath(_options.HostWorkspaceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var requested = Path.GetFullPath(hostWorkingDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (!requested.StartsWith(hostRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"WorkingDirectory '{hostWorkingDirectory}' is not under HostWorkspaceRoot '{_options.HostWorkspaceRoot}'. SingleContainer mode can only run sessions whose working directory sits inside the mounted workspace.");
+        }
+
+        var relative = requested.Length == hostRoot.Length
+            ? string.Empty
+            : requested[(hostRoot.Length + 1)..];
+        var containerRoot = _options.ContainerWorkspaceRoot.TrimEnd('/');
+        var containerRelative = relative.Replace('\\', '/');
+        return string.IsNullOrEmpty(containerRelative)
+            ? containerRoot
+            : $"{containerRoot}/{containerRelative}";
     }
 
     public Task<CloneContainerState?> GetCloneContainerStateAsync(string workingDirectory, CancellationToken cancellationToken = default)

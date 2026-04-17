@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Observability;
@@ -14,11 +15,15 @@ public class SingleContainerAgentExecutionServiceTests
 {
     private static SingleContainerAgentExecutionService Build(
         string? workerUrl = "http://localhost:8081",
-        ISessionEventIngestor? ingestor = null)
+        ISessionEventIngestor? ingestor = null,
+        string hostWorkspaceRoot = "",
+        string containerWorkspaceRoot = "/workdir")
     {
         var opts = Options.Create(new SingleContainerAgentExecutionOptions
         {
             WorkerUrl = workerUrl ?? string.Empty,
+            HostWorkspaceRoot = hostWorkspaceRoot,
+            ContainerWorkspaceRoot = containerWorkspaceRoot,
         });
         return new SingleContainerAgentExecutionService(
             opts,
@@ -130,5 +135,81 @@ public class SingleContainerAgentExecutionServiceTests
         Assert.That(ex.CurrentSessionId, Is.EqualTo("current"));
         Assert.That(ex.Message, Does.Contain("requested"));
         Assert.That(ex.Message, Does.Contain("current"));
+    }
+
+    [Test]
+    public void TranslateWorkingDirectory_NonWindowsHost_PassesThroughUnchanged()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Test asserts non-Windows behaviour.");
+            return;
+        }
+
+        using var svc = Build(hostWorkspaceRoot: "/home/dev/projects", containerWorkspaceRoot: "/workdir");
+        var result = svc.TranslateWorkingDirectoryForContainer("/home/dev/projects/smoke/main");
+        Assert.That(result, Is.EqualTo("/home/dev/projects/smoke/main"));
+    }
+
+    [Test]
+    public void TranslateWorkingDirectory_WindowsHost_RewritesPrefixToContainerPath()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Test asserts Windows path-rewriting behaviour.");
+            return;
+        }
+
+        using var svc = Build(
+            hostWorkspaceRoot: @"C:\Users\dev\.homespun\projects",
+            containerWorkspaceRoot: "/workdir");
+        var result = svc.TranslateWorkingDirectoryForContainer(@"C:\Users\dev\.homespun\projects\smoke\main");
+        Assert.That(result, Is.EqualTo("/workdir/smoke/main"));
+    }
+
+    [Test]
+    public void TranslateWorkingDirectory_WindowsHost_RootItselfMapsToContainerRoot()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Test asserts Windows path-rewriting behaviour.");
+            return;
+        }
+
+        using var svc = Build(
+            hostWorkspaceRoot: @"C:\Users\dev\.homespun\projects",
+            containerWorkspaceRoot: "/workdir");
+        var result = svc.TranslateWorkingDirectoryForContainer(@"C:\Users\dev\.homespun\projects");
+        Assert.That(result, Is.EqualTo("/workdir"));
+    }
+
+    [Test]
+    public void TranslateWorkingDirectory_WindowsHost_PathOutsideWorkspaceRoot_Throws()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Test asserts Windows path-rewriting behaviour.");
+            return;
+        }
+
+        using var svc = Build(
+            hostWorkspaceRoot: @"C:\Users\dev\.homespun\projects",
+            containerWorkspaceRoot: "/workdir");
+        Assert.Throws<InvalidOperationException>(
+            () => svc.TranslateWorkingDirectoryForContainer(@"D:\other\path"));
+    }
+
+    [Test]
+    public void TranslateWorkingDirectory_WindowsHost_EmptyWorkspaceRoot_Throws()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Test asserts Windows path-rewriting behaviour.");
+            return;
+        }
+
+        using var svc = Build(hostWorkspaceRoot: "", containerWorkspaceRoot: "/workdir");
+        Assert.Throws<InvalidOperationException>(
+            () => svc.TranslateWorkingDirectoryForContainer(@"C:\anything"));
     }
 }

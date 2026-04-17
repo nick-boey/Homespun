@@ -67,7 +67,7 @@ function Stop-ComposeWorker {
     Write-Host "Stopping docker-compose worker..." -ForegroundColor Cyan
     Push-Location $ProjectRoot
     try {
-        & docker compose stop worker | Out-Null
+        & docker compose -f docker-compose.yml -f docker-compose.windows.yml stop worker | Out-Null
     } catch {
         Write-Host "Failed to stop worker: $_" -ForegroundColor Yellow
     } finally {
@@ -82,11 +82,24 @@ if ($WithWorker) {
         exit 1
     }
 
+    # Bind-mount the host workspace root into the worker so the Linux container
+    # can resolve Windows-format WorkingDirectory paths. The SingleContainer shim
+    # rewrites the prefix from $HOMESPUN_WORKSPACE → /workdir before forwarding.
+    # Defaults to the standard Homespun clone root.
+    if (-not $env:HOMESPUN_WORKSPACE) {
+        $env:HOMESPUN_WORKSPACE = Join-Path $env:USERPROFILE ".homespun\projects"
+    }
+    if (-not (Test-Path $env:HOMESPUN_WORKSPACE)) {
+        Write-Host "Creating workspace root at $env:HOMESPUN_WORKSPACE..." -ForegroundColor Cyan
+        New-Item -ItemType Directory -Path $env:HOMESPUN_WORKSPACE -Force | Out-Null
+    }
+    Write-Host "Mounting $env:HOMESPUN_WORKSPACE -> /workdir in worker container." -ForegroundColor Cyan
+
     Write-Host "Starting docker-compose worker on host port $WorkerHostPort..." -ForegroundColor Cyan
     Push-Location $ProjectRoot
     try {
         $env:WORKER_HOST_PORT = $WorkerHostPort
-        & docker compose up -d worker
+        & docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d worker
         if ($LASTEXITCODE -ne 0) {
             throw "docker compose up -d worker failed"
         }
@@ -113,6 +126,7 @@ if ($WithWorker) {
 
     $env:AgentExecution__Mode = "SingleContainer"
     $env:AgentExecution__SingleContainer__WorkerUrl = "http://localhost:$WorkerHostPort"
+    $env:AgentExecution__SingleContainer__HostWorkspaceRoot = $env:HOMESPUN_WORKSPACE
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     # The `mock` launch profile enables HOMESPUN_MOCK_MODE which bypasses the
     # real agent-execution registration entirely. With --WithWorker the point
@@ -121,16 +135,28 @@ if ($WithWorker) {
     $env:MockMode__Enabled = "false"
 }
 
-# Build the dotnet run command args
+# Build the dotnet run command args. With -WithWorker we skip the `mock`
+# launch profile entirely: that profile forces ASPNETCORE_ENVIRONMENT=Mock
+# and HOMESPUN_MOCK_MODE=true, which would override the env vars set above
+# and cause the server to register MockAgentExecutionService instead of the
+# SingleContainer shim we actually want. Without the profile we set the
+# application URL explicitly.
+$BackendPort = if ($Port -ne 0) { $Port } else { 5101 }
 $dotnetArgs = @(
     "run"
     "--project", $ProjectPath
-    "--launch-profile", "mock"
 )
 
-if ($Port -ne 0) {
+if ($WithWorker) {
     $dotnetArgs += "--urls"
-    $dotnetArgs += "http://localhost:$Port"
+    $dotnetArgs += "http://localhost:$BackendPort"
+} else {
+    $dotnetArgs += "--launch-profile"
+    $dotnetArgs += "mock"
+    if ($Port -ne 0) {
+        $dotnetArgs += "--urls"
+        $dotnetArgs += "http://localhost:$Port"
+    }
 }
 
 # Foreground mode: original behavior (backend only, output to terminal)

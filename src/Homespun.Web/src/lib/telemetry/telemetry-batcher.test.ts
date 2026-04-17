@@ -283,7 +283,7 @@ describe('TelemetryBatcher', () => {
       window.dispatchEvent(new Event('beforeunload'))
 
       expect(mockSendBeacon).toHaveBeenCalledWith(
-        '/api/clienttelemetry',
+        '/api/client-telemetry',
         JSON.stringify({
           sessionId: 'test-session-id',
           events: [event],
