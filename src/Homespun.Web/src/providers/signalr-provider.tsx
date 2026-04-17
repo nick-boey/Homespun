@@ -23,6 +23,29 @@ import {
   type NotificationHubMethods,
 } from '@/lib/signalr/notification-hub'
 import type { ConnectionStatus } from '@/types/signalr'
+import { sessionEventLog } from '@/lib/session-event-log'
+
+/**
+ * Map Claude Code hub connection status to a session-event-log hop name so
+ * Loki can stitch the full "user opened page → hub connected → joined session
+ * → envelopes arrived" timeline from one query.
+ */
+function logClaudeCodeStatus(status: ConnectionStatus, error?: string): void {
+  const hop =
+    status === 'connected'
+      ? 'client.signalr.connect'
+      : status === 'disconnected'
+        ? 'client.signalr.disconnect'
+        : status === 'reconnecting'
+          ? 'client.signalr.reconnecting'
+          : null
+  if (!hop) return
+  sessionEventLog(hop, {
+    SessionId: 'hub',
+    Level: error ? 'Warning' : 'Information',
+    Message: error ? `${hop} error=${error}` : hop,
+  })
+}
 
 // ============================================================================
 // Context Types
@@ -124,8 +147,12 @@ export function SignalRProvider({
       onStatusChange: (status, error) => {
         setClaudeCodeStatus(status)
         setClaudeCodeError(error)
+        logClaudeCodeStatus(status, error)
       },
-      onReconnected: () => onClaudeCodeReconnectedRef.current?.(),
+      onReconnected: () => {
+        sessionEventLog('client.signalr.reconnected', { SessionId: 'hub' })
+        onClaudeCodeReconnectedRef.current?.()
+      },
     })
     setClaudeCodeConnection(claudeCodeConn)
     setClaudeCodeMethods(createClaudeCodeHubMethods(claudeCodeConn))
@@ -147,6 +174,7 @@ export function SignalRProvider({
       startConnection(claudeCodeConn, (status, error) => {
         setClaudeCodeStatus(status)
         setClaudeCodeError(error)
+        logClaudeCodeStatus(status, error)
       })
       startConnection(notificationConn, (status, error) => {
         setNotificationStatus(status)

@@ -1,0 +1,19 @@
+# Windows-only docker-compose overlay used by `scripts/mock.ps1 -WithWorker`.
+# Opt-in: this file is loaded via `docker compose -f docker-compose.yml -f
+# docker-compose.windows.yml up worker`, never by the default compose flow, so
+# Linux/macOS dev and production deployments are unaffected.
+#
+# Why: the worker is a Linux container but the host-side backend emits sessions
+# whose WorkingDirectory is a Windows path (C:\Users\...). The SDK's cwd must
+# resolve inside the container, so we bind-mount the host workspace root at
+# /workdir and the SingleContainer shim rewrites the path prefix before
+# forwarding the session request.
+#
+# HOMESPUN_WORKSPACE is set by scripts/mock.ps1 (defaults to
+# %USERPROFILE%\.homespun\projects). The same value must be passed to the
+# backend as AgentExecution__SingleContainer__HostWorkspaceRoot so the shim
+# knows how to translate it.
+services:
+  worker:
+    volumes:
+      - ${HOMESPUN_WORKSPACE}:/workdir

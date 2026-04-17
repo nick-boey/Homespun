@@ -76,6 +76,20 @@ public static class SessionEventHops
     public const string ClientSignalrRx = "client.signalr.rx";
     public const string ClientReducerApply = "client.reducer.apply";
 
+    // Hub lifecycle diagnostics. Not part of the event fan-out but necessary to
+    // distinguish "client never connected" / "client never joined group" from
+    // "server broadcast never reached client".
+    public const string ServerHubConnected = "server.hub.connected";
+    public const string ServerHubDisconnected = "server.hub.disconnected";
+    public const string ServerHubJoin = "server.hub.join";
+    public const string ServerHubLeave = "server.hub.leave";
+    public const string ClientSignalrConnect = "client.signalr.connect";
+    public const string ClientSignalrDisconnect = "client.signalr.disconnect";
+    public const string ClientSignalrReconnecting = "client.signalr.reconnecting";
+    public const string ClientSignalrReconnected = "client.signalr.reconnected";
+    public const string ClientSignalrJoin = "client.signalr.join";
+    public const string ClientSignalrJoinError = "client.signalr.join.error";
+
     public static readonly IReadOnlyList<string> All =
     [
         WorkerA2AEmit,
@@ -85,6 +99,16 @@ public static class SessionEventHops
         ServerSignalrTx,
         ClientSignalrRx,
         ClientReducerApply,
+        ServerHubConnected,
+        ServerHubDisconnected,
+        ServerHubJoin,
+        ServerHubLeave,
+        ClientSignalrConnect,
+        ClientSignalrDisconnect,
+        ClientSignalrReconnecting,
+        ClientSignalrReconnected,
+        ClientSignalrJoin,
+        ClientSignalrJoinError,
     ];
 }
 

@@ -1,23 +1,61 @@
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
+using Homespun.Features.Observability;
+using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Hubs;
 
 /// <summary>
 /// SignalR hub for Claude Code session real-time communication.
 /// </summary>
-public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
+public class ClaudeCodeHub(
+    IClaudeSessionService sessionService,
+    ILogger<ClaudeCodeHub> logger,
+    IOptions<SessionEventLogOptions> sessionEventLogOptions) : Hub
 {
+    private readonly SessionEventLogOptions _sessionEventLogOptions = sessionEventLogOptions.Value;
+
+    public override Task OnConnectedAsync()
+    {
+        SessionEventLog.LogHubHop(
+            logger,
+            _sessionEventLogOptions,
+            SessionEventHops.ServerHubConnected,
+            sessionId: "unknown",
+            connectionId: Context.ConnectionId);
+        return base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        SessionEventLog.LogHubHop(
+            logger,
+            _sessionEventLogOptions,
+            SessionEventHops.ServerHubDisconnected,
+            sessionId: "unknown",
+            connectionId: Context.ConnectionId,
+            detail: exception is null ? null : $"reason={exception.Message}");
+        return base.OnDisconnectedAsync(exception);
+    }
+
     /// <summary>
     /// Join a session group to receive session-specific messages.
     /// </summary>
     public async Task JoinSession(string sessionId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{sessionId}");
+
+        SessionEventLog.LogHubHop(
+            logger,
+            _sessionEventLogOptions,
+            SessionEventHops.ServerHubJoin,
+            sessionId: sessionId,
+            connectionId: Context.ConnectionId);
 
         // Send current session state to the joining client
         var session = sessionService.GetSession(sessionId);
@@ -33,6 +71,13 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     public async Task LeaveSession(string sessionId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"session-{sessionId}");
+
+        SessionEventLog.LogHubHop(
+            logger,
+            _sessionEventLogOptions,
+            SessionEventHops.ServerHubLeave,
+            sessionId: sessionId,
+            connectionId: Context.ConnectionId);
     }
 
     /// <summary>

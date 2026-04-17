@@ -51,7 +51,7 @@ describe('TelemetryService', () => {
 
       await service.flush()
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/clienttelemetry', {
+      expect(mockFetch).toHaveBeenCalledWith('/api/client-telemetry', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

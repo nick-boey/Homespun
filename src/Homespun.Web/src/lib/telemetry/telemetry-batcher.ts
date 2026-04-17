@@ -23,7 +23,7 @@ export class TelemetryBatcher {
       batchSize: 50,
       flushInterval: 10000, // 10 seconds
       maxRetries: 3,
-      endpoint: '/api/clienttelemetry',
+      endpoint: '/api/client-telemetry',
       ...config,
     }
 

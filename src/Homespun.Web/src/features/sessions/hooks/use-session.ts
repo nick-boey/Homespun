@@ -3,6 +3,7 @@ import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { useSessionSettingsStore } from '@/stores/session-settings-store'
 import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { ClaudeSession } from '@/types/signalr'
+import { sessionEventLog } from '@/lib/session-event-log'
 
 export interface UseSessionResult {
   session: ClaudeSession | null | undefined
@@ -76,6 +77,10 @@ export function useSession(sessionId: string): UseSessionResult {
     fetchSession()
 
     // Join session group
+    sessionEventLog('client.signalr.join', {
+      SessionId: sessionId,
+      Message: `client.signalr.join sessionId=${sessionId}`,
+    })
     methods
       .joinSession(sessionId)
       .then(() => {
@@ -84,8 +89,13 @@ export function useSession(sessionId: string): UseSessionResult {
           setIsJoined(true)
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // Join failed, ensure isJoined stays false
+        sessionEventLog('client.signalr.join.error', {
+          SessionId: sessionId,
+          Level: 'Error',
+          Message: `client.signalr.join.error ${err instanceof Error ? err.message : String(err)}`,
+        })
         if (isMountedRef.current) {
           hasJoinedRef.current = false
           setIsJoined(false)
@@ -118,6 +128,10 @@ export function useSession(sessionId: string): UseSessionResult {
 
       // Re-join the current session
       const currentSessionId = currentSessionIdRef.current
+      sessionEventLog('client.signalr.join', {
+        SessionId: currentSessionId,
+        Message: `client.signalr.join (rejoin) sessionId=${currentSessionId}`,
+      })
       methods
         .joinSession(currentSessionId)
         .then(() => {
@@ -126,7 +140,12 @@ export function useSession(sessionId: string): UseSessionResult {
             setIsJoined(true)
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          sessionEventLog('client.signalr.join.error', {
+            SessionId: currentSessionId,
+            Level: 'Error',
+            Message: `client.signalr.join.error (rejoin) ${err instanceof Error ? err.message : String(err)}`,
+          })
           if (isMountedRef.current) {
             hasJoinedRef.current = false
             setIsJoined(false)

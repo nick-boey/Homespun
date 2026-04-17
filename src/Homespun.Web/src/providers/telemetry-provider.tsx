@@ -24,7 +24,7 @@ export function TelemetryProvider({ children, enabled = true, endpoint }: Teleme
 
     serviceRef.current = new TelemetryService({
       enabled: telemetryEnabled,
-      endpoint: endpoint || import.meta.env.VITE_TELEMETRY_ENDPOINT || '/api/clienttelemetry',
+      endpoint: endpoint || import.meta.env.VITE_TELEMETRY_ENDPOINT || '/api/client-telemetry',
       batchSize: import.meta.env.VITE_TELEMETRY_BATCH_SIZE
         ? parseInt(import.meta.env.VITE_TELEMETRY_BATCH_SIZE, 10)
         : 50,
