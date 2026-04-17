@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Homespun.Tests.Features.ClaudeCode;
@@ -187,6 +189,89 @@ public class SessionEventIngestorTests
         _storeMock.Verify(s =>
             s.AppendAsync(ProjectId, SessionId, "task", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Test]
+    public async Task LoggingDoesNotReorderOrDropEnvelopes()
+    {
+        var payload = JsonDocument.Parse("""
+        {
+            "kind": "message",
+            "messageId": "m-1",
+            "role": "agent",
+            "parts": [ { "kind": "text", "text": "hello world" } ],
+            "contextId": "ctx-1",
+            "taskId": "t-1"
+        }
+        """).RootElement;
+
+        var translated = new AGUIBaseEvent[]
+        {
+            AGUIEventFactory.CreateTextMessageStart("m-1"),
+            AGUIEventFactory.CreateTextMessageContent("m-1", "hello"),
+            AGUIEventFactory.CreateTextMessageEnd("m-1"),
+        };
+
+        async Task<List<SessionEventEnvelope>> RunAsync(SessionEventLogOptions options)
+        {
+            var storeMock = new Mock<IA2AEventStore>();
+            storeMock.Setup(s => s.AppendAsync(ProjectId, SessionId, "message", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Record(9, "event-9", "message"));
+
+            var translatorMock = new Mock<IA2AToAGUITranslator>();
+            translatorMock.Setup(t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()))
+                .Returns(translated);
+
+            var groupClient = new Mock<IClientProxy>();
+            var captured = new List<SessionEventEnvelope>();
+            groupClient.Setup(c => c.SendCoreAsync(AGUIEventType.ReceiveSessionEvent, It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+                .Callback<string, object?[], CancellationToken>((_, args, _) =>
+                {
+                    if (args.Length >= 2 && args[1] is SessionEventEnvelope env) captured.Add(env);
+                })
+                .Returns(Task.CompletedTask);
+
+            var hubClients = new Mock<IHubClients>();
+            hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(groupClient.Object);
+            var hub = new Mock<IHubContext<ClaudeCodeHub>>();
+            hub.SetupGet(h => h.Clients).Returns(hubClients.Object);
+
+            var ingestor = new SessionEventIngestor(
+                storeMock.Object,
+                translatorMock.Object,
+                hub.Object,
+                new Mock<ILogger<SessionEventIngestor>>().Object,
+                new NullServiceProvider(),
+                Options.Create(options));
+
+            await ingestor.IngestAsync(ProjectId, SessionId, "message", payload);
+            return captured;
+        }
+
+        // Run once with all hops disabled (no logging), once with max logging (content preview on).
+        var noLogging = new SessionEventLogOptions
+        {
+            ContentPreviewChars = 0,
+            Hops = new Dictionary<string, SessionEventLogOptions.HopSettings>
+            {
+                [Homespun.Shared.Models.Observability.SessionEventHops.ServerSseRx] = new() { Enabled = false },
+                [Homespun.Shared.Models.Observability.SessionEventHops.ServerIngestAppend] = new() { Enabled = false },
+                [Homespun.Shared.Models.Observability.SessionEventHops.ServerAguiTranslate] = new() { Enabled = false },
+                [Homespun.Shared.Models.Observability.SessionEventHops.ServerSignalrTx] = new() { Enabled = false },
+            },
+        };
+        var maxLogging = new SessionEventLogOptions { ContentPreviewChars = 80 };
+
+        var capturedNoLogging = await RunAsync(noLogging);
+        var capturedMaxLogging = await RunAsync(maxLogging);
+
+        Assert.That(capturedMaxLogging, Has.Count.EqualTo(capturedNoLogging.Count));
+        for (var i = 0; i < capturedNoLogging.Count; i++)
+        {
+            Assert.That(capturedMaxLogging[i].Seq, Is.EqualTo(capturedNoLogging[i].Seq));
+            Assert.That(capturedMaxLogging[i].EventId, Is.EqualTo(capturedNoLogging[i].EventId));
+            Assert.That(capturedMaxLogging[i].Event.Type, Is.EqualTo(capturedNoLogging[i].Event.Type));
+        }
     }
 
     [Test]

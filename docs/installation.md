@@ -280,3 +280,20 @@ If you see `network homespun-net not found`:
 ```bash
 docker network create homespun-net
 ```
+
+## Windows development with `--with-worker`
+
+`scripts/mock.ps1 --WithWorker` (or `./scripts/mock.sh --with-worker` under WSL/Git Bash) boots a real `homespun-worker` container via docker-compose and points the host-side backend at it using `AgentExecution:Mode=SingleContainer`. This is the only supported way to exercise the live Claude Agent SDK pipeline when the Homespun backend runs on the host via `dotnet run` (i.e. on Windows without Docker-in-Docker).
+
+### Requirements
+
+- Docker Desktop running.
+- `$env:CLAUDE_CODE_OAUTH_TOKEN` set to a valid Claude Code OAuth token. The script aborts immediately if the token is missing.
+- `WORKER_HOST_PORT` environment variable is optional — defaults to `8081`.
+
+### Behaviour and constraints
+
+- **Single active session.** `SingleContainerAgentExecutionService` enforces at most one concurrent agent session. Starting a second session while one is active raises `SingleContainerBusyException`, surfaced to the UI as an error toast.
+- **Dev-only.** The mode is gated on `ASPNETCORE_ENVIRONMENT=Development`. Setting `AgentExecution:Mode=SingleContainer` in Production causes the server to throw at startup.
+- **Windows path mapping caveat.** The compose worker has a Linux filesystem view. Live sessions operate on paths inside the container (typically `/workdir/...`), not on Windows host paths. Tool calls like `Read`, `Write`, and `Bash` therefore see the container's filesystem, which is acceptable for pipeline-debugging but not for edit-loop workflows that expect host-side files.
+- **Cleanup.** The script runs `docker compose stop worker` on exit via a `try`/`finally` block (PowerShell) or an `EXIT`/`INT`/`TERM` trap (bash). Ctrl+C is safe.

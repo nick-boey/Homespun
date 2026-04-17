@@ -29,6 +29,7 @@ import {
   initialAGUISessionState,
   type AGUISessionState,
 } from '@/features/sessions/utils/agui-reducer'
+import { sessionEventLog } from '@/lib/session-event-log'
 
 /** Maximum number of recent eventIds remembered for dedup per session. */
 const DEDUP_CAPACITY = 10_000
@@ -111,6 +112,14 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
       stateRef.current = next
       setRenderState(next)
       setStoredState(sessionId, next)
+      sessionEventLog('client.reducer.apply', {
+        SessionId: sessionId,
+        EventId: envelope.eventId,
+        Seq: envelope.seq,
+        AGUIType: envelope.event.type,
+        AGUICustomName:
+          envelope.event.type === 'CUSTOM' ? (envelope.event as { name?: string }).name : undefined,
+      })
     },
     [sessionId, setStoredState]
   )
@@ -140,6 +149,14 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
       // The hub addresses the group by sessionId, but double-check so a leaked subscription
       // on a different sessionId never pollutes state.
       if (deliveredSessionId !== sessionId) return
+      sessionEventLog('client.signalr.rx', {
+        SessionId: deliveredSessionId,
+        EventId: envelope.eventId,
+        Seq: envelope.seq,
+        AGUIType: envelope.event.type,
+        AGUICustomName:
+          envelope.event.type === 'CUSTOM' ? (envelope.event as { name?: string }).name : undefined,
+      })
       applyOne(envelope)
     }
 

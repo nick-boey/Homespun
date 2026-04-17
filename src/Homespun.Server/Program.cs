@@ -60,6 +60,10 @@ builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatt
 // Register custom Homespun activity sources for tracing
 builder.Services.AddHomespunInstrumentation();
 
+// SessionEventLog — shared structured logging for the A2A → AG-UI pipeline.
+builder.Services.Configure<SessionEventLogOptions>(
+    builder.Configuration.GetSection(SessionEventLogOptions.SectionName));
+
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
 var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");
@@ -168,27 +172,63 @@ else
     // Claude Code SDK services
     builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 
-    // Agent Execution service - Docker mode with container discovery and recovery
-    builder.Services.Configure<DockerAgentExecutionOptions>(
-        builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
-    builder.Services.PostConfigure<DockerAgentExecutionOptions>(options =>
+    // Agent Execution service - mode-gated:
+    //   "Docker" (default): container-per-issue with discovery/recovery
+    //   "SingleContainer" (Development only): forwards every session to a
+    //   pre-running docker-compose worker at AgentExecution:SingleContainer:WorkerUrl
+    var agentMode = builder.Configuration["AgentExecution:Mode"] ?? "Docker";
+    if (agentMode == "SingleContainer")
     {
-        var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
-        if (!string.IsNullOrEmpty(hostPath))
-            options.HostDataPath = hostPath;
-    });
-    builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
-    builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
-    builder.Services.AddHostedService(sp =>
+        if (!builder.Environment.IsDevelopment())
+        {
+            throw new InvalidOperationException(
+                "AgentExecution:Mode=SingleContainer is only permitted when ASPNETCORE_ENVIRONMENT=Development.");
+        }
+
+        builder.Services.Configure<SingleContainerAgentExecutionOptions>(
+            builder.Configuration.GetSection(SingleContainerAgentExecutionOptions.SectionName));
+        var workerUrl = builder.Configuration[$"{SingleContainerAgentExecutionOptions.SectionName}:WorkerUrl"];
+        if (string.IsNullOrWhiteSpace(workerUrl))
+        {
+            throw new InvalidOperationException(
+                "AgentExecution:SingleContainer:WorkerUrl must be set when AgentExecution:Mode=SingleContainer.");
+        }
+
+        builder.Services.AddSingleton<IAgentExecutionService, SingleContainerAgentExecutionService>();
+
+        // Development's default DI scope validation surfaces pre-existing Singleton →
+        // Scoped consumption issues across the real service graph that block startup.
+        // Those are not in scope for this dev-only shim; disable validation to match
+        // Production-mode behaviour so the --with-worker path actually boots.
+        builder.Host.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateScopes = false;
+            options.ValidateOnBuild = false;
+        });
+    }
+    else
     {
-        var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
-        var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
-        var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
-        return new ContainerRecoveryHostedService(
-            discoveryService,
-            container => executionService?.RegisterDiscoveredContainer(container),
-            logger);
-    });
+        builder.Services.Configure<DockerAgentExecutionOptions>(
+            builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+        builder.Services.PostConfigure<DockerAgentExecutionOptions>(options =>
+        {
+            var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+            if (!string.IsNullOrEmpty(hostPath))
+                options.HostDataPath = hostPath;
+        });
+        builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+        builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+        builder.Services.AddHostedService(sp =>
+        {
+            var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+            var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+            var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+            return new ContainerRecoveryHostedService(
+                discoveryService,
+                container => executionService?.RegisterDiscoveredContainer(container),
+                logger);
+        });
+    }
 
     // Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
     builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
@@ -210,7 +250,10 @@ else
     // SessionCachePurgeHostedService below wipes its residue on startup.
     var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
     builder.Services.AddSingleton<IA2AEventStore>(sp =>
-        new A2AEventStore(messageCacheDir, sp.GetRequiredService<ILogger<A2AEventStore>>()));
+        new A2AEventStore(
+            messageCacheDir,
+            sp.GetRequiredService<ILogger<A2AEventStore>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>()));
 
     // Pure A2A → AG-UI translator used by both the live ingestion path and the replay endpoint.
     builder.Services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
@@ -339,6 +382,19 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// SessionEventLog: warn if content previews are enabled in Production — this
+// ships raw event text to Loki, which may leak sensitive content.
+var sessionEventLogOptions = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>().Value;
+if (app.Environment.IsProduction() && sessionEventLogOptions.ContentPreviewChars > 0)
+{
+    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Homespun.SessionEvents");
+    startupLogger.LogWarning(
+        "SessionEventLog:ContentPreviewChars is set to {Chars} in Production. Event content previews will be written to logs.",
+        sessionEventLogOptions.ContentPreviewChars);
+}
 
 // Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())

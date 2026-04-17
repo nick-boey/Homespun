@@ -89,3 +89,73 @@ For every A2A event received from the worker the server:
 4. Broadcasts via SignalR.
 
 The write-before-broadcast order guarantees that any replay query served after a live broadcast includes that event — clients never see a live event that cannot be replayed.
+
+## Debug logging
+
+The session-event pipeline emits structured `SessionEventLog` entries at six defined hops between the worker-side Claude Agent SDK and the client reducer. One Loki query pinned to a `MessageId` or `SessionId` returns the full chain hop-by-hop.
+
+### Hops
+
+| Hop                        | Where                                             | Purpose |
+|----------------------------|---------------------------------------------------|---------|
+| `worker.a2a.emit`          | `src/Homespun.Worker/src/services/sse-writer.ts`  | Worker formatted an A2A event for SSE output. |
+| `server.sse.rx`            | `DockerAgentExecutionService.TryIngestA2AEventAsync` / `SingleContainerAgentExecutionService.TryIngestA2AAsync` | Server parsed a worker SSE event. |
+| `server.ingest.append`     | `A2AEventStore.AppendAsync`                       | Event written to the JSONL log with its assigned `Seq` and `EventId`. |
+| `server.agui.translate`    | `SessionEventIngestor.IngestAsync`                | One log line per AG-UI envelope produced from the parent A2A event. |
+| `server.signalr.tx`        | `SessionEventIngestor.IngestAsync`                | Envelope dispatched to SignalR group. |
+| `client.signalr.rx`        | `use-session-events.ts` live handler              | Client received envelope over SignalR. |
+| `client.reducer.apply`     | `use-session-events.ts` `applyOne`                | Envelope folded into client state. |
+
+### Field schema
+
+Every entry is flat JSON with top-level fields for LogQL `| json` filtering:
+
+```json
+{
+  "Timestamp": "2026-04-17T10:15:32.345Z",
+  "Level": "Information",
+  "SourceContext": "Homespun.SessionEvents",
+  "Component": "Server",
+  "Hop": "server.signalr.tx",
+  "SessionId": "<Homespun sessionId = A2A contextId>",
+  "TaskId": "<A2A taskId>",
+  "MessageId": "<present for Message events>",
+  "ArtifactId": "<present for ArtifactUpdate events>",
+  "StatusTimestamp": "<present for StatusUpdate events>",
+  "EventId": "<server-assigned, present from server.ingest.append onward>",
+  "Seq": 42,
+  "A2AKind": "message|task|status-update|artifact-update",
+  "AGUIType": "TEXT_MESSAGE_CONTENT|...|CUSTOM",
+  "AGUICustomName": "thinking|system.init|...",
+  "ContentPreview": "<truncated per config; omitted when ContentPreviewChars=0>"
+}
+```
+
+`SourceContext` is `Homespun.SessionEvents` for server-emitted entries, `Homespun.ClientSessionEvents` for client-forwarded entries (via `POST /api/log/client`), and `Worker` for worker-emitted entries.
+
+### Example LogQL
+
+Pin to a single message across the full pipeline:
+
+```logql
+{app="homespun"} | json | MessageId="M1"
+```
+
+Filter to a specific hop:
+
+```logql
+{app="homespun"} | json | Hop="server.signalr.tx" | SessionId="..."
+```
+
+### Configuration: `SessionEventLog:ContentPreviewChars`
+
+Controls how many characters of the event's text content appear in the `ContentPreview` field. `0` disables the field entirely.
+
+| Environment  | Default | Rationale |
+|--------------|---------|-----------|
+| Development  | `80`    | Short previews aid local debugging; token cost is trivial. |
+| Production   | `0`     | Previews may leak sensitive assistant/user content to Loki. |
+
+Setting `ContentPreviewChars > 0` in Production emits a startup warning — it remains effective, but operators are explicitly opting in.
+
+Individual hops can be silenced via `SessionEventLog:Hops:<hop>:Enabled = false`, for example `SessionEventLog:Hops:server.signalr.tx:Enabled = false`.

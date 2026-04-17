@@ -18,7 +18,16 @@ import {
   type TranslationContext,
 } from "./a2a-translator.js";
 import type { A2AStreamEvent } from "../types/a2a.js";
-import { info, debug } from "../utils/logger.js";
+import {
+  info,
+  debug,
+  sessionEventLog,
+  SessionEventHop,
+  extractA2ACorrelation,
+  extractMessagePreview,
+  getContentPreviewChars,
+  truncatePreview,
+} from "../utils/logger.js";
 
 /**
  * Formats tool parameters for debug logging.
@@ -87,6 +96,31 @@ export function formatSSE(event: string, data: unknown): string {
 }
 
 /**
+ * Emits the `worker.a2a.emit` SessionEventLog hop for an A2A stream event
+ * about to be written to SSE, then returns the SSE-formatted string. Callers
+ * should use this in place of `formatSSE` so every outbound event is logged
+ * exactly once with its correlation IDs extracted from the payload.
+ */
+export function emitAndFormatSSE(
+  sessionId: string,
+  event: string,
+  data: unknown,
+): string {
+  const fields = extractA2ACorrelation(event, data);
+  // Prefer the caller-supplied sessionId when the payload's contextId is absent
+  // so every log line carries a non-empty SessionId.
+  fields.SessionId = fields.SessionId || sessionId;
+
+  const chars = getContentPreviewChars();
+  if (chars > 0 && event === "message") {
+    fields.ContentPreview = truncatePreview(extractMessagePreview(data), chars);
+  }
+
+  sessionEventLog(SessionEventHop.WorkerA2AEmit, fields);
+  return formatSSE(event, data);
+}
+
+/**
  * Streams A2A-formatted events for a session.
  *
  * Event sequence:
@@ -112,7 +146,7 @@ export async function* streamSessionEvents(
       `Session ${sessionId} not found`,
       "SESSION_NOT_FOUND",
     );
-    yield formatSSE(errorEvent.kind, errorEvent);
+    yield emitAndFormatSSE(sessionId, errorEvent.kind, errorEvent);
     return;
   }
 
@@ -124,12 +158,12 @@ export async function* streamSessionEvents(
 
   // 1. Emit initial task with state 'submitted'
   const initialTask = createInitialTask(ctx.taskId, ctx.contextId);
-  yield formatSSE(initialTask.kind, initialTask);
+  yield emitAndFormatSSE(sessionId, initialTask.kind, initialTask);
   info(`A2A state transition: submitted → working (sessionId: ${sessionId})`);
 
   // 2. Emit working status
   const workingStatus = createWorkingStatus(ctx);
-  yield formatSSE(workingStatus.kind, workingStatus);
+  yield emitAndFormatSSE(sessionId, workingStatus.kind, workingStatus);
 
   try {
     for await (const event of sessionManager.stream(sessionId)) {
@@ -150,7 +184,7 @@ export async function* streamSessionEvents(
             `A2A state transition: input-required → working (sessionId: ${sessionId})`,
           );
           const workingStatus = createWorkingStatus(ctx);
-          yield formatSSE(workingStatus.kind, workingStatus);
+          yield emitAndFormatSSE(sessionId, workingStatus.kind, workingStatus);
           continue;
         }
 
@@ -161,7 +195,7 @@ export async function* streamSessionEvents(
         );
 
         const statusUpdate = translateControlEvent(controlEvent, ctx);
-        yield formatSSE(statusUpdate.kind, statusUpdate);
+        yield emitAndFormatSSE(sessionId, statusUpdate.kind, statusUpdate);
         continue;
       }
 
@@ -183,7 +217,7 @@ export async function* streamSessionEvents(
         );
 
         const statusUpdate = translateResultToStatus(msg, ctx);
-        yield formatSSE(statusUpdate.kind, statusUpdate);
+        yield emitAndFormatSSE(sessionId, statusUpdate.kind, statusUpdate);
         return;
       }
 
@@ -209,12 +243,12 @@ export async function* streamSessionEvents(
           }
         }
 
-        yield formatSSE(a2aMessage.kind, a2aMessage);
+        yield emitAndFormatSSE(sessionId, a2aMessage.kind, a2aMessage);
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const errorEvent = createErrorStatus(ctx, message, "AGENT_ERROR");
-    yield formatSSE(errorEvent.kind, errorEvent);
+    yield emitAndFormatSSE(sessionId, errorEvent.kind, errorEvent);
   }
 }

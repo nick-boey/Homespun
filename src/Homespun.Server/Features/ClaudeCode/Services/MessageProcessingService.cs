@@ -189,6 +189,19 @@ public class MessageProcessingService : IMessageProcessingService
                 await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
             }
         }
+        catch (Homespun.Features.ClaudeCode.Exceptions.SingleContainerBusyException busy)
+        {
+            _logger.LogError(
+                "SingleContainer worker busy: requested session {RequestedSessionId} but {CurrentSessionId} is active",
+                busy.RequestedSessionId, busy.CurrentSessionId);
+            session.Status = ClaudeSessionStatus.Error;
+            session.ErrorMessage = busy.Message;
+            await _hubContext.BroadcastSessionError(
+                sessionId,
+                $"Dev worker is busy with session {busy.CurrentSessionId}. Stop it before starting a new one.",
+                errorSubtype: "single_container_busy",
+                isRecoverable: false);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing message in session {SessionId}", sessionId);

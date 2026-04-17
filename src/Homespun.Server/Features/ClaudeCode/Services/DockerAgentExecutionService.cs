@@ -144,17 +144,20 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageSubtype);
 
     private readonly ISessionEventIngestor _eventIngestor;
+    private readonly Homespun.Features.Observability.SessionEventLogOptions _sessionEventLogOptions;
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        ISessionEventIngestor eventIngestor)
+        ISessionEventIngestor eventIngestor,
+        IOptions<Homespun.Features.Observability.SessionEventLogOptions> sessionEventLogOptions)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
         _eventIngestor = eventIngestor;
+        _sessionEventLogOptions = sessionEventLogOptions.Value;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
@@ -2204,6 +2207,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             // ingestor persists the element and the store may keep it alive beyond this
             // method's stack frame when bursts are in flight.
             var payload = doc.RootElement.Clone();
+
+            // server.sse.rx hop: emitted immediately after the worker SSE event parses.
+            var parsed = A2AMessageParser.ParseSseEvent(eventKind, rawData);
+            Homespun.Features.Observability.SessionEventLog.LogA2AHop(
+                _logger,
+                _sessionEventLogOptions,
+                hop: Homespun.Shared.Models.Observability.SessionEventHops.ServerSseRx,
+                sessionId: sessionId,
+                a2aKind: eventKind,
+                parsed: parsed,
+                rawJsonForPreview: rawData);
 
             // projectId is best-effort; when not available (legacy non-issue sessions) we
             // fall back to a stable "unknown" bucket so the event log still writes. The
