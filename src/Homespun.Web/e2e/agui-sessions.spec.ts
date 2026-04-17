@@ -40,13 +40,20 @@ test.describe('AG-UI Sessions', () => {
       await page.goto('/sessions')
       await page.waitForLoadState('networkidle')
 
-      // Check for card grid container
-      const cardGrid = page.locator('[class*="grid"]').first()
-      await expect(cardGrid).toBeVisible()
-
-      // Check that it's not a table layout
+      // Regardless of session count, the sessions page must never render a table layout
       const table = page.locator('table')
       await expect(table).not.toBeVisible()
+
+      // When sessions exist, the list uses a card grid; when empty, an empty-state card.
+      // Mock mode seeds no sessions (A2A event pipeline — see MockDataSeederService), so
+      // only assert the grid when a card is actually rendered.
+      const cards = page.locator('[data-slot="card"]')
+      if ((await cards.count()) > 0) {
+        const cardGrid = page.locator('[class*="grid"]').first()
+        await expect(cardGrid).toBeVisible()
+      } else {
+        await expect(page.getByText('No sessions yet')).toBeVisible()
+      }
     })
 
     test('session cards display entity badges', async ({ page }) => {
