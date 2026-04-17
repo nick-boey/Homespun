@@ -98,3 +98,184 @@ export function sdkDebug(direction: 'tx' | 'rx', msg: unknown): void {
     formatLog('Debug', `[SDK ${direction}] ${payload}`),
   );
 }
+
+/**
+ * Pipeline hop identifiers that worker-emitted SessionEventLog entries use. The
+ * worker only emits at `worker.a2a.emit`; the remaining hops are logged by the
+ * server and client.
+ */
+export const SessionEventHop = {
+  WorkerA2AEmit: 'worker.a2a.emit',
+} as const;
+export type SessionEventHopValue =
+  (typeof SessionEventHop)[keyof typeof SessionEventHop];
+
+/**
+ * Fields carried by every {@link sessionEventLog} entry. Mirrors the C#
+ * `SessionEventLogEntry` record so Loki's `| json` stage returns them addressable.
+ */
+export interface SessionEventLogFields {
+  SessionId: string;
+  TaskId?: string;
+  MessageId?: string;
+  ArtifactId?: string;
+  StatusTimestamp?: string;
+  A2AKind?: string;
+  AGUIType?: string;
+  AGUICustomName?: string;
+  ContentPreview?: string;
+  Seq?: number;
+  EventId?: string;
+}
+
+interface SessionEventLogEntry extends LogEntry {
+  Hop: string;
+  SessionId: string;
+  TaskId?: string;
+  MessageId?: string;
+  ArtifactId?: string;
+  StatusTimestamp?: string;
+  A2AKind?: string;
+  AGUIType?: string;
+  AGUICustomName?: string;
+  ContentPreview?: string;
+  Seq?: number;
+  EventId?: string;
+}
+
+/**
+ * Number of characters retained in the `ContentPreview` field on every
+ * session-event-log entry. `0` disables the field entirely. Read lazily so
+ * tests can override via `process.env`.
+ */
+export function getContentPreviewChars(): number {
+  const raw = process.env.CONTENT_PREVIEW_CHARS;
+  if (raw === undefined || raw === '') {
+    // No explicit setting. Development defaults to 80, production to 0.
+    return process.env.NODE_ENV === 'production' ? 0 : 80;
+  }
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/**
+ * Truncates `text` to `chars` characters followed by an ellipsis when longer;
+ * returns `undefined` when `chars` is zero or `text` is undefined.
+ */
+export function truncatePreview(
+  text: string | null | undefined,
+  chars: number,
+): string | undefined {
+  if (chars <= 0 || text === undefined || text === null) return undefined;
+  if (text.length <= chars) return text;
+  return text.slice(0, chars) + '\u2026';
+}
+
+/**
+ * Emits a structured {@link SessionEventLogEntry} for a pipeline hop
+ * (worker side only emits `worker.a2a.emit`). Fields are placed at the
+ * top level of the JSON object for LogQL filtering.
+ */
+export function sessionEventLog(
+  hop: SessionEventHopValue,
+  fields: SessionEventLogFields,
+): void {
+  const entry: SessionEventLogEntry = {
+    Timestamp: new Date().toISOString(),
+    Level: 'Information',
+    Message: buildSessionEventLogMessage(hop, fields),
+    SourceContext: 'Worker',
+    Component: 'Worker',
+    Hop: hop,
+    SessionId: fields.SessionId,
+  };
+  if (fields.TaskId !== undefined) entry.TaskId = fields.TaskId;
+  if (fields.MessageId !== undefined) entry.MessageId = fields.MessageId;
+  if (fields.ArtifactId !== undefined) entry.ArtifactId = fields.ArtifactId;
+  if (fields.StatusTimestamp !== undefined)
+    entry.StatusTimestamp = fields.StatusTimestamp;
+  if (fields.A2AKind !== undefined) entry.A2AKind = fields.A2AKind;
+  if (fields.AGUIType !== undefined) entry.AGUIType = fields.AGUIType;
+  if (fields.AGUICustomName !== undefined)
+    entry.AGUICustomName = fields.AGUICustomName;
+  if (fields.ContentPreview !== undefined)
+    entry.ContentPreview = fields.ContentPreview;
+  if (fields.Seq !== undefined) entry.Seq = fields.Seq;
+  if (fields.EventId !== undefined) entry.EventId = fields.EventId;
+  if (issueId) entry.IssueId = issueId;
+  if (projectName) entry.ProjectName = projectName;
+  console.log(JSON.stringify(entry));
+}
+
+function buildSessionEventLogMessage(
+  hop: string,
+  fields: SessionEventLogFields,
+): string {
+  const parts: string[] = [hop];
+  if (fields.A2AKind) parts.push(`a2aKind=${fields.A2AKind}`);
+  if (fields.MessageId) parts.push(`msg=${fields.MessageId.slice(0, 8)}`);
+  return parts.join(' ');
+}
+
+/**
+ * Extracts correlation fields from an A2A stream event payload for logging
+ * at the `worker.a2a.emit` hop. Returns undefined for missing fields.
+ */
+export function extractA2ACorrelation(
+  kind: string,
+  data: unknown,
+): SessionEventLogFields {
+  const sessionId = extractString(data, ['contextId']) ?? '';
+  const fields: SessionEventLogFields = {
+    SessionId: sessionId,
+    A2AKind: kind,
+  };
+  const taskId = extractString(data, ['taskId']) ?? extractString(data, ['id']);
+  if (taskId) fields.TaskId = taskId;
+
+  if (kind === 'message') {
+    const messageId = extractString(data, ['messageId']);
+    if (messageId) fields.MessageId = messageId;
+  }
+  if (kind === 'status-update') {
+    const ts = extractString(data, ['status', 'timestamp']);
+    if (ts) fields.StatusTimestamp = ts;
+  }
+  if (kind === 'artifact-update') {
+    const artifactId = extractString(data, ['artifact', 'artifactId']);
+    if (artifactId) fields.ArtifactId = artifactId;
+  }
+
+  return fields;
+}
+
+function extractString(obj: unknown, path: string[]): string | undefined {
+  let cur: unknown = obj;
+  for (const key of path) {
+    if (cur === null || cur === undefined || typeof cur !== 'object')
+      return undefined;
+    cur = (cur as Record<string, unknown>)[key];
+  }
+  return typeof cur === 'string' ? cur : undefined;
+}
+
+/**
+ * Pulls a short text preview from an A2A `Message` event's first text part.
+ * Returns undefined for non-message events or messages without text parts.
+ */
+export function extractMessagePreview(data: unknown): string | undefined {
+  if (data === null || typeof data !== 'object') return undefined;
+  const parts = (data as { parts?: unknown }).parts;
+  if (!Array.isArray(parts)) return undefined;
+  for (const part of parts) {
+    if (
+      part &&
+      typeof part === 'object' &&
+      (part as { kind?: string }).kind === 'text'
+    ) {
+      const text = (part as { text?: string }).text;
+      if (typeof text === 'string') return text;
+    }
+  }
+  return undefined;
+}

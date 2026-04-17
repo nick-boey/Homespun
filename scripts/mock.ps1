@@ -14,6 +14,13 @@
 .PARAMETER Foreground
     Run backend only in foreground with output to terminal (original behavior).
 
+.PARAMETER WithWorker
+    Bring up the docker-compose `worker` service, wait for its healthcheck,
+    then start the backend in SingleContainer agent-execution mode pointed at
+    http://localhost:$env:WORKER_HOST_PORT (default 8081). Dev-only; enforces
+    one active Claude Agent SDK session at a time. Requires
+    $env:CLAUDE_CODE_OAUTH_TOKEN to be set.
+
 .EXAMPLE
     .\mock.ps1
     Runs both backend and frontend with logs captured to files.
@@ -39,7 +46,8 @@
 
 param(
     [int]$Port = 0,
-    [switch]$Foreground
+    [switch]$Foreground,
+    [switch]$WithWorker
 )
 
 Set-StrictMode -Version Latest
@@ -51,6 +59,67 @@ $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..")
 $ProjectPath = Join-Path $ProjectRoot "src" "Homespun.Server" "Homespun.Server.csproj"
 $WebDir = Join-Path $ProjectRoot "src" "Homespun.Web"
 $LogDir = Join-Path $ProjectRoot "logs"
+
+$WorkerHostPort = if ($env:WORKER_HOST_PORT) { $env:WORKER_HOST_PORT } else { "8081" }
+
+function Stop-ComposeWorker {
+    if (-not $WithWorker) { return }
+    Write-Host "Stopping docker-compose worker..." -ForegroundColor Cyan
+    Push-Location $ProjectRoot
+    try {
+        & docker compose stop worker | Out-Null
+    } catch {
+        Write-Host "Failed to stop worker: $_" -ForegroundColor Yellow
+    } finally {
+        Pop-Location
+    }
+}
+
+if ($WithWorker) {
+    if (-not $env:CLAUDE_CODE_OAUTH_TOKEN) {
+        Write-Host "ERROR: CLAUDE_CODE_OAUTH_TOKEN is not set; aborting." -ForegroundColor Red
+        Write-Host "       --WithWorker boots a real Claude Agent SDK worker which requires authentication." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Starting docker-compose worker on host port $WorkerHostPort..." -ForegroundColor Cyan
+    Push-Location $ProjectRoot
+    try {
+        $env:WORKER_HOST_PORT = $WorkerHostPort
+        & docker compose up -d worker
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker compose up -d worker failed"
+        }
+    } finally {
+        Pop-Location
+    }
+
+    Write-Host "Waiting for worker /api/health on http://localhost:$WorkerHostPort..." -ForegroundColor Cyan
+    $ready = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri "http://localhost:$WorkerHostPort/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) { $ready = $true; break }
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+    if (-not $ready) {
+        Write-Host "Worker did not become healthy within 30s; aborting." -ForegroundColor Yellow
+        Stop-ComposeWorker
+        exit 1
+    }
+    Write-Host "Worker is healthy." -ForegroundColor Green
+
+    $env:AgentExecution__Mode = "SingleContainer"
+    $env:AgentExecution__SingleContainer__WorkerUrl = "http://localhost:$WorkerHostPort"
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    # The `mock` launch profile enables HOMESPUN_MOCK_MODE which bypasses the
+    # real agent-execution registration entirely. With --WithWorker the point
+    # is to hit the real SingleContainer shim, so force mock mode off.
+    $env:HOMESPUN_MOCK_MODE = "false"
+    $env:MockMode__Enabled = "false"
+}
 
 # Build the dotnet run command args
 $dotnetArgs = @(
@@ -66,11 +135,15 @@ if ($Port -ne 0) {
 
 # Foreground mode: original behavior (backend only, output to terminal)
 if ($Foreground) {
-    Write-Host "=== Homespun Mock Mode (foreground) ===" -ForegroundColor Cyan
-    Write-Host "Running backend only with output to terminal..." -ForegroundColor Cyan
-    Write-Host "WARNING: Do not use KillShell on this process - use 'Stop-Process -Name dotnet' instead" -ForegroundColor Yellow
-    Write-Host ""
-    & dotnet @dotnetArgs
+    try {
+        Write-Host "=== Homespun Mock Mode (foreground) ===" -ForegroundColor Cyan
+        Write-Host "Running backend only with output to terminal..." -ForegroundColor Cyan
+        Write-Host "WARNING: Do not use KillShell on this process - use 'Stop-Process -Name dotnet' instead" -ForegroundColor Yellow
+        Write-Host ""
+        & dotnet @dotnetArgs
+    } finally {
+        Stop-ComposeWorker
+    }
     return
 }
 
@@ -128,5 +201,6 @@ try {
     if (-not $frontendProcess.HasExited) {
         Stop-Process -Id $frontendProcess.Id -Force -ErrorAction SilentlyContinue
     }
+    Stop-ComposeWorker
     Write-Host "Servers stopped." -ForegroundColor Cyan
 }

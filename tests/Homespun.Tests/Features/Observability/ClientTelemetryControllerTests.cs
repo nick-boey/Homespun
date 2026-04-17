@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Homespun.Tests.Features.Observability;
 
 [TestFixture]
+[NonParallelizable]
 public class ClientTelemetryControllerTests
 {
     private ClientTelemetryController _controller = null!;

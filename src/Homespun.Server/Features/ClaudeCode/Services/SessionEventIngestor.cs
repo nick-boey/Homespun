@@ -2,8 +2,11 @@ using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
+using Homespun.Features.Observability;
+using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -39,19 +42,22 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
     private readonly IHubContext<ClaudeCodeHub> _hub;
     private readonly ILogger<SessionEventIngestor> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly SessionEventLogOptions _sessionEventLogOptions;
 
     public SessionEventIngestor(
         IA2AEventStore store,
         IA2AToAGUITranslator translator,
         IHubContext<ClaudeCodeHub> hub,
         ILogger<SessionEventIngestor> logger,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        IOptions<SessionEventLogOptions>? sessionEventLogOptions = null)
     {
         _store = store;
         _translator = translator;
         _hub = hub;
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _sessionEventLogOptions = sessionEventLogOptions?.Value ?? new SessionEventLogOptions();
     }
 
     /// <inheritdoc />
@@ -97,16 +103,53 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
         // Step 3: broadcast. One envelope per translated AG-UI event, all sharing the parent
         // A2A event's seq and eventId so live and replay produce identical envelope streams.
+        ExtractParentCorrelation(
+            parsed,
+            out var parentTaskId,
+            out var parentMessageId,
+            out var parentArtifactId,
+            out var parentStatusTimestamp);
+
         try
         {
             foreach (var agui in aguiEvents)
             {
+                // server.agui.translate hop: one per AG-UI envelope produced from the parent A2A event.
+                SessionEventLog.LogAGUIHop(
+                    _logger,
+                    _sessionEventLogOptions,
+                    hop: SessionEventHops.ServerAguiTranslate,
+                    sessionId: sessionId,
+                    agui: agui,
+                    seq: record.Seq,
+                    eventId: record.EventId,
+                    parentMessageId: parentMessageId,
+                    parentArtifactId: parentArtifactId,
+                    parentStatusTimestamp: parentStatusTimestamp,
+                    parentTaskId: parentTaskId,
+                    a2aKind: eventKind);
+
                 var envelope = new SessionEventEnvelope(
                     Seq: record.Seq,
                     SessionId: record.SessionId,
                     EventId: record.EventId,
                     Event: agui);
                 await _hub.BroadcastSessionEvent(sessionId, envelope);
+
+                // server.signalr.tx hop: emitted after the SignalR dispatch returns.
+                SessionEventLog.LogAGUIHop(
+                    _logger,
+                    _sessionEventLogOptions,
+                    hop: SessionEventHops.ServerSignalrTx,
+                    sessionId: sessionId,
+                    agui: agui,
+                    seq: record.Seq,
+                    eventId: record.EventId,
+                    parentMessageId: parentMessageId,
+                    parentArtifactId: parentArtifactId,
+                    parentStatusTimestamp: parentStatusTimestamp,
+                    parentTaskId: parentTaskId,
+                    a2aKind: eventKind);
             }
         }
         catch (Exception ex)
@@ -117,6 +160,38 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
             _logger.LogWarning(ex,
                 "Failed to broadcast SessionEventEnvelope seq={Seq} eventId={EventId} for session {SessionId}",
                 record.Seq, record.EventId, sessionId);
+        }
+    }
+
+    private static void ExtractParentCorrelation(
+        ParsedA2AEvent? parsed,
+        out string? taskId,
+        out string? messageId,
+        out string? artifactId,
+        out string? statusTimestamp)
+    {
+        taskId = null;
+        messageId = null;
+        artifactId = null;
+        statusTimestamp = null;
+
+        switch (parsed)
+        {
+            case ParsedAgentMessage pm:
+                messageId = pm.Message.MessageId;
+                taskId = pm.Message.TaskId;
+                break;
+            case ParsedAgentTask pt:
+                taskId = pt.Task.Id;
+                break;
+            case ParsedTaskStatusUpdateEvent ps:
+                taskId = ps.StatusUpdate.TaskId;
+                statusTimestamp = ps.StatusUpdate.Status.Timestamp.ToString("O");
+                break;
+            case ParsedTaskArtifactUpdateEvent pa:
+                taskId = pa.ArtifactUpdate.TaskId;
+                artifactId = pa.ArtifactUpdate.Artifact?.ArtifactId;
+                break;
         }
     }
 

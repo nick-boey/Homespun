@@ -222,6 +222,9 @@ function applyRunStarted(state: AGUISessionState, _event: RunStartedEvent): AGUI
 }
 
 function applyRunFinished(state: AGUISessionState, _event: RunFinishedEvent): AGUISessionState {
+  // RunFinished.result is deliberately NOT rendered — it is a completion signal, not
+  // visible content. The assistant's own text-message block carries the user-visible
+  // output. See openspec/changes/session-event-telemetry/design.md (Non-Goals).
   return { ...state, isRunning: false }
 }
 

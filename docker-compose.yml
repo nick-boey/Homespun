@@ -29,6 +29,10 @@
 #   GRAFANA_PORT            - Grafana port (default: 3000)
 #   GRAFANA_ADMIN_PASSWORD  - Grafana admin password (default: admin)
 #   MINI_PROMPT_SIDECAR_URL - URL for mini-prompt sidecar (default: http://homespun-worker:8080)
+#   WORKER_HOST_PORT        - Host port exposed for the worker container (default: 8081)
+#                             Used by scripts/mock.sh --with-worker so a backend running
+#                             from `dotnet run` on the host can reach the compose worker.
+#                             Leave unset in production — production doesn't use compose.
 
 services:
   # Main Homespun application
@@ -81,6 +85,8 @@ services:
     image: ${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
     container_name: homespun-worker
     restart: unless-stopped
+    ports:
+      - "${WORKER_HOST_PORT:-8081}:8080"
     networks:
       - homespun-net
     environment:
