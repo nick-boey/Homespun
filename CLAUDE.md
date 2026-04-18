@@ -116,9 +116,41 @@ tests/
 - **Projects**: Project CRUD operations
 - **PullRequests**: PR workflow, feature management, and core data entities
 
+### Dev prerequisites
+
+- .NET 10 SDK with the Aspire workload
+- Node 20+ (npm on PATH — required by the AppHost's Vite wiring)
+- Docker Desktop (for PLG containers, and for Docker-mode agent execution)
+- One-time secret bootstrap: run `scripts/set-user-secrets.sh` (macOS/Linux) or
+  `scripts/set-user-secrets.ps1` (Windows) after copying `.env.example` → `.env`.
+  The script migrates `GITHUB_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` into the
+  `Homespun.AppHost` user-secrets store so Aspire can inject them at runtime.
+
 ### Running the Application
 
 **Do not under any circumstances stop a container called `homespun` or `homespun-prod`.**
+
+Local dev runs through the Aspire AppHost. Pick a launch profile:
+
+| Profile | Use case |
+|---|---|
+| `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + PLG with the mock service graph. No worker, agents return canned A2A events. |
+| `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
+| `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — use on Windows where DooD is unavailable. |
+| `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
+
+```bash
+dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
+dotnet run --project src/Homespun.AppHost --launch-profile dev-live
+dotnet run --project src/Homespun.AppHost --launch-profile dev-windows
+dotnet run --project src/Homespun.AppHost --launch-profile dev-container
+```
+
+Use `dotnet run` for these — `aspire run` does not accept `--launch-profile`
+and silently falls back to the first profile in `launchSettings.json`.
+
+Server is reachable at `http://localhost:5101` (port pinned for Playwright + existing tests).
+Grafana lands on `3000` and Loki on `3100`. The Aspire dashboard prints its own URL at startup.
 
 ### Accessing Application Logs
 
@@ -247,29 +279,30 @@ E2E tests for the React frontend are located in `src/Homespun.Web/e2e/`. These t
 To start a server running in Mock Mode to investigate with the Playwright MCP:
 
 ```bash
-# Start both backend and frontend servers (logs captured to logs/ directory)
-./scripts/mock.sh       # Linux/Mac
-./scripts/mock.ps1      # Windows
-
-# Or run backend only in foreground (original behavior)
-./scripts/mock.sh --foreground
+dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
 ```
 
-Logs are written to `logs/mock-backend.log` and `logs/mock-frontend.log`. Use `tail -f` to follow them.
-
-Review the log files to find the ports that the development backend and frontend applications are running on, then use the Playwright MCP tools to investigate.
+Server, Vite, and the PLG stack are started by the AppHost. Server logs, traces,
+and metrics stream to the Aspire dashboard via OTLP (URL printed at startup).
+Worker / container-resource logs are also visible in Loki via Grafana at
+`http://localhost:3000`. The server is reachable at `http://localhost:5101`
+(pinned port), and the Vite dev server at `http://localhost:5173`. Use the
+Playwright MCP tools against those URLs.
 
 ### Critical Shell Management Rules
 
-**NEVER use `KillShell` on a shell running `mock.sh` or any `dotnet` process.** Killing these shells can terminate your entire session and crash the agent.
+**NEVER use `KillShell` on a shell running `dotnet run --project src/Homespun.AppHost`
+or any long-lived `dotnet` process.** Killing these shells can terminate your
+entire session and crash the agent.
 
 When cleaning up after UI testing:
 
 - Close the browser using `mcp__playwright__browser_close` - this is safe
-- Leave the mock.sh process running - it will be cleaned up when the session ends
+- Leave the AppHost process running - it will be cleaned up when the session ends
 - Do NOT attempt to kill background shells that are running server processes
 
-If you need to restart the mock server:
+If you need to restart the AppHost:
 
-1. Use `pkill -f "dotnet.*mock"` to stop the dotnet process directly
-2. Start a new mock server with `./scripts/mock.sh &`
+1. Use `pkill -f "Homespun.AppHost"` to stop the dotnet process directly
+2. Start a new AppHost run with
+   `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock &`

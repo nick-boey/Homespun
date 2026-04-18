@@ -9,8 +9,10 @@ import { defineConfig, devices } from '@playwright/test'
  * - CI: Set to 'true' in CI environments for optimized settings
  *
  * Usage:
- * - Local: Start the mock server with `./scripts/mock.sh`, then run `npm run test:e2e`
- * - CI: Tests automatically start both Vite dev server and .NET backend
+ * - Local: Launch the Aspire AppHost via
+ *   `dotnet run --project ../Homespun.AppHost --launch-profile dev-mock`, then
+ *   run `npm run test:e2e`
+ * - CI: `webServer` below drives the AppHost automatically
  */
 export default defineConfig({
   testDir: './e2e',
@@ -52,28 +54,18 @@ export default defineConfig({
     // },
   ],
 
-  // Start both the .NET backend and Vite dev server
-  // Vite dev server proxies API calls to the .NET backend (configured in vite.config.ts)
+  // Launch the full dev stack through the Aspire AppHost (server + Vite + PLG).
+  // Wait on the Vite dev-server port — it starts last in the AppHost WaitFor
+  // chain (loki → server → web), so a ready signal there guarantees the whole
+  // stack is up. Server lives at :5101 via Vite's /api proxy.
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : [
-        {
-          // Start the .NET backend first
-          command: 'cd ../Homespun.Server && dotnet run --launch-profile mock',
-          url: 'http://localhost:5101/health',
-          reuseExistingServer: !process.env.CI,
-          timeout: 120000,
-          stdout: 'pipe',
-          stderr: 'pipe',
-        },
-        {
-          // Then start Vite dev server which proxies to the backend
-          command: 'npm run dev',
-          url: 'http://localhost:5173',
-          reuseExistingServer: !process.env.CI,
-          timeout: 30000,
-          stdout: 'pipe',
-          stderr: 'pipe',
-        },
-      ],
+    : {
+        command: 'dotnet run --project ../Homespun.AppHost --launch-profile dev-mock',
+        url: 'http://localhost:5173/',
+        reuseExistingServer: !process.env.CI,
+        timeout: 180000,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
 })

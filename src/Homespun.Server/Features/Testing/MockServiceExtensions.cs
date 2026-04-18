@@ -192,9 +192,47 @@ public static class MockServiceExtensions
         MockModeOptions options,
         IConfiguration configuration)
     {
-        // Register MockAgentExecutionService for mock mode
-        Console.WriteLine("[AgentExecution] MockLive mode: Registering MockAgentExecutionService");
-        services.AddSingleton<IAgentExecutionService, MockAgentExecutionService>();
+        // Agent execution selection mirrors the non-mock path in Program.cs:
+        //   Docker            → DockerAgentExecutionService + discovery/recovery
+        //   SingleContainer   → SingleContainerAgentExecutionService shim
+        //   unset / other     → MockAgentExecutionService
+        var agentMode = configuration["AgentExecution:Mode"];
+        if (string.Equals(agentMode, "Docker", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[AgentExecution] MockLive + Docker: Registering DockerAgentExecutionService");
+            services.Configure<DockerAgentExecutionOptions>(
+                configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+            services.PostConfigure<DockerAgentExecutionOptions>(opts =>
+            {
+                var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+                if (!string.IsNullOrEmpty(hostPath))
+                    opts.HostDataPath = hostPath;
+            });
+            services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+            services.AddHostedService(sp =>
+            {
+                var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+                var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+                var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+                return new ContainerRecoveryHostedService(
+                    discoveryService,
+                    container => executionService?.RegisterDiscoveredContainer(container),
+                    logger);
+            });
+        }
+        else if (string.Equals(agentMode, "SingleContainer", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[AgentExecution] MockLive + SingleContainer: Registering SingleContainerAgentExecutionService");
+            services.Configure<SingleContainerAgentExecutionOptions>(
+                configuration.GetSection(SingleContainerAgentExecutionOptions.SectionName));
+            services.AddSingleton<IAgentExecutionService, SingleContainerAgentExecutionService>();
+        }
+        else
+        {
+            Console.WriteLine("[AgentExecution] MockLive mode: Registering MockAgentExecutionService");
+            services.AddSingleton<IAgentExecutionService, MockAgentExecutionService>();
+        }
 
         // Determine working directory for live sessions
         // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise home directory

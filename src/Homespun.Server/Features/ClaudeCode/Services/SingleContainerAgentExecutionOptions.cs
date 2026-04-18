@@ -41,4 +41,14 @@ public sealed class SingleContainerAgentExecutionOptions
     /// (see <see cref="HostWorkspaceRoot"/>).
     /// </summary>
     public string ContainerWorkspaceRoot { get; set; } = "/workdir";
+
+    /// <summary>
+    /// When set, the shim ignores the caller's working directory entirely and
+    /// forwards this path as the worker <c>cwd</c>. Intended for mock-mode
+    /// sessions where the host-side clone path (e.g. a macOS temp directory)
+    /// isn't mounted into the worker container — forcing a known-good path
+    /// like <c>/workdir</c> lets live-agent chat run end-to-end without the
+    /// session failing to spawn the SDK child process.
+    /// </summary>
+    public string ForceContainerWorkingDirectory { get; set; } = string.Empty;
 }

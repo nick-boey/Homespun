@@ -57,6 +57,7 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         public SessionMode Mode { get; init; }
         public string Model { get; init; } = string.Empty;
         public string WorkingDirectory { get; init; } = string.Empty;
+        public string? ProjectId { get; init; }
     }
 
     public SingleContainerAgentExecutionService(
@@ -108,6 +109,7 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
                 Mode = request.Mode,
                 Model = request.Model,
                 WorkingDirectory = request.WorkingDirectory,
+                ProjectId = request.ProjectId,
             };
             _active = session;
         }
@@ -117,6 +119,12 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         }
 
         var containerWorkingDirectory = TranslateWorkingDirectoryForContainer(request.WorkingDirectory);
+
+        // Worker never emits an A2A message for the initial prompt (it pushes
+        // into the SDK input queue, not the output channel), so the UI never
+        // sees the user's first message. Synthesize one here before streaming
+        // so it appears in the event log alongside the agent's reply.
+        await IngestUserMessageAsync(request.ProjectId, sessionId, request.Prompt, cancellationToken);
 
         var startBody = new
         {
@@ -153,19 +161,33 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var active = _active;
-        if (active is null || active.SessionId != request.SessionId)
+        // MessageProcessingService passes the agentSessionId captured from the
+        // session_started event, which for SingleContainer is the worker's own
+        // session id — so match on either identifier held by the active slot.
+        var matches = active is not null
+            && (active.SessionId == request.SessionId
+                || (!string.IsNullOrEmpty(active.WorkerSessionId) && active.WorkerSessionId == request.SessionId));
+        if (!matches)
         {
-            _logger.LogError("SendMessageAsync: no active SingleContainer session for {SessionId}", request.SessionId);
+            _logger.LogError(
+                "SendMessageAsync: no active SingleContainer session for {SessionId} (active={ActiveSessionId}, worker={WorkerSessionId})",
+                request.SessionId,
+                active?.SessionId,
+                active?.WorkerSessionId);
             yield break;
         }
 
-        if (string.IsNullOrEmpty(active.WorkerSessionId))
+        if (string.IsNullOrEmpty(active!.WorkerSessionId))
         {
             _logger.LogError("SendMessageAsync: active session has no WorkerSessionId yet");
             yield break;
         }
 
         active.LastActivityAt = DateTime.UtcNow;
+
+        // Mirror StartSessionAsync: the worker doesn't echo follow-up user
+        // messages as A2A events, so synthesize one so the UI sees it.
+        await IngestUserMessageAsync(active.ProjectId, active.SessionId, request.Message, cancellationToken);
 
         var body = new
         {
@@ -176,7 +198,7 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
 
         var url = $"{_options.WorkerUrl.TrimEnd('/')}/api/sessions/{active.WorkerSessionId}/message";
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, active.Cts.Token);
-        await foreach (var msg in StreamAgentEventsAsync(url, body, request.SessionId, null, linked.Token))
+        await foreach (var msg in StreamAgentEventsAsync(url, body, active.SessionId, null, linked.Token))
         {
             yield return msg;
         }
@@ -336,6 +358,11 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
     /// </summary>
     internal string TranslateWorkingDirectoryForContainer(string hostWorkingDirectory)
     {
+        if (!string.IsNullOrEmpty(_options.ForceContainerWorkingDirectory))
+        {
+            return _options.ForceContainerWorkingDirectory;
+        }
+
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return hostWorkingDirectory;
@@ -483,6 +510,40 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
                 eventType = null;
                 data.Clear();
             }
+        }
+    }
+
+    private async Task IngestUserMessageAsync(string? projectId, string sessionId, string? message, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(message)) return;
+        var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            kind = "message",
+            messageId = Guid.NewGuid().ToString(),
+            role = "user",
+            parts = new[]
+            {
+                new { kind = "text", text = message },
+            },
+            contextId = sessionId,
+            metadata = new { sdkMessageType = "user" },
+        });
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            await _eventIngestor.IngestAsync(
+                effectiveProjectId,
+                sessionId,
+                HomespunA2AEventKind.Message,
+                doc.RootElement.Clone(),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SingleContainer user-message synth failed for session {SessionId}",
+                sessionId);
         }
     }
 

@@ -1,4 +1,5 @@
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Testing.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,15 +20,24 @@ public class AgentExecutionModeStartupTests
     private sealed class ModeFactory : WebApplicationFactory<Program>
     {
         public required string Environment { get; init; }
-        public required string Mode { get; init; }
+        public string? Mode { get; init; }
         public string? WorkerUrl { get; init; }
+        public bool MockMode { get; init; }
+        public bool UseLiveClaudeSessions { get; init; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(Environment);
-            // Do not enable mock mode so the agent-execution registration branch runs.
-            builder.UseSetting("MockMode:Enabled", "false");
-            builder.UseSetting("AgentExecution:Mode", Mode);
+            builder.UseSetting("MockMode:Enabled", MockMode ? "true" : "false");
+            if (MockMode)
+            {
+                builder.UseSetting("MockMode:SeedData", "false");
+                builder.UseSetting("MockMode:UseLiveClaudeSessions", UseLiveClaudeSessions ? "true" : "false");
+            }
+            if (Mode is not null)
+            {
+                builder.UseSetting("AgentExecution:Mode", Mode);
+            }
             if (WorkerUrl is not null)
             {
                 builder.UseSetting("AgentExecution:SingleContainer:WorkerUrl", WorkerUrl);
@@ -87,5 +97,37 @@ public class AgentExecutionModeStartupTests
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IAgentExecutionService>();
         Assert.That(service, Is.InstanceOf<SingleContainerAgentExecutionService>());
+    }
+
+    [Test]
+    public void MockMode_Live_Docker_RegistersDockerAgentExecutionService()
+    {
+        using var factory = new ModeFactory
+        {
+            Environment = "Mock",
+            MockMode = true,
+            UseLiveClaudeSessions = true,
+            Mode = "Docker",
+        };
+
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAgentExecutionService>();
+        Assert.That(service, Is.InstanceOf<DockerAgentExecutionService>());
+    }
+
+    [Test]
+    public void MockMode_Live_NoMode_FallsBackToMockAgentExecutionService()
+    {
+        using var factory = new ModeFactory
+        {
+            Environment = "Mock",
+            MockMode = true,
+            UseLiveClaudeSessions = true,
+            Mode = null,
+        };
+
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAgentExecutionService>();
+        Assert.That(service, Is.InstanceOf<MockAgentExecutionService>());
     }
 }
