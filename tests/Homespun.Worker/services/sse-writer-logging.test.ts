@@ -5,7 +5,7 @@ import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
 
 // Mock the logger module
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   info: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('#src/utils/logger.js', () => ({
   truncatePreview: vi.fn((t: string | undefined) => t),
 }));
 
-import { info, debug } from '#src/utils/logger.js';
+import { info, debug } from '#src/utils/otel-logger.js';
 
 describe('SSE Writer Logging', () => {
   let mockSessionManager: any;

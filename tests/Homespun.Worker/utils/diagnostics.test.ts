@@ -18,7 +18,7 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
 }));
 
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   error: vi.fn(),
 }));
 

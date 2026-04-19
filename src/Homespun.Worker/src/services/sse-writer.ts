@@ -27,7 +27,7 @@ import {
   extractMessagePreview,
   getContentPreviewChars,
   truncatePreview,
-} from "../utils/logger.js";
+} from "../utils/otel-logger.js";
 
 /**
  * Formats tool parameters for debug logging.

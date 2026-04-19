@@ -190,6 +190,30 @@ remove a span → update that file in the same PR. A drift check in each
 tier's test suite refuses to merge otherwise; see
 [`docs/traces/README.md`](docs/traces/README.md) for the workflow.
 
+### Worker OTLP path
+
+The worker (`src/Homespun.Worker`) exports traces + logs via
+`@opentelemetry/sdk-node` from `src/instrumentation.ts`, which is the very
+first import of `src/index.ts` so `@opentelemetry/auto-instrumentations-node`
+patches Hono/http/undici before any other module binds them. The SDK
+targets `${OTLP_PROXY_URL}/traces` and `${OTLP_PROXY_URL}/logs`; the server's
+`DockerAgentExecutionService` injects `OTLP_PROXY_URL` (plus
+`OTEL_SERVICE_NAME=homespun.worker`, `HOMESPUN_SESSION_ID`,
+`HOMESPUN_ISSUE_ID`, `HOMESPUN_PROJECT_NAME`) into every spawned container.
+`docker stop --time 3` (not `docker kill`) is used on shutdown so the
+worker receives SIGTERM and flushes the OTel batch processors.
+
+**Do NOT enable** the following auto-instrumentations on the worker (all
+disabled in `instrumentation.ts` via
+`getNodeAutoInstrumentations({...})`):
+
+- `@opentelemetry/instrumentation-fs` — every Claude Agent SDK tool call,
+  OpenSpec snapshot, and Fleece read generates hundreds of `fs.readFile`
+  spans per second; it drowns Seq and destroys the signal-to-noise ratio.
+  Relevant I/O surfaces as explicit spans on service methods instead.
+- `@opentelemetry/instrumentation-net`, `@opentelemetry/instrumentation-dns`
+  — low-level noise with no correlation value.
+
 ## React Frontend Development
 
 ### Technology Stack

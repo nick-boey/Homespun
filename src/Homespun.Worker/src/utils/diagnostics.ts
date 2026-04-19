@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { info, error as logError } from './logger.js';
+import { error as logError } from './otel-logger.js';
 
 /**
  * Reads the last N lines from a file.

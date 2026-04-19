@@ -1,3 +1,9 @@
+// IMPORTANT: `./instrumentation` MUST be the very first import so that
+// `@opentelemetry/auto-instrumentations-node` can patch Hono, http, and the
+// SDK's undici client before any other module binds the un-patched
+// versions. Do not reorder.
+import './instrumentation.js';
+
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { query } from '@anthropic-ai/claude-agent-sdk';
@@ -9,7 +15,7 @@ import { createTestRoute } from './routes/test.js';
 import files from './routes/files.js';
 import { SessionManager } from './services/session-manager.js';
 import { emitBootInventory } from './services/session-inventory.js';
-import { info } from './utils/logger.js';
+import { info } from './utils/otel-logger.js';
 
 const app = new Hono();
 const sessionManager = new SessionManager();
@@ -46,12 +52,19 @@ void emitBootInventory({
   }),
 });
 
-// Graceful shutdown
+// Graceful shutdown. SIGTERM/SIGINT also trigger the SDK shutdown handler in
+// `./instrumentation.ts`; that handler calls `process.exit(0)` once telemetry
+// is flushed. To avoid racing and cutting off the final OTLP batch, this
+// handler only closes sessions and does NOT call `process.exit()` — the
+// instrumentation handler owns that.
 async function shutdown() {
   info('Shutting down...');
   await sessionManager.closeAll();
-  process.exit(0);
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => {
+  void shutdown();
+});
+process.on('SIGINT', () => {
+  void shutdown();
+});

@@ -6,7 +6,7 @@ import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 import { isControlEvent } from '../../../src/Homespun.Worker/src/services/session-manager.js';
 
 // Mock the logger module
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   info: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
@@ -48,7 +48,7 @@ vi.mock('node:crypto', () => ({
 }));
 
 import { SessionManager } from '#src/services/session-manager.js';
-import { info, error, warn, debug } from '#src/utils/logger.js';
+import { info, error, warn, debug } from '#src/utils/otel-logger.js';
 
 describe('SessionManager Logging', () => {
   let sessionManager: SessionManager;

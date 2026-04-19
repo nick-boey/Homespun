@@ -1,64 +1,76 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sdkDebug, isSdkDebugEnabled } from '#src/utils/logger.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { sdkDebug, isSdkDebugEnabled } from '#src/utils/otel-logger.js';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 
-describe('sdkDebug', () => {
-  let logSpy: ReturnType<typeof vi.spyOn>;
+type EmitCall = {
+  severityNumber?: number;
+  body?: unknown;
+  attributes?: Record<string, unknown>;
+};
 
-  beforeEach(() => {
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  });
+function installLoggerSpy(): { emit: ReturnType<typeof vi.fn> } {
+  const emit = vi.fn();
+  const logger = { emit } as unknown as ReturnType<typeof logs.getLogger>;
+  vi.spyOn(logs, 'getLogger').mockReturnValue(logger);
+  return { emit };
+}
 
+describe('sdkDebug (OTel-backed)', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    logSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
-  it('emits no output when DEBUG_AGENT_SDK is unset', () => {
+  it('emits no log record when DEBUG_AGENT_SDK is unset', () => {
+    const { emit } = installLoggerSpy();
     vi.stubEnv('DEBUG_AGENT_SDK', '');
     sdkDebug('tx', { hello: 'world' });
-    expect(logSpy).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
   });
 
-  it('emits no output when DEBUG_AGENT_SDK is any value other than "true"', () => {
+  it('emits no log record when DEBUG_AGENT_SDK is anything other than "true"', () => {
+    const { emit } = installLoggerSpy();
     vi.stubEnv('DEBUG_AGENT_SDK', '1');
     sdkDebug('rx', { x: 1 });
     vi.stubEnv('DEBUG_AGENT_SDK', 'false');
     sdkDebug('rx', { x: 1 });
     vi.stubEnv('DEBUG_AGENT_SDK', 'TRUE');
     sdkDebug('rx', { x: 1 });
-    expect(logSpy).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
   });
 
-  it('emits a structured JSON line for tx payloads when enabled', () => {
+  it('emits a DEBUG-severity log record for tx payloads when enabled', () => {
+    const { emit } = installLoggerSpy();
     vi.stubEnv('DEBUG_AGENT_SDK', 'true');
     sdkDebug('tx', { op: 'setPermissionMode', mode: 'bypassPermissions' });
 
-    expect(logSpy).toHaveBeenCalledOnce();
-    const written = logSpy.mock.calls[0][0] as string;
-    const parsed = JSON.parse(written);
-    expect(parsed.Level).toBe('Debug');
-    expect(parsed.Message).toContain('[SDK tx]');
-    expect(parsed.Message).toContain('"op":"setPermissionMode"');
-    expect(parsed.Message).toContain('"mode":"bypassPermissions"');
+    expect(emit).toHaveBeenCalledOnce();
+    const call = emit.mock.calls[0][0] as EmitCall;
+    expect(call.severityNumber).toBe(SeverityNumber.DEBUG);
+    expect(String(call.body)).toContain('[SDK tx]');
+    expect(String(call.body)).toContain('"op":"setPermissionMode"');
+    expect(call.attributes?.['sdk.direction']).toBe('tx');
   });
 
   it('emits for rx direction', () => {
+    const { emit } = installLoggerSpy();
     vi.stubEnv('DEBUG_AGENT_SDK', 'true');
     sdkDebug('rx', { type: 'assistant' });
 
-    expect(logSpy).toHaveBeenCalledOnce();
-    const written = logSpy.mock.calls[0][0] as string;
-    const parsed = JSON.parse(written);
-    expect(parsed.Message).toContain('[SDK rx]');
-    expect(parsed.Message).toContain('"type":"assistant"');
+    expect(emit).toHaveBeenCalledOnce();
+    const call = emit.mock.calls[0][0] as EmitCall;
+    expect(String(call.body)).toContain('[SDK rx]');
+    expect(String(call.body)).toContain('"type":"assistant"');
+    expect(call.attributes?.['sdk.direction']).toBe('rx');
   });
 
   it('falls back to String(msg) for non-serializable payloads', () => {
+    const { emit } = installLoggerSpy();
     vi.stubEnv('DEBUG_AGENT_SDK', 'true');
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
     expect(() => sdkDebug('tx', cyclic)).not.toThrow();
-    expect(logSpy).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledOnce();
   });
 
   it('isSdkDebugEnabled reflects the current env', () => {

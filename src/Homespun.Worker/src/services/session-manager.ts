@@ -19,7 +19,7 @@ import {
   debug,
   sdkDebug,
   isSdkDebugEnabled,
-} from "../utils/logger.js";
+} from "../utils/otel-logger.js";
 import {
   buildInventoryFromInit,
   emitInventoryLog,

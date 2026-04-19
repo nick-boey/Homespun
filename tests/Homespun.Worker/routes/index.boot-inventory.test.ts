@@ -17,7 +17,7 @@ const logs: { info: string[]; warn: string[]; error: string[] } = {
   error: [],
 };
 
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   info: vi.fn((m: string) => logs.info.push(m)),
   warn: vi.fn((m: string) => logs.warn.push(m)),
   error: vi.fn((m: string) => logs.error.push(m)),
