@@ -95,42 +95,6 @@ public class AppHostTests
     }
 
     [Test]
-    public async Task AppHost_skips_plg_stack_when_HOMESPUN_DEV_SKIP_PLG_is_true()
-    {
-        // e2e-ci launch profile sets this env var so CI doesn't pay the cost
-        // of pulling loki/promtail/grafana images just to run Playwright.
-        var previous = Environment.GetEnvironmentVariable("HOMESPUN_DEV_SKIP_PLG");
-        Environment.SetEnvironmentVariable("HOMESPUN_DEV_SKIP_PLG", "true");
-        try
-        {
-            var appHost = await DistributedApplicationTestingBuilder
-                .CreateAsync<Projects.Homespun_AppHost>();
-
-            var app = await appHost.BuildAsync();
-
-            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(model.Resources.SingleOrDefault(r => r.Name == "loki"),
-                    Is.Null, "Loki should be absent when HOMESPUN_DEV_SKIP_PLG=true");
-                Assert.That(model.Resources.SingleOrDefault(r => r.Name == "promtail"),
-                    Is.Null, "Promtail should be absent when HOMESPUN_DEV_SKIP_PLG=true");
-                Assert.That(model.Resources.SingleOrDefault(r => r.Name == "grafana"),
-                    Is.Null, "Grafana should be absent when HOMESPUN_DEV_SKIP_PLG=true");
-                Assert.That(model.Resources.SingleOrDefault(r => r.Name == "server"),
-                    Is.Not.Null, "Server should still be registered");
-                Assert.That(model.Resources.SingleOrDefault(r => r.Name == "web"),
-                    Is.Not.Null, "Web should still be registered");
-            });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("HOMESPUN_DEV_SKIP_PLG", previous);
-        }
-    }
-
-    [Test]
     public async Task Secret_parameters_are_wired_to_correct_services()
     {
         var appHost = await DistributedApplicationTestingBuilder

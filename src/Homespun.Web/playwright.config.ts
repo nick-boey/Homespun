@@ -9,10 +9,13 @@ import { defineConfig, devices } from '@playwright/test'
  * - CI: Set to 'true' in CI environments for optimized settings
  *
  * Usage:
- * - Local: Launch the Aspire AppHost via
- *   `dotnet run --project ../Homespun.AppHost --launch-profile dev-mock`, then
- *   run `npm run test:e2e`
- * - CI: `webServer` below drives the AppHost automatically
+ * - Local: launch the Aspire AppHost (`dotnet run --project ../Homespun.AppHost
+ *   --launch-profile dev-mock`) and then `E2E_BASE_URL=http://localhost:5173 npm
+ *   run test:e2e`, or let this config drive a lightweight non-Aspire stack below.
+ * - CI: `webServer` entries below start the .NET mock server and Vite directly,
+ *   bypassing Aspire to avoid DCP cert-trust + container-pull overhead on fresh
+ *   runners. Aspire remains the primary dev-orchestration surface for
+ *   local inner-loop (dev-mock / dev-live / dev-windows / dev-container).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -54,17 +57,28 @@ export default defineConfig({
     // },
   ],
 
-  // Launch the app through the Aspire AppHost using the `e2e-ci` profile,
-  // which skips the PLG stack (HOMESPUN_DEV_SKIP_PLG=true). Waiting on Vite
-  // means server + vite are both up; PLG is irrelevant for E2E.
+  // Start the .NET mock server and Vite dev server directly. This mirrors the
+  // pre-Aspire setup and keeps CI boot predictable — Aspire/DCP cert trust
+  // and PLG image pulls were pushing cold runs past Playwright's webServer
+  // timeout. Vite's dev proxy (vite.config.ts) forwards /api to 5101.
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : {
-        command: 'dotnet run --project ../Homespun.AppHost --launch-profile e2e-ci',
-        url: 'http://localhost:5173/',
-        reuseExistingServer: !process.env.CI,
-        timeout: 240000,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
+    : [
+        {
+          command: 'cd ../Homespun.Server && dotnet run --launch-profile mock',
+          url: 'http://localhost:5101/health',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+        {
+          command: 'npm run dev',
+          url: 'http://localhost:5173',
+          reuseExistingServer: !process.env.CI,
+          timeout: 30000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+      ],
 })
