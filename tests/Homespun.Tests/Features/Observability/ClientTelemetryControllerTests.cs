@@ -1,38 +1,26 @@
-using System.Text.Json;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Observability;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Homespun.Tests.Features.Observability;
 
 [TestFixture]
-[NonParallelizable]
 public class ClientTelemetryControllerTests
 {
     private ClientTelemetryController _controller = null!;
-    private StringWriter _consoleOutput = null!;
-    private TextWriter _originalOutput = null!;
+    private CapturingLogger _logger = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _controller = new ClientTelemetryController();
-        _originalOutput = Console.Out;
-        _consoleOutput = new StringWriter();
-        Console.SetOut(_consoleOutput);
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        Console.SetOut(_originalOutput);
-        _consoleOutput.Dispose();
+        _logger = new CapturingLogger();
+        _controller = new ClientTelemetryController(_logger);
     }
 
     [Test]
     public void ReceiveTelemetry_WithValidBatch_ReturnsAccepted()
     {
-        // Arrange
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -42,111 +30,32 @@ public class ClientTelemetryControllerTests
             ]
         };
 
-        // Act
         var result = _controller.ReceiveTelemetry(batch);
 
-        // Assert
         Assert.That(result, Is.InstanceOf<AcceptedResult>());
     }
 
     [Test]
     public void ReceiveTelemetry_WithEmptyEvents_ReturnsBadRequest()
     {
-        // Arrange
         var batch = new ClientTelemetryBatch { Events = [] };
 
-        // Act
         var result = _controller.ReceiveTelemetry(batch);
 
-        // Assert
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
     public void ReceiveTelemetry_WithNullBatch_ReturnsBadRequest()
     {
-        // Act
         var result = _controller.ReceiveTelemetry(null!);
 
-        // Assert
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
-    public void ReceiveTelemetry_OutputsValidJson()
+    public void ReceiveTelemetry_ExceptionEvents_LogAtErrorLevel()
     {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = "test-session",
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        Assert.DoesNotThrow(() => JsonDocument.Parse(output), "Output should be valid JSON");
-    }
-
-    [Test]
-    public void ReceiveTelemetry_OutputsRequiredJsonFields()
-    {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = "test-session",
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        var root = json.RootElement;
-
-        Assert.That(root.TryGetProperty("Timestamp", out _), Is.True);
-        Assert.That(root.TryGetProperty("Level", out _), Is.True);
-        Assert.That(root.TryGetProperty("Message", out _), Is.True);
-        Assert.That(root.TryGetProperty("SourceContext", out _), Is.True);
-        Assert.That(root.TryGetProperty("Component", out _), Is.True);
-    }
-
-    [Test]
-    public void ReceiveTelemetry_ComponentIsClient()
-    {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = "test-session",
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        Assert.That(json.RootElement.GetProperty("Component").GetString(), Is.EqualTo("Client"));
-    }
-
-    [Test]
-    public void ReceiveTelemetry_ExceptionEventsHaveErrorLevel()
-    {
-        // Arrange
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -161,19 +70,15 @@ public class ClientTelemetryControllerTests
             ]
         };
 
-        // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        Assert.That(json.RootElement.GetProperty("Level").GetString(), Is.EqualTo("Error"));
+        Assert.That(_logger.Entries, Has.Count.EqualTo(1));
+        Assert.That(_logger.Entries[0].Level, Is.EqualTo(LogLevel.Error));
     }
 
     [Test]
-    public void ReceiveTelemetry_PageViewEventsHaveInformationLevel()
+    public void ReceiveTelemetry_NonExceptionEvents_LogAtInformationLevel()
     {
-        // Arrange
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -183,19 +88,15 @@ public class ClientTelemetryControllerTests
             ]
         };
 
-        // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        Assert.That(json.RootElement.GetProperty("Level").GetString(), Is.EqualTo("Information"));
+        Assert.That(_logger.Entries, Has.Count.EqualTo(1));
+        Assert.That(_logger.Entries[0].Level, Is.EqualTo(LogLevel.Information));
     }
 
     [Test]
-    public void ReceiveTelemetry_IncludesTelemetryFields()
+    public void ReceiveTelemetry_EmitsScopedTelemetryFields()
     {
-        // Arrange
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -210,23 +111,22 @@ public class ClientTelemetryControllerTests
             ]
         };
 
-        // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        var root = json.RootElement;
-
-        Assert.That(root.GetProperty("TelemetryType").GetString(), Is.EqualTo("Event"));
-        Assert.That(root.GetProperty("TelemetryName").GetString(), Is.EqualTo("ButtonClicked"));
-        Assert.That(root.GetProperty("SessionId").GetString(), Is.EqualTo("test-session"));
+        var entry = _logger.Entries.Single();
+        Assert.That(entry.Scope, Is.Not.Null);
+        Assert.That(entry.Scope!["SourceContext"], Is.EqualTo("ClientTelemetry"));
+        Assert.That(entry.Scope!["Component"], Is.EqualTo("Client"));
+        Assert.That(entry.Scope!["TelemetryType"], Is.EqualTo("Event"));
+        Assert.That(entry.Scope!["TelemetryName"], Is.EqualTo("ButtonClicked"));
+        Assert.That(entry.Scope!["SessionId"], Is.EqualTo("test-session"));
+        Assert.That(entry.Scope!.TryGetValue("Properties", out var props), Is.True);
+        Assert.That(props, Is.EqualTo(new Dictionary<string, string> { ["buttonId"] = "submit" }));
     }
 
     [Test]
-    public void ReceiveTelemetry_IncludesDependencyFields()
+    public void ReceiveTelemetry_EmitsDependencyFields_WhenProvided()
     {
-        // Arrange
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -238,29 +138,80 @@ public class ClientTelemetryControllerTests
                     Name = "GET /api/projects",
                     DurationMs = 150.5,
                     Success = true,
-                    StatusCode = 200,
-                    Properties = new Dictionary<string, string> { ["type"] = "HTTP", ["target"] = "localhost" }
+                    StatusCode = 200
                 }
             ]
         };
 
-        // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        var root = json.RootElement;
-
-        Assert.That(root.GetProperty("DurationMs").GetDouble(), Is.EqualTo(150.5));
-        Assert.That(root.GetProperty("Success").GetBoolean(), Is.True);
-        Assert.That(root.GetProperty("StatusCode").GetInt32(), Is.EqualTo(200));
+        var scope = _logger.Entries.Single().Scope!;
+        Assert.That(scope["DurationMs"], Is.EqualTo(150.5));
+        Assert.That(scope["Success"], Is.EqualTo(true));
+        Assert.That(scope["StatusCode"], Is.EqualTo(200));
     }
 
     [Test]
-    public void ReceiveTelemetry_WithMultipleEvents_OutputsMultipleLines()
+    public void ReceiveTelemetry_OmitsDependencyFields_WhenAbsent()
     {
-        // Arrange
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
+            ]
+        };
+
+        _controller.ReceiveTelemetry(batch);
+
+        var scope = _logger.Entries.Single().Scope!;
+        Assert.That(scope.ContainsKey("DurationMs"), Is.False);
+        Assert.That(scope.ContainsKey("Success"), Is.False);
+        Assert.That(scope.ContainsKey("StatusCode"), Is.False);
+    }
+
+    [Test]
+    public void ReceiveTelemetry_WithNullSessionId_ScopesSessionIdAsUnknown()
+    {
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = null,
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
+            ]
+        };
+
+        _controller.ReceiveTelemetry(batch);
+
+        var scope = _logger.Entries.Single().Scope!;
+        Assert.That(scope["SessionId"], Is.EqualTo("unknown"));
+    }
+
+    [Test]
+    public void ReceiveTelemetry_MessageContainsTelemetryInfo()
+    {
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "HomePage" }
+            ]
+        };
+
+        _controller.ReceiveTelemetry(batch);
+
+        var message = _logger.Entries.Single().Message;
+        Assert.That(message, Does.Contain("ClientTelemetry"));
+        Assert.That(message, Does.Contain("PageView"));
+        Assert.That(message, Does.Contain("HomePage"));
+    }
+
+    [Test]
+    public void ReceiveTelemetry_WithMultipleEvents_LogsOnceEach()
+    {
         var batch = new ClientTelemetryBatch
         {
             SessionId = "test-session",
@@ -272,86 +223,64 @@ public class ClientTelemetryControllerTests
             ]
         };
 
-        // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert
-        var lines = _consoleOutput.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.That(lines, Has.Length.EqualTo(3));
+        Assert.That(_logger.Entries, Has.Count.EqualTo(3));
+        Assert.That(_logger.Entries[2].Level, Is.EqualTo(LogLevel.Error));
+    }
 
-        // Verify each line is valid JSON
-        foreach (var line in lines)
+    /// <summary>
+    /// Minimal ILogger that records every entry with a flattened snapshot of the
+    /// active logging scope so tests can verify both the log level and the
+    /// structured attributes ClientTelemetryController pushes via BeginScope.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<ClientTelemetryController>
+    {
+        private readonly Stack<IDictionary<string, object?>> _scopeStack = new();
+
+        public List<LogRecord> Entries { get; } = new();
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
         {
-            Assert.DoesNotThrow(() => JsonDocument.Parse(line));
+            if (state is IEnumerable<KeyValuePair<string, object?>> kvps)
+            {
+                var snapshot = kvps.ToDictionary(k => k.Key, k => k.Value);
+                _scopeStack.Push(snapshot);
+                return new PopOnDispose(_scopeStack);
+            }
+            return new PopOnDispose(null);
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var scope = _scopeStack.Count > 0
+                ? new Dictionary<string, object?>(_scopeStack.Peek())
+                : null;
+
+            Entries.Add(new LogRecord(
+                logLevel,
+                formatter(state, exception),
+                scope));
+        }
+
+        private sealed class PopOnDispose(Stack<IDictionary<string, object?>>? stack) : IDisposable
+        {
+            public void Dispose()
+            {
+                if (stack is { Count: > 0 })
+                {
+                    stack.Pop();
+                }
+            }
         }
     }
 
-    [Test]
-    public void ReceiveTelemetry_WithNullSessionId_UsesUnknown()
-    {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = null,
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        Assert.That(json.RootElement.GetProperty("SessionId").GetString(), Is.EqualTo("unknown"));
-    }
-
-    [Test]
-    public void ReceiveTelemetry_SourceContextIsClientTelemetry()
-    {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = "test-session",
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        Assert.That(json.RootElement.GetProperty("SourceContext").GetString(), Is.EqualTo("ClientTelemetry"));
-    }
-
-    [Test]
-    public void ReceiveTelemetry_MessageContainsTelemetryInfo()
-    {
-        // Arrange
-        var batch = new ClientTelemetryBatch
-        {
-            SessionId = "test-session",
-            Events =
-            [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "HomePage" }
-            ]
-        };
-
-        // Act
-        _controller.ReceiveTelemetry(batch);
-
-        // Assert
-        var output = _consoleOutput.ToString().Trim();
-        var json = JsonDocument.Parse(output);
-        var message = json.RootElement.GetProperty("Message").GetString();
-        Assert.That(message, Does.Contain("ClientTelemetry"));
-        Assert.That(message, Does.Contain("PageView"));
-        Assert.That(message, Does.Contain("HomePage"));
-    }
+    private sealed record LogRecord(LogLevel Level, string Message, IDictionary<string, object?>? Scope);
 }
