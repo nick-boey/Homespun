@@ -184,6 +184,12 @@ curl -s 'http://localhost:5341/api/events/signal?count=1'
 
 For detailed log analysis, use the `/logs` skill.
 
+**Span / tracer reference:** every span emitted by any tier is catalogued in
+[`docs/traces/dictionary.md`](docs/traces/dictionary.md). Add / rename /
+remove a span → update that file in the same PR. A drift check in each
+tier's test suite refuses to merge otherwise; see
+[`docs/traces/README.md`](docs/traces/README.md) for the workflow.
+
 ## React Frontend Development
 
 ### Technology Stack
