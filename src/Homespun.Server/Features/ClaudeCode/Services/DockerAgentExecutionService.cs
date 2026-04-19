@@ -68,15 +68,30 @@ public class DockerAgentExecutionOptions
     public string NetworkName { get; set; } = "bridge";
 
     /// <summary>
-    /// Publish the worker's 8080 port to a random host loopback port and address
-    /// the worker as <c>http://127.0.0.1:{hostPort}</c> instead of the container's
-    /// bridge-network IP. Required when the server runs on macOS / Windows Docker
-    /// Desktop in host mode, where host traffic cannot route to bridge-network
-    /// container IPs. In Linux host-mode or container-in-container (DooD inside
-    /// Aspire-networked server) the bridge IP is reachable directly, so this can
-    /// stay <c>false</c>.
+    /// Publish the worker's 8080 port to a random host port and address the
+    /// worker via <see cref="WorkerHost"/>:{hostPort} instead of the container's
+    /// bridge-network IP. Required when the server cannot reach sibling worker
+    /// container IPs directly (macOS / Windows Docker Desktop in host mode;
+    /// dev-container where Aspire's DCP strips non-managed endpoints from its
+    /// session network).
     /// </summary>
     public bool UseLoopbackPortMapping { get; set; } = false;
+
+    /// <summary>
+    /// IP the <c>-p</c> publish binds to on the host side. Defaults to
+    /// <c>127.0.0.1</c> (safe for dev-live host-mode — only the host's loopback
+    /// sees the worker). Dev-container hosting sets this to <c>0.0.0.0</c> so
+    /// the server container can reach the host via <c>host.docker.internal</c>.
+    /// </summary>
+    public string LoopbackBindHost { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Hostname used to address the worker when
+    /// <see cref="UseLoopbackPortMapping"/> is true. <c>127.0.0.1</c> for
+    /// dev-live (server on host); <c>host.docker.internal</c> for dev-container
+    /// (server inside a container reaching the host-published port).
+    /// </summary>
+    public string WorkerHost { get; set; } = "127.0.0.1";
 }
 
 /// <summary>
@@ -156,6 +171,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     private readonly ISessionEventIngestor _eventIngestor;
     private readonly Homespun.Features.Observability.SessionEventLogOptions _sessionEventLogOptions;
+
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
@@ -1517,13 +1533,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <summary>
-    /// Checks if a container's worker is healthy.
+    /// Checks if a container's worker is healthy. Uses a short probe timeout so a
+    /// dead / unreachable container (e.g. an orphan from a previous launch on a
+    /// different Docker network) fails fast instead of blocking on the
+    /// <see cref="DockerAgentExecutionOptions.RequestTimeout"/> (30 min default).
     /// </summary>
     private async Task<bool> IsContainerHealthyAsync(string workerUrl, CancellationToken cancellationToken)
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"{workerUrl}/api/health", cancellationToken);
+            using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            probeCts.CancelAfter(TimeSpan.FromSeconds(3));
+            using var response = await _httpClient.GetAsync($"{workerUrl}/api/health", probeCts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -1619,9 +1640,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         if (_options.UseLoopbackPortMapping)
         {
-            // Bind container 8080 to a random host loopback port. RunDockerAndGetUrl
-            // resolves the mapped host port and returns http://127.0.0.1:{port}.
-            dockerArgs.Append("-p 127.0.0.1::8080 ");
+            // Bind container 8080 to a random host port. RunDockerAndGetUrl
+            // resolves the mapped port and returns http://{WorkerHost}:{port}.
+            var bindPrefix = string.IsNullOrEmpty(_options.LoopbackBindHost)
+                ? string.Empty
+                : $"{_options.LoopbackBindHost}:";
+            dockerArgs.Append($"-p {bindPrefix}:8080 ");
         }
 
         dockerArgs.Append(_options.WorkerImage);
@@ -1826,10 +1850,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         if (_options.UseLoopbackPortMapping)
         {
             var hostPort = await InspectMappedHostPortAsync(containerId, "8080/tcp", cancellationToken);
-            var loopbackUrl = $"http://127.0.0.1:{hostPort}";
+            var loopbackUrl = $"http://{_options.WorkerHost}:{hostPort}";
             _logger.LogInformation(
-                "Container {ContainerId} ready at {WorkerUrl} (loopback host port {HostPort})",
-                containerId, loopbackUrl, hostPort);
+                "Container {ContainerId} ready at {WorkerUrl} (host port {HostPort} via {WorkerHost})",
+                containerId, loopbackUrl, hostPort, _options.WorkerHost);
 
             await WaitForWorkerReadyAsync(loopbackUrl, cancellationToken);
             return (containerId, loopbackUrl);

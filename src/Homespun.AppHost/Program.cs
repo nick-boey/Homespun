@@ -103,6 +103,14 @@ if (isContainerHosting)
         .WithHttpEndpoint(targetPort: 8080, port: 5101, name: "http")
         // DooD mount — sibling worker spawns rely on the host docker socket.
         .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock")
+        // The Dockerfile's USER homespun (non-root) can't access the bind-mounted
+        // docker socket on Docker Desktop for Mac/Windows — the socket lives inside
+        // the Linux VM with root ownership and the homespun UID isn't in any group
+        // that grants access. Run the server as root in dev-container so sibling
+        // worker `docker run` invocations from DockerAgentExecutionService succeed.
+        // Dev-only concession; prod deploys via docker-compose+Komodo keep the
+        // non-root USER directive.
+        .WithContainerRuntimeArgs("--user", "0:0")
         .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Mock")
         .WithEnvironment("HOMESPUN_MOCK_MODE", "true")
         .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
@@ -117,6 +125,14 @@ if (isContainerHosting)
     if (isDockerAgent)
     {
         serverContainer.WithEnvironment("AgentExecution__Docker__WorkerImage", localWorkerImageTag);
+        // Aspire's DCP owns the server's session network and strips non-DCP
+        // endpoints from it shortly after docker run. Bypass network routing
+        // entirely: publish sibling 8080 to host 0.0.0.0 and have the server
+        // reach it via host.docker.internal. Works without needing siblings to
+        // share a network with the server.
+        serverContainer.WithEnvironment("AgentExecution__Docker__UseLoopbackPortMapping", "true");
+        serverContainer.WithEnvironment("AgentExecution__Docker__LoopbackBindHost", "0.0.0.0");
+        serverContainer.WithEnvironment("AgentExecution__Docker__WorkerHost", "host.docker.internal");
     }
     if (workerEndpoint is not null)
     {
