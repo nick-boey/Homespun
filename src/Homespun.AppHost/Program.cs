@@ -12,6 +12,13 @@ var useLiveSessions =
 var hostingMode =
     Environment.GetEnvironmentVariable("HOMESPUN_DEV_HOSTING_MODE") ?? "host";
 var isContainerHosting = string.Equals(hostingMode, "container", StringComparison.OrdinalIgnoreCase);
+// CI opt-out: E2E jobs don't assert on Grafana/Loki/Promtail, and pulling
+// ~300MB of images on a cold GitHub runner blows past Playwright's
+// webServer timeout. `e2e-ci` launch profile sets this flag.
+var skipPlg = string.Equals(
+    Environment.GetEnvironmentVariable("HOMESPUN_DEV_SKIP_PLG"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
 
 // In dev-container the mode auto-selects by host OS when not set.
 if (isContainerHosting && string.IsNullOrEmpty(agentMode))
@@ -33,36 +40,40 @@ const string localWorkerImageTag = "worker:dev";
 var githubToken = builder.AddParameter("github-token", secret: true);
 var claudeOauthToken = builder.AddParameter("claude-oauth-token", secret: true);
 
-// ─── PLG stack (always on) ────────────────────────────────────────────────────
-var loki = builder.AddContainer("loki", "grafana/loki", "3.6.6")
-    .WithBindMount("../../config/loki-config.yml", "/etc/loki/local-config.yaml", isReadOnly: true)
-    .WithVolume("homespun-loki-data", "/loki")
-    .WithArgs("-config.file=/etc/loki/local-config.yaml")
-    .WithHttpEndpoint(targetPort: 3100, port: 3100, name: "http");
+// ─── PLG stack (skippable for CI e2e via HOMESPUN_DEV_SKIP_PLG) ───────────────
+IResourceBuilder<ContainerResource>? loki = null;
+if (!skipPlg)
+{
+    loki = builder.AddContainer("loki", "grafana/loki", "3.6.6")
+        .WithBindMount("../../config/loki-config.yml", "/etc/loki/local-config.yaml", isReadOnly: true)
+        .WithVolume("homespun-loki-data", "/loki")
+        .WithArgs("-config.file=/etc/loki/local-config.yaml")
+        .WithHttpEndpoint(targetPort: 3100, port: 3100, name: "http");
 
-// Promtail relies on the Docker socket (docker_sd_configs) for container
-// discovery AND log streaming. The additional /var/lib/docker/containers
-// mount that the prod compose file uses is a performance optimisation for
-// Linux hosts that doesn't exist on macOS Docker Desktop (Docker's state
-// lives inside the Linux VM, not the host FS) — mounting it there makes DCP
-// abort container creation with FailedToStart. Keep the socket mount only;
-// promtail still resolves logs through Docker's HTTP API.
-var promtail = builder.AddContainer("promtail", "grafana/promtail", "3.6.6")
-    .WithBindMount("../../config/promtail-config.yml", "/etc/promtail/config.yml", isReadOnly: true)
-    .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock", isReadOnly: true)
-    .WithArgs("-config.file=/etc/promtail/config.yml")
-    .WaitFor(loki);
+    // Promtail relies on the Docker socket (docker_sd_configs) for container
+    // discovery AND log streaming. The additional /var/lib/docker/containers
+    // mount that the prod compose file uses is a performance optimisation for
+    // Linux hosts that doesn't exist on macOS Docker Desktop (Docker's state
+    // lives inside the Linux VM, not the host FS) — mounting it there makes DCP
+    // abort container creation with FailedToStart. Keep the socket mount only;
+    // promtail still resolves logs through Docker's HTTP API.
+    builder.AddContainer("promtail", "grafana/promtail", "3.6.6")
+        .WithBindMount("../../config/promtail-config.yml", "/etc/promtail/config.yml", isReadOnly: true)
+        .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock", isReadOnly: true)
+        .WithArgs("-config.file=/etc/promtail/config.yml")
+        .WaitFor(loki);
 
-var grafana = builder.AddContainer("grafana", "grafana/grafana", "12.3.3")
-    .WithBindMount("../../config/grafana/grafana.ini", "/etc/grafana/grafana.ini", isReadOnly: true)
-    .WithBindMount("../../config/grafana/provisioning", "/etc/grafana/provisioning", isReadOnly: true)
-    .WithVolume("homespun-grafana-data", "/var/lib/grafana")
-    .WithEnvironment("GF_SECURITY_ADMIN_USER", "admin")
-    .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", "admin")
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ENABLED", "true")
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ORG_ROLE", "Viewer")
-    .WithHttpEndpoint(targetPort: 3000, port: 3000, name: "http")
-    .WaitFor(loki);
+    builder.AddContainer("grafana", "grafana/grafana", "12.3.3")
+        .WithBindMount("../../config/grafana/grafana.ini", "/etc/grafana/grafana.ini", isReadOnly: true)
+        .WithBindMount("../../config/grafana/provisioning", "/etc/grafana/provisioning", isReadOnly: true)
+        .WithVolume("homespun-grafana-data", "/var/lib/grafana")
+        .WithEnvironment("GF_SECURITY_ADMIN_USER", "admin")
+        .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", "admin")
+        .WithEnvironment("GF_AUTH_ANONYMOUS_ENABLED", "true")
+        .WithEnvironment("GF_AUTH_ANONYMOUS_ORG_ROLE", "Viewer")
+        .WithHttpEndpoint(targetPort: 3000, port: 3000, name: "http")
+        .WaitFor(loki);
+}
 
 // ─── Worker image (always built from this repo in dev) ────────────────────────
 // SingleContainer profiles pre-run the worker and inject its endpoint into the
@@ -115,8 +126,12 @@ if (isContainerHosting)
         .WithEnvironment("HOMESPUN_MOCK_MODE", "true")
         .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
         .WithEnvironment("GITHUB_TOKEN", githubToken)
-        .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
-        .WaitFor(loki);
+        .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken);
+
+    if (loki is not null)
+    {
+        serverContainer.WaitFor(loki);
+    }
 
     if (!string.IsNullOrEmpty(agentMode))
     {
@@ -161,8 +176,12 @@ else
         .WithEnvironment("HOMESPUN_MOCK_MODE", "true")
         .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
         .WithEnvironment("GITHUB_TOKEN", githubToken)
-        .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
-        .WaitFor(loki);
+        .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken);
+
+    if (loki is not null)
+    {
+        server.WaitFor(loki);
+    }
 
     if (!string.IsNullOrEmpty(agentMode))
     {

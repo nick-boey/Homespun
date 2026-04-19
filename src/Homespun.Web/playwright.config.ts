@@ -54,17 +54,16 @@ export default defineConfig({
     // },
   ],
 
-  // Launch the full dev stack through the Aspire AppHost (server + Vite + PLG).
-  // Wait on the Vite dev-server port — it starts last in the AppHost WaitFor
-  // chain (loki → server → web), so a ready signal there guarantees the whole
-  // stack is up. Server lives at :5101 via Vite's /api proxy.
+  // Launch the app through the Aspire AppHost using the `e2e-ci` profile,
+  // which skips the PLG stack (HOMESPUN_DEV_SKIP_PLG=true). Waiting on Vite
+  // means server + vite are both up; PLG is irrelevant for E2E.
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'dotnet run --project ../Homespun.AppHost --launch-profile dev-mock',
+        command: 'dotnet run --project ../Homespun.AppHost --launch-profile e2e-ci',
         url: 'http://localhost:5173/',
         reuseExistingServer: !process.env.CI,
-        timeout: 180000,
+        timeout: 240000,
         stdout: 'pipe',
         stderr: 'pipe',
       },
