@@ -20,6 +20,14 @@ if (isContainerHosting && string.IsNullOrEmpty(agentMode))
 }
 
 var isSingleContainer = string.Equals(agentMode, "SingleContainer", StringComparison.OrdinalIgnoreCase);
+var isDockerAgent = string.Equals(agentMode, "Docker", StringComparison.OrdinalIgnoreCase);
+
+// Deterministic tag for the locally-built worker image. The AppHost builds
+// `src/Homespun.Worker/Dockerfile` via AddDockerfile below and Docker Desktop's
+// daemon stores it as `worker:dev`, addressable both by Aspire (for pre-run
+// SingleContainer profiles) and by sibling `docker run` calls the server
+// issues in Docker agent mode (DooD).
+const string localWorkerImageTag = "worker:dev";
 
 // ─── Secret parameters (user-secrets, env vars, azd env) ──────────────────────
 var githubToken = builder.AddParameter("github-token", secret: true);
@@ -32,10 +40,16 @@ var loki = builder.AddContainer("loki", "grafana/loki", "3.6.6")
     .WithArgs("-config.file=/etc/loki/local-config.yaml")
     .WithHttpEndpoint(targetPort: 3100, port: 3100, name: "http");
 
+// Promtail relies on the Docker socket (docker_sd_configs) for container
+// discovery AND log streaming. The additional /var/lib/docker/containers
+// mount that the prod compose file uses is a performance optimisation for
+// Linux hosts that doesn't exist on macOS Docker Desktop (Docker's state
+// lives inside the Linux VM, not the host FS) — mounting it there makes DCP
+// abort container creation with FailedToStart. Keep the socket mount only;
+// promtail still resolves logs through Docker's HTTP API.
 var promtail = builder.AddContainer("promtail", "grafana/promtail", "3.6.6")
     .WithBindMount("../../config/promtail-config.yml", "/etc/promtail/config.yml", isReadOnly: true)
     .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock", isReadOnly: true)
-    .WithBindMount("/var/lib/docker/containers", "/var/lib/docker/containers", isReadOnly: true)
     .WithArgs("-config.file=/etc/promtail/config.yml")
     .WaitFor(loki);
 
@@ -50,40 +64,42 @@ var grafana = builder.AddContainer("grafana", "grafana/grafana", "12.3.3")
     .WithHttpEndpoint(targetPort: 3000, port: 3000, name: "http")
     .WaitFor(loki);
 
-// ─── Optional pre-run worker (SingleContainer only) ───────────────────────────
+// ─── Worker image (always built from this repo in dev) ────────────────────────
+// SingleContainer profiles pre-run the worker and inject its endpoint into the
+// server. Docker-agent profiles only need the image built; the server spawns
+// siblings via DooD using `localWorkerImageTag`.
 IResourceBuilder<ContainerResource>? workerContainer = null;
 EndpointReference? workerEndpoint = null;
 
 if (isSingleContainer)
 {
-    workerContainer = builder.AddContainer("worker", "ghcr.io/nick-boey/homespun-worker", "latest")
+    workerContainer = builder.AddDockerfile("worker", "../Homespun.Worker")
+        .WithImageTag("dev")
+        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 8080, name: "http")
         .WithEnvironment("PORT", "8080")
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
         .WithEnvironment("DEBUG_AGENT_SDK", "true");
     workerEndpoint = workerContainer.GetEndpoint("http");
 }
+else if (isDockerAgent)
+{
+    // Docker agent mode (dev-live host + dev-container non-Windows): the
+    // server spawns sibling workers via DooD. No endpoint is published — the
+    // container idles; its purpose is to drive the image build so the
+    // `worker:dev` tag is available on the host daemon before sessions start.
+    workerContainer = builder.AddDockerfile("worker", "../Homespun.Worker")
+        .WithImageTag("dev")
+        .WithContainerRuntimeArgs("--label", "logging=promtail");
+}
 
 // ─── Server + web — two hosting paths ─────────────────────────────────────────
 if (isContainerHosting)
 {
-    // dev-container: server + web + worker all via Dockerfile, for prod parity.
-    if (isSingleContainer)
-    {
-        // Worker is already wired above via AddContainer; no Dockerfile build.
-    }
-    else
-    {
-        // Non-Windows container path still spawns sibling workers via DooD;
-        // no pre-run worker resource needed, but we still build the worker
-        // image so `dev-container` exercises the Dockerfile.
-        builder.AddDockerfile("worker", "../Homespun.Worker")
-            .WithHttpEndpoint(targetPort: 8080, name: "http")
-            .WithEnvironment("PORT", "8080")
-            .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken);
-    }
-
+    // dev-container: server + web built via Dockerfile for prod parity. Worker
+    // is already wired above (SingleContainer → pre-run; Docker → build-only).
     var serverContainer = builder.AddDockerfile("server", "../../")
+        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 8080, port: 5101, name: "http")
         // DooD mount — sibling worker spawns rely on the host docker socket.
         .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock")
@@ -98,6 +114,10 @@ if (isContainerHosting)
     {
         serverContainer.WithEnvironment("AgentExecution__Mode", agentMode);
     }
+    if (isDockerAgent)
+    {
+        serverContainer.WithEnvironment("AgentExecution__Docker__WorkerImage", localWorkerImageTag);
+    }
     if (workerEndpoint is not null)
     {
         serverContainer.WithEnvironment("AgentExecution__SingleContainer__WorkerUrl", workerEndpoint);
@@ -108,6 +128,7 @@ if (isContainerHosting)
     // is `homespun:8080`; for dev-container we point it at the Aspire server
     // resource's container-network hostname (`server`).
     builder.AddDockerfile("web", "../Homespun.Web")
+        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 80, name: "http")
         .WithEnvironment("UPSTREAM_HOST", "server")
         .WithEnvironment("UPSTREAM_PORT", "8080")
@@ -130,6 +151,10 @@ else
     if (!string.IsNullOrEmpty(agentMode))
     {
         server.WithEnvironment("AgentExecution__Mode", agentMode);
+    }
+    if (isDockerAgent)
+    {
+        server.WithEnvironment("AgentExecution__Docker__WorkerImage", localWorkerImageTag);
     }
     if (workerEndpoint is not null)
     {

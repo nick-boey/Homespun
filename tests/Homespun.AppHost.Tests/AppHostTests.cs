@@ -66,7 +66,7 @@ public class AppHostTests
         var webResource = model.Resources.Single(r => r.Name == "web");
 
         // The web resource is wired with VITE_API_URL pointing at the server endpoint.
-        var envAnnotations = webResource.Annotations
+        var envAnnotations = AnnotationSnapshot.Of(webResource)
             .OfType<EnvironmentCallbackAnnotation>()
             .ToList();
 
@@ -86,7 +86,7 @@ public class AppHostTests
         var serverResource = model.Resources.Single(r => r.Name == "server");
 
         // The server resource is wired with mock-mode + secret env vars.
-        var envAnnotations = serverResource.Annotations
+        var envAnnotations = AnnotationSnapshot.Of(serverResource)
             .OfType<EnvironmentCallbackAnnotation>()
             .ToList();
 

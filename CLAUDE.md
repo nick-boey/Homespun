@@ -136,7 +136,7 @@ Local dev runs through the Aspire AppHost. Pick a launch profile:
 |---|---|
 | `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + PLG with the mock service graph. No worker, agents return canned A2A events. |
 | `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
-| `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — use on Windows where DooD is unavailable. |
+| `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — also usable on Apple Silicon now that the worker image is built locally instead of pulled from GHCR. |
 | `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
 
 ```bash
@@ -149,10 +149,30 @@ dotnet run --project src/Homespun.AppHost --launch-profile dev-container
 Use `dotnet run` for these — `aspire run` does not accept `--launch-profile`
 and silently falls back to the first profile in `launchSettings.json`.
 
+In every dev profile that needs a worker (`dev-live`, `dev-windows`,
+`dev-container`), the AppHost builds the image from
+`src/Homespun.Worker/Dockerfile` via `AddDockerfile` and tags it `worker:dev`.
+First boot takes an extra 30–60s for the Docker build; subsequent boots hit
+the layer cache. No dev profile pulls from GHCR — GHCR is reserved for the
+prod deploy path (`docker-compose.yml` + Komodo).
+
 Server is reachable at `http://localhost:5101` (port pinned for Playwright + existing tests).
 Grafana lands on `3000` and Loki on `3100`. The Aspire dashboard prints its own URL at startup.
 
 ### Accessing Application Logs
+
+Server logs flow through two sinks in parallel:
+
+1. **Aspire dashboard** — `AddServiceDefaults()` wires the OTLP log exporter;
+   `aspire otel logs server` surfaces entries for the current session. The
+   server's `Program.cs` calls `ClearProviders()` *before* `AddServiceDefaults`
+   so the OTLP provider survives alongside the JSON console formatter.
+2. **Grafana/Loki via Promtail** — every Aspire-managed container the dev
+   stack runs (worker, plus server/web in `dev-container`) carries the
+   `logging=promtail` label so Promtail's `docker_sd_configs` discovers it.
+   Promtail streams those containers' logs through the host Docker socket
+   alone (no `/var/lib/docker/containers` bind mount, which doesn't exist on
+   macOS Docker Desktop).
 
 Workers can query application logs from Loki at `http://homespun-loki:3100`.
 
