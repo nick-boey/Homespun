@@ -3,7 +3,12 @@ import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { useSessionSettingsStore } from '@/stores/session-settings-store'
 import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { ClaudeSession } from '@/types/signalr'
-import { sessionEventLog } from '@/lib/session-event-log'
+
+// NOTE: `sessionEventLog`-driven hop logging was retired with the
+// custom-telemetry stack. `traceInvoke` now produces a client span for every
+// `joinSession` invocation and the server-side TraceparentHubFilter attaches
+// the `homespun.session.id` tag — so the same "did the join succeed?"
+// question is answerable from Seq traces instead of a bespoke log channel.
 
 export interface UseSessionResult {
   session: ClaudeSession | null | undefined
@@ -76,11 +81,8 @@ export function useSession(sessionId: string): UseSessionResult {
 
     fetchSession()
 
-    // Join session group
-    sessionEventLog('client.signalr.join', {
-      SessionId: sessionId,
-      Message: `client.signalr.join sessionId=${sessionId}`,
-    })
+    // Join session group — traceInvoke wraps this and emits a client span
+    // named `signalr.invoke.JoinSession`; errors are recorded on that span.
     methods
       .joinSession(sessionId)
       .then(() => {
@@ -89,13 +91,7 @@ export function useSession(sessionId: string): UseSessionResult {
           setIsJoined(true)
         }
       })
-      .catch((err: unknown) => {
-        // Join failed, ensure isJoined stays false
-        sessionEventLog('client.signalr.join.error', {
-          SessionId: sessionId,
-          Level: 'Error',
-          Message: `client.signalr.join.error ${err instanceof Error ? err.message : String(err)}`,
-        })
+      .catch(() => {
         if (isMountedRef.current) {
           hasJoinedRef.current = false
           setIsJoined(false)
@@ -126,12 +122,8 @@ export function useSession(sessionId: string): UseSessionResult {
     if (wasReconnectingRef.current && isConnected && methods) {
       wasReconnectingRef.current = false
 
-      // Re-join the current session
+      // Re-join the current session; traceInvoke handles span + error recording.
       const currentSessionId = currentSessionIdRef.current
-      sessionEventLog('client.signalr.join', {
-        SessionId: currentSessionId,
-        Message: `client.signalr.join (rejoin) sessionId=${currentSessionId}`,
-      })
       methods
         .joinSession(currentSessionId)
         .then(() => {
@@ -140,12 +132,7 @@ export function useSession(sessionId: string): UseSessionResult {
             setIsJoined(true)
           }
         })
-        .catch((err: unknown) => {
-          sessionEventLog('client.signalr.join.error', {
-            SessionId: currentSessionId,
-            Level: 'Error',
-            Message: `client.signalr.join.error (rejoin) ${err instanceof Error ? err.message : String(err)}`,
-          })
+        .catch(() => {
           if (isMountedRef.current) {
             hasJoinedRef.current = false
             setIsJoined(false)

@@ -27,7 +27,6 @@ Object.defineProperty(window, 'sessionStorage', { value: createStorageMock() })
 
 import '@testing-library/jest-dom/vitest'
 import 'vitest-canvas-mock'
-import './mocks/telemetry'
 
 // Mock window.matchMedia for components that use media queries
 Object.defineProperty(window, 'matchMedia', {

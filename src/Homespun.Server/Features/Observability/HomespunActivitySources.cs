@@ -11,6 +11,7 @@ public static class HomespunActivitySources
     public const string AgentOrchestration = "Homespun.AgentOrchestration";
     public const string GitClone = "Homespun.GitClone";
     public const string FleeceSync = "Homespun.FleeceSync";
+    public const string Signalr = "Homespun.Signalr";
 
     public static readonly ActivitySource AgentOrchestrationSource = new(AgentOrchestration);
     public static readonly ActivitySource GitCloneSource = new(GitClone);
@@ -20,6 +21,7 @@ public static class HomespunActivitySources
     [
         AgentOrchestration,
         GitClone,
-        FleeceSync
+        FleeceSync,
+        Signalr,
     ];
 }

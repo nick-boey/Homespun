@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { trace, SpanKind } from '@opentelemetry/api'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { useSessionEventsStore } from '@/stores/session-events-store'
 import type { SessionEventEnvelope } from '@/types/session-events'
@@ -29,7 +30,9 @@ import {
   initialAGUISessionState,
   type AGUISessionState,
 } from '@/features/sessions/utils/agui-reducer'
-import { sessionEventLog } from '@/lib/session-event-log'
+import { withExtractedContext } from '@/lib/signalr/trace'
+
+const SESSION_EVENTS_TRACER = 'homespun.web.session-events'
 
 /** Maximum number of recent eventIds remembered for dedup per session. */
 const DEDUP_CAPACITY = 10_000
@@ -108,17 +111,32 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
         return
       }
       dedupRef.current.add(dedupKey)
-      const next = applyEnvelope(stateRef.current, envelope)
-      stateRef.current = next
-      setRenderState(next)
-      setStoredState(sessionId, next)
-      sessionEventLog('client.reducer.apply', {
-        SessionId: sessionId,
-        EventId: envelope.eventId,
-        Seq: envelope.seq,
-        AGUIType: envelope.event.type,
-        AGUICustomName:
-          envelope.event.type === 'CUSTOM' ? (envelope.event as { name?: string }).name : undefined,
+      // Parent the reducer span to the server-side broadcast using the
+      // traceparent the envelope carries. Falls through to a root span when
+      // the envelope has no traceparent (e.g. replay).
+      withExtractedContext(envelope, () => {
+        const tracer = trace.getTracer(SESSION_EVENTS_TRACER)
+        const span = tracer.startSpan('homespun.client.reducer.apply', {
+          kind: SpanKind.CONSUMER,
+          attributes: {
+            'homespun.session.id': sessionId,
+            'homespun.event.id': envelope.eventId,
+            'homespun.event.seq': envelope.seq,
+            'homespun.agui.type': envelope.event.type,
+            'homespun.agui.custom.name':
+              envelope.event.type === 'CUSTOM'
+                ? ((envelope.event as { name?: string }).name ?? '')
+                : '',
+          },
+        })
+        try {
+          const next = applyEnvelope(stateRef.current, envelope)
+          stateRef.current = next
+          setRenderState(next)
+          setStoredState(sessionId, next)
+        } finally {
+          span.end()
+        }
       })
     },
     [sessionId, setStoredState]
@@ -149,15 +167,25 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
       // The hub addresses the group by sessionId, but double-check so a leaked subscription
       // on a different sessionId never pollutes state.
       if (deliveredSessionId !== sessionId) return
-      sessionEventLog('client.signalr.rx', {
-        SessionId: deliveredSessionId,
-        EventId: envelope.eventId,
-        Seq: envelope.seq,
-        AGUIType: envelope.event.type,
-        AGUICustomName:
-          envelope.event.type === 'CUSTOM' ? (envelope.event as { name?: string }).name : undefined,
+      // Run the rx hop under the server's traceparent too so its span joins
+      // the same trace as the reducer-apply span inside `applyOne`.
+      withExtractedContext(envelope, () => {
+        const tracer = trace.getTracer(SESSION_EVENTS_TRACER)
+        const span = tracer.startSpan('homespun.envelope.rx', {
+          kind: SpanKind.CONSUMER,
+          attributes: {
+            'homespun.session.id': deliveredSessionId,
+            'homespun.event.id': envelope.eventId,
+            'homespun.event.seq': envelope.seq,
+            'homespun.agui.type': envelope.event.type,
+          },
+        })
+        try {
+          applyOne(envelope)
+        } finally {
+          span.end()
+        }
       })
-      applyOne(envelope)
     }
 
     connection.on('ReceiveSessionEvent', handler)

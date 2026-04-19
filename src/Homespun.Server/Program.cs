@@ -26,6 +26,7 @@ using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -337,7 +338,14 @@ builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>
 builder.Services.AddScoped<IBranchStateResolverService, BranchStateResolverService>();
 builder.Services.AddScoped<IIssueGraphOpenSpecEnricher, IssueGraphOpenSpecEnricher>();
 
-builder.Services.AddSignalR()
+builder.Services.AddSignalR(o =>
+    {
+        // TraceparentHubFilter extracts the W3C traceparent the client
+        // passes as the first argument of every hub method and starts a
+        // server-side activity parented to it. See
+        // Homespun.Features.Observability.TraceparentHubFilter.
+        o.AddFilter<TraceparentHubFilter>();
+    })
     .AddJsonProtocol(options =>
     {
         options.PayloadSerializerOptions.Converters.Add(

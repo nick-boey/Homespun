@@ -214,6 +214,43 @@ disabled in `instrumentation.ts` via
 - `@opentelemetry/instrumentation-net`, `@opentelemetry/instrumentation-dns`
   — low-level noise with no correlation value.
 
+### Client OTel propagation
+
+The web client (`src/Homespun.Web`) bootstraps `WebTracerProvider` +
+`LoggerProvider` in `src/instrumentation.ts`, loaded as the first import of
+`main.tsx`. Fetch and XHR requests to `/api/*` are auto-instrumented, which
+injects a W3C `traceparent` header so server spans parent the browser
+span automatically. `/api/otlp/v1/*` is ignored to avoid telemetry feedback
+loops.
+
+**SignalR is special** because WebSocket transports do not expose per-frame
+headers. Propagation uses two symmetric mechanisms:
+
+- **Client → server**: every hub method invocation is wrapped in
+  `traceInvoke` (`src/lib/signalr/trace.ts`). The helper starts a client
+  span and prepends a traceparent string as arg 0 on the wire. The server's
+  `TraceparentHubFilter` (`Homespun.Features.Observability`) pulls arg 0
+  off every invocation, parses it as `ActivityContext`, and starts a
+  server-kind activity on the `Homespun.Signalr` `ActivitySource` parented
+  to the client context. Arg 1 (when a string) is tagged as
+  `homespun.session.id`.
+- **Server → client**: `SessionEventEnvelope.Traceparent` carries the
+  current server activity's W3C traceparent on every
+  `ReceiveSessionEvent` broadcast. The client's handler wraps the callback
+  in `withExtractedContext(envelope, …)` so downstream work runs under the
+  server's parent context.
+
+The native `Microsoft.AspNetCore.SignalR.Server` `ActivitySource` is
+**not** registered on the tracer provider — the filter owns the span so
+there is no double emission.
+
+Context manager choice: the web SDK uses `StackContextManager` (the
+default), not `ZoneContextManager`. Zone.js is not a runtime dependency.
+If you add async chains that need context propagation (promise
+continuations crossing I/O boundaries), wrap the boundary in
+`context.with(context.active(), fn)` at the call site — the default
+manager does not follow awaits across event-loop turns on its own.
+
 ## React Frontend Development
 
 ### Technology Stack

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
@@ -129,11 +130,17 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                     parentTaskId: parentTaskId,
                     a2aKind: eventKind);
 
+                // Capture the W3C traceparent for the current activity so the
+                // client can parent its reducer-apply span to this broadcast
+                // span. The hub filter on the inbound invoke side populates
+                // Activity.Current; on replay paths this will be null and the
+                // client falls back to its own root span.
                 var envelope = new SessionEventEnvelope(
                     Seq: record.Seq,
                     SessionId: record.SessionId,
                     EventId: record.EventId,
-                    Event: agui);
+                    Event: agui,
+                    Traceparent: FormatCurrentTraceparent());
                 await _hub.BroadcastSessionEvent(sessionId, envelope);
 
                 // server.signalr.tx hop: emitted after the SignalR dispatch returns.
@@ -254,5 +261,25 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                 _logger.LogWarning(ex, "Tool-use dispatch failed for {ToolName} in session {SessionId}", toolName, sessionId);
             }
         }
+    }
+
+    /// <summary>
+    /// Formats <see cref="Activity.Current"/> as a W3C <c>traceparent</c>
+    /// string (<c>00-&lt;traceId&gt;-&lt;spanId&gt;-&lt;flags&gt;</c>) so a
+    /// client receiving the envelope can parent its span to this broadcast.
+    /// Returns <c>null</c> when no activity is in flight — replay responses
+    /// rebuilt from disk fall into that bucket and the client treats a null
+    /// traceparent as "start a new trace root".
+    /// </summary>
+    private static string? FormatCurrentTraceparent()
+    {
+        var activity = Activity.Current;
+        if (activity is null || activity.IdFormat != ActivityIdFormat.W3C)
+        {
+            return null;
+        }
+
+        var flags = (activity.ActivityTraceFlags & ActivityTraceFlags.Recorded) != 0 ? "01" : "00";
+        return $"00-{activity.TraceId.ToHexString()}-{activity.SpanId.ToHexString()}-{flags}";
     }
 }

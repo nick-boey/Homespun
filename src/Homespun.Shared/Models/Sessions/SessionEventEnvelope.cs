@@ -33,8 +33,16 @@ namespace Homespun.Shared.Models.Sessions;
 /// deduplicate by this value alone — independent of whether live and replay streams overlap.
 /// </param>
 /// <param name="Event">The AG-UI event payload (discriminated by <see cref="AGUIBaseEvent.Type"/>).</param>
+/// <param name="Traceparent">
+/// Optional W3C <c>traceparent</c> captured from the server's <c>Activity.Current</c>
+/// at broadcast time. Clients use it to parent the reducer-apply span to the server's
+/// ingest span so live and refresh produce the same trace tree in Seq. Null when no
+/// activity is in flight (e.g. replay responses rebuilt from disk outside a request
+/// scope).
+/// </param>
 public sealed record SessionEventEnvelope(
     [property: JsonPropertyName("seq")] long Seq,
     [property: JsonPropertyName("sessionId")] string SessionId,
     [property: JsonPropertyName("eventId")] string EventId,
-    [property: JsonPropertyName("event")] AGUIBaseEvent Event);
+    [property: JsonPropertyName("event")] AGUIBaseEvent Event,
+    [property: JsonPropertyName("traceparent")] string? Traceparent = null);

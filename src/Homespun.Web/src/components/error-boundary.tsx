@@ -1,8 +1,9 @@
 import * as React from 'react'
 import { AlertCircle, RefreshCw, WifiOff, Clock, ServerCrash } from 'lucide-react'
+import { trace } from '@opentelemetry/api'
+import { logs, SeverityNumber } from '@opentelemetry/api-logs'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { getGlobalTelemetryService } from '@/lib/telemetry/telemetry-singleton'
 
 /**
  * Error type classification for contextual error display.
@@ -258,18 +259,35 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
 
-    // Track exception in telemetry
-    const telemetry = getGlobalTelemetryService()
-    if (telemetry) {
-      const errorType = classifyError(error)
-      telemetry.trackException(error, {
-        errorBoundary: 'true',
-        errorType,
-        componentStack: errorInfo.componentStack || '',
-        // Extract component name from stack if possible
-        component: errorInfo.componentStack?.split('\n')[0]?.trim() || 'unknown',
-      })
-    }
+    // Record the exception on whatever span happens to be active at catch
+    // time (typically the route-level span the user action created). We
+    // also emit a dedicated Error-level log record so the exception shows
+    // up in Seq's log stream even when there is no active span.
+    const errorType = classifyError(error)
+    const component = errorInfo.componentStack?.split('\n')[0]?.trim() || 'unknown'
+
+    const activeSpan = trace.getActiveSpan()
+    activeSpan?.recordException(error)
+    activeSpan?.setAttributes({
+      'homespun.errorBoundary': true,
+      'homespun.errorType': errorType,
+      'homespun.component': component,
+    })
+
+    logs.getLogger('homespun.web').emit({
+      severityNumber: SeverityNumber.ERROR,
+      severityText: 'ERROR',
+      body: error.message,
+      attributes: {
+        'exception.type': error.name,
+        'exception.message': error.message,
+        'exception.stacktrace': error.stack ?? '',
+        'homespun.errorBoundary': true,
+        'homespun.errorType': errorType,
+        'homespun.component': component,
+        'homespun.componentStack': errorInfo.componentStack ?? '',
+      },
+    })
 
     this.props.onError?.(error, errorInfo)
   }

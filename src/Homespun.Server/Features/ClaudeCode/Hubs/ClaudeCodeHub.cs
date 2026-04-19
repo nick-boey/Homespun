@@ -12,6 +12,16 @@ namespace Homespun.Features.ClaudeCode.Hubs;
 
 /// <summary>
 /// SignalR hub for Claude Code session real-time communication.
+///
+/// <para>
+/// Every client-facing hub method takes <c>string traceparent</c> as its
+/// first parameter. The client's <c>traceInvoke</c> helper injects the W3C
+/// traceparent of the active browser span; <see cref="TraceparentHubFilter"/>
+/// intercepts the invocation, extracts arg0, and starts a server span
+/// parented to the client's context. Hub method bodies themselves ignore
+/// the traceparent — the filter owns the span lifecycle — but the parameter
+/// must be present on the wire signature.
+/// </para>
 /// </summary>
 public class ClaudeCodeHub(
     IClaudeSessionService sessionService,
@@ -46,8 +56,9 @@ public class ClaudeCodeHub(
     /// <summary>
     /// Join a session group to receive session-specific messages.
     /// </summary>
-    public async Task JoinSession(string sessionId)
+    public async Task JoinSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{sessionId}");
 
         SessionEventLog.LogHubHop(
@@ -68,8 +79,9 @@ public class ClaudeCodeHub(
     /// <summary>
     /// Leave a session group.
     /// </summary>
-    public async Task LeaveSession(string sessionId)
+    public async Task LeaveSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"session-{sessionId}");
 
         SessionEventLog.LogHubHop(
@@ -83,16 +95,18 @@ public class ClaudeCodeHub(
     /// <summary>
     /// Send a message to a session.
     /// </summary>
-    public async Task SendMessage(string sessionId, string message, SessionMode mode = SessionMode.Build)
+    public async Task SendMessage(string traceparent, string sessionId, string message, SessionMode mode = SessionMode.Build)
     {
+        _ = traceparent;
         await sessionService.SendMessageAsync(sessionId, message, mode);
     }
 
     /// <summary>
     /// Stop a session.
     /// </summary>
-    public async Task StopSession(string sessionId)
+    public async Task StopSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         await sessionService.StopSessionAsync(sessionId);
     }
 
@@ -100,42 +114,48 @@ public class ClaudeCodeHub(
     /// Interrupt a session's current execution without fully stopping it.
     /// The session remains alive so the user can send another message to resume.
     /// </summary>
-    public async Task InterruptSession(string sessionId)
+    public async Task InterruptSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         await sessionService.InterruptSessionAsync(sessionId);
     }
 
     /// <summary>
     /// Get all active sessions.
     /// </summary>
-    public IReadOnlyList<ClaudeSession> GetAllSessions()
+    public IReadOnlyList<ClaudeSession> GetAllSessions(string traceparent)
     {
+        _ = traceparent;
         return sessionService.GetAllSessions();
     }
 
     /// <summary>
     /// Get sessions for a specific project.
     /// </summary>
-    public IReadOnlyList<ClaudeSession> GetProjectSessions(string projectId)
+    public IReadOnlyList<ClaudeSession> GetProjectSessions(string traceparent, string projectId)
     {
+        _ = traceparent;
         return sessionService.GetSessionsForProject(projectId);
     }
 
     /// <summary>
     /// Get a specific session by ID.
     /// </summary>
-    public ClaudeSession? GetSession(string sessionId)
+    public ClaudeSession? GetSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         return sessionService.GetSession(sessionId);
     }
 
     /// <summary>
     /// Answer a pending question in a session.
     /// </summary>
+    /// <param name="traceparent">W3C traceparent from the client's active span.</param>
     /// <param name="sessionId">The session ID</param>
     /// <param name="answersJson">JSON string of dictionary mapping question text to answer text</param>
-    public async Task AnswerQuestion(string sessionId, string answersJson)
+    public async Task AnswerQuestion(string traceparent, string sessionId, string answersJson)
     {
+        _ = traceparent;
         try
         {
             var answers = JsonSerializer.Deserialize<Dictionary<string, string>>(answersJson)
@@ -151,40 +171,36 @@ public class ClaudeCodeHub(
     /// <summary>
     /// Execute a plan by optionally clearing context and sending it as a message.
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="clearContext">Whether to clear context before execution</param>
-    public async Task ExecutePlan(string sessionId, bool clearContext = true)
+    public async Task ExecutePlan(string traceparent, string sessionId, bool clearContext = true)
     {
+        _ = traceparent;
         await sessionService.ExecutePlanAsync(sessionId, clearContext);
     }
 
     /// <summary>
     /// Approve or reject a pending plan from ExitPlanMode.
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="approved">Whether the plan is approved</param>
-    /// <param name="keepContext">If approved, whether to keep existing context</param>
-    /// <param name="feedback">User feedback when rejecting the plan</param>
-    public async Task ApprovePlan(string sessionId, bool approved, bool keepContext, string? feedback = null)
+    public async Task ApprovePlan(string traceparent, string sessionId, bool approved, bool keepContext, string? feedback = null)
     {
+        _ = traceparent;
         await sessionService.ApprovePlanAsync(sessionId, approved, keepContext, feedback);
     }
 
     /// <summary>
     /// Checks the state of any existing container for a working directory.
-    /// Returns information about what action should be taken before starting a new session.
     /// </summary>
-    /// <param name="workingDirectory">The working directory (clone path)</param>
-    public async Task<AgentStartCheckResult> CheckCloneState(string workingDirectory)
+    public async Task<AgentStartCheckResult> CheckCloneState(string traceparent, string workingDirectory)
     {
+        _ = traceparent;
         return await sessionService.CheckCloneStateAsync(workingDirectory);
     }
 
     /// <summary>
     /// Starts a session after optionally terminating any existing session in the container.
     /// </summary>
-    public async Task<ClaudeSession> StartSessionWithTermination(CreateSessionRequest request, bool terminateExisting)
+    public async Task<ClaudeSession> StartSessionWithTermination(string traceparent, CreateSessionRequest request, bool terminateExisting)
     {
+        _ = traceparent;
         return await sessionService.StartSessionWithTerminationAsync(
             request.EntityId,
             request.ProjectId,
@@ -197,23 +213,19 @@ public class ClaudeCodeHub(
 
     /// <summary>
     /// Restart the container for a session and prepare for resumption.
-    /// This stops the existing container, starts a new one, and preserves the conversation ID
-    /// so the session can be resumed.
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <returns>The updated session, or null if not found</returns>
-    public async Task<ClaudeSession?> RestartSession(string sessionId)
+    public async Task<ClaudeSession?> RestartSession(string traceparent, string sessionId)
     {
+        _ = traceparent;
         return await sessionService.RestartSessionAsync(sessionId);
     }
 
     /// <summary>
     /// Sets the session mode without sending a new message.
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="mode">The new session mode</param>
-    public async Task SetSessionMode(string sessionId, SessionMode mode)
+    public async Task SetSessionMode(string traceparent, string sessionId, SessionMode mode)
     {
+        _ = traceparent;
         try
         {
             await sessionService.SetSessionModeAsync(sessionId, mode);
@@ -231,10 +243,9 @@ public class ClaudeCodeHub(
     /// <summary>
     /// Sets the session model without sending a new message.
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="model">The new model</param>
-    public async Task SetSessionModel(string sessionId, string model)
+    public async Task SetSessionModel(string traceparent, string sessionId, string model)
     {
+        _ = traceparent;
         try
         {
             await sessionService.SetSessionModelAsync(sessionId, model);
@@ -251,13 +262,10 @@ public class ClaudeCodeHub(
 
     /// <summary>
     /// Clears context and starts a new session for the same entity/project.
-    /// The old session is preserved in history but a fresh session is created.
     /// </summary>
-    /// <param name="sessionId">The current session ID</param>
-    /// <param name="initialPrompt">Optional initial prompt for the new session</param>
-    /// <returns>The new session</returns>
-    public async Task<ClaudeSession> ClearContextAndStartNew(string sessionId, string? initialPrompt = null)
+    public async Task<ClaudeSession> ClearContextAndStartNew(string traceparent, string sessionId, string? initialPrompt = null)
     {
+        _ = traceparent;
         try
         {
             return await sessionService.ClearContextAndStartNewAsync(sessionId, initialPrompt);
@@ -305,10 +313,6 @@ public static class ClaudeCodeHubExtensions
     /// <summary>
     /// Broadcasts session status change.
     /// </summary>
-    /// <param name="hubContext">The hub context</param>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="status">The new session status</param>
-    /// <param name="hasPendingPlanApproval">Whether there is a pending plan awaiting approval</param>
     public static async Task BroadcastSessionStatusChanged(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
@@ -377,11 +381,6 @@ public static class ClaudeCodeHubExtensions
     /// <summary>
     /// Broadcasts when a session encounters an error.
     /// </summary>
-    /// <param name="hubContext">The hub context</param>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="errorMessage">User-friendly error message</param>
-    /// <param name="errorSubtype">SDK error subtype (e.g., error_max_turns, error_during_execution)</param>
-    /// <param name="isRecoverable">Whether the session can be resumed by sending another message</param>
     public static async Task BroadcastSessionError(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,

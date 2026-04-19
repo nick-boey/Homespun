@@ -48,8 +48,12 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
+                // NOTE: we deliberately do NOT add "Microsoft.AspNetCore.SignalR.Server" here.
+                // The Homespun TraceparentHubFilter owns the SignalR span tree so that each
+                // server-side span can be parented to the client's traceparent (which is
+                // impossible for the native source — WebSocket transports give it no place
+                // to read the client context from). See client-otel/proposal.md.
                 tracing.AddSource(builder.Environment.ApplicationName)
-                    .AddSource("Microsoft.AspNetCore.SignalR.Server")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();
             });

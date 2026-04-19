@@ -3,6 +3,7 @@
  */
 
 import type { HubConnection } from '@microsoft/signalr'
+import { traceInvoke, type HubInvoke } from './trace'
 import type {
   ClaudeSession,
   ClaudeSessionStatus,
@@ -156,39 +157,49 @@ export interface ClaudeCodeHubMethods {
 
 /**
  * Creates typed methods for invoking Claude Code hub server methods.
+ *
+ * Every method is wrapped with {@link traceInvoke}, which starts a client
+ * span and prepends the active W3C traceparent as the first wire argument.
+ * The server's `TraceparentHubFilter` peels that arg off and parents its
+ * own span to the client's context.
  */
 export function createClaudeCodeHubMethods(connection: HubConnection): ClaudeCodeHubMethods {
+  // Bind the connection's invoke once; the typed callers pass this to
+  // traceInvoke so we don't spin up a new closure per call.
+  const invoke: HubInvoke = <T>(methodName: string, ...args: unknown[]) =>
+    connection.invoke<T>(methodName, ...args)
+
   return {
-    joinSession: (sessionId: string) => connection.invoke('JoinSession', sessionId),
-    leaveSession: (sessionId: string) => connection.invoke('LeaveSession', sessionId),
+    joinSession: (sessionId: string) => traceInvoke(invoke, 'JoinSession', sessionId),
+    leaveSession: (sessionId: string) => traceInvoke(invoke, 'LeaveSession', sessionId),
     sendMessage: (sessionId: string, message: string, mode: SessionMode = 'build') =>
-      connection.invoke('SendMessage', sessionId, message, mode),
-    stopSession: (sessionId: string) => connection.invoke('StopSession', sessionId),
-    interruptSession: (sessionId: string) => connection.invoke('InterruptSession', sessionId),
-    getAllSessions: () => connection.invoke<ClaudeSession[]>('GetAllSessions'),
+      traceInvoke(invoke, 'SendMessage', sessionId, message, mode),
+    stopSession: (sessionId: string) => traceInvoke(invoke, 'StopSession', sessionId),
+    interruptSession: (sessionId: string) => traceInvoke(invoke, 'InterruptSession', sessionId),
+    getAllSessions: () => traceInvoke<ClaudeSession[]>(invoke, 'GetAllSessions'),
     getProjectSessions: (projectId: string) =>
-      connection.invoke<ClaudeSession[]>('GetProjectSessions', projectId),
+      traceInvoke<ClaudeSession[]>(invoke, 'GetProjectSessions', projectId),
     getSession: (sessionId: string) =>
-      connection.invoke<ClaudeSession | null>('GetSession', sessionId),
+      traceInvoke<ClaudeSession | null>(invoke, 'GetSession', sessionId),
     answerQuestion: (sessionId: string, answersJson: string) =>
-      connection.invoke('AnswerQuestion', sessionId, answersJson),
+      traceInvoke(invoke, 'AnswerQuestion', sessionId, answersJson),
     executePlan: (sessionId: string, clearContext = true) =>
-      connection.invoke('ExecutePlan', sessionId, clearContext),
+      traceInvoke(invoke, 'ExecutePlan', sessionId, clearContext),
     approvePlan: (
       sessionId: string,
       approved: boolean,
       keepContext: boolean,
       feedback?: string | null
-    ) => connection.invoke('ApprovePlan', sessionId, approved, keepContext, feedback),
+    ) => traceInvoke(invoke, 'ApprovePlan', sessionId, approved, keepContext, feedback),
     getCachedMessageCount: (sessionId: string) =>
-      connection.invoke<number>('GetCachedMessageCount', sessionId),
+      traceInvoke<number>(invoke, 'GetCachedMessageCount', sessionId),
     restartSession: (sessionId: string) =>
-      connection.invoke<ClaudeSession | null>('RestartSession', sessionId),
+      traceInvoke<ClaudeSession | null>(invoke, 'RestartSession', sessionId),
     setSessionMode: (sessionId: string, mode: SessionMode) =>
-      connection.invoke('SetSessionMode', sessionId, mode),
+      traceInvoke(invoke, 'SetSessionMode', sessionId, mode),
     setSessionModel: (sessionId: string, model: string) =>
-      connection.invoke('SetSessionModel', sessionId, model),
+      traceInvoke(invoke, 'SetSessionModel', sessionId, model),
     clearContextAndStartNew: (sessionId: string, initialPrompt?: string | null) =>
-      connection.invoke<ClaudeSession>('ClearContextAndStartNew', sessionId, initialPrompt),
+      traceInvoke<ClaudeSession>(invoke, 'ClearContextAndStartNew', sessionId, initialPrompt),
   }
 }

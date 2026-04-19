@@ -27,6 +27,13 @@ export interface SessionEventEnvelope {
   eventId: string
   /** AG-UI event payload. */
   event: AGUIEvent
+  /**
+   * Optional W3C traceparent captured from the server's `Activity.Current` at
+   * broadcast time. The client uses it via `withExtractedContext` so the
+   * reducer-apply span parents to the server ingest span and Seq shows a
+   * contiguous trace from user click → server → envelope → reducer.
+   */
+  traceparent?: string | null
 }
 
 // ============================================================================
