@@ -120,12 +120,6 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
 
         var containerWorkingDirectory = TranslateWorkingDirectoryForContainer(request.WorkingDirectory);
 
-        // Worker never emits an A2A message for the initial prompt (it pushes
-        // into the SDK input queue, not the output channel), so the UI never
-        // sees the user's first message. Synthesize one here before streaming
-        // so it appears in the event log alongside the agent's reply.
-        await IngestUserMessageAsync(request.ProjectId, sessionId, request.Prompt, cancellationToken);
-
         var startBody = new
         {
             workingDirectory = containerWorkingDirectory,
@@ -184,10 +178,6 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         }
 
         active.LastActivityAt = DateTime.UtcNow;
-
-        // Mirror StartSessionAsync: the worker doesn't echo follow-up user
-        // messages as A2A events, so synthesize one so the UI sees it.
-        await IngestUserMessageAsync(active.ProjectId, active.SessionId, request.Message, cancellationToken);
 
         var body = new
         {
@@ -510,40 +500,6 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
                 eventType = null;
                 data.Clear();
             }
-        }
-    }
-
-    private async Task IngestUserMessageAsync(string? projectId, string sessionId, string? message, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(message)) return;
-        var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
-        var payloadJson = JsonSerializer.Serialize(new
-        {
-            kind = "message",
-            messageId = Guid.NewGuid().ToString(),
-            role = "user",
-            parts = new[]
-            {
-                new { kind = "text", text = message },
-            },
-            contextId = sessionId,
-            metadata = new { sdkMessageType = "user" },
-        });
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            await _eventIngestor.IngestAsync(
-                effectiveProjectId,
-                sessionId,
-                HomespunA2AEventKind.Message,
-                doc.RootElement.Clone(),
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "SingleContainer user-message synth failed for session {SessionId}",
-                sessionId);
         }
     }
 

@@ -155,6 +155,11 @@ else
     if (isDockerAgent)
     {
         server.WithEnvironment("AgentExecution__Docker__WorkerImage", localWorkerImageTag);
+        // Host-mode server (dev-live) on macOS / Windows Docker Desktop can't
+        // reach sibling workers via their bridge-network IPs. Publish the
+        // worker's 8080 to a random host loopback port so the server talks
+        // to http://127.0.0.1:{hostPort}.
+        server.WithEnvironment("AgentExecution__Docker__UseLoopbackPortMapping", "true");
     }
     if (workerEndpoint is not null)
     {

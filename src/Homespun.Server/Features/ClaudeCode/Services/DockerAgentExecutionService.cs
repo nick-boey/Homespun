@@ -66,6 +66,17 @@ public class DockerAgentExecutionOptions
     /// Network name for container communication.
     /// </summary>
     public string NetworkName { get; set; } = "bridge";
+
+    /// <summary>
+    /// Publish the worker's 8080 port to a random host loopback port and address
+    /// the worker as <c>http://127.0.0.1:{hostPort}</c> instead of the container's
+    /// bridge-network IP. Required when the server runs on macOS / Windows Docker
+    /// Desktop in host mode, where host traffic cannot route to bridge-network
+    /// container IPs. In Linux host-mode or container-in-container (DooD inside
+    /// Aspire-networked server) the bridge IP is reachable directly, so this can
+    /// stay <c>false</c>.
+    /// </summary>
+    public bool UseLoopbackPortMapping { get; set; } = false;
 }
 
 /// <summary>
@@ -231,7 +242,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var sessionId = Guid.NewGuid().ToString();
+        // Align with SingleContainer/Mock executors: prefer the outer Homespun session
+        // ID so A2A events get ingested, translated, and broadcast on the SignalR
+        // channel the client subscribes to. Fall back to a fresh Guid only when the
+        // caller didn't thread one through (legacy call sites).
+        var sessionId = request.HomespunSessionId ?? Guid.NewGuid().ToString();
         var hasIssue = !string.IsNullOrEmpty(request.IssueId) && !string.IsNullOrEmpty(request.ProjectId);
         var containerName = hasIssue
             ? GetIssueContainerName(request.ProjectId!, request.IssueId!)
@@ -1602,6 +1617,13 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         dockerArgs.Append($"--network {_options.NetworkName} ");
 
+        if (_options.UseLoopbackPortMapping)
+        {
+            // Bind container 8080 to a random host loopback port. RunDockerAndGetUrl
+            // resolves the mapped host port and returns http://127.0.0.1:{port}.
+            dockerArgs.Append("-p 127.0.0.1::8080 ");
+        }
+
         dockerArgs.Append(_options.WorkerImage);
 
         return dockerArgs.ToString();
@@ -1801,6 +1823,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 $"Container {containerName} exited immediately (state: {containerState}). Container logs:\n{containerLogs}");
         }
 
+        if (_options.UseLoopbackPortMapping)
+        {
+            var hostPort = await InspectMappedHostPortAsync(containerId, "8080/tcp", cancellationToken);
+            var loopbackUrl = $"http://127.0.0.1:{hostPort}";
+            _logger.LogInformation(
+                "Container {ContainerId} ready at {WorkerUrl} (loopback host port {HostPort})",
+                containerId, loopbackUrl, hostPort);
+
+            await WaitForWorkerReadyAsync(loopbackUrl, cancellationToken);
+            return (containerId, loopbackUrl);
+        }
+
         var inspectArgs = $"inspect -f \"{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}\" {containerId}";
         _logger.LogInformation("Docker inspect command: docker {InspectArgs}", inspectArgs);
 
@@ -1865,6 +1899,53 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         await WaitForWorkerReadyAsync(workerUrl, cancellationToken);
 
         return (containerId, workerUrl);
+    }
+
+    /// <summary>
+    /// Inspects the container's mapped host port for a given container port
+    /// (e.g. "8080/tcp") when the container was started with a <c>-p</c> publish
+    /// flag. Returns the numeric host port as a string. Throws
+    /// <see cref="AgentStartupException"/> if docker inspect fails or returns no mapping.
+    /// </summary>
+    private async Task<string> InspectMappedHostPortAsync(
+        string containerId, string containerPort, CancellationToken cancellationToken)
+    {
+        var inspectArgs =
+            $"inspect -f \"{{{{(index (index .NetworkSettings.Ports \\\"{containerPort}\\\") 0).HostPort}}}}\" {containerId}";
+        _logger.LogInformation("Docker inspect port command: docker {InspectArgs}", inspectArgs);
+
+        var startInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = inspectArgs,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new AgentStartupException($"Failed to start docker inspect for container {containerId}");
+
+        var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            throw new AgentStartupException(
+                $"docker inspect failed while resolving host port for {containerPort} on {containerId}: {stderr.Trim()}");
+        }
+
+        var hostPort = stdout.Trim();
+        if (string.IsNullOrEmpty(hostPort) || !int.TryParse(hostPort, out _))
+        {
+            throw new AgentStartupException(
+                $"docker inspect returned no host port mapping for {containerPort} on {containerId} (raw: '{hostPort}'). " +
+                "Ensure -p is set in the docker run args when UseLoopbackPortMapping is enabled.");
+        }
+
+        return hostPort;
     }
 
     /// <summary>

@@ -139,20 +139,8 @@ public class MockAgentExecutionService : IAgentExecutionService
         { "kind": "task", "id": "{{taskId}}", "contextId": "{{sessionId}}", "status": { "state": "working", "timestamp": "{{DateTime.UtcNow:O}}" } }
         """, ct);
 
-        if (!string.IsNullOrEmpty(userMessage))
-        {
-            var userText = JsonEncodedText.Encode(userMessage).ToString();
-            await IngestAsync(projectId, sessionId, HomespunA2AEventKind.Message, $$"""
-            {
-              "kind": "message",
-              "messageId": "{{Guid.NewGuid()}}",
-              "role": "user",
-              "parts": [ { "kind": "text", "text": "{{userText}}" } ],
-              "contextId": "{{sessionId}}",
-              "metadata": { "sdkMessageType": "user" }
-            }
-            """, ct);
-        }
+        // User-role echo is synthesized centrally in MessageProcessingService.SendMessageAsync
+        // so every executor (Docker/SingleContainer/Mock) shares the same path.
 
         await IngestAsync(projectId, sessionId, HomespunA2AEventKind.Message, $$"""
         {
