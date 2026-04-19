@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Fleece.Services;
@@ -29,6 +30,7 @@ public class MessageProcessingService : IMessageProcessingService
     private readonly ISessionStateManager _stateManager;
     private readonly IToolInteractionService _toolInteraction;
     private readonly ISessionMetadataStore _metadataStore;
+    private readonly ISessionEventIngestor _eventIngestor;
 
     public MessageProcessingService(
         IClaudeSessionStore sessionStore,
@@ -38,7 +40,8 @@ public class MessageProcessingService : IMessageProcessingService
         IFleeceIssueTransitionService fleeceTransitionService,
         ISessionStateManager stateManager,
         IToolInteractionService toolInteraction,
-        ISessionMetadataStore metadataStore)
+        ISessionMetadataStore metadataStore,
+        ISessionEventIngestor eventIngestor)
     {
         _sessionStore = sessionStore;
         _logger = logger;
@@ -48,6 +51,7 @@ public class MessageProcessingService : IMessageProcessingService
         _stateManager = stateManager;
         _toolInteraction = toolInteraction;
         _metadataStore = metadataStore;
+        _eventIngestor = eventIngestor;
     }
 
     public Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default)
@@ -115,6 +119,12 @@ public class MessageProcessingService : IMessageProcessingService
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             IAsyncEnumerable<SdkMessage> messageStream;
+
+            // Synthesize a user-role A2A message so the UI renders the prompt
+            // alongside the agent's reply. Executors (Docker/SingleContainer/Mock)
+            // receive the prompt but don't echo it as an A2A event — do it once
+            // here so the behavior is uniform regardless of execution backend.
+            await IngestUserMessageAsync(session.ProjectId, sessionId, message, linkedCts.Token);
 
             var agentSessionId = _stateManager.GetAgentSessionId(sessionId);
             if (agentSessionId == null)
@@ -208,6 +218,46 @@ public class MessageProcessingService : IMessageProcessingService
             session.Status = ClaudeSessionStatus.Error;
             session.ErrorMessage = ex.Message;
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Synthesize a user-role A2A message event so the UI renders the user's prompt.
+    /// Centralized here so every executor backend (Docker/SingleContainer/Mock)
+    /// shares the same echo path. Safe no-op when <paramref name="message"/> is empty.
+    /// </summary>
+    private async Task IngestUserMessageAsync(
+        string? projectId, string sessionId, string? message, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(message)) return;
+        var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            kind = "message",
+            messageId = Guid.NewGuid().ToString(),
+            role = "user",
+            parts = new[]
+            {
+                new { kind = "text", text = message },
+            },
+            contextId = sessionId,
+            metadata = new { sdkMessageType = "user" },
+        });
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            await _eventIngestor.IngestAsync(
+                effectiveProjectId,
+                sessionId,
+                HomespunA2AEventKind.Message,
+                doc.RootElement.Clone(),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "User-message synth failed for session {SessionId}",
+                sessionId);
         }
     }
 

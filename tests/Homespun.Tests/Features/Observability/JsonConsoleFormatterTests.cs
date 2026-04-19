@@ -400,6 +400,123 @@ public class JsonConsoleFormatterTests
         Assert.That(json.RootElement.GetProperty("Component").GetString(), Is.EqualTo("Server"));
     }
 
+    [Test]
+    public void Write_IncludesArbitraryScopeKeysAsTopLevelFields()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Error,
+            "TestCategory",
+            "Client threw");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            ["TelemetryType"] = "Exception",
+            ["TelemetryName"] = "sessions.filter is not a function",
+            ["SessionId"] = "abc-123",
+            ["StatusCode"] = 500
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert — every scope key surfaces as a top-level JSON field so
+        // Promtail's pipeline_stages can extract them as Loki labels.
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        var root = json.RootElement;
+        Assert.That(root.GetProperty("TelemetryType").GetString(), Is.EqualTo("Exception"));
+        Assert.That(root.GetProperty("TelemetryName").GetString(), Is.EqualTo("sessions.filter is not a function"));
+        Assert.That(root.GetProperty("SessionId").GetString(), Is.EqualTo("abc-123"));
+        Assert.That(root.GetProperty("StatusCode").GetInt32(), Is.EqualTo(500));
+    }
+
+    [Test]
+    public void Write_AllowsScopeToOverrideSourceContextAndComponent()
+    {
+        // Arrange — ClientTelemetryController pushes SourceContext="ClientTelemetry"
+        // and Component="Client" via scope so the server's logger category
+        // (Homespun.Features.Observability.ClientTelemetryController) doesn't
+        // show up in Loki queries that filter on SourceContext.
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "Homespun.Features.Observability.ClientTelemetryController",
+            "ClientTelemetry: PageView - /sessions");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            ["SourceContext"] = "ClientTelemetry",
+            ["Component"] = "Client"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.GetProperty("SourceContext").GetString(), Is.EqualTo("ClientTelemetry"));
+        Assert.That(json.RootElement.GetProperty("Component").GetString(), Is.EqualTo("Client"));
+    }
+
+    [Test]
+    public void Write_DoesNotAllowScopeToClobberProtectedFields()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Real message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            ["Timestamp"] = "not-a-timestamp",
+            ["Level"] = "NotALevel",
+            ["Message"] = "spoofed message",
+            ["Exception"] = "fake exception"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert — protected keys keep the values the formatter controls.
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.GetProperty("Level").GetString(), Is.EqualTo("Information"));
+        Assert.That(json.RootElement.GetProperty("Message").GetString(), Is.EqualTo("Real message"));
+        Assert.That(json.RootElement.GetProperty("Timestamp").GetString(), Does.Match(@"^\d{4}-\d{2}-\d{2}T"));
+        Assert.That(json.RootElement.TryGetProperty("Exception", out _), Is.False,
+            "Scope must not introduce an Exception field when no exception was logged");
+    }
+
+    [Test]
+    public void Write_IgnoresOriginalFormatScopeKey()
+    {
+        // Arrange — when `ILogger.Log` emits a message template, MEL pushes
+        // the template string under `{OriginalFormat}`. That's implementation
+        // detail; we don't want it leaking into stdout JSON.
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            ["{OriginalFormat}"] = "ClientTelemetry: {TelemetryType} - {TelemetryName}",
+            ["TelemetryType"] = "Event"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("{OriginalFormat}", out _), Is.False,
+            "{OriginalFormat} is a MEL implementation detail; must not land in log output");
+        Assert.That(json.RootElement.GetProperty("TelemetryType").GetString(), Is.EqualTo("Event"));
+    }
+
     private static LogEntry<string> CreateLogEntry(
         LogLevel logLevel,
         string category,

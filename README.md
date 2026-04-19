@@ -101,28 +101,36 @@ export HOMESPUN_DATA_PATH="/data/.homespun/homespun-data.json"
 
 #### Development Mode
 
-```bash
-# Backend (from repository root)
-dotnet run --project src/Homespun.Server
-
-# Frontend (in a separate terminal)
-cd src/Homespun.Web
-npm run dev
-```
-
-The application will be available at `http://localhost:5173` (frontend) with API at `https://localhost:5001`.
-
-#### Mock Mode (for development/testing)
+Local dev runs through the Aspire AppHost. Prerequisites: .NET 10 SDK + Aspire
+workload, Node 20+, Docker Desktop. One-time secret bootstrap:
 
 ```bash
-# Linux/Mac
-./scripts/mock.sh
-
+# macOS/Linux
+./scripts/set-user-secrets.sh
 # Windows
-./scripts/mock.ps1
+./scripts/set-user-secrets.ps1
 ```
 
-Mock mode provides pre-seeded demo data without external dependencies.
+Then launch the full dev stack via one of the AppHost profiles. Use
+`dotnet run` — the `aspire` CLI's `run` command does not support
+`--launch-profile` and will silently fall back to the first profile.
+
+```bash
+# Mock data + mock agents (fastest inner loop)
+dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
+
+# Mock data + real Claude SDK sessions, Docker-spawned workers (DooD)
+dotnet run --project src/Homespun.AppHost --launch-profile dev-live
+
+# Mock data + pre-run worker container (for Windows hosts)
+dotnet run --project src/Homespun.AppHost --launch-profile dev-windows
+
+# Container parity check (server/web/worker all from Dockerfiles)
+dotnet run --project src/Homespun.AppHost --launch-profile dev-container
+```
+
+Server: `http://localhost:5101`. Vite: `http://localhost:5173`. Grafana: `:3000`.
+The Aspire dashboard URL is printed at startup.
 
 ## Development
 

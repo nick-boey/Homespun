@@ -490,11 +490,8 @@ public class SessionsApiTests
         var deleteResponse = await _client.DeleteAsync($"/api/sessions/{session.Id}");
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        // Assert - session should still be in store but with Stopped status
-        // The mock service sets status to Stopped but doesn't remove from store
+        // Assert — SessionLifecycleService removes the session from the store on stop.
         var getResponse = await _client.GetAsync($"/api/sessions/{session.Id}");
-        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var stoppedSession = await getResponse.Content.ReadFromJsonAsync<ClaudeSession>(JsonOptions);
-        Assert.That(stoppedSession!.Status, Is.EqualTo(ClaudeSessionStatus.Stopped));
+        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 }

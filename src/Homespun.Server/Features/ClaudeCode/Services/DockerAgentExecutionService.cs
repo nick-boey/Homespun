@@ -66,6 +66,32 @@ public class DockerAgentExecutionOptions
     /// Network name for container communication.
     /// </summary>
     public string NetworkName { get; set; } = "bridge";
+
+    /// <summary>
+    /// Publish the worker's 8080 port to a random host port and address the
+    /// worker via <see cref="WorkerHost"/>:{hostPort} instead of the container's
+    /// bridge-network IP. Required when the server cannot reach sibling worker
+    /// container IPs directly (macOS / Windows Docker Desktop in host mode;
+    /// dev-container where Aspire's DCP strips non-managed endpoints from its
+    /// session network).
+    /// </summary>
+    public bool UseLoopbackPortMapping { get; set; } = false;
+
+    /// <summary>
+    /// IP the <c>-p</c> publish binds to on the host side. Defaults to
+    /// <c>127.0.0.1</c> (safe for dev-live host-mode — only the host's loopback
+    /// sees the worker). Dev-container hosting sets this to <c>0.0.0.0</c> so
+    /// the server container can reach the host via <c>host.docker.internal</c>.
+    /// </summary>
+    public string LoopbackBindHost { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Hostname used to address the worker when
+    /// <see cref="UseLoopbackPortMapping"/> is true. <c>127.0.0.1</c> for
+    /// dev-live (server on host); <c>host.docker.internal</c> for dev-container
+    /// (server inside a container reaching the host-published port).
+    /// </summary>
+    public string WorkerHost { get; set; } = "127.0.0.1";
 }
 
 /// <summary>
@@ -145,6 +171,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     private readonly ISessionEventIngestor _eventIngestor;
     private readonly Homespun.Features.Observability.SessionEventLogOptions _sessionEventLogOptions;
+
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
@@ -231,7 +258,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var sessionId = Guid.NewGuid().ToString();
+        // Align with SingleContainer/Mock executors: prefer the outer Homespun session
+        // ID so A2A events get ingested, translated, and broadcast on the SignalR
+        // channel the client subscribes to. Fall back to a fresh Guid only when the
+        // caller didn't thread one through (legacy call sites).
+        var sessionId = request.HomespunSessionId ?? Guid.NewGuid().ToString();
         var hasIssue = !string.IsNullOrEmpty(request.IssueId) && !string.IsNullOrEmpty(request.ProjectId);
         var containerName = hasIssue
             ? GetIssueContainerName(request.ProjectId!, request.IssueId!)
@@ -1502,13 +1533,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <summary>
-    /// Checks if a container's worker is healthy.
+    /// Checks if a container's worker is healthy. Uses a short probe timeout so a
+    /// dead / unreachable container (e.g. an orphan from a previous launch on a
+    /// different Docker network) fails fast instead of blocking on the
+    /// <see cref="DockerAgentExecutionOptions.RequestTimeout"/> (30 min default).
     /// </summary>
     private async Task<bool> IsContainerHealthyAsync(string workerUrl, CancellationToken cancellationToken)
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"{workerUrl}/api/health", cancellationToken);
+            using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            probeCts.CancelAfter(TimeSpan.FromSeconds(3));
+            using var response = await _httpClient.GetAsync($"{workerUrl}/api/health", probeCts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -1601,6 +1637,16 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             dockerArgs.Append($"--label homespun.issue.id={issueId} ");
 
         dockerArgs.Append($"--network {_options.NetworkName} ");
+
+        if (_options.UseLoopbackPortMapping)
+        {
+            // Bind container 8080 to a random host port. RunDockerAndGetUrl
+            // resolves the mapped port and returns http://{WorkerHost}:{port}.
+            var bindPrefix = string.IsNullOrEmpty(_options.LoopbackBindHost)
+                ? string.Empty
+                : $"{_options.LoopbackBindHost}:";
+            dockerArgs.Append($"-p {bindPrefix}:8080 ");
+        }
 
         dockerArgs.Append(_options.WorkerImage);
 
@@ -1801,6 +1847,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 $"Container {containerName} exited immediately (state: {containerState}). Container logs:\n{containerLogs}");
         }
 
+        if (_options.UseLoopbackPortMapping)
+        {
+            var hostPort = await InspectMappedHostPortAsync(containerId, "8080/tcp", cancellationToken);
+            var loopbackUrl = $"http://{_options.WorkerHost}:{hostPort}";
+            _logger.LogInformation(
+                "Container {ContainerId} ready at {WorkerUrl} (host port {HostPort} via {WorkerHost})",
+                containerId, loopbackUrl, hostPort, _options.WorkerHost);
+
+            await WaitForWorkerReadyAsync(loopbackUrl, cancellationToken);
+            return (containerId, loopbackUrl);
+        }
+
         var inspectArgs = $"inspect -f \"{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}\" {containerId}";
         _logger.LogInformation("Docker inspect command: docker {InspectArgs}", inspectArgs);
 
@@ -1865,6 +1923,53 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         await WaitForWorkerReadyAsync(workerUrl, cancellationToken);
 
         return (containerId, workerUrl);
+    }
+
+    /// <summary>
+    /// Inspects the container's mapped host port for a given container port
+    /// (e.g. "8080/tcp") when the container was started with a <c>-p</c> publish
+    /// flag. Returns the numeric host port as a string. Throws
+    /// <see cref="AgentStartupException"/> if docker inspect fails or returns no mapping.
+    /// </summary>
+    private async Task<string> InspectMappedHostPortAsync(
+        string containerId, string containerPort, CancellationToken cancellationToken)
+    {
+        var inspectArgs =
+            $"inspect -f \"{{{{(index (index .NetworkSettings.Ports \\\"{containerPort}\\\") 0).HostPort}}}}\" {containerId}";
+        _logger.LogInformation("Docker inspect port command: docker {InspectArgs}", inspectArgs);
+
+        var startInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = inspectArgs,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new AgentStartupException($"Failed to start docker inspect for container {containerId}");
+
+        var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            throw new AgentStartupException(
+                $"docker inspect failed while resolving host port for {containerPort} on {containerId}: {stderr.Trim()}");
+        }
+
+        var hostPort = stdout.Trim();
+        if (string.IsNullOrEmpty(hostPort) || !int.TryParse(hostPort, out _))
+        {
+            throw new AgentStartupException(
+                $"docker inspect returned no host port mapping for {containerPort} on {containerId} (raw: '{hostPort}'). " +
+                "Ensure -p is set in the docker run args when UseLoopbackPortMapping is enabled.");
+        }
+
+        return hostPort;
     }
 
     /// <summary>

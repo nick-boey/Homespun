@@ -165,11 +165,13 @@ release blocker.
 The following actions are forbidden during automated or interactive work:
 
 - Stopping or removing the `homespun` or `homespun-prod` containers.
-- `KillShell` (or equivalent) on a shell running `mock.sh` / `mock.ps1` or any
-  `dotnet` process — doing so can terminate the entire session.
+- `KillShell` (or equivalent) on a shell running `dotnet run` against
+  `Homespun.AppHost` or any long-lived `dotnet` process — doing so can
+  terminate the entire session.
 
-To restart a stuck mock server: stop the dotnet process directly with
-`pkill -f "dotnet.*mock"`, then start a fresh `./scripts/mock.sh &`.
+To restart a stuck AppHost: stop the dotnet process directly with
+`pkill -f "Homespun.AppHost"`, then start a fresh
+`dotnet run --project src/Homespun.AppHost --launch-profile dev-mock &`.
 
 ### XI. Logs via Loki
 

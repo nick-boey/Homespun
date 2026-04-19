@@ -32,7 +32,7 @@ public static class MockServiceExtensions
     public static IServiceCollection AddMockServices(
         this IServiceCollection services,
         MockModeOptions options,
-        IConfiguration? configuration = null)
+        IConfiguration configuration)
     {
         // Register the temporary data folder service - creates temp folder structure
         services.AddSingleton<TempDataFolderService>();
@@ -121,17 +121,9 @@ public static class MockServiceExtensions
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
-        // Choose between live Claude sessions or mock based on configuration
-        if (options.UseLiveClaudeSessions && configuration != null)
-        {
-            // Use real ClaudeSessionService with test working directory
-            services.AddLiveClaudeSessionServices(options, configuration);
-        }
-        else
-        {
-            // Use mock service for simulated responses
-            services.AddSingleton<IClaudeSessionService, MockClaudeSessionService>();
-        }
+        // Always use the real session pipeline; IAgentExecutionService picks between the
+        // Docker/SingleContainer/Mock executors based on AgentExecution:Mode.
+        services.AddClaudeSessionServices(options, configuration);
 
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<ISkillDiscoveryService, SkillDiscoveryService>();
@@ -185,36 +177,82 @@ public static class MockServiceExtensions
     }
 
     /// <summary>
-    /// Adds live Claude session services for testing with a real Claude Code agent.
+    /// Registers the real Claude session pipeline (SessionLifecycleService, MessageProcessingService,
+    /// ClaudeSessionService) over a Docker / SingleContainer / Mock executor backend.
     /// </summary>
-    private static IServiceCollection AddLiveClaudeSessionServices(
+    private static IServiceCollection AddClaudeSessionServices(
         this IServiceCollection services,
         MockModeOptions options,
         IConfiguration configuration)
     {
-        // Register MockAgentExecutionService for mock mode
-        Console.WriteLine("[AgentExecution] MockLive mode: Registering MockAgentExecutionService");
-        services.AddSingleton<IAgentExecutionService, MockAgentExecutionService>();
-
-        // Determine working directory for live sessions
-        // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise home directory
-        var dataPath2 = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
-        string defaultWorkspace;
-        if (!string.IsNullOrEmpty(dataPath2))
+        // Agent execution selection mirrors the non-mock path in Program.cs, but unless
+        // UseLiveClaudeSessions is explicitly set we always pick the mock executor —
+        // otherwise dev-mock / Api.Tests would try to spawn real Docker containers.
+        //   Docker            → DockerAgentExecutionService + discovery/recovery
+        //   SingleContainer   → SingleContainerAgentExecutionService shim
+        //   unset / other     → MockAgentExecutionService
+        var agentMode = options.UseLiveClaudeSessions ? configuration["AgentExecution:Mode"] : null;
+        if (string.Equals(agentMode, "Docker", StringComparison.OrdinalIgnoreCase))
         {
-            var dataDirectory = Path.GetDirectoryName(dataPath2);
-            defaultWorkspace = Path.Combine(dataDirectory!, "test-workspace");
+            Console.WriteLine("[AgentExecution] Docker: Registering DockerAgentExecutionService");
+            services.Configure<DockerAgentExecutionOptions>(
+                configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+            services.PostConfigure<DockerAgentExecutionOptions>(opts =>
+            {
+                var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+                if (!string.IsNullOrEmpty(hostPath))
+                    opts.HostDataPath = hostPath;
+            });
+            services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+            services.AddHostedService(sp =>
+            {
+                var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+                var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+                var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+                return new ContainerRecoveryHostedService(
+                    discoveryService,
+                    container => executionService?.RegisterDiscoveredContainer(container),
+                    logger);
+            });
+        }
+        else if (string.Equals(agentMode, "SingleContainer", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[AgentExecution] SingleContainer: Registering SingleContainerAgentExecutionService");
+            services.Configure<SingleContainerAgentExecutionOptions>(
+                configuration.GetSection(SingleContainerAgentExecutionOptions.SectionName));
+            services.AddSingleton<IAgentExecutionService, SingleContainerAgentExecutionService>();
         }
         else
         {
-            defaultWorkspace = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
+            Console.WriteLine("[AgentExecution] Mock mode: Registering MockAgentExecutionService");
+            services.AddSingleton<IAgentExecutionService, MockAgentExecutionService>();
         }
-        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory ?? defaultWorkspace;
 
-        // Ensure the test workspace directory exists
-        if (!Directory.Exists(workingDirectory))
+        // Determine working directory for live sessions. Only relevant in live mode —
+        // in pure mock mode we leave TestWorkingDirectory unset so MockGitCloneService
+        // gives each clone a unique path instead of routing them all through a single
+        // test workspace (which would collide across concurrent integration tests).
+        string? workingDirectory = null;
+        if (options.UseLiveClaudeSessions)
         {
-            Directory.CreateDirectory(workingDirectory);
+            var dataPath2 = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+            string defaultWorkspace;
+            if (!string.IsNullOrEmpty(dataPath2))
+            {
+                var dataDirectory = Path.GetDirectoryName(dataPath2);
+                defaultWorkspace = Path.Combine(dataDirectory!, "test-workspace");
+            }
+            else
+            {
+                defaultWorkspace = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
+            }
+            workingDirectory = options.LiveClaudeSessionsWorkingDirectory ?? defaultWorkspace;
+
+            if (!Directory.Exists(workingDirectory))
+            {
+                Directory.CreateDirectory(workingDirectory);
+            }
         }
 
         // Session discovery service - reads from Claude's native session storage
@@ -258,9 +296,10 @@ public static class MockServiceExtensions
         services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 
         // Store the test working directory in configuration for the MockGitCloneService
+        // (only populated when running against a live Claude agent).
         services.Configure<LiveClaudeTestOptions>(opts =>
         {
-            opts.TestWorkingDirectory = workingDirectory;
+            opts.TestWorkingDirectory = workingDirectory ?? "";
         });
 
         return services;

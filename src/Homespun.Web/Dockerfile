@@ -21,8 +21,13 @@ FROM nginx:alpine AS production
 # Copy built assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config template — the nginx:alpine entrypoint runs envsubst on
+# files in /etc/nginx/templates/ at container start, substituting only the
+# UPSTREAM_* variables (so nginx's own $vars like $uri / $host stay literal).
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV NGINX_ENVSUBST_FILTER="^UPSTREAM_"
+ENV UPSTREAM_HOST=homespun
+ENV UPSTREAM_PORT=8080
 
 # Expose port
 EXPOSE 80

@@ -7,12 +7,30 @@ namespace Homespun.Features.Observability;
 
 /// <summary>
 /// A custom console formatter that outputs log entries as JSON.
-/// Format: {"Timestamp":"...","Level":"...","Message":"...","SourceContext":"...","Component":"...","IssueId":"...","ProjectName":"...","Exception":"..."}
-/// IssueId and ProjectName are included when available from logging scope (see IssueLogScope).
+/// Baseline fields: Timestamp, Level, Message, SourceContext, Component, Exception.
+/// Any additional key/value pair pushed via an ILogger scope is merged into the
+/// JSON output as a top-level field so downstream consumers (Promtail pipeline
+/// stages, Loki label extraction) see the same shape that OTLP attributes carry.
+/// See <see cref="IssueLogScope"/> for the canonical issue-context keys.
 /// </summary>
 public sealed class JsonConsoleFormatter : ConsoleFormatter
 {
     public const string FormatterName = "json";
+
+    /// <summary>
+    /// Keys the formatter fully controls. Scope values matching these keys are
+    /// dropped so callers can't clobber the canonical envelope fields.
+    /// <c>SourceContext</c> and <c>Component</c> are intentionally NOT in this
+    /// set — client-telemetry logs, for example, advertise themselves as
+    /// <c>SourceContext="ClientTelemetry"</c>, <c>Component="Client"</c> via scope.
+    /// </summary>
+    private static readonly HashSet<string> ProtectedReservedKeys = new(StringComparer.Ordinal)
+    {
+        "Timestamp",
+        "Level",
+        "Message",
+        "Exception"
+    };
 
     private readonly PromtailJsonFormatterOptions _options;
 
@@ -37,30 +55,16 @@ public sealed class JsonConsoleFormatter : ConsoleFormatter
             ? DateTimeOffset.UtcNow
             : DateTimeOffset.Now;
 
-        // Extract issue context from scope
-        string? issueId = null;
-        string? projectName = null;
-        ExtractScopeValues(scopeProvider, ref issueId, ref projectName);
-
-        // Build log object with optional fields
         var logObject = new Dictionary<string, object?>
         {
-            ["Timestamp"] = timestamp.ToString("O"), // ISO 8601 format
+            ["Timestamp"] = timestamp.ToString("O"),
             ["Level"] = GetLogLevelString(logEntry.LogLevel),
             ["Message"] = message,
             ["SourceContext"] = GetShortCategoryName(logEntry.Category),
             ["Component"] = "Server"
         };
 
-        if (!string.IsNullOrEmpty(issueId))
-        {
-            logObject["IssueId"] = issueId;
-        }
-
-        if (!string.IsNullOrEmpty(projectName))
-        {
-            logObject["ProjectName"] = projectName;
-        }
+        MergeScopeValues(scopeProvider, logObject);
 
         if (logEntry.Exception is not null)
         {
@@ -70,58 +74,61 @@ public sealed class JsonConsoleFormatter : ConsoleFormatter
         textWriter.WriteLine(JsonSerializer.Serialize(logObject));
     }
 
-    /// <summary>
-    /// Helper class to hold scope values that can be modified in the ForEachScope callback.
-    /// </summary>
-    private sealed class ScopeValueHolder
-    {
-        public string? IssueId { get; set; }
-        public string? ProjectName { get; set; }
-    }
-
-    private static void ExtractScopeValues(IExternalScopeProvider? scopeProvider, ref string? issueId, ref string? projectName)
+    private static void MergeScopeValues(IExternalScopeProvider? scopeProvider, Dictionary<string, object?> logObject)
     {
         if (scopeProvider is null)
         {
             return;
         }
 
-        var holder = new ScopeValueHolder();
-
         scopeProvider.ForEachScope((scope, state) =>
         {
-            if (scope is IReadOnlyList<KeyValuePair<string, object?>> scopeItems)
+            if (scope is IReadOnlyList<KeyValuePair<string, object?>> scopeList)
             {
-                foreach (var item in scopeItems)
+                foreach (var item in scopeList)
                 {
-                    if (item.Key == IssueLogScope.IssueIdKey && item.Value is string id)
-                    {
-                        state.IssueId = id;
-                    }
-                    else if (item.Key == IssueLogScope.ProjectNameKey && item.Value is string name)
-                    {
-                        state.ProjectName = name;
-                    }
+                    MergeEntry(state, item.Key, item.Value);
                 }
             }
-            else if (scope is IEnumerable<KeyValuePair<string, object?>> scopeDict)
+            else if (scope is IEnumerable<KeyValuePair<string, object?>> scopeEnumerable)
             {
-                foreach (var item in scopeDict)
+                foreach (var item in scopeEnumerable)
                 {
-                    if (item.Key == IssueLogScope.IssueIdKey && item.Value is string id)
-                    {
-                        state.IssueId = id;
-                    }
-                    else if (item.Key == IssueLogScope.ProjectNameKey && item.Value is string name)
-                    {
-                        state.ProjectName = name;
-                    }
+                    MergeEntry(state, item.Key, item.Value);
                 }
             }
-        }, holder);
+        }, logObject);
+    }
 
-        issueId = holder.IssueId;
-        projectName = holder.ProjectName;
+    private static void MergeEntry(Dictionary<string, object?> logObject, string key, object? value)
+    {
+        if (string.IsNullOrEmpty(key) || value is null)
+        {
+            return;
+        }
+
+        // Skip empty strings so callers can pass `scope[Foo] = maybeEmpty`
+        // without polluting output with blank values — matches the behaviour
+        // of the original IssueLogScope-specific extraction.
+        if (value is string str && str.Length == 0)
+        {
+            return;
+        }
+
+        // Skip the implicit {OriginalFormat} key that ILogger.Log pushes
+        // alongside message-template parameters — its value is the unrendered
+        // template string, which would be noise in Loki.
+        if (key == "{OriginalFormat}")
+        {
+            return;
+        }
+
+        if (ProtectedReservedKeys.Contains(key))
+        {
+            return;
+        }
+
+        logObject[key] = value;
     }
 
     private static string GetLogLevelString(LogLevel logLevel) => logLevel switch

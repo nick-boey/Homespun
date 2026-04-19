@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import {
   useGitHubInfo,
@@ -365,7 +366,7 @@ function ThemeSection() {
 
 function UserEmailSection() {
   const { userEmail, isLoading, isError } = useUserSettings()
-  const { mutate: updateEmail, isPending } = useUpdateUserEmail()
+  const { mutateAsync: updateEmail, isPending } = useUpdateUserEmail()
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
 
@@ -374,10 +375,21 @@ function UserEmailSection() {
     setIsEditing(true)
   }
 
-  const handleSave = () => {
-    if (editValue.trim()) {
-      updateEmail(editValue.trim())
+  const handleSave = async () => {
+    const trimmed = editValue.trim()
+    if (!trimmed) return
+
+    try {
+      await updateEmail(trimmed)
+      toast.success('Email saved')
       setIsEditing(false)
+    } catch (error) {
+      // Keep the editor open so the user can correct the value; surface the
+      // server's reason (e.g. "Invalid email format") via toast. Silent
+      // failure here used to make the form look like it had saved when the
+      // server had actually rejected the request with 400.
+      const message = error instanceof Error ? error.message : 'Failed to save email'
+      toast.error(message)
     }
   }
 

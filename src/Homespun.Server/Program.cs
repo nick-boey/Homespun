@@ -30,6 +30,12 @@ using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ClearProviders MUST run before AddServiceDefaults so the OTLP logger provider
+// wired by ServiceDefaults survives to the runtime. Calling ClearProviders after
+// AddServiceDefaults wipes the OTLP log pipeline and breaks
+// `aspire otel logs server`; traces/metrics still work but logs go missing.
+builder.Logging.ClearProviders();
+
 builder.AddServiceDefaults();
 
 // Enable static web assets resolution for non-production environments (e.g. Mock)
@@ -50,7 +56,6 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
 }
 
 // Configure console logging with JSON format for Promtail/Loki
-builder.Logging.ClearProviders();
 builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatter.FormatterName)
     .AddConsoleFormatter<JsonConsoleFormatter, PromtailJsonFormatterOptions>(options =>
     {

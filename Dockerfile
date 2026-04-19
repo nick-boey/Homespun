@@ -2,7 +2,7 @@
 # Multi-stage build for .NET 10 application with React frontend
 # Includes: git, gh CLI, and Fleece issue tracking tools
 #
-# Environment Variables (passed at runtime via scripts/run.sh):
+# Environment Variables (passed at runtime via docker-compose / Komodo):
 #   GITHUB_TOKEN              - GitHub personal access token for PR operations
 #   CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token for authentication
 #
@@ -61,7 +61,7 @@ RUN dotnet publish src/Homespun.Server/Homespun.Server.csproj \
 # Derives from shared base image (Dockerfile.base) which includes:
 #   .NET 10 SDK, Node.js, gh CLI, Claude Code, Playwright MCP + Chromium,
 #   Fleece CLI, Docker CLI
-# Local default: homespun-base:local (built by scripts/run.sh)
+# Local default: homespun-base:local (built by scripts/build-containers.sh)
 # CI override: ghcr.io/<repo>-base:latest (passed via --build-arg)
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /app

@@ -9,8 +9,13 @@ import { defineConfig, devices } from '@playwright/test'
  * - CI: Set to 'true' in CI environments for optimized settings
  *
  * Usage:
- * - Local: Start the mock server with `./scripts/mock.sh`, then run `npm run test:e2e`
- * - CI: Tests automatically start both Vite dev server and .NET backend
+ * - Local: launch the Aspire AppHost (`dotnet run --project ../Homespun.AppHost
+ *   --launch-profile dev-mock`) and then `E2E_BASE_URL=http://localhost:5173 npm
+ *   run test:e2e`, or let this config drive a lightweight non-Aspire stack below.
+ * - CI: `webServer` entries below start the .NET mock server and Vite directly,
+ *   bypassing Aspire to avoid DCP cert-trust + container-pull overhead on fresh
+ *   runners. Aspire remains the primary dev-orchestration surface for
+ *   local inner-loop (dev-mock / dev-live / dev-windows / dev-container).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -52,13 +57,14 @@ export default defineConfig({
     // },
   ],
 
-  // Start both the .NET backend and Vite dev server
-  // Vite dev server proxies API calls to the .NET backend (configured in vite.config.ts)
+  // Start the .NET mock server and Vite dev server directly. This mirrors the
+  // pre-Aspire setup and keeps CI boot predictable — Aspire/DCP cert trust
+  // and PLG image pulls were pushing cold runs past Playwright's webServer
+  // timeout. Vite's dev proxy (vite.config.ts) forwards /api to 5101.
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : [
         {
-          // Start the .NET backend first
           command: 'cd ../Homespun.Server && dotnet run --launch-profile mock',
           url: 'http://localhost:5101/health',
           reuseExistingServer: !process.env.CI,
@@ -67,7 +73,6 @@ export default defineConfig({
           stderr: 'pipe',
         },
         {
-          // Then start Vite dev server which proxies to the backend
           command: 'npm run dev',
           url: 'http://localhost:5173',
           reuseExistingServer: !process.env.CI,

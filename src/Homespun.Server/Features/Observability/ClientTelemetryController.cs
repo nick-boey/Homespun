@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Homespun.Shared.Models.Observability;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,16 +5,17 @@ namespace Homespun.Features.Observability;
 
 /// <summary>
 /// Controller for receiving client-side telemetry events.
-/// Events are logged to stdout as JSON where Promtail can collect them for Loki.
+/// Events flow through ILogger so they reach both the Aspire dashboard via the
+/// OTLP log exporter wired by ServiceDefaults and the JSON console stdout that
+/// Promtail scrapes when the server is running as a labelled container.
 /// </summary>
 [ApiController]
 [Route("api/client-telemetry")]
 [Produces("application/json")]
-public class ClientTelemetryController : ControllerBase
+public class ClientTelemetryController(ILogger<ClientTelemetryController> logger) : ControllerBase
 {
     /// <summary>
-    /// Receives a batch of telemetry events from the Blazor WASM client.
-    /// Events are logged to stdout as JSON where Promtail can collect them.
+    /// Receives a batch of telemetry events from the web client.
     /// </summary>
     /// <param name="batch">The batch of telemetry events.</param>
     /// <returns>202 Accepted on success, 400 Bad Request if batch is invalid.</returns>
@@ -38,53 +37,50 @@ public class ClientTelemetryController : ControllerBase
         return Accepted();
     }
 
-    private static void LogTelemetryEvent(ClientTelemetryEvent evt, string? sessionId)
+    private void LogTelemetryEvent(ClientTelemetryEvent evt, string? sessionId)
     {
-        // Write JSON directly to stdout for Promtail to parse
-        // This includes dedicated telemetry fields alongside standard log fields
-        var telemetryLog = new ClientTelemetryLogEntry
+        // Every key landed into the scope becomes both an OTLP log attribute
+        // (for the Aspire dashboard) and a top-level JSON field (for
+        // Promtail/Loki via JsonConsoleFormatter). SourceContext/Component are
+        // overridden so downstream log queries see these entries as coming
+        // from the Client tier, not the Server.
+        var scopeState = new Dictionary<string, object?>
         {
-            Timestamp = evt.Timestamp.ToString("O"),
-            Level = evt.Type == TelemetryEventType.Exception ? "Error" : "Information",
-            Message = $"ClientTelemetry: {evt.Type} - {evt.Name}",
-            SourceContext = "ClientTelemetry",
-            Component = "Client",
-            TelemetryType = evt.Type.ToString(),
-            TelemetryName = evt.Name,
-            SessionId = sessionId ?? "unknown",
-            Properties = evt.Properties,
-            DurationMs = evt.DurationMs,
-            Success = evt.Success,
-            StatusCode = evt.StatusCode
+            ["SourceContext"] = "ClientTelemetry",
+            ["Component"] = "Client",
+            ["TelemetryType"] = evt.Type.ToString(),
+            ["TelemetryName"] = evt.Name,
+            ["SessionId"] = sessionId ?? "unknown",
+            ["ClientTimestamp"] = evt.Timestamp.ToString("O")
         };
 
-        Console.WriteLine(JsonSerializer.Serialize(telemetryLog, ClientTelemetryLogEntryContext.Default.ClientTelemetryLogEntry));
+        if (evt.DurationMs.HasValue)
+        {
+            scopeState["DurationMs"] = evt.DurationMs.Value;
+        }
+        if (evt.Success.HasValue)
+        {
+            scopeState["Success"] = evt.Success.Value;
+        }
+        if (evt.StatusCode.HasValue)
+        {
+            scopeState["StatusCode"] = evt.StatusCode.Value;
+        }
+        if (evt.Properties is { Count: > 0 })
+        {
+            scopeState["Properties"] = evt.Properties;
+        }
+
+        using var scope = logger.BeginScope(scopeState);
+
+        var level = evt.Type == TelemetryEventType.Exception
+            ? LogLevel.Error
+            : LogLevel.Information;
+
+        logger.Log(
+            level,
+            "ClientTelemetry: {TelemetryType} - {TelemetryName}",
+            evt.Type,
+            evt.Name);
     }
-}
-
-/// <summary>
-/// Represents a client telemetry log entry with fields for Promtail/Loki.
-/// </summary>
-internal sealed class ClientTelemetryLogEntry
-{
-    public required string Timestamp { get; init; }
-    public required string Level { get; init; }
-    public required string Message { get; init; }
-    public required string SourceContext { get; init; }
-    public required string Component { get; init; }
-    public required string TelemetryType { get; init; }
-    public required string TelemetryName { get; init; }
-    public required string SessionId { get; init; }
-    public Dictionary<string, string>? Properties { get; init; }
-    public double? DurationMs { get; init; }
-    public bool? Success { get; init; }
-    public int? StatusCode { get; init; }
-}
-
-/// <summary>
-/// Source-generated JSON serialization context for AOT compatibility.
-/// </summary>
-[JsonSerializable(typeof(ClientTelemetryLogEntry))]
-internal sealed partial class ClientTelemetryLogEntryContext : JsonSerializerContext
-{
 }

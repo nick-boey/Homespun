@@ -32,17 +32,23 @@ public class MockAgentStartBackgroundService(
             // Broadcast agent starting
             await notificationHub.BroadcastAgentStarting(request.IssueId, request.ProjectId, request.BranchName);
 
-            // Use a mock working directory since we don't have real clones in mock mode
-            var mockWorkingDirectory = $"/mock/clones/{request.BranchName}";
+            // Prefer the seeded project directory (a real writable git repo under the
+            // mock temp folder) so live-session profiles like dev-live can exec real
+            // workers against it. Fall back to a `/mock/clones/…` placeholder only
+            // when no ProjectLocalPath is supplied — MockAgentExecutionService never
+            // touches the path, so the placeholder is fine there.
+            var workingDirectory = !string.IsNullOrEmpty(request.ProjectLocalPath)
+                ? request.ProjectLocalPath
+                : $"/mock/clones/{request.BranchName}";
 
             // Resolve mode and initial message using the shared skill-dispatch path
             var (initialMessage, mode) = await AgentStartBackgroundService
-                .ResolveDispatchAsync(request, skillDiscovery, mockWorkingDirectory, CancellationToken.None);
+                .ResolveDispatchAsync(request, skillDiscovery, workingDirectory, CancellationToken.None);
 
             var session = await sessionService.StartSessionAsync(
                 request.IssueId,
                 request.ProjectId,
-                mockWorkingDirectory,
+                workingDirectory,
                 mode,
                 request.Model);
 
