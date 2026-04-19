@@ -104,6 +104,12 @@ if (isContainerHosting)
         .WithEnvironment("GITHUB_TOKEN", githubToken)
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.server")
+        // OtlpFanout receiver ships worker/client OTLP into Seq via the
+        // container's ingest endpoint. Aspire-leg URL is injected separately
+        // by Aspire itself as OTEL_EXPORTER_OTLP_ENDPOINT.
+        .WithEnvironment(
+            "OtlpFanout__SeqBaseUrl",
+            ReferenceExpression.Create($"{seq.GetEndpoint("http")}/ingest/otlp"))
         .WithReference(seq)
         .WaitFor(seq);
 
@@ -153,6 +159,11 @@ else
         .WithEnvironment("GITHUB_TOKEN", githubToken)
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.server")
+        // OtlpFanout receiver ships worker/client OTLP into Seq. Aspire-leg URL
+        // is injected separately by Aspire itself as OTEL_EXPORTER_OTLP_ENDPOINT.
+        .WithEnvironment(
+            "OtlpFanout__SeqBaseUrl",
+            ReferenceExpression.Create($"{seq.GetEndpoint("http")}/ingest/otlp"))
         .WithReference(seq)
         .WaitFor(seq);
 

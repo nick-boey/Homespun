@@ -190,6 +190,15 @@ remove a span → update that file in the same PR. A drift check in each
 tier's test suite refuses to merge otherwise; see
 [`docs/traces/README.md`](docs/traces/README.md) for the workflow.
 
+**OTLP proxy:** the worker and web client never hit Seq or the Aspire
+dashboard directly. Both export through `POST /api/otlp/v1/logs` and
+`POST /api/otlp/v1/traces` on the server, which parses the protobuf body,
+runs `OtlpScrubber` (content-preview gating + secret-substring redaction),
+and fans out to Seq + the Aspire dashboard in parallel via `OtlpFanout`.
+Upstream sink failures are logged at Warning and swallowed — the proxy
+always returns 202 so OTLP client SDKs never retry-amplify sink outages.
+Full contract in [`docs/observability/otlp-proxy.md`](docs/observability/otlp-proxy.md).
+
 ### Worker OTLP path
 
 The worker (`src/Homespun.Worker`) exports traces + logs via

@@ -56,6 +56,9 @@ bld/
 [Ll]ogs/
 # But include Claude skills with "logs" in the name
 !.claude/skills/logs/
+# And vendored OpenTelemetry protobuf definitions for logs
+!proto/opentelemetry/proto/logs/
+!proto/opentelemetry/proto/collector/logs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

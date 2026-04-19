@@ -58,6 +58,12 @@ services:
       - MiniPrompt__SidecarUrl=${MINI_PROMPT_SIDECAR_URL:-http://homespun-worker:8080}
       - ConnectionStrings__seq=http://seq:5341
       - OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=${SEQ_API_KEY:-}
+      # OtlpFanout receiver: worker/client ship OTLP into the server, which
+      # scrubs + forwards to Seq via /ingest/otlp. Prod has no Aspire dashboard,
+      # so OTEL_EXPORTER_OTLP_ENDPOINT is deliberately absent here — absent env
+      # tells OtlpFanout to skip the Aspire leg.
+      - OtlpFanout__SeqBaseUrl=http://seq:5341/ingest/otlp
+      - OtlpFanout__SeqApiKey=${SEQ_API_KEY:-}
     group_add:
       - ${DOCKER_GID:-999}
     restart: unless-stopped

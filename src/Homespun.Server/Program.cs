@@ -62,6 +62,21 @@ builder.Services.AddHomespunInstrumentation();
 builder.Services.Configure<SessionEventLogOptions>(
     builder.Configuration.GetSection(SessionEventLogOptions.SectionName));
 
+// OTLP receiver proxy (POST /api/otlp/v1/{logs,traces}): worker + client ship
+// OTLP to the server, which scrubs + fans out to Seq + the Aspire dashboard.
+// Registered at top level so mock-mode integration tests can exercise the
+// endpoints the same way production does.
+builder.Services.Configure<OtlpFanoutOptions>(
+    builder.Configuration.GetSection(OtlpFanoutOptions.SectionName));
+builder.Services.Configure<OtlpScrubberOptions>(
+    builder.Configuration.GetSection(OtlpScrubberOptions.SectionName));
+builder.Services.AddHttpClient(OtlpFanout.HttpClientName, c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+});
+builder.Services.AddSingleton<IOtlpScrubber, OtlpScrubber>();
+builder.Services.AddSingleton<IOtlpFanout, OtlpFanout>();
+
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
 var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");

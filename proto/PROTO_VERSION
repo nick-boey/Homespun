@@ -1,0 +1,3 @@
+tag=v1.3.2
+sha=40b3c1b746767cbc13c2e39da3eaf1a23e54ffdd
+upstream=https://github.com/open-telemetry/opentelemetry-proto
