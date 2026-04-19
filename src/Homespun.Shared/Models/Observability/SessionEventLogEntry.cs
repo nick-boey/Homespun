@@ -5,8 +5,8 @@ namespace Homespun.Shared.Models.Observability;
 /// <summary>
 /// Shared structured log-entry shape emitted at each of the six session event
 /// pipeline hops (worker.a2a.emit → client.reducer.apply). All correlation
-/// fields are top-level so Loki's `| json` filter returns them addressable
-/// without nested extraction.
+/// fields are top-level so Seq / the Aspire dashboard surface them as
+/// addressable OTLP log attributes without nested extraction.
 /// </summary>
 public sealed record SessionEventLogEntry
 {

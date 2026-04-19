@@ -10,8 +10,8 @@ namespace Homespun.Features.Observability;
 /// Structured logging helper for the A2A → AG-UI session event pipeline.
 ///
 /// <para>
-/// Every entry is emitted as flat JSON to stdout so Loki's <c>| json</c> pipeline
-/// stage returns correlation fields addressable by name. The source context is
+/// Every entry flows via OTLP log attributes to Seq + the Aspire dashboard so
+/// correlation fields are addressable by name. The source context is
 /// fixed to <see cref="SessionEventSourceContexts.Server"/> for server-side hops
 /// and <see cref="SessionEventSourceContexts.Client"/> for client-forwarded
 /// entries routed through <c>POST /api/log/client</c>.

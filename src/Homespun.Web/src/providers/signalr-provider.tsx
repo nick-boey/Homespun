@@ -27,7 +27,7 @@ import { sessionEventLog } from '@/lib/session-event-log'
 
 /**
  * Map Claude Code hub connection status to a session-event-log hop name so
- * Loki can stitch the full "user opened page → hub connected → joined session
+ * Seq can stitch the full "user opened page → hub connected → joined session
  * → envelopes arrived" timeline from one query.
  */
 function logClaudeCodeStatus(status: ConnectionStatus, error?: string): void {

@@ -1622,9 +1622,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AppendAuthEnvironmentVars(dockerArgs);
         AppendCredentialsMount(dockerArgs);
 
-        // Labels for Promtail log discovery
-        dockerArgs.Append("--label logging=promtail ");
-
         // Labels for container discovery after server restart
         dockerArgs.Append("--label homespun.managed=true ");
         dockerArgs.Append("--label homespun.type=worker ");

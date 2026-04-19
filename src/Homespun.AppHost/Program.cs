@@ -33,36 +33,20 @@ const string localWorkerImageTag = "worker:dev";
 var githubToken = builder.AddParameter("github-token", secret: true);
 var claudeOauthToken = builder.AddParameter("claude-oauth-token", secret: true);
 
-// ─── PLG stack (always on) ────────────────────────────────────────────────────
-var loki = builder.AddContainer("loki", "grafana/loki", "3.6.6")
-    .WithBindMount("../../config/loki-config.yml", "/etc/loki/local-config.yaml", isReadOnly: true)
-    .WithVolume("homespun-loki-data", "/loki")
-    .WithArgs("-config.file=/etc/loki/local-config.yaml")
-    .WithHttpEndpoint(targetPort: 3100, port: 3100, name: "http");
-
-// Promtail relies on the Docker socket (docker_sd_configs) for container
-// discovery AND log streaming. The additional /var/lib/docker/containers
-// mount that the prod compose file uses is a performance optimisation for
-// Linux hosts that doesn't exist on macOS Docker Desktop (Docker's state
-// lives inside the Linux VM, not the host FS) — mounting it there makes DCP
-// abort container creation with FailedToStart. Keep the socket mount only;
-// promtail still resolves logs through Docker's HTTP API.
-var promtail = builder.AddContainer("promtail", "grafana/promtail", "3.6.6")
-    .WithBindMount("../../config/promtail-config.yml", "/etc/promtail/config.yml", isReadOnly: true)
-    .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock", isReadOnly: true)
-    .WithArgs("-config.file=/etc/promtail/config.yml")
-    .WaitFor(loki);
-
-var grafana = builder.AddContainer("grafana", "grafana/grafana", "12.3.3")
-    .WithBindMount("../../config/grafana/grafana.ini", "/etc/grafana/grafana.ini", isReadOnly: true)
-    .WithBindMount("../../config/grafana/provisioning", "/etc/grafana/provisioning", isReadOnly: true)
-    .WithVolume("homespun-grafana-data", "/var/lib/grafana")
-    .WithEnvironment("GF_SECURITY_ADMIN_USER", "admin")
-    .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", "admin")
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ENABLED", "true")
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ORG_ROLE", "Viewer")
-    .WithHttpEndpoint(targetPort: 3000, port: 3000, name: "http")
-    .WaitFor(loki);
+// ─── Seq (always on) ──────────────────────────────────────────────────────────
+// Single long-lived observability sink — logs + traces flow here via OTLP.
+// Dev port pinned to 5341 for stable bookmarks / Playwright / smoke tests.
+// Aspire's default DCP port proxy remaps dynamic host ports; mutate the
+// endpoint in place with IsProxied=false so Docker binds 5341:80 directly.
+var seq = builder.AddSeq("seq", port: 5341)
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithEnvironment("ACCEPT_EULA", "Y")
+    .WithEndpoint("http", e =>
+    {
+        e.Port = 5341;
+        e.TargetPort = 80;
+        e.IsProxied = false;
+    });
 
 // ─── Worker image (always built from this repo in dev) ────────────────────────
 // SingleContainer profiles pre-run the worker and inject its endpoint into the
@@ -75,11 +59,13 @@ if (isSingleContainer)
 {
     workerContainer = builder.AddDockerfile("worker", "../Homespun.Worker")
         .WithImageTag("dev")
-        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 8080, name: "http")
         .WithEnvironment("PORT", "8080")
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
-        .WithEnvironment("DEBUG_AGENT_SDK", "true");
+        .WithEnvironment("DEBUG_AGENT_SDK", "true")
+        .WithEnvironment("OTEL_SERVICE_NAME", "homespun.worker")
+        .WithReference(seq)
+        .WaitFor(seq);
     workerEndpoint = workerContainer.GetEndpoint("http");
 }
 else if (isDockerAgent)
@@ -90,7 +76,9 @@ else if (isDockerAgent)
     // `worker:dev` tag is available on the host daemon before sessions start.
     workerContainer = builder.AddDockerfile("worker", "../Homespun.Worker")
         .WithImageTag("dev")
-        .WithContainerRuntimeArgs("--label", "logging=promtail");
+        .WithEnvironment("OTEL_SERVICE_NAME", "homespun.worker")
+        .WithReference(seq)
+        .WaitFor(seq);
 }
 
 // ─── Server + web — two hosting paths ─────────────────────────────────────────
@@ -99,7 +87,6 @@ if (isContainerHosting)
     // dev-container: server + web built via Dockerfile for prod parity. Worker
     // is already wired above (SingleContainer → pre-run; Docker → build-only).
     var serverContainer = builder.AddDockerfile("server", "../../")
-        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 8080, port: 5101, name: "http")
         // DooD mount — sibling worker spawns rely on the host docker socket.
         .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock")
@@ -116,7 +103,9 @@ if (isContainerHosting)
         .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
         .WithEnvironment("GITHUB_TOKEN", githubToken)
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
-        .WaitFor(loki);
+        .WithEnvironment("OTEL_SERVICE_NAME", "homespun.server")
+        .WithReference(seq)
+        .WaitFor(seq);
 
     if (!string.IsNullOrEmpty(agentMode))
     {
@@ -144,11 +133,12 @@ if (isContainerHosting)
     // is `homespun:8080`; for dev-container we point it at the Aspire server
     // resource's container-network hostname (`server`).
     builder.AddDockerfile("web", "../Homespun.Web")
-        .WithContainerRuntimeArgs("--label", "logging=promtail")
         .WithHttpEndpoint(targetPort: 80, name: "http")
         .WithEnvironment("UPSTREAM_HOST", "server")
         .WithEnvironment("UPSTREAM_PORT", "8080")
         .WithEnvironment("VITE_API_URL", serverContainer.GetEndpoint("http"))
+        .WithEnvironment("OTEL_SERVICE_NAME", "homespun.web")
+        .WithReference(seq)
         .WaitFor(serverContainer);
 }
 else
@@ -162,7 +152,9 @@ else
         .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
         .WithEnvironment("GITHUB_TOKEN", githubToken)
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
-        .WaitFor(loki);
+        .WithEnvironment("OTEL_SERVICE_NAME", "homespun.server")
+        .WithReference(seq)
+        .WaitFor(seq);
 
     if (!string.IsNullOrEmpty(agentMode))
     {

@@ -5,9 +5,8 @@ namespace Homespun.Features.Observability;
 
 /// <summary>
 /// Controller for receiving client-side telemetry events.
-/// Events flow through ILogger so they reach both the Aspire dashboard via the
-/// OTLP log exporter wired by ServiceDefaults and the JSON console stdout that
-/// Promtail scrapes when the server is running as a labelled container.
+/// Events flow through ILogger so they reach both the Aspire dashboard and
+/// Seq via the OTLP log exporters wired by ServiceDefaults.
 /// </summary>
 [ApiController]
 [Route("api/client-telemetry")]
@@ -39,11 +38,10 @@ public class ClientTelemetryController(ILogger<ClientTelemetryController> logger
 
     private void LogTelemetryEvent(ClientTelemetryEvent evt, string? sessionId)
     {
-        // Every key landed into the scope becomes both an OTLP log attribute
-        // (for the Aspire dashboard) and a top-level JSON field (for
-        // Promtail/Loki via JsonConsoleFormatter). SourceContext/Component are
-        // overridden so downstream log queries see these entries as coming
-        // from the Client tier, not the Server.
+        // Every key landed into the scope becomes an OTLP log attribute
+        // (Aspire dashboard + Seq). SourceContext/Component are overridden
+        // so downstream log queries see these entries as coming from the
+        // Client tier, not the Server.
         var scopeState = new Dictionary<string, object?>
         {
             ["SourceContext"] = "ClientTelemetry",

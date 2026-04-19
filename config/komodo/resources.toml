@@ -48,7 +48,7 @@ details (including how to derive each host-specific value).
 Secrets (set once per Komodo instance):
   GITHUB_TOKEN             GitHub PAT with `repo` scope.
   CLAUDE_CODE_OAUTH_TOKEN  Copy from ~/.claude/.credentials.json after `claude login`.
-  GRAFANA_ADMIN_PASSWORD   Grafana admin password for the bundled dashboard.
+  SEQ_API_KEY              Seq ingestion API key gating OTLP writes.
 
 Release knob:
   HOMESPUN_TAG             Image tag — `latest`, `alpha`, or a specific version.
@@ -88,7 +88,6 @@ environment = """
 HOMESPUN_IMAGE=ghcr.io/nick-boey/homespun:[[HOMESPUN_TAG]]
 WORKER_IMAGE=ghcr.io/nick-boey/homespun-worker:[[HOMESPUN_TAG]]
 WEB_IMAGE=ghcr.io/nick-boey/homespun-web:[[HOMESPUN_TAG]]
-COMPOSE_PROFILES=plg
 CONTAINER_NAME=homespun
 HOST_PORT=8080
 HOST_UID=[[HOST_UID]]
@@ -102,6 +101,6 @@ AGENT_MODE=Docker
 GITHUB_TOKEN=[[GITHUB_TOKEN]]
 CLAUDE_CODE_OAUTH_TOKEN=[[CLAUDE_CODE_OAUTH_TOKEN]]
 MINI_PROMPT_SIDECAR_URL=http://homespun-worker:8080
-GRAFANA_PORT=3000
-GRAFANA_ADMIN_PASSWORD=[[GRAFANA_ADMIN_PASSWORD]]
+SEQ_PORT=5341
+SEQ_API_KEY=[[SEQ_API_KEY]]
 """

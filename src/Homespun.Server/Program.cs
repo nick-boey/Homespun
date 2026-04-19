@@ -26,7 +26,6 @@ using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,13 +53,6 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
 {
     mockModeOptions.Enabled = true;
 }
-
-// Configure console logging with JSON format for Promtail/Loki
-builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatter.FormatterName)
-    .AddConsoleFormatter<JsonConsoleFormatter, PromtailJsonFormatterOptions>(options =>
-    {
-        options.UseUtcTimestamp = true;
-    });
 
 // Register custom Homespun activity sources for tracing
 builder.Services.AddHomespunInstrumentation();
@@ -389,7 +381,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // SessionEventLog: warn if content previews are enabled in Production — this
-// ships raw event text to Loki, which may leak sensitive content.
+// ships raw event text to Seq, which may leak sensitive content.
 var sessionEventLogOptions = app.Services
     .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>().Value;
 if (app.Environment.IsProduction() && sessionEventLogOptions.ContentPreviewChars > 0)

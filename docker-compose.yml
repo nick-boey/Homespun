@@ -1,8 +1,7 @@
-# Docker Compose for Homespun with PLG Logging Stack
+# Docker Compose for Homespun with Seq observability sink
 # Tailscale is managed separately via config/tailscale/compose.yml
 # Usage:
-#   docker compose up -d                  # Start Homespun only
-#   docker compose --profile plg up -d    # Start with PLG logging stack
+#   docker compose up -d                  # Start Homespun + Seq
 #   docker compose down                   # Stop all services
 #   docker compose logs -f                # Follow all logs
 #
@@ -27,8 +26,8 @@
 #   GITHUB_TOKEN            - GitHub personal access token
 #   CLAUDE_CODE_OAUTH_TOKEN - Claude Code OAuth token
 #   HSP_EXTERNAL_HOSTNAME   - External hostname for agent URLs (optional)
-#   GRAFANA_PORT            - Grafana port (default: 3000)
-#   GRAFANA_ADMIN_PASSWORD  - Grafana admin password (default: admin)
+#   SEQ_PORT                - Seq UI + OTLP ingest port (default: 5341)
+#   SEQ_API_KEY             - Seq ingestion API key (required in prod; empty in dev)
 #   MINI_PROMPT_SIDECAR_URL - URL for mini-prompt sidecar (default: http://homespun-worker:8080)
 #   WORKER_HOST_PORT        - Host port exposed for the worker container (default: 8081)
 #                             Legacy compose flag; leave unset in production.
@@ -57,6 +56,8 @@ services:
       - AgentExecution__Docker__WorkerImage=${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
       - AgentExecution__Docker__NetworkName=homespun-net
       - MiniPrompt__SidecarUrl=${MINI_PROMPT_SIDECAR_URL:-http://homespun-worker:8080}
+      - ConnectionStrings__seq=http://seq:5341
+      - OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=${SEQ_API_KEY:-}
     group_add:
       - ${DOCKER_GID:-999}
     restart: unless-stopped
@@ -68,15 +69,12 @@ services:
       start_period: 10s
     networks:
       - homespun-net
-    labels:
-      - "logging=promtail"
-      - "logging_jobname=homespun-server"
     depends_on:
       worker:
         condition: service_healthy
         required: false
-      loki:
-        condition: service_started
+      seq:
+        condition: service_healthy
         required: false
 
   # Worker - Sidecar container for mini prompts and lightweight AI tasks
@@ -95,18 +93,17 @@ services:
       # crossing the @anthropic-ai/claude-agent-sdk boundary. On by default;
       # export DEBUG_AGENT_SDK=false in your host env to turn it off.
       - DEBUG_AGENT_SDK=${DEBUG_AGENT_SDK:-true}
+      - ConnectionStrings__seq=http://seq:5341
+      - OTEL_EXPORTER_OTLP_HEADERS=X-Seq-ApiKey=${SEQ_API_KEY:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
-    labels:
-      - "logging=promtail"
-      - "logging_jobname=homespun-worker"
     depends_on:
-      loki:
-        condition: service_started
+      seq:
+        condition: service_healthy
         required: false
 
   # React Frontend - Vite-based React application
@@ -120,75 +117,35 @@ services:
     restart: unless-stopped
     networks:
       - homespun-net
-    labels:
-      - "logging=promtail"
-      - "logging_jobname=homespun-web"
     depends_on:
       homespun:
         condition: service_healthy
         required: false
-      loki:
-        condition: service_started
-        required: false
 
-  # Loki - Log aggregation
-  loki:
-    image: grafana/loki:3.6.6
-    container_name: homespun-loki
-    profiles: ["plg"]
+  # Seq - events-first log + trace store. OTLP ingest + UI both on port 5341.
+  seq:
+    image: datalust/seq:2024.3
+    container_name: homespun-seq
     ports:
-      - "${LOKI_PORT:-3100}:3100"
+      - "${SEQ_PORT:-5341}:80"
     volumes:
-      - ./config/loki-config.yml:/etc/loki/local-config.yaml:ro
-      - loki-data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    restart: unless-stopped
-    networks:
-      - homespun-net
-  # Promtail - Log collector
-  promtail:
-    image: grafana/promtail:3.6.6
-    container_name: homespun-promtail
-    profiles: ["plg"]
-    volumes:
-      - ./config/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yml
-    restart: unless-stopped
-    networks:
-      - homespun-net
-    depends_on:
-      loki:
-        condition: service_started
-
-  # Grafana - Visualization
-  grafana:
-    image: grafana/grafana:12.3.3
-    container_name: homespun-grafana
-    profiles: ["plg"]
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    volumes:
-      - ./config/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-      - grafana-data:/var/lib/grafana
+      - seq-data:/data
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - ACCEPT_EULA=Y
+      - SEQ_API__INGESTION__APIKEYS__0__TOKEN=${SEQ_API_KEY:-}
     restart: unless-stopped
     networks:
       - homespun-net
-    depends_on:
-      loki:
-        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   homespun-net:
     external: true
 
 volumes:
-  loki-data:
-  grafana-data:
+  seq-data:

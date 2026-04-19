@@ -6,16 +6,70 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Homespun.AppHost.Tests;
 
 /// <summary>
-/// AppHost wiring tests for the dev-orchestration change. The AppHost now
-/// drives four launch profiles (dev-mock, dev-live, dev-windows, dev-container)
-/// and branches on env vars at boot time — these tests exercise the default
-/// host-mode wiring (dev-mock equivalent) without setting any mode env vars.
+/// AppHost wiring tests. The AppHost now drives four launch profiles
+/// (dev-mock, dev-live, dev-windows, dev-container) and branches on env vars
+/// at boot time — these tests exercise the default host-mode wiring
+/// (dev-mock equivalent) without setting any mode env vars. The
+/// observability sink is Seq alone; PLG resources must be absent.
 /// </summary>
 [TestFixture]
 public class AppHostTests
 {
     [Test]
-    public async Task AppHost_default_profile_has_server_web_and_plg_stack()
+    public async Task AppHost_has_seq_resource()
+    {
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.Homespun_AppHost>();
+
+        var app = await appHost.BuildAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var seqResource = model.Resources.SingleOrDefault(r => r.Name == "seq");
+
+        Assert.That(seqResource, Is.Not.Null, "Seq resource should exist");
+    }
+
+    [Test]
+    public async Task AppHost_has_no_loki_promtail_grafana_resources()
+    {
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.Homespun_AppHost>();
+
+        var app = await appHost.BuildAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(model.Resources.Any(r => r.Name == "loki"), Is.False, "Loki resource must be absent");
+            Assert.That(model.Resources.Any(r => r.Name == "promtail"), Is.False, "Promtail resource must be absent");
+            Assert.That(model.Resources.Any(r => r.Name == "grafana"), Is.False, "Grafana resource must be absent");
+        });
+    }
+
+    [Test]
+    public async Task Server_resource_references_seq()
+    {
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.Homespun_AppHost>();
+
+        var app = await appHost.BuildAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var serverResource = model.Resources.Single(r => r.Name == "server");
+
+        var refAnnotations = AnnotationSnapshot.Of(serverResource)
+            .OfType<ResourceRelationshipAnnotation>()
+            .ToList();
+
+        Assert.That(
+            refAnnotations.Any(a => a.Resource.Name == "seq"),
+            Is.True,
+            "Server resource should carry a resource relationship to seq (via WithReference/WaitFor)");
+    }
+
+    [Test]
+    public async Task AppHost_default_profile_has_server_web()
     {
         var appHost = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.Homespun_AppHost>();
@@ -26,15 +80,12 @@ public class AppHostTests
 
         var serverResource = model.Resources.SingleOrDefault(r => r.Name == "server");
         var webResource = model.Resources.SingleOrDefault(r => r.Name == "web");
-        var lokiResource = model.Resources.SingleOrDefault(r => r.Name == "loki");
-        var promtailResource = model.Resources.SingleOrDefault(r => r.Name == "promtail");
-        var grafanaResource = model.Resources.SingleOrDefault(r => r.Name == "grafana");
 
-        Assert.That(serverResource, Is.Not.Null, "Server resource should exist");
-        Assert.That(webResource, Is.Not.Null, "Web resource should exist");
-        Assert.That(lokiResource, Is.Not.Null, "Loki resource should exist");
-        Assert.That(promtailResource, Is.Not.Null, "Promtail resource should exist");
-        Assert.That(grafanaResource, Is.Not.Null, "Grafana resource should exist");
+        Assert.Multiple(() =>
+        {
+            Assert.That(serverResource, Is.Not.Null, "Server resource should exist");
+            Assert.That(webResource, Is.Not.Null, "Web resource should exist");
+        });
     }
 
     [Test]
@@ -65,7 +116,6 @@ public class AppHostTests
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var webResource = model.Resources.Single(r => r.Name == "web");
 
-        // The web resource is wired with VITE_API_URL pointing at the server endpoint.
         var envAnnotations = AnnotationSnapshot.Of(webResource)
             .OfType<EnvironmentCallbackAnnotation>()
             .ToList();
@@ -85,7 +135,6 @@ public class AppHostTests
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var serverResource = model.Resources.Single(r => r.Name == "server");
 
-        // The server resource is wired with mock-mode + secret env vars.
         var envAnnotations = AnnotationSnapshot.Of(serverResource)
             .OfType<EnvironmentCallbackAnnotation>()
             .ToList();
@@ -109,7 +158,10 @@ public class AppHostTests
         var claudeOauthTokenParam = model.Resources
             .SingleOrDefault(r => r.Name == "claude-oauth-token");
 
-        Assert.That(githubTokenParam, Is.Not.Null, "github-token parameter should exist");
-        Assert.That(claudeOauthTokenParam, Is.Not.Null, "claude-oauth-token parameter should exist");
+        Assert.Multiple(() =>
+        {
+            Assert.That(githubTokenParam, Is.Not.Null, "github-token parameter should exist");
+            Assert.That(claudeOauthTokenParam, Is.Not.Null, "claude-oauth-token parameter should exist");
+        });
     }
 }

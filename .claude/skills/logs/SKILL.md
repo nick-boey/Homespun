@@ -1,222 +1,150 @@
 ---
 name: logs
-description: Log Analysis with Loki. Use this skill when debugging errors, investigating failures, or troubleshooting issues. Query application logs from Loki using LogQL.
+description: Log analysis with Seq. Use this skill when debugging errors, investigating failures, or troubleshooting issues. Query application logs + traces from Seq via its HTTP API.
 ---
 
-# Log Analysis with Loki
+# Log Analysis with Seq
 
-Query application logs from Loki using LogQL and curl.
+Query application logs + traces from Seq via its HTTP API and curl. Seq is
+an events-first store that natively ingests OTLP and exposes every log
+attribute as an addressable property — no label-cardinality tax.
 
-## Loki API Endpoint
+## Seq API Endpoint
 
-- **Base URL:** `http://homespun-loki:3100`
-- **Query endpoint:** `/loki/api/v1/query_range`
-- **Auth:** None required
+- **Dev base URL (host):** `http://localhost:5341`
+- **Prod base URL (container network):** `http://homespun-seq:5341`
+- **OTLP ingest:** `/ingest/otlp` (emitters) — NOT what you query.
+- **Event query endpoint:** `/api/events/signal`
+- **Auth:** `X-Seq-ApiKey: <SEQ_API_KEY>` header when `SEQ_API_KEY` is set
+  (required in prod, empty in dev).
 
 ## Verify Connectivity
 
 ```bash
-curl -s 'http://homespun-loki:3100/ready'
-# Expected: "ready"
+curl -s 'http://localhost:5341/api/events/signal?count=1'
 ```
 
-## LogQL Syntax
+## Query Syntax
 
-### Label Matchers
+Seq uses property-based filtering. Every OTLP log attribute becomes a
+top-level property on the event. Pass filters via the `filter` query-string
+parameter, in Seq's filter language (C#-ish expressions).
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `=` | Exact match | `{container="homespun"}` |
-| `!=` | Not equal | `{container!="promtail"}` |
-| `=~` | Regex match | `{container=~"homespun.*"}` |
-| `!~` | Regex not match | `{container!~"loki.*"}` |
+### Common properties
 
-### Line Filters
+| Property | Meaning | Example values |
+|----------|---------|----------------|
+| `@Level` | Log level | `Error`, `Warning`, `Information` |
+| `@Message` | Rendered message | any string |
+| `service.name` | OTel service name | `homespun.server`, `homespun.worker` |
+| `SourceContext` | .NET logger category | `Homespun.Features.…`, `ClientTelemetry` |
+| `Component` | Tier | `Server`, `Worker`, `Client` |
+| `homespun.issue.id` | Fleece issue id | `abc123` |
+| `homespun.session.id` | Claude session id | UUID |
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `\|=` | Contains | `{container="homespun"} \|= "error"` |
-| `!=` | Does not contain | `{container="homespun"} != "health"` |
-| `\|~` | Regex match | `{container="homespun"} \|~ "fail(ed\|ure)"` |
-| `!~` | Regex not match | `{container="homespun"} !~ "debug"` |
+### Time windows
 
-### JSON Parsing
-
-Parse structured logs with `| json`:
-
-```logql
-{container="homespun"} | json | Level="Error"
-```
-
-Extract specific fields:
-
-```logql
-{container="homespun"} | json | line_format "{{.Level}}: {{.Message}}"
-```
-
-## Available Labels
-
-| Label | Description | Example Values |
-|-------|-------------|----------------|
-| `container` | Container name | `homespun`, `homespun-worker-*` |
-| `component` | Log component | `Server`, `Worker`, `Client` |
-| `level` | Log level | `Error`, `Warning`, `Information`, `Debug` |
-| `issue_id` | Fleece issue ID | `abc123` |
-| `project_name` | Project name | `MyProject` |
-
-## Time Range Formatting
-
-Use Go duration format for relative times:
-- `1m` = 1 minute
-- `1h` = 1 hour
-- `24h` = 24 hours
-- `7d` = 7 days
-
-RFC3339 for absolute times:
-- `2024-01-15T10:00:00Z`
+Pass `fromDateUtc` / `toDateUtc` as ISO-8601, or omit to use defaults.
 
 ## Common Query Patterns
 
-### Query Recent Logs (Last 15 Minutes)
+### Recent server logs
 
 ```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container="homespun"}' \
-  --data-urlencode 'start='$(date -d '15 minutes ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=100' | jq '.data.result[].values[][1]'
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode 'filter=service.name = "homespun.server"' \
+  --data-urlencode 'count=100' \
+  --data-urlencode 'render=true'
 ```
 
-### Query Last Hour
+### Errors only
 
 ```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container="homespun"}' \
-  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=200' | jq '.data.result[].values[][1]'
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode 'filter=@Level = "Error" and service.name = "homespun.server"' \
+  --data-urlencode 'count=100' \
+  --data-urlencode 'render=true'
 ```
 
-### Filter by Log Level (Errors Only)
+### Filter by component
 
 ```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container="homespun"} | json | Level="Error"' \
-  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=100' | jq '.data.result[].values[][1]'
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode 'filter=Component = "Worker"' \
+  --data-urlencode 'count=200' \
+  --data-urlencode 'render=true'
 ```
 
-### Filter by Component
+### Filter by issue id
 
 ```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container="homespun"} | json | Component="AgentOrchestration"' \
-  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=100' | jq '.data.result[].values[][1]'
+ISSUE_ID=abc123
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode "filter=homespun.issue.id = \"$ISSUE_ID\"" \
+  --data-urlencode 'count=500' \
+  --data-urlencode 'render=true'
 ```
 
-### Filter by Issue ID
+### Search for text
 
 ```bash
-ISSUE_ID="abc123"
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode "query={container=\"homespun\"} | json | IssueId=\"$ISSUE_ID\"" \
-  --data-urlencode 'start='$(date -d '24 hours ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=500' | jq '.data.result[].values[][1]'
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode 'filter=@Message like "%exception%"' \
+  --data-urlencode 'count=100' \
+  --data-urlencode 'render=true'
 ```
 
-### Search for Text Pattern
+### Errors for a specific issue
 
 ```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container="homespun"} |= "exception"' \
-  --data-urlencode 'start='$(date -d '1 hour ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=100' | jq '.data.result[].values[][1]'
-```
-
-### Query Worker Logs
-
-```bash
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={container=~"homespun-worker.*"}' \
-  --data-urlencode 'start='$(date -d '30 minutes ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=200' | jq '.data.result[].values[][1]'
-```
-
-### Combined Filters (Errors for Specific Issue)
-
-```bash
-ISSUE_ID="abc123"
-curl -sG 'http://homespun-loki:3100/loki/api/v1/query_range' \
-  --data-urlencode "query={container=\"homespun\"} | json | Level=\"Error\" | IssueId=\"$ISSUE_ID\"" \
-  --data-urlencode 'start='$(date -d '24 hours ago' +%s)000000000 \
-  --data-urlencode 'end='$(date +%s)000000000 \
-  --data-urlencode 'limit=100' | jq '.data.result[].values[][1]'
+ISSUE_ID=abc123
+curl -sG 'http://localhost:5341/api/events/signal' \
+  --data-urlencode "filter=@Level = \"Error\" and homespun.issue.id = \"$ISSUE_ID\"" \
+  --data-urlencode 'count=100' \
+  --data-urlencode 'render=true'
 ```
 
 ## Output Parsing with jq
 
-### Get Raw Log Lines
+### Raw messages
 
 ```bash
-... | jq -r '.data.result[].values[][1]'
+… | jq -r '.Events[].RenderedMessage'
 ```
 
-### Parse as JSON and Format
+### Structured
 
 ```bash
-... | jq -r '.data.result[].values[][1]' | while read line; do echo "$line" | jq -r '"\(.Timestamp) [\(.Level)] \(.Message)"'; done
+… | jq '.Events[] | {ts: .Timestamp, level: .Level, msg: .RenderedMessage, props: .Properties}'
 ```
 
-### Get Structured Data
+### Count
 
 ```bash
-... | jq '.data.result[].values[] | {timestamp: .[0], log: (.[1] | fromjson)}'
-```
-
-### Count Results
-
-```bash
-... | jq '.data.result[].values | length'
+… | jq '.Events | length'
 ```
 
 ## Troubleshooting
 
-### No Results Returned
+### No results
 
-1. **Check time range** - Logs may be outside the queried window
-2. **Verify label exists** - Use `{container=~".+"}` to see all labels
-3. **Check Loki status** - `curl -s 'http://homespun-loki:3100/ready'`
+1. **Time range** — use `fromDateUtc=...` to widen if needed.
+2. **Check Seq is up** — `curl -s 'http://localhost:5341/api/events/signal?count=1'`.
+3. **Verify auth** — in prod, include `-H "X-Seq-ApiKey: $SEQ_API_KEY"`.
 
-### List Available Labels
+### List known properties
 
-```bash
-curl -s 'http://homespun-loki:3100/loki/api/v1/labels' | jq
-```
-
-### List Label Values
-
-```bash
-curl -s 'http://homespun-loki:3100/loki/api/v1/label/container/values' | jq
-```
-
-### Check Loki Metrics
-
-```bash
-curl -s 'http://homespun-loki:3100/metrics' | grep -E '^loki_ingester'
-```
+Seq's UI (`http://localhost:5341`) surfaces all discovered properties in the
+query bar. Programmatically, inspect a sample event's `Properties` via the
+`/api/events/signal` endpoint.
 
 ## Retention
 
-Logs are retained for **7 days**. Queries beyond this window will return empty results.
+Seq free tier retains **7 days** of events. Older events age out.
 
 ## Notes
 
-- The PLG stack must be running (`docker compose --profile plg up -d`) for log access
-- Workers spawned on `homespun-net` network can access Loki directly
-- All timestamps in Loki are nanoseconds since Unix epoch
+- Seq is always on in every dev profile; in prod it's started by
+  `docker-compose.yml`.
+- Workers on the `homespun-net` network reach Seq via `http://homespun-seq:5341`.
+- Traces land in Seq alongside logs via the same OTLP endpoint.

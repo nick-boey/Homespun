@@ -10,8 +10,8 @@ namespace Homespun.Features.Observability;
 ///
 /// <para>
 /// The client MAY include <see cref="EventId"/> and <see cref="Seq"/> when it
-/// is propagating a server-received envelope — this lets Loki stitch client and
-/// server lines with a shared id. Server-only fields like
+/// is propagating a server-received envelope — this lets Seq/Aspire stitch
+/// client and server lines with a shared id. Server-only fields like
 /// <c>Homespun.SessionEvents</c> <c>SourceContext</c> are overwritten on forward
 /// to prevent client impersonation.
 /// </para>

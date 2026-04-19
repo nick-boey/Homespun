@@ -120,7 +120,7 @@ tests/
 
 - .NET 10 SDK with the Aspire workload
 - Node 20+ (npm on PATH — required by the AppHost's Vite wiring)
-- Docker Desktop (for PLG containers, and for Docker-mode agent execution)
+- Docker Desktop (for Seq + Docker-mode agent execution)
 - One-time secret bootstrap: run `scripts/set-user-secrets.sh` (macOS/Linux) or
   `scripts/set-user-secrets.ps1` (Windows) after copying `.env.example` → `.env`.
   The script migrates `GITHUB_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` into the
@@ -134,7 +134,7 @@ Local dev runs through the Aspire AppHost. Pick a launch profile:
 
 | Profile | Use case |
 |---|---|
-| `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + PLG with the mock service graph. No worker, agents return canned A2A events. |
+| `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + Seq with the mock service graph. No worker, agents return canned A2A events. |
 | `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
 | `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — also usable on Apple Silicon now that the worker image is built locally instead of pulled from GHCR. |
 | `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
@@ -157,31 +157,32 @@ the layer cache. No dev profile pulls from GHCR — GHCR is reserved for the
 prod deploy path (`docker-compose.yml` + Komodo).
 
 Server is reachable at `http://localhost:5101` (port pinned for Playwright + existing tests).
-Grafana lands on `3000` and Loki on `3100`. The Aspire dashboard prints its own URL at startup.
+Seq's UI + OTLP ingest both land on `5341` in every dev profile
+(`http://localhost:5341`). The Aspire dashboard prints its own URL at startup.
 
 ### Accessing Application Logs
 
-Server logs flow through two sinks in parallel:
+Every tier exports OTLP to two sinks in parallel via
+`Homespun.ServiceDefaults`:
 
-1. **Aspire dashboard** — `AddServiceDefaults()` wires the OTLP log exporter;
-   `aspire otel logs server` surfaces entries for the current session. The
-   server's `Program.cs` calls `ClearProviders()` *before* `AddServiceDefaults`
-   so the OTLP provider survives alongside the JSON console formatter.
-2. **Grafana/Loki via Promtail** — every Aspire-managed container the dev
-   stack runs (worker, plus server/web in `dev-container`) carries the
-   `logging=promtail` label so Promtail's `docker_sd_configs` discovers it.
-   Promtail streams those containers' logs through the host Docker socket
-   alone (no `/var/lib/docker/containers` bind mount, which doesn't exist on
-   macOS Docker Desktop).
+1. **Aspire dashboard** — per-signal `AddOtlpExporter` calls driven by
+   `OTEL_EXPORTER_OTLP_ENDPOINT`. `aspire otel logs server` surfaces entries
+   for the current session. Server `Program.cs` calls `ClearProviders()`
+   *before* `AddServiceDefaults()` so the OTLP logger provider survives.
+2. **Seq** — `AddSeqEndpoint("seq")` reads the `seq` connection string the
+   AppHost injects via `WithReference(seq)`. Logs + traces land here; metrics
+   stay on the Aspire leg only (Seq does not accept metrics).
 
-Workers can query application logs from Loki at `http://homespun-loki:3100`.
+Seq UI is at `http://localhost:5341` in dev. In prod the `datalust/seq:2024.3`
+service in `docker-compose.yml` ingests via `http://seq:5341/ingest/otlp`;
+set `SEQ_API_KEY` in the Komodo env to gate ingestion.
 
 **Verify connectivity:**
 ```bash
-curl -s 'http://homespun-loki:3100/ready'
+curl -s 'http://localhost:5341/api/events/signal?count=1'
 ```
 
-For detailed log analysis with LogQL queries, use the `/logs` skill.
+For detailed log analysis, use the `/logs` skill.
 
 ## React Frontend Development
 
@@ -302,12 +303,12 @@ To start a server running in Mock Mode to investigate with the Playwright MCP:
 dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
 ```
 
-Server, Vite, and the PLG stack are started by the AppHost. Server logs, traces,
-and metrics stream to the Aspire dashboard via OTLP (URL printed at startup).
-Worker / container-resource logs are also visible in Loki via Grafana at
-`http://localhost:3000`. The server is reachable at `http://localhost:5101`
-(pinned port), and the Vite dev server at `http://localhost:5173`. Use the
-Playwright MCP tools against those URLs.
+Server, Vite, and Seq are started by the AppHost. Server logs, traces, and
+metrics stream to the Aspire dashboard via OTLP (URL printed at startup).
+Logs + traces are also visible in the Seq UI at `http://localhost:5341`.
+The server is reachable at `http://localhost:5101` (pinned port), and the
+Vite dev server at `http://localhost:5173`. Use the Playwright MCP tools
+against those URLs.
 
 ### Critical Shell Management Rules
 

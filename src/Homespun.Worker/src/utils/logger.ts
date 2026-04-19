@@ -76,9 +76,8 @@ export function error(message: string, err?: unknown): void {
  *
  * Gated by `DEBUG_AGENT_SDK=true`. Enabled by default in both docker-compose
  * and server-spawned agent containers; set `DEBUG_AGENT_SDK=false` to disable.
- * The payload is JSON-serialized into the
- * entry's `Message` field, so existing Promtail / `docker logs` consumers
- * handle it identically to other worker logs.
+ * The payload is JSON-serialized into the entry's `Message` field, so
+ * `docker logs` consumers handle it identically to other worker logs.
  *
  * - `direction: 'tx'` — outbound from worker to SDK (session options, user
  *   messages pushed into the input queue, control calls like setPermissionMode
@@ -112,7 +111,8 @@ export type SessionEventHopValue =
 
 /**
  * Fields carried by every {@link sessionEventLog} entry. Mirrors the C#
- * `SessionEventLogEntry` record so Loki's `| json` stage returns them addressable.
+ * `SessionEventLogEntry` record so Seq / the Aspire dashboard surface them
+ * as addressable OTLP log attributes.
  */
 export interface SessionEventLogFields {
   SessionId: string;
