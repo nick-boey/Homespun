@@ -128,6 +128,12 @@ if (isContainerHosting)
         serverContainer.WithEnvironment("AgentExecution__Docker__UseLoopbackPortMapping", "true");
         serverContainer.WithEnvironment("AgentExecution__Docker__LoopbackBindHost", "0.0.0.0");
         serverContainer.WithEnvironment("AgentExecution__Docker__WorkerHost", "host.docker.internal");
+        // Container-mode: sibling workers reach the server over the compose
+        // network using the service hostname `server`. The host-mode default
+        // (`host.docker.internal`) does not resolve between sibling containers.
+        serverContainer.WithEnvironment(
+            "AgentExecution__Docker__ServerOtlpProxyUrl",
+            "http://server:8080/api/otlp/v1");
     }
     if (workerEndpoint is not null)
     {
