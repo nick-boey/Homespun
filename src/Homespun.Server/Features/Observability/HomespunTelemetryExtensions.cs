@@ -1,3 +1,6 @@
+using Homespun.Features.Commands.Telemetry;
+using Homespun.Features.Gitgraph.Telemetry;
+using Homespun.Features.OpenSpec.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Trace;
 
@@ -13,6 +16,10 @@ public static class HomespunTelemetryExtensions
         services.ConfigureOpenTelemetryTracerProvider(tracing =>
         {
             tracing.AddSource(HomespunActivitySources.AllSourceNames);
+            tracing.AddSource(
+                GraphgraphActivitySource.Name,
+                OpenSpecActivitySource.Name,
+                CommandsActivitySource.Name);
         });
 
         return services;

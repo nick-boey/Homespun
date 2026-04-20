@@ -93,6 +93,7 @@ public class GraphServiceLinkedIssueFilterTests
             _mockCacheService.Object,
             new Mock<IPRStatusResolver>().Object,
             new Mock<Homespun.Features.OpenSpec.Services.IIssueGraphOpenSpecEnricher>().Object,
+            new Mock<Homespun.Features.Git.IGitCloneService>().Object,
             _mockLogger.Object);
     }
 

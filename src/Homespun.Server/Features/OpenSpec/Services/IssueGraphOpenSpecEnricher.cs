@@ -1,5 +1,6 @@
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
+using Homespun.Features.OpenSpec.Telemetry;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.OpenSpec;
@@ -23,8 +24,17 @@ public class IssueGraphOpenSpecEnricher(
     public async Task EnrichAsync(
         string projectId,
         TaskGraphResponse response,
+        BranchResolutionContext? branchContext = null,
         CancellationToken ct = default)
     {
+        using var enrichActivity = OpenSpecActivitySource.Instance.StartActivity("openspec.enrich");
+        enrichActivity?.SetTag("project.id", projectId);
+        enrichActivity?.SetTag("graph.node.count", response.Nodes.Count);
+
+        // Build the context once if the caller did not supply one. Hot-path
+        // callers (GraphService) always pass a pre-built context.
+        var context = branchContext ?? await BuildFallbackContextAsync(projectId);
+
         foreach (var node in response.Nodes)
         {
             var issueId = node.Issue?.Id;
@@ -33,12 +43,22 @@ public class IssueGraphOpenSpecEnricher(
                 continue;
             }
 
+            using var nodeActivity = OpenSpecActivitySource.Instance.StartActivity("openspec.enrich.node");
+            nodeActivity?.SetTag("issue.id", issueId);
+
             try
             {
-                var state = await ResolveForIssueAsync(projectId, issueId, ct);
+                var state = await ResolveForIssueAsync(projectId, issueId, context, ct);
                 if (state is not null)
                 {
                     response.OpenSpecStates[issueId] = state;
+                    nodeActivity?.SetTag(
+                        "branch.source",
+                        state.BranchState == BranchPresence.None ? "none" : "resolved");
+                }
+                else
+                {
+                    nodeActivity?.SetTag("branch.source", "none");
                 }
             }
             catch (Exception ex)
@@ -57,12 +77,32 @@ public class IssueGraphOpenSpecEnricher(
         }
     }
 
+    private async Task<BranchResolutionContext> BuildFallbackContextAsync(string projectId)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project is null || string.IsNullOrEmpty(project.LocalPath))
+        {
+            return new BranchResolutionContext(
+                Array.Empty<Homespun.Shared.Models.Git.CloneInfo>(),
+                new Dictionary<string, string>(StringComparer.Ordinal));
+        }
+
+        var prBranches = dataStore.GetPullRequestsByProject(projectId)
+            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && !string.IsNullOrEmpty(pr.BranchName))
+            .GroupBy(pr => pr.BeadsIssueId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().BranchName!, StringComparer.Ordinal);
+
+        var clones = await cloneService.ListClonesAsync(project.LocalPath);
+        return new BranchResolutionContext(clones, prBranches);
+    }
+
     internal async Task<IssueOpenSpecState?> ResolveForIssueAsync(
         string projectId,
         string issueId,
+        BranchResolutionContext context,
         CancellationToken ct)
     {
-        var branch = await branchResolver.ResolveIssueBranchAsync(projectId, issueId);
+        var branch = await branchResolver.ResolveIssueBranchAsync(projectId, issueId, context);
         if (string.IsNullOrEmpty(branch))
         {
             return new IssueOpenSpecState

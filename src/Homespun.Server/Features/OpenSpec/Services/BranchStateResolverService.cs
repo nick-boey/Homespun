@@ -1,4 +1,5 @@
 using Homespun.Features.Git;
+using Homespun.Features.OpenSpec.Telemetry;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.OpenSpec;
@@ -24,11 +25,17 @@ public class BranchStateResolverService(
         string branch,
         CancellationToken ct = default)
     {
+        using var activity = OpenSpecActivitySource.Instance.StartActivity("openspec.state.resolve");
+        activity?.SetTag("project.id", projectId);
+
         var cached = cache.TryGet(projectId, branch);
         if (cached is not null)
         {
+            activity?.SetTag("cache.hit", true);
             return cached;
         }
+
+        activity?.SetTag("cache.hit", false);
 
         var fleeceId = BranchNameParser.ExtractIssueId(branch);
         if (string.IsNullOrEmpty(fleeceId))

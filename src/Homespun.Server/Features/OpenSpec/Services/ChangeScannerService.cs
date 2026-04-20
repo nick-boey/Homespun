@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Homespun.Features.Commands;
+using Homespun.Features.OpenSpec.Telemetry;
 using Homespun.Shared.Models.OpenSpec;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +24,15 @@ public class ChangeScannerService(
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>
+    /// mtime-keyed micro-cache for parsed <see cref="ChangeArtifactState"/>.
+    /// Key = (clonePath, changeName, mtimeTupleHash) — mtime changes make old
+    /// entries unreachable and the subprocess runs again on the next call.
+    /// </summary>
+    private readonly ConcurrentDictionary<ArtifactStateCacheKey, ChangeArtifactState?> _artifactStateCache = new();
+
+    internal readonly record struct ArtifactStateCacheKey(string ClonePath, string ChangeName, long MtimeHash);
+
     /// <inheritdoc />
     public async Task<BranchScanResult> ScanBranchAsync(
         string clonePath,
@@ -29,6 +40,8 @@ public class ChangeScannerService(
         string? baseBranch = null,
         CancellationToken ct = default)
     {
+        using var activity = OpenSpecActivitySource.Instance.StartActivity("openspec.scan.branch");
+
         var linked = new List<LinkedChangeInfo>();
         var orphans = new List<OrphanChangeInfo>();
         var inherited = new List<string>();
@@ -139,6 +152,80 @@ public class ChangeScannerService(
         string clonePath,
         string changeName,
         CancellationToken ct = default)
+    {
+        using var activity = OpenSpecActivitySource.Instance.StartActivity("openspec.artifact.state");
+        activity?.SetTag("change.name", changeName);
+
+        var mtimeHash = BuildMtimeTuple(clonePath, changeName);
+        if (mtimeHash.HasValue)
+        {
+            var key = new ArtifactStateCacheKey(clonePath, changeName, mtimeHash.Value);
+            if (_artifactStateCache.TryGetValue(key, out var cached))
+            {
+                activity?.SetTag("cache.hit", true);
+                return cached;
+            }
+
+            activity?.SetTag("cache.hit", false);
+
+            var computed = await InvokeOpenSpecStatusAsync(clonePath, changeName);
+            _artifactStateCache[key] = computed;
+            return computed;
+        }
+
+        // Change directory (or all three hashed files) missing — skip the cache
+        // so a stale entry cannot outlive the directory being deleted and
+        // recreated.
+        activity?.SetTag("cache.hit", false);
+        return await InvokeOpenSpecStatusAsync(clonePath, changeName);
+    }
+
+    /// <summary>
+    /// Builds a stable hash over the last-write times of <c>proposal.md</c>,
+    /// <c>tasks.md</c>, and the <c>specs/</c> subtree root under the given
+    /// change directory. Returns <c>null</c> if the change directory does not
+    /// exist (caller falls back to the uncached subprocess path).
+    /// </summary>
+    private static long? BuildMtimeTuple(string clonePath, string changeName)
+    {
+        var changeDir = Path.Combine(clonePath, ChangesRelativePath, changeName);
+        if (!Directory.Exists(changeDir))
+        {
+            return null;
+        }
+
+        var proposal = GetLastWriteTicksOrSentinel(Path.Combine(changeDir, "proposal.md"));
+        var tasks = GetLastWriteTicksOrSentinel(Path.Combine(changeDir, TasksFileName));
+        var specs = GetLastWriteTicksOrSentinel(Path.Combine(changeDir, "specs"));
+
+        // HashCode.Combine is sufficient — we only need per-change uniqueness
+        // and churn detection, not cryptographic strength.
+        return ((long)HashCode.Combine(proposal, tasks, specs)) & 0xFFFFFFFFL;
+    }
+
+    private static long GetLastWriteTicksOrSentinel(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                return File.GetLastWriteTimeUtc(path).Ticks;
+            }
+            if (Directory.Exists(path))
+            {
+                return Directory.GetLastWriteTimeUtc(path).Ticks;
+            }
+        }
+        catch (IOException)
+        {
+            // Fall through — sentinel tells the cache the file is unreachable.
+        }
+        return -1L;
+    }
+
+    private async Task<ChangeArtifactState?> InvokeOpenSpecStatusAsync(
+        string clonePath,
+        string changeName)
     {
         CommandResult result;
         try

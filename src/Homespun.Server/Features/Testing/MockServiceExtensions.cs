@@ -3,7 +3,9 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Features.GitHub;
+using Homespun.Features.Observability;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
@@ -13,6 +15,7 @@ using Homespun.Features.Commands;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing;
@@ -34,6 +37,10 @@ public static class MockServiceExtensions
         MockModeOptions options,
         IConfiguration configuration)
     {
+        // Register Homespun ActivitySources (Gitgraph/OpenSpec/Commands + existing)
+        // so dev-mock emits task-graph spans identically to production.
+        services.AddHomespunInstrumentation();
+
         // Register the temporary data folder service - creates temp folder structure
         services.AddSingleton<TempDataFolderService>();
         services.AddSingleton<ITempDataFolderService>(sp => sp.GetRequiredService<TempDataFolderService>());
@@ -158,6 +165,25 @@ public static class MockServiceExtensions
         services.AddSingleton<IGraphCacheService>(sp =>
             new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
         services.AddScoped<IGraphService, GraphService>();
+
+        // TaskGraphSnapshot — same shape as production. Gated on
+        // TaskGraphSnapshot:Enabled; tests can set it to false via configuration.
+        services.Configure<TaskGraphSnapshotOptions>(
+            configuration.GetSection(TaskGraphSnapshotOptions.SectionName));
+        var snapshotOptions = new TaskGraphSnapshotOptions();
+        configuration.GetSection(TaskGraphSnapshotOptions.SectionName).Bind(snapshotOptions);
+        if (snapshotOptions.Enabled)
+        {
+            services.AddSingleton<IProjectTaskGraphSnapshotStore, ProjectTaskGraphSnapshotStore>();
+            services.AddSingleton<TaskGraphSnapshotRefresher>();
+            services.AddSingleton<ITaskGraphSnapshotRefresher>(
+                sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
+            services.AddHostedService(
+                sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
+        }
+
+        // TimeProvider needed by snapshot store + refresher.
+        services.TryAddSingleton(TimeProvider.System);
 
         // Clone enrichment service
         services.AddScoped<ICloneEnrichmentService, CloneEnrichmentService>();

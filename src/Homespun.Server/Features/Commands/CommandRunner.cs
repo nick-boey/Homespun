@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Homespun.Features.Commands.Telemetry;
 
 namespace Homespun.Features.Commands;
 
@@ -8,6 +9,9 @@ public class CommandRunner(
 {
     public async Task<CommandResult> RunAsync(string command, string arguments, string workingDirectory)
     {
+        using var activity = CommandsActivitySource.Instance.StartActivity("cmd.run");
+        activity?.SetTag("cmd.name", command);
+
         var stopwatch = Stopwatch.StartNew();
 
         // Add --no-daemon flag for beads commands to bypass daemon socket communication.
@@ -55,6 +59,9 @@ public class CommandRunner(
                 ExitCode = process.ExitCode
             };
 
+            activity?.SetTag("cmd.exit_code", result.ExitCode);
+            activity?.SetTag("cmd.duration_ms", stopwatch.ElapsedMilliseconds);
+
             if (result.Success)
             {
                 logger.LogTrace(
@@ -80,6 +87,10 @@ public class CommandRunner(
         catch (Exception ex)
         {
             stopwatch.Stop();
+
+            activity?.SetTag("cmd.exit_code", -1);
+            activity?.SetTag("cmd.duration_ms", stopwatch.ElapsedMilliseconds);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
 
             var path = Environment.GetEnvironmentVariable("PATH");
             var user = Environment.UserName;
