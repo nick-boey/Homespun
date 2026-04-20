@@ -11,7 +11,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { info as logInfo, warn as logWarn } from "../utils/logger.js";
+import { info as logInfo, warn as logWarn } from "../utils/otel-logger.js";
 
 export interface Sidecar {
   fleeceId: string;

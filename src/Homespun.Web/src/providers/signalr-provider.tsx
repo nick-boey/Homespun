@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { HubConnection } from '@microsoft/signalr'
+import { trace, type Span } from '@opentelemetry/api'
 import { createHubConnection, startConnection, stopConnection } from '@/lib/signalr/connection'
 import {
   createClaudeCodeHubMethods,
@@ -23,29 +24,9 @@ import {
   type NotificationHubMethods,
 } from '@/lib/signalr/notification-hub'
 import type { ConnectionStatus } from '@/types/signalr'
-import { sessionEventLog } from '@/lib/session-event-log'
 
-/**
- * Map Claude Code hub connection status to a session-event-log hop name so
- * Loki can stitch the full "user opened page → hub connected → joined session
- * → envelopes arrived" timeline from one query.
- */
-function logClaudeCodeStatus(status: ConnectionStatus, error?: string): void {
-  const hop =
-    status === 'connected'
-      ? 'client.signalr.connect'
-      : status === 'disconnected'
-        ? 'client.signalr.disconnect'
-        : status === 'reconnecting'
-          ? 'client.signalr.reconnecting'
-          : null
-  if (!hop) return
-  sessionEventLog(hop, {
-    SessionId: 'hub',
-    Level: error ? 'Warning' : 'Information',
-    Message: error ? `${hop} error=${error}` : hop,
-  })
-}
+const HUB_TRACER = 'homespun.web.signalr'
+const CONNECT_SPAN_NAME = 'homespun.signalr.client.connect'
 
 // ============================================================================
 // Context Types
@@ -131,6 +112,13 @@ export function SignalRProvider({
   const onClaudeCodeReconnectedRef = useRef(onClaudeCodeReconnected)
   const onNotificationReconnectedRef = useRef(onNotificationReconnected)
 
+  // Long-lived span that records the Claude Code hub's connection lifetime.
+  // Lifecycle transitions (connect/disconnect/reconnecting/reconnected) are
+  // attached as span events, not separate spans — one span per page load is
+  // enough signal for "did the socket wobble?" questions in Seq and keeps the
+  // trace tree readable.
+  const claudeCodeLifecycleSpanRef = useRef<Span | null>(null)
+
   useEffect(() => {
     onClaudeCodeReconnectedRef.current = onClaudeCodeReconnected
   }, [onClaudeCodeReconnected])
@@ -141,16 +129,28 @@ export function SignalRProvider({
 
   // Initialize connections
   useEffect(() => {
+    const tracer = trace.getTracer(HUB_TRACER)
+    const lifecycleSpan = tracer.startSpan(CONNECT_SPAN_NAME)
+    claudeCodeLifecycleSpanRef.current = lifecycleSpan
+
+    const addLifecycleEvent = (status: ConnectionStatus, error?: string) => {
+      const span = claudeCodeLifecycleSpanRef.current
+      if (!span) return
+      const attrs: Record<string, string> = { 'homespun.signalr.status': status }
+      if (error) attrs['exception.message'] = error
+      span.addEvent(`signalr.${status}`, attrs)
+    }
+
     // Create Claude Code hub connection
     const claudeCodeConn = createHubConnection({
       hubUrl: HUB_URLS.claudeCode,
       onStatusChange: (status, error) => {
         setClaudeCodeStatus(status)
         setClaudeCodeError(error)
-        logClaudeCodeStatus(status, error)
+        addLifecycleEvent(status, error)
       },
       onReconnected: () => {
-        sessionEventLog('client.signalr.reconnected', { SessionId: 'hub' })
+        addLifecycleEvent('connected')
         onClaudeCodeReconnectedRef.current?.()
       },
     })
@@ -174,7 +174,7 @@ export function SignalRProvider({
       startConnection(claudeCodeConn, (status, error) => {
         setClaudeCodeStatus(status)
         setClaudeCodeError(error)
-        logClaudeCodeStatus(status, error)
+        addLifecycleEvent(status, error)
       })
       startConnection(notificationConn, (status, error) => {
         setNotificationStatus(status)
@@ -188,6 +188,12 @@ export function SignalRProvider({
       stopConnection(notificationConn)
       setClaudeCodeConnection(null)
       setNotificationConnection(null)
+      const span = claudeCodeLifecycleSpanRef.current
+      if (span) {
+        span.addEvent('signalr.teardown')
+        span.end()
+        claudeCodeLifecycleSpanRef.current = null
+      }
     }
   }, [autoConnect])
 

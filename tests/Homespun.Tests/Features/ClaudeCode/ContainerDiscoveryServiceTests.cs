@@ -30,7 +30,7 @@ public class ContainerDiscoveryServiceTests
         {
           "ID": "abc123def456",
           "Names": "homespun-issue-proj1-issue1",
-          "Labels": "homespun.managed=true,homespun.type=worker,homespun.working.directory=/data/projects/test,homespun.created.at=2026-03-01T10:00:00Z,homespun.project.id=proj1,homespun.issue.id=issue1,logging=promtail"
+          "Labels": "homespun.managed=true,homespun.type=worker,homespun.working.directory=/data/projects/test,homespun.created.at=2026-03-01T10:00:00Z,homespun.project.id=proj1,homespun.issue.id=issue1"
         }
         """;
 
@@ -58,7 +58,7 @@ public class ContainerDiscoveryServiceTests
         {
           "ID": "abc123def456",
           "Names": "homespun-issue-proj1-issue1",
-          "Labels": "homespun.managed=true,homespun.type=worker,logging=promtail"
+          "Labels": "homespun.managed=true,homespun.type=worker"
         }
         """;
 
@@ -77,7 +77,7 @@ public class ContainerDiscoveryServiceTests
         {
           "ID": "abc123def456",
           "Names": "some-other-container",
-          "Labels": "logging=promtail"
+          "Labels": "app=other"
         }
         """;
 

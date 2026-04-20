@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Projects } from '@/api'
-import { useTelemetry } from '@/hooks/use-telemetry'
 
 export const projectsQueryKey = ['projects'] as const
 
@@ -16,27 +15,17 @@ export function useProjects() {
 
 export function useDeleteProject() {
   const queryClient = useQueryClient()
-  const telemetry = useTelemetry()
 
   return useMutation({
     mutationFn: async (projectId: string) => {
+      // The outbound DELETE is picked up by `FetchInstrumentation`, so a
+      // dedicated event is redundant — success/failure surface on the
+      // auto-created client span.
       await Projects.deleteApiProjectsById({ path: { id: projectId } })
       return projectId
     },
-    onSuccess: (projectId) => {
-      // Track successful project deletion
-      telemetry.trackEvent('project_deleted', {
-        projectId,
-      })
-
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectsQueryKey })
-    },
-    onError: (error: Error, projectId) => {
-      // Track failed project deletion
-      telemetry.trackEvent('project_deletion_failed', {
-        projectId,
-        error: error.message || 'Unknown error',
-      })
     },
   })
 }

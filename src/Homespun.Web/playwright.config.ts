@@ -59,7 +59,7 @@ export default defineConfig({
 
   // Start the .NET mock server and Vite dev server directly. This mirrors the
   // pre-Aspire setup and keeps CI boot predictable — Aspire/DCP cert trust
-  // and PLG image pulls were pushing cold runs past Playwright's webServer
+  // and Seq image pulls were pushing cold runs past Playwright's webServer
   // timeout. Vite's dev proxy (vite.config.ts) forwards /api to 5101.
   webServer: process.env.E2E_BASE_URL
     ? undefined

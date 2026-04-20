@@ -8,10 +8,12 @@ public class HomespunActivitySourcesTests
     [Test]
     public void AllSourceNames_ContainsExpectedSources()
     {
-        Assert.That(HomespunActivitySources.AllSourceNames, Has.Length.EqualTo(3));
+        Assert.That(HomespunActivitySources.AllSourceNames, Has.Length.EqualTo(5));
         Assert.That(HomespunActivitySources.AllSourceNames, Does.Contain("Homespun.AgentOrchestration"));
         Assert.That(HomespunActivitySources.AllSourceNames, Does.Contain("Homespun.GitClone"));
         Assert.That(HomespunActivitySources.AllSourceNames, Does.Contain("Homespun.FleeceSync"));
+        Assert.That(HomespunActivitySources.AllSourceNames, Does.Contain("Homespun.Signalr"));
+        Assert.That(HomespunActivitySources.AllSourceNames, Does.Contain("Homespun.SessionPipeline"));
     }
 
     [Test]

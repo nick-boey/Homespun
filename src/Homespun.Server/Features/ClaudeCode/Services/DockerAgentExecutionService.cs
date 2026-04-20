@@ -92,6 +92,18 @@ public class DockerAgentExecutionOptions
     /// (server inside a container reaching the host-published port).
     /// </summary>
     public string WorkerHost { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// URL the worker container uses to reach the server's OTLP proxy
+    /// (<c>/api/otlp/v1</c>). Injected into every spawned worker as
+    /// <c>OTLP_PROXY_URL</c>.
+    /// <para>
+    /// Default in host-mode DooD: <c>http://host.docker.internal:5101/api/otlp/v1</c>.
+    /// Default in container-mode (server-inside-a-container): override to
+    /// <c>http://server:8080/api/otlp/v1</c> via AppHost env injection.
+    /// </para>
+    /// </summary>
+    public string ServerOtlpProxyUrl { get; set; } = "http://host.docker.internal:5101/api/otlp/v1";
 }
 
 /// <summary>
@@ -170,21 +182,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageSubtype);
 
     private readonly ISessionEventIngestor _eventIngestor;
-    private readonly Homespun.Features.Observability.SessionEventLogOptions _sessionEventLogOptions;
 
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        ISessionEventIngestor eventIngestor,
-        IOptions<Homespun.Features.Observability.SessionEventLogOptions> sessionEventLogOptions)
+        ISessionEventIngestor eventIngestor)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
         _eventIngestor = eventIngestor;
-        _sessionEventLogOptions = sessionEventLogOptions.Value;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
@@ -1579,6 +1588,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
 
+        // Map host.docker.internal -> host gateway so the worker can reach the
+        // server's OTLP proxy on the host. Linux containers on user-defined
+        // networks do not resolve host.docker.internal via Docker's embedded
+        // DNS when the container's resolv.conf is overridden. Docker since
+        // 20.10 honors the `host-gateway` keyword here. Harmless in
+        // container-mode (server-inside-a-container) where the proxy URL
+        // uses the compose service name instead.
+        dockerArgs.Append("--add-host=host.docker.internal:host-gateway ");
+
         var userFlag = ProcessUserInfo.GetDockerUserFlag();
         if (!string.IsNullOrEmpty(userFlag))
         {
@@ -1619,11 +1637,24 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append("-e DEBUG_LOGGING=true ");
         dockerArgs.Append("-e DEBUG_AGENT_SDK=true ");
 
+        // OpenTelemetry wiring. The worker boots `@opentelemetry/sdk-node` in
+        // `src/instrumentation.ts` and ships logs + traces to the server's
+        // OTLP proxy at `${OTLP_PROXY_URL}/logs` and `${OTLP_PROXY_URL}/traces`.
+        // HOMESPUN_* env vars are picked up as Resource attributes so every
+        // record carries issue / project identity. Session ID is NOT baked in
+        // at container boot because worker containers are reused across
+        // sessions for the same (project, issue); per-session correlation
+        // flows instead via W3C `traceparent` headers on inbound HTTP
+        // requests (auto-extracted by @opentelemetry/instrumentation-http).
+        dockerArgs.Append($"-e OTLP_PROXY_URL={_options.ServerOtlpProxyUrl} ");
+        dockerArgs.Append("-e OTEL_SERVICE_NAME=homespun.worker ");
+        if (!string.IsNullOrEmpty(issueId))
+            dockerArgs.Append($"-e HOMESPUN_ISSUE_ID={issueId} ");
+        if (!string.IsNullOrEmpty(projectName))
+            dockerArgs.Append($"-e HOMESPUN_PROJECT_NAME={projectName} ");
+
         AppendAuthEnvironmentVars(dockerArgs);
         AppendCredentialsMount(dockerArgs);
-
-        // Labels for Promtail log discovery
-        dockerArgs.Append("--label logging=promtail ");
 
         // Labels for container discovery after server restart
         dockerArgs.Append("--label homespun.managed=true ");
@@ -2136,14 +2167,31 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         throw new AgentStartupException($"Worker at {workerUrl} did not become ready in time");
     }
 
+    /// <summary>
+    /// Command-line arguments used to stop a worker container. Extracted as
+    /// an <see langword="internal"/> static helper so unit tests can assert
+    /// the flag without spawning a docker subprocess.
+    /// <para>
+    /// The <c>--time 3</c> grace gives the worker's OTel SDK SIGTERM handler
+    /// three seconds to flush its last batch before SIGKILL.
+    /// </para>
+    /// </summary>
+    internal static string BuildStopContainerArgs(string containerId)
+        => $"stop --time 3 {containerId}";
+
     private async Task StopContainerAsync(string containerId)
     {
         try
         {
+            // `docker stop --time 3` sends SIGTERM and waits up to 3 seconds
+            // before SIGKILL. The worker's OTel SDK registers a SIGTERM
+            // handler (src/Homespun.Worker/src/instrumentation.ts) that
+            // flushes batched logs/traces before exiting. Using `docker
+            // kill` (SIGKILL) would discard the final telemetry batch.
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "docker",
-                Arguments = $"stop {containerId}",
+                Arguments = BuildStopContainerArgs(containerId),
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -2312,17 +2360,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             // ingestor persists the element and the store may keep it alive beyond this
             // method's stack frame when bursts are in flight.
             var payload = doc.RootElement.Clone();
-
-            // server.sse.rx hop: emitted immediately after the worker SSE event parses.
-            var parsed = A2AMessageParser.ParseSseEvent(eventKind, rawData);
-            Homespun.Features.Observability.SessionEventLog.LogA2AHop(
-                _logger,
-                _sessionEventLogOptions,
-                hop: Homespun.Shared.Models.Observability.SessionEventHops.ServerSseRx,
-                sessionId: sessionId,
-                a2aKind: eventKind,
-                parsed: parsed,
-                rawJsonForPreview: rawData);
 
             // projectId is best-effort; when not available (legacy non-issue sessions) we
             // fall back to a stable "unknown" bucket so the event log still writes. The

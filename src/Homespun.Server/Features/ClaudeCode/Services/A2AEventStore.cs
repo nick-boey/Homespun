@@ -1,10 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Homespun.Features.Observability;
-using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -45,17 +42,15 @@ public sealed class A2AEventStore : IA2AEventStore
 
     private readonly string _baseDir;
     private readonly ILogger<A2AEventStore> _logger;
-    private readonly SessionEventLogOptions _sessionEventLogOptions;
 
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _sessionLocks = new();
     private readonly ConcurrentDictionary<string, long> _sessionMaxSeq = new();
     private readonly ConcurrentDictionary<string, string> _sessionToProject = new();
 
-    public A2AEventStore(string baseDir, ILogger<A2AEventStore> logger, IOptions<SessionEventLogOptions>? sessionEventLogOptions = null)
+    public A2AEventStore(string baseDir, ILogger<A2AEventStore> logger)
     {
         _baseDir = baseDir;
         _logger = logger;
-        _sessionEventLogOptions = sessionEventLogOptions?.Value ?? new SessionEventLogOptions();
 
         // Ensure the base directory exists so the initial filesystem scan does not throw
         // and subsequent appends can write project subdirectories beneath it.
@@ -103,20 +98,6 @@ public sealed class A2AEventStore : IA2AEventStore
             _logger.LogDebug(
                 "Appended A2A event seq={Seq} eventId={EventId} kind={Kind} to session {SessionId}",
                 nextSeq, record.EventId, eventKind, sessionId);
-
-            // server.ingest.append hop: emitted after the file write succeeds, carrying
-            // the freshly-assigned seq and eventId so downstream hops share correlation.
-            var parsed = A2AMessageParser.ParseSseEvent(eventKind, payload.GetRawText());
-            SessionEventLog.LogA2AHop(
-                _logger,
-                _sessionEventLogOptions,
-                hop: SessionEventHops.ServerIngestAppend,
-                sessionId: sessionId,
-                a2aKind: eventKind,
-                parsed: parsed,
-                rawJsonForPreview: payload.GetRawText(),
-                seq: nextSeq,
-                eventId: record.EventId);
 
             return record;
         }

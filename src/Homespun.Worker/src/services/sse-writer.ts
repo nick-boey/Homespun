@@ -18,16 +18,23 @@ import {
   type TranslationContext,
 } from "./a2a-translator.js";
 import type { A2AStreamEvent } from "../types/a2a.js";
+import { trace, SpanKind } from "@opentelemetry/api";
 import {
   info,
   debug,
-  sessionEventLog,
-  SessionEventHop,
   extractA2ACorrelation,
   extractMessagePreview,
-  getContentPreviewChars,
-  truncatePreview,
-} from "../utils/logger.js";
+  gateContentPreview,
+  type SessionEventLogFields,
+} from "../utils/otel-logger.js";
+
+// Resolve the tracer on every call rather than caching at module load. The
+// OTel API's `ProxyTracer` caches its delegate on first use, which makes
+// test isolation with per-test `setGlobalTracerProvider` impossible if we
+// bind once. Runtime cost is negligible: `getTracer` is a map lookup.
+function workerTracer() {
+  return trace.getTracer("homespun.worker");
+}
 
 /**
  * Formats tool parameters for debug logging.
@@ -96,10 +103,10 @@ export function formatSSE(event: string, data: unknown): string {
 }
 
 /**
- * Emits the `worker.a2a.emit` SessionEventLog hop for an A2A stream event
- * about to be written to SSE, then returns the SSE-formatted string. Callers
- * should use this in place of `formatSSE` so every outbound event is logged
- * exactly once with its correlation IDs extracted from the payload.
+ * Emits a `homespun.a2a.emit` PRODUCER span for an A2A stream event about to
+ * be written to SSE, then returns the SSE-formatted string. Every outbound
+ * event is spanned exactly once with its correlation IDs attached as span
+ * attributes.
  */
 export function emitAndFormatSSE(
   sessionId: string,
@@ -107,17 +114,39 @@ export function emitAndFormatSSE(
   data: unknown,
 ): string {
   const fields = extractA2ACorrelation(event, data);
-  // Prefer the caller-supplied sessionId when the payload's contextId is absent
-  // so every log line carries a non-empty SessionId.
   fields.SessionId = fields.SessionId || sessionId;
 
-  const chars = getContentPreviewChars();
-  if (chars > 0 && event === "message") {
-    fields.ContentPreview = truncatePreview(extractMessagePreview(data), chars);
+  if (event === "message") {
+    const preview = gateContentPreview(extractMessagePreview(data));
+    if (preview !== undefined) fields.ContentPreview = preview;
   }
 
-  sessionEventLog(SessionEventHop.WorkerA2AEmit, fields);
+  const span = workerTracer().startSpan("homespun.a2a.emit", {
+    kind: SpanKind.PRODUCER,
+  });
+  span.setAttributes(mapFieldsToAttributes(fields));
+  span.end();
+
   return formatSSE(event, data);
+}
+
+function mapFieldsToAttributes(
+  fields: SessionEventLogFields,
+): Record<string, string | number> {
+  const attrs: Record<string, string | number> = {
+    "homespun.session.id": fields.SessionId,
+  };
+  if (fields.TaskId !== undefined) attrs["homespun.task.id"] = fields.TaskId;
+  if (fields.MessageId !== undefined) attrs["homespun.message.id"] = fields.MessageId;
+  if (fields.ArtifactId !== undefined) attrs["homespun.artifact.id"] = fields.ArtifactId;
+  if (fields.StatusTimestamp !== undefined) attrs["homespun.status.timestamp"] = fields.StatusTimestamp;
+  if (fields.A2AKind !== undefined) attrs["homespun.a2a.kind"] = fields.A2AKind;
+  if (fields.AGUIType !== undefined) attrs["homespun.agui.type"] = fields.AGUIType;
+  if (fields.AGUICustomName !== undefined) attrs["homespun.agui.custom_name"] = fields.AGUICustomName;
+  if (fields.ContentPreview !== undefined) attrs["homespun.content.preview"] = fields.ContentPreview;
+  if (fields.Seq !== undefined) attrs["homespun.seq"] = fields.Seq;
+  if (fields.EventId !== undefined) attrs["homespun.event.id"] = fields.EventId;
+  return attrs;
 }
 
 /**

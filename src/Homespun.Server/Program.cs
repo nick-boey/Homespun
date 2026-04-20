@@ -26,7 +26,7 @@ using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Logging.Console;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,19 +55,36 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
     mockModeOptions.Enabled = true;
 }
 
-// Configure console logging with JSON format for Promtail/Loki
-builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatter.FormatterName)
-    .AddConsoleFormatter<JsonConsoleFormatter, PromtailJsonFormatterOptions>(options =>
-    {
-        options.UseUtcTimestamp = true;
-    });
-
 // Register custom Homespun activity sources for tracing
 builder.Services.AddHomespunInstrumentation();
 
-// SessionEventLog — shared structured logging for the A2A → AG-UI pipeline.
-builder.Services.Configure<SessionEventLogOptions>(
-    builder.Configuration.GetSection(SessionEventLogOptions.SectionName));
+// SessionEventContent — content-preview gating for session-pipeline spans.
+// The new `SessionEventContent` section is authoritative; the legacy
+// `SessionEventLog` section is read as a fallback for one release so existing
+// deployments keep working through the hop-log → span migration.
+builder.Services.Configure<SessionEventContentOptions>(options =>
+{
+    var primary = builder.Configuration.GetSection(SessionEventContentOptions.SectionName);
+    var legacy = builder.Configuration.GetSection(SessionEventContentOptions.LegacySectionName);
+    var source = primary.Exists() ? primary : legacy;
+    source.Bind(options);
+});
+builder.Services.AddSingleton<IContentPreviewGate, ContentPreviewGate>();
+
+// OTLP receiver proxy (POST /api/otlp/v1/{logs,traces}): worker + client ship
+// OTLP to the server, which scrubs + fans out to Seq + the Aspire dashboard.
+// Registered at top level so mock-mode integration tests can exercise the
+// endpoints the same way production does.
+builder.Services.Configure<OtlpFanoutOptions>(
+    builder.Configuration.GetSection(OtlpFanoutOptions.SectionName));
+builder.Services.Configure<OtlpScrubberOptions>(
+    builder.Configuration.GetSection(OtlpScrubberOptions.SectionName));
+builder.Services.AddHttpClient(OtlpFanout.HttpClientName, c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(5);
+});
+builder.Services.AddSingleton<IOtlpScrubber, OtlpScrubber>();
+builder.Services.AddSingleton<IOtlpFanout, OtlpFanout>();
 
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
@@ -257,8 +274,7 @@ else
     builder.Services.AddSingleton<IA2AEventStore>(sp =>
         new A2AEventStore(
             messageCacheDir,
-            sp.GetRequiredService<ILogger<A2AEventStore>>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>()));
+            sp.GetRequiredService<ILogger<A2AEventStore>>()));
 
     // Pure A2A → AG-UI translator used by both the live ingestion path and the replay endpoint.
     builder.Services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
@@ -345,7 +361,14 @@ builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>
 builder.Services.AddScoped<IBranchStateResolverService, BranchStateResolverService>();
 builder.Services.AddScoped<IIssueGraphOpenSpecEnricher, IssueGraphOpenSpecEnricher>();
 
-builder.Services.AddSignalR()
+builder.Services.AddSignalR(o =>
+    {
+        // TraceparentHubFilter extracts the W3C traceparent the client
+        // passes as the first argument of every hub method and starts a
+        // server-side activity parented to it. See
+        // Homespun.Features.Observability.TraceparentHubFilter.
+        o.AddFilter<TraceparentHubFilter>();
+    })
     .AddJsonProtocol(options =>
     {
         options.PayloadSerializerOptions.Converters.Add(
@@ -388,17 +411,30 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// SessionEventLog: warn if content previews are enabled in Production — this
-// ships raw event text to Loki, which may leak sensitive content.
-var sessionEventLogOptions = app.Services
-    .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>().Value;
-if (app.Environment.IsProduction() && sessionEventLogOptions.ContentPreviewChars > 0)
+// SessionEventContent: warn if content previews are enabled in Production —
+// this ships raw event text to Seq span attributes, which may leak sensitive
+// content. Also log a deprecation warning if the legacy config section was
+// consulted.
+var sessionEventContentOptions = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventContentOptions>>().Value;
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("Homespun.SessionEvents");
+
+var primarySection = builder.Configuration.GetSection(SessionEventContentOptions.SectionName);
+var legacySection = builder.Configuration.GetSection(SessionEventContentOptions.LegacySectionName);
+if (!primarySection.Exists() && legacySection.Exists())
 {
-    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
-        .CreateLogger("Homespun.SessionEvents");
     startupLogger.LogWarning(
-        "SessionEventLog:ContentPreviewChars is set to {Chars} in Production. Event content previews will be written to logs.",
-        sessionEventLogOptions.ContentPreviewChars);
+        "Config section '{Legacy}' is deprecated; rename to '{Primary}'. The legacy name will be removed in the next release.",
+        SessionEventContentOptions.LegacySectionName,
+        SessionEventContentOptions.SectionName);
+}
+
+if (app.Environment.IsProduction() && sessionEventContentOptions.ContentPreviewChars > 0)
+{
+    startupLogger.LogWarning(
+        "SessionEventContent:ContentPreviewChars is set to {Chars} in Production. Event content previews will be attached to span attributes.",
+        sessionEventContentOptions.ContentPreviewChars);
 }
 
 // Configure the HTTP request pipeline

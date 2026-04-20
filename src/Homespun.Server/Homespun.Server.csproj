@@ -16,6 +16,11 @@
     <ItemGroup>
         <PackageReference Include="A2A" Version="0.3.3-preview" />
         <PackageReference Include="Fleece.Core" Version="2.1.1" />
+        <PackageReference Include="Google.Protobuf" Version="3.28.*" />
+        <PackageReference Include="Grpc.Tools" Version="2.68.*">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
         <PackageReference Include="Markdig" Version="0.44.0" />
         <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.0.0-preview.260219.1" />
         <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
@@ -23,6 +28,10 @@
         <PackageReference Include="Octokit" Version="14.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
         <PackageReference Include="YamlDotNet" Version="16.2.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="..\..\proto\**\*.proto" GrpcServices="None" ProtoRoot="..\..\proto\" />
     </ItemGroup>
 
     <ItemGroup>

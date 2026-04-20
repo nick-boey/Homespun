@@ -3,10 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
-using Homespun.Features.Observability;
-using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Options;
 
@@ -40,7 +37,6 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
     private readonly SingleContainerAgentExecutionOptions _options;
     private readonly ILogger<SingleContainerAgentExecutionService> _logger;
     private readonly ISessionEventIngestor _eventIngestor;
-    private readonly SessionEventLogOptions _sessionEventLogOptions;
     private readonly HttpClient _httpClient;
 
     private readonly SemaphoreSlim _slotLock = new(1, 1);
@@ -63,13 +59,11 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
     public SingleContainerAgentExecutionService(
         IOptions<SingleContainerAgentExecutionOptions> options,
         ILogger<SingleContainerAgentExecutionService> logger,
-        ISessionEventIngestor eventIngestor,
-        IOptions<SessionEventLogOptions> sessionEventLogOptions)
+        ISessionEventIngestor eventIngestor)
     {
         _options = options.Value;
         _logger = logger;
         _eventIngestor = eventIngestor;
-        _sessionEventLogOptions = sessionEventLogOptions.Value;
 
         if (string.IsNullOrWhiteSpace(_options.WorkerUrl))
         {
@@ -510,15 +504,6 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         {
             using var doc = JsonDocument.Parse(rawData);
             var payload = doc.RootElement.Clone();
-            var parsed = A2AMessageParser.ParseSseEvent(eventKind, rawData);
-            SessionEventLog.LogA2AHop(
-                _logger,
-                _sessionEventLogOptions,
-                hop: SessionEventHops.ServerSseRx,
-                sessionId: sessionId,
-                a2aKind: eventKind,
-                parsed: parsed,
-                rawJsonForPreview: rawData);
 
             var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
             await _eventIngestor.IngestAsync(effectiveProjectId, sessionId, eventKind, payload, cancellationToken);

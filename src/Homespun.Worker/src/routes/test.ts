@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { SessionManager } from '../services/session-manager.js';
-import { error as logError, info } from '../utils/logger.js';
+import { error as logError, info } from '../utils/otel-logger.js';
 
 interface TestErrorRequest {
   message?: string;

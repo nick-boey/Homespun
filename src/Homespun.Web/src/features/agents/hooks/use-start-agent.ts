@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sessions } from '@/api'
 import type { ClaudeSession, CreateSessionRequest, SessionMode } from '@/api/generated/types.gen'
 import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
-import { useTelemetry } from '@/hooks/use-telemetry'
 import { useSessionSettingsStore, type ModelSelection } from '@/stores/session-settings-store'
 import { fromApiSessionMode } from '@/lib/utils/session-mode'
 
@@ -19,10 +18,13 @@ export interface StartAgentParams {
 
 /**
  * Hook to start a new agent session for an issue or PR.
+ *
+ * The outbound `POST /api/sessions` is captured by the OTel fetch
+ * auto-instrumentation, so the full request/response span — plus any server
+ * spans downstream — lands in Seq without an explicit trackEvent call.
  */
 export function useStartAgent() {
   const queryClient = useQueryClient()
-  const telemetry = useTelemetry()
 
   return useMutation({
     mutationFn: async (params: StartAgentParams): Promise<ClaudeSession> => {
@@ -51,27 +53,8 @@ export function useStartAgent() {
           .initSession(session.id, mode, (params.model ?? 'opus') as ModelSelection)
       }
 
-      // Track successful agent launch
-      telemetry.trackEvent('agent_launched', {
-        sessionId: session.id || '',
-        entityId: params.entityId,
-        projectId: params.projectId,
-        mode: (params.mode ?? 'build').toString(),
-        model: params.model || '',
-        hasInitialMessage: params.initialMessage ? 'true' : 'false',
-      })
-
       // Invalidate all session queries to refresh all session displays
       invalidateAllSessionsQueries(queryClient)
-    },
-    onError: (error: Error, params) => {
-      // Track failed agent launch
-      telemetry.trackEvent('agent_launch_failed', {
-        entityId: params.entityId,
-        projectId: params.projectId,
-        mode: (params.mode ?? 'build').toString(),
-        error: error.message || 'Unknown error',
-      })
     },
   })
 }

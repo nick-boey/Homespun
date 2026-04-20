@@ -12,7 +12,7 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { info, warn } from "../utils/logger.js";
+import { info, warn } from "../utils/otel-logger.js";
 import type { SDKMessage, Query } from "@anthropic-ai/claude-agent-sdk";
 
 // ---------------------------------------------------------------------------

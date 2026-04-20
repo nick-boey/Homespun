@@ -11,7 +11,6 @@
 #   - periphery: Komodo agent for executing Docker commands
 #
 # Integration:
-#   - Logs are collected by Promtail (labels: logging=promtail)
 #   - Access via Tailscale on port 3500 (when Tailscale sidecar is running)
 
 services:
@@ -21,8 +20,6 @@ services:
     container_name: homespun-komodo-mongo
     labels:
       komodo.skip: true
-      logging: promtail
-      logging_jobname: komodo-mongo
     command: --quiet --wiredTigerCacheSizeGB 0.25
     restart: unless-stopped
     volumes:
@@ -46,8 +43,6 @@ services:
     container_name: homespun-komodo-core
     labels:
       komodo.skip: true
-      logging: promtail
-      logging_jobname: komodo-core
     restart: unless-stopped
     depends_on:
       mongo:
@@ -76,8 +71,6 @@ services:
     container_name: homespun-komodo-periphery
     labels:
       komodo.skip: true
-      logging: promtail
-      logging_jobname: komodo-periphery
     restart: unless-stopped
     depends_on:
       core:

@@ -12,7 +12,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Issues, IssueStatus, IssueType, ExecutionMode } from '@/api'
 import type { IssueResponse, TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
 import { taskGraphQueryKey } from './use-task-graph'
-import { useTelemetry } from '@/hooks/use-telemetry'
 
 export interface UseCreateIssueOptions {
   /** The project ID to create issues in */
@@ -63,7 +62,6 @@ function generateTempId(): string {
 export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueReturn {
   const { projectId, onSuccess, onError, optimistic = true } = options
   const queryClient = useQueryClient()
-  const telemetry = useTelemetry()
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const rollbackRef = useRef<(() => void) | null>(null)
@@ -154,14 +152,9 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
         // Clear rollback ref on success
         rollbackRef.current = null
 
-        // Track successful issue creation
-        telemetry.trackEvent('issue_created', {
-          issueId: issue.id || '',
-          projectId,
-          issueType: type.toString(),
-          hasParent: parentIssueId ? 'true' : 'false',
-          hasChild: childIssueId ? 'true' : 'false',
-        })
+        // The POST fetch is auto-instrumented; a dedicated trackEvent would
+        // duplicate the span without adding context the server doesn't
+        // already have.
 
         // Invalidate task graph to get the correct server state
         // This replaces our optimistic data with the real data
@@ -175,13 +168,6 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
         const error = err instanceof Error ? err : new Error('Failed to create issue')
         setError(error)
 
-        // Track failed issue creation
-        telemetry.trackEvent('issue_creation_failed', {
-          projectId,
-          issueType: type.toString(),
-          error: error.message,
-        })
-
         // Rollback optimistic update on error
         if (rollbackRef.current) {
           rollbackRef.current()
@@ -194,7 +180,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
         setIsCreating(false)
       }
     },
-    [projectId, queryClient, onSuccess, onError, optimistic, telemetry]
+    [projectId, queryClient, onSuccess, onError, optimistic]
   )
 
   return {

@@ -5,20 +5,17 @@ import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
 
 // Mock the logger module
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   info: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
   debug: vi.fn(),
-  sessionEventLog: vi.fn(),
-  SessionEventHop: { WorkerA2AEmit: 'worker.a2a.emit' },
   extractA2ACorrelation: vi.fn((kind: string) => ({ SessionId: '', A2AKind: kind })),
   extractMessagePreview: vi.fn(() => undefined),
-  getContentPreviewChars: vi.fn(() => 0),
-  truncatePreview: vi.fn((t: string | undefined) => t),
+  gateContentPreview: vi.fn(() => undefined),
 }));
 
-import { info, debug } from '#src/utils/logger.js';
+import { info, debug } from '#src/utils/otel-logger.js';
 
 describe('SSE Writer Logging', () => {
   let mockSessionManager: any;

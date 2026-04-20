@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { info, error } from '../utils/logger.js';
+import { info, error } from '../utils/otel-logger.js';
 
 /**
  * Request body for mini prompts.

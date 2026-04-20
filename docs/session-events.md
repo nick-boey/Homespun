@@ -90,72 +90,64 @@ For every A2A event received from the worker the server:
 
 The write-before-broadcast order guarantees that any replay query served after a live broadcast includes that event — clients never see a live event that cannot be replayed.
 
-## Debug logging
+## Observability
 
-The session-event pipeline emits structured `SessionEventLog` entries at six defined hops between the worker-side Claude Agent SDK and the client reducer. One Loki query pinned to a `MessageId` or `SessionId` returns the full chain hop-by-hop.
+The session-event pipeline is represented as OpenTelemetry spans, not hop logs. Every A2A event surfaces in Seq's trace view as a connected chain from the worker through to the client reducer.
 
-### Hops
+### Spans
 
-| Hop                        | Where                                             | Purpose |
-|----------------------------|---------------------------------------------------|---------|
-| `worker.a2a.emit`          | `src/Homespun.Worker/src/services/sse-writer.ts`  | Worker formatted an A2A event for SSE output. |
-| `server.sse.rx`            | `DockerAgentExecutionService.TryIngestA2AEventAsync` / `SingleContainerAgentExecutionService.TryIngestA2AAsync` | Server parsed a worker SSE event. |
-| `server.ingest.append`     | `A2AEventStore.AppendAsync`                       | Event written to the JSONL log with its assigned `Seq` and `EventId`. |
-| `server.agui.translate`    | `SessionEventIngestor.IngestAsync`                | One log line per AG-UI envelope produced from the parent A2A event. |
-| `server.signalr.tx`        | `SessionEventIngestor.IngestAsync`                | Envelope dispatched to SignalR group. |
-| `client.signalr.rx`        | `use-session-events.ts` live handler              | Client received envelope over SignalR. |
-| `client.reducer.apply`     | `use-session-events.ts` `applyOne`                | Envelope folded into client state. |
+| Span name                        | Tier   | Kind      | Where |
+|----------------------------------|--------|-----------|-------|
+| `homespun.a2a.emit`              | worker | PRODUCER  | `src/Homespun.Worker/src/services/sse-writer.ts` |
+| `homespun.session.ingest`        | server | CONSUMER  | `SessionEventIngestor.IngestAsync` — carries span events `sse.rx`, `ingest.append`, `signalr.tx` |
+| `homespun.agui.translate`        | server | INTERNAL  | child of `homespun.session.ingest`, covers the translator call |
+| `homespun.signalr.connect`       | server | SERVER    | `ClaudeCodeHub.OnConnectedAsync` — long-lived span, events `connected` / `disconnected` |
+| `homespun.signalr.join`          | server | SERVER    | `ClaudeCodeHub.JoinSession` |
+| `homespun.signalr.leave`         | server | SERVER    | `ClaudeCodeHub.LeaveSession` |
+| `homespun.signalr.client.connect`| client | INTERNAL  | `src/Homespun.Web/src/providers/signalr-provider.tsx` — long-lived span; transition events |
+| `homespun.envelope.rx`           | client | CONSUMER  | `use-session-events.ts` — parents to server broadcast via `SessionEventEnvelope.Traceparent` |
+| `homespun.client.reducer.apply`  | client | CONSUMER  | `use-session-events.ts` `applyOne` |
 
-### Field schema
+See [`docs/traces/dictionary.md`](traces/dictionary.md) for the authoritative per-span attribute list.
 
-Every entry is flat JSON with top-level fields for LogQL `| json` filtering:
+### Correlation attributes
 
-```json
-{
-  "Timestamp": "2026-04-17T10:15:32.345Z",
-  "Level": "Information",
-  "SourceContext": "Homespun.SessionEvents",
-  "Component": "Server",
-  "Hop": "server.signalr.tx",
-  "SessionId": "<Homespun sessionId = A2A contextId>",
-  "TaskId": "<A2A taskId>",
-  "MessageId": "<present for Message events>",
-  "ArtifactId": "<present for ArtifactUpdate events>",
-  "StatusTimestamp": "<present for StatusUpdate events>",
-  "EventId": "<server-assigned, present from server.ingest.append onward>",
-  "Seq": 42,
-  "A2AKind": "message|task|status-update|artifact-update",
-  "AGUIType": "TEXT_MESSAGE_CONTENT|...|CUSTOM",
-  "AGUICustomName": "thinking|system.init|...",
-  "ContentPreview": "<truncated per config; omitted when ContentPreviewChars=0>"
-}
+Common span attributes across the pipeline:
+
+- `homespun.session.id`
+- `homespun.a2a.kind` (`message` / `task` / `status-update` / `artifact-update`)
+- `homespun.seq` (server-assigned, present from `ingest.append` onward)
+- `homespun.event.id` (server-assigned UUID)
+- `homespun.task.id`, `homespun.message.id`, `homespun.artifact.id` — when the source A2A event has them
+- `homespun.agui.type`, `homespun.agui.custom_name` — on translate / client-side spans
+- `homespun.content.preview` — optional, gated by `SessionEventContent:ContentPreviewChars`
+
+### Example Seq queries
+
+Pin to one session:
+
+```seq
+homespun.session.id = '<sessionId>'
 ```
 
-`SourceContext` is `Homespun.SessionEvents` for server-emitted entries, `Homespun.ClientSessionEvents` for client-forwarded entries (via `POST /api/log/client`), and `Worker` for worker-emitted entries.
+Show the full trace for one user action (click a span → "View trace"):
 
-### Example LogQL
-
-Pin to a single message across the full pipeline:
-
-```logql
-{app="homespun"} | json | MessageId="M1"
+```
+client traceparent → server http.server → SignalR.ClaudeCodeHub/SendMessage
+                  → homespun.session.ingest
+                  → homespun.agui.translate
+                  → homespun.envelope.rx (client)
 ```
 
-Filter to a specific hop:
+### Configuration: `SessionEventContent:ContentPreviewChars`
 
-```logql
-{app="homespun"} | json | Hop="server.signalr.tx" | SessionId="..."
-```
-
-### Configuration: `SessionEventLog:ContentPreviewChars`
-
-Controls how many characters of the event's text content appear in the `ContentPreview` field. `0` disables the field entirely.
+Controls the length of the optional `homespun.content.preview` attribute on session pipeline spans. `0` disables the attribute entirely.
 
 | Environment  | Default | Rationale |
 |--------------|---------|-----------|
-| Development  | `80`    | Short previews aid local debugging; token cost is trivial. |
-| Production   | `0`     | Previews may leak sensitive assistant/user content to Loki. |
+| Development  | `80`    | Short previews aid local debugging. |
+| Production   | `0`     | Previews may leak sensitive assistant/user content to Seq. |
 
 Setting `ContentPreviewChars > 0` in Production emits a startup warning — it remains effective, but operators are explicitly opting in.
 
-Individual hops can be silenced via `SessionEventLog:Hops:<hop>:Enabled = false`, for example `SessionEventLog:Hops:server.signalr.tx:Enabled = false`.
+The legacy config key `SessionEventLog:ContentPreviewChars` is honoured as a fallback for one release and logs a deprecation warning at startup when consulted. Rename to `SessionEventContent:ContentPreviewChars` to silence it.

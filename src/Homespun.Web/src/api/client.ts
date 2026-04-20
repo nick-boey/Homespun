@@ -9,7 +9,6 @@
 
 import { client } from './generated/client.gen'
 import type { Config } from './generated/client'
-import { getGlobalTelemetryService } from '@/lib/telemetry/telemetry-singleton'
 
 /** API error response structure */
 export interface ApiError {
@@ -47,60 +46,23 @@ export function configureApiClient(config?: Partial<Config>): void {
     ...config,
   })
 
-  // Map to store request start times for duration calculation
-  const requestStartTimes = new Map<string, number>()
-
-  // Set up request interceptor to track start time
   client.interceptors.request.use((request: Request) => {
-    const requestId = `${request.method} ${request.url}`
-    requestStartTimes.set(requestId, Date.now())
-
     if (import.meta.env.DEV) {
       console.debug('[API Request]', request.method, request.url)
     }
-
     return request
   })
 
-  // Set up response interceptor for successful responses
   client.interceptors.response.use((response: Response, request: Request) => {
-    const requestId = `${request.method} ${request.url}`
-    const startTime = requestStartTimes.get(requestId)
-    requestStartTimes.delete(requestId)
-
     if (import.meta.env.DEV) {
       console.debug('[API Response]', request.method, request.url, response.status)
     }
-
-    // Track dependency telemetry for successful responses
-    if (startTime && !isExcludedFromTelemetry(request.url)) {
-      const duration = Date.now() - startTime
-      const telemetry = getGlobalTelemetryService()
-      telemetry?.trackDependency(
-        `${request.method} ${getPathFromUrl(request.url)}`,
-        duration,
-        response.ok,
-        response.status,
-        {
-          method: request.method,
-          path: getPathFromUrl(request.url),
-          statusText: response.statusText,
-        }
-      )
-    }
-
     return response
   })
 
-  // Set up error handling interceptor
   client.interceptors.error.use(
     (error: unknown, response: Response | undefined, request: Request) => {
-      const requestId = `${request.method} ${request.url}`
-      const startTime = requestStartTimes.get(requestId)
-      requestStartTimes.delete(requestId)
-
       if (response) {
-        // HTTP error response
         const apiError: ApiError = {
           status: response.status,
           statusText: response.statusText,
@@ -114,24 +76,6 @@ export function configureApiClient(config?: Partial<Config>): void {
           error: apiError.message,
         })
 
-        // Track dependency telemetry for error responses
-        if (startTime && !isExcludedFromTelemetry(request.url)) {
-          const duration = Date.now() - startTime
-          const telemetry = getGlobalTelemetryService()
-          telemetry?.trackDependency(
-            `${request.method} ${getPathFromUrl(request.url)}`,
-            duration,
-            false,
-            response.status,
-            {
-              method: request.method,
-              path: getPathFromUrl(request.url),
-              error: apiError.message,
-              statusText: response.statusText,
-            }
-          )
-        }
-
         return new ApiClientError(
           apiError.status,
           apiError.statusText,
@@ -140,29 +84,10 @@ export function configureApiClient(config?: Partial<Config>): void {
         )
       }
 
-      // Network or other error (no response)
       console.error('[API Network Error]', {
         url: request.url,
         error: error instanceof Error ? error.message : String(error),
       })
-
-      // Track dependency telemetry for network errors
-      if (startTime && !isExcludedFromTelemetry(request.url)) {
-        const duration = Date.now() - startTime
-        const telemetry = getGlobalTelemetryService()
-        telemetry?.trackDependency(
-          `${request.method} ${getPathFromUrl(request.url)}`,
-          duration,
-          false,
-          0,
-          {
-            method: request.method,
-            path: getPathFromUrl(request.url),
-            error: getErrorMessage(error),
-            errorType: 'network',
-          }
-        )
-      }
 
       return new ApiClientError(0, 'Network Error', getErrorMessage(error), error)
     }
@@ -240,31 +165,6 @@ function getErrorMessage(error: unknown): string {
   }
 
   return 'An unexpected error occurred'
-}
-
-/**
- * Extract the path from a URL, removing the domain and query parameters.
- */
-function getPathFromUrl(url: string): string {
-  try {
-    const urlObj = new URL(url, window.location.origin)
-    return urlObj.pathname
-  } catch {
-    // If URL parsing fails, try to extract path from string
-    const match = url.match(/^(?:https?:\/\/[^/]+)?([^?#]*)/)?.[1]
-    return match || url
-  }
-}
-
-/**
- * Check if a URL should be excluded from telemetry tracking.
- * Excludes telemetry and health check endpoints.
- */
-function isExcludedFromTelemetry(url: string): boolean {
-  const path = getPathFromUrl(url)
-  return (
-    path.includes('/api/client-telemetry') || path.includes('/health') || path.includes('/metrics')
-  )
 }
 
 // Re-export the configured client and all generated types/SDK

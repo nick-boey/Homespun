@@ -38,6 +38,11 @@ function createMockConnection(): HubConnection & {
   }
 }
 
+// traceInvoke always prepends a traceparent string as the first wire arg.
+// Outside an active span it is an empty string (we intentionally keep the
+// argument shape stable so the server-side filter always reads arg0).
+const TRACEPARENT = expect.any(String)
+
 describe('registerClaudeCodeHubEvents', () => {
   let mockConnection: ReturnType<typeof createMockConnection>
 
@@ -144,7 +149,7 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.joinSession('session-1')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('JoinSession', 'session-1')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('JoinSession', TRACEPARENT, 'session-1')
   })
 
   it('creates leaveSession method', async () => {
@@ -152,7 +157,7 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.leaveSession('session-1')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('LeaveSession', 'session-1')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('LeaveSession', TRACEPARENT, 'session-1')
   })
 
   it('creates sendMessage method with default mode', async () => {
@@ -160,7 +165,13 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.sendMessage('session-1', 'Hello')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'build')
+    expect(mockConnection.invoke).toHaveBeenCalledWith(
+      'SendMessage',
+      TRACEPARENT,
+      'session-1',
+      'Hello',
+      'build'
+    )
   })
 
   it('creates sendMessage method with plan mode', async () => {
@@ -168,7 +179,13 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.sendMessage('session-1', 'Hello', 'plan')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'plan')
+    expect(mockConnection.invoke).toHaveBeenCalledWith(
+      'SendMessage',
+      TRACEPARENT,
+      'session-1',
+      'Hello',
+      'plan'
+    )
   })
 
   it('creates stopSession method', async () => {
@@ -176,7 +193,7 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.stopSession('session-1')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('StopSession', 'session-1')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('StopSession', TRACEPARENT, 'session-1')
   })
 
   it('creates getAllSessions method', async () => {
@@ -186,7 +203,7 @@ describe('createClaudeCodeHubMethods', () => {
     const methods = createClaudeCodeHubMethods(mockConnection)
     const result = await methods.getAllSessions()
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('GetAllSessions')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('GetAllSessions', TRACEPARENT)
     expect(result).toBe(mockSessions)
   })
 
@@ -196,7 +213,12 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.answerQuestion('session-1', answersJson)
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('AnswerQuestion', 'session-1', answersJson)
+    expect(mockConnection.invoke).toHaveBeenCalledWith(
+      'AnswerQuestion',
+      TRACEPARENT,
+      'session-1',
+      answersJson
+    )
   })
 
   it('creates executePlan method with default clearContext', async () => {
@@ -204,7 +226,12 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.executePlan('session-1')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('ExecutePlan', 'session-1', true)
+    expect(mockConnection.invoke).toHaveBeenCalledWith(
+      'ExecutePlan',
+      TRACEPARENT,
+      'session-1',
+      true
+    )
   })
 
   it('creates executePlan method with clearContext false', async () => {
@@ -212,6 +239,11 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.executePlan('session-1', false)
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('ExecutePlan', 'session-1', false)
+    expect(mockConnection.invoke).toHaveBeenCalledWith(
+      'ExecutePlan',
+      TRACEPARENT,
+      'session-1',
+      false
+    )
   })
 })

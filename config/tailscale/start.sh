@@ -36,11 +36,11 @@ generate_config() {
     # homespun is the ASP.NET backend (API server on port 8080, also serves Blazor UI)
     HOMESPUN_WEB_IP=$(resolve homespun-web)
     HOMESPUN_IP=$(resolve homespun)
-    GRAFANA_IP=$(resolve homespun-grafana)
+    SEQ_IP=$(resolve homespun-seq)
     KOMODO_IP=$(resolve homespun-komodo-core)
 
     # Build a comparable state string
-    STATE="homespun-web=$HOMESPUN_WEB_IP homespun=$HOMESPUN_IP grafana=$GRAFANA_IP komodo=$KOMODO_IP"
+    STATE="homespun-web=$HOMESPUN_WEB_IP homespun=$HOMESPUN_IP seq=$SEQ_IP komodo=$KOMODO_IP"
 
     # Short-circuit if nothing changed
     if [ "$STATE" = "$PREV_STATE" ]; then
@@ -50,7 +50,7 @@ generate_config() {
 
     [ -n "$HOMESPUN_WEB_IP" ] && echo "  resolved homespun-web -> $HOMESPUN_WEB_IP"
     [ -n "$HOMESPUN_IP" ]     && echo "  resolved homespun -> $HOMESPUN_IP"
-    [ -n "$GRAFANA_IP" ]      && echo "  resolved homespun-grafana -> $GRAFANA_IP"
+    [ -n "$SEQ_IP" ]          && echo "  resolved homespun-seq -> $SEQ_IP"
     [ -n "$KOMODO_IP" ]       && echo "  resolved homespun-komodo-core -> $KOMODO_IP"
 
     # Write the serve-config JSON
@@ -64,9 +64,9 @@ generate_config() {
         if [ -n "$HOMESPUN_WEB_IP" ]; then
             TCP_ENTRIES='    "443": { "HTTPS": true },\n    "80": { "HTTP": true }'
         fi
-        if [ -n "$GRAFANA_IP" ]; then
+        if [ -n "$SEQ_IP" ]; then
             [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
-            TCP_ENTRIES="$TCP_ENTRIES"'\n    "3000": { "HTTPS": true }'
+            TCP_ENTRIES="$TCP_ENTRIES"'\n    "5341": { "HTTPS": true }'
         fi
         if [ -n "$HOMESPUN_IP" ]; then
             [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
@@ -99,10 +99,10 @@ generate_config() {
             printf '    }'
             WEB_FIRST=false
         fi
-        if [ -n "$GRAFANA_IP" ]; then
+        if [ -n "$SEQ_IP" ]; then
             [ "$WEB_FIRST" = false ] && printf ','
-            printf '\n    "${TS_CERT_DOMAIN}:3000": {\n'
-            printf '      "Handlers": { "/": { "Proxy": "http://%s:3000" } }\n' "$GRAFANA_IP"
+            printf '\n    "${TS_CERT_DOMAIN}:5341": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:80" } }\n' "$SEQ_IP"
             printf '    }'
             WEB_FIRST=false
         fi

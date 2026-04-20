@@ -10,7 +10,7 @@ import type {
   ApprovePlanRequest,
   ClearContextRequest,
 } from '../types/index.js';
-import { info } from '../utils/logger.js';
+import { info } from '../utils/otel-logger.js';
 
 export function createSessionsRoute(sessionManager: SessionManager) {
   const sessions = new Hono();

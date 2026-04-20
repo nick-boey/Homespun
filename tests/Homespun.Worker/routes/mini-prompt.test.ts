@@ -10,7 +10,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 // Capture logger calls
 const mockInfo = vi.fn();
 const mockError = vi.fn();
-vi.mock('#src/utils/logger.js', () => ({
+vi.mock('#src/utils/otel-logger.js', () => ({
   info: (...args: any[]) => mockInfo(...args),
   error: (...args: any[]) => mockError(...args),
 }));

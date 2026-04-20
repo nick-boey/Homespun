@@ -120,7 +120,7 @@ tests/
 
 - .NET 10 SDK with the Aspire workload
 - Node 20+ (npm on PATH — required by the AppHost's Vite wiring)
-- Docker Desktop (for PLG containers, and for Docker-mode agent execution)
+- Docker Desktop (for Seq + Docker-mode agent execution)
 - One-time secret bootstrap: run `scripts/set-user-secrets.sh` (macOS/Linux) or
   `scripts/set-user-secrets.ps1` (Windows) after copying `.env.example` → `.env`.
   The script migrates `GITHUB_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` into the
@@ -134,7 +134,7 @@ Local dev runs through the Aspire AppHost. Pick a launch profile:
 
 | Profile | Use case |
 |---|---|
-| `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + PLG with the mock service graph. No worker, agents return canned A2A events. |
+| `dev-mock` | Fastest inner loop. Server (`AddProject`) + Vite + Seq with the mock service graph. No worker, agents return canned A2A events. |
 | `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
 | `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — also usable on Apple Silicon now that the worker image is built locally instead of pulled from GHCR. |
 | `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
@@ -157,31 +157,108 @@ the layer cache. No dev profile pulls from GHCR — GHCR is reserved for the
 prod deploy path (`docker-compose.yml` + Komodo).
 
 Server is reachable at `http://localhost:5101` (port pinned for Playwright + existing tests).
-Grafana lands on `3000` and Loki on `3100`. The Aspire dashboard prints its own URL at startup.
+Seq's UI + OTLP ingest both land on `5341` in every dev profile
+(`http://localhost:5341`). The Aspire dashboard prints its own URL at startup.
 
 ### Accessing Application Logs
 
-Server logs flow through two sinks in parallel:
+Every tier exports OTLP to two sinks in parallel via
+`Homespun.ServiceDefaults`:
 
-1. **Aspire dashboard** — `AddServiceDefaults()` wires the OTLP log exporter;
-   `aspire otel logs server` surfaces entries for the current session. The
-   server's `Program.cs` calls `ClearProviders()` *before* `AddServiceDefaults`
-   so the OTLP provider survives alongside the JSON console formatter.
-2. **Grafana/Loki via Promtail** — every Aspire-managed container the dev
-   stack runs (worker, plus server/web in `dev-container`) carries the
-   `logging=promtail` label so Promtail's `docker_sd_configs` discovers it.
-   Promtail streams those containers' logs through the host Docker socket
-   alone (no `/var/lib/docker/containers` bind mount, which doesn't exist on
-   macOS Docker Desktop).
+1. **Aspire dashboard** — per-signal `AddOtlpExporter` calls driven by
+   `OTEL_EXPORTER_OTLP_ENDPOINT`. `aspire otel logs server` surfaces entries
+   for the current session. Server `Program.cs` calls `ClearProviders()`
+   *before* `AddServiceDefaults()` so the OTLP logger provider survives.
+2. **Seq** — `AddSeqEndpoint("seq")` reads the `seq` connection string the
+   AppHost injects via `WithReference(seq)`. Logs + traces land here; metrics
+   stay on the Aspire leg only (Seq does not accept metrics).
 
-Workers can query application logs from Loki at `http://homespun-loki:3100`.
+Seq UI is at `http://localhost:5341` in dev. In prod the `datalust/seq:2024.3`
+service in `docker-compose.yml` ingests via `http://seq:5341/ingest/otlp`;
+set `SEQ_API_KEY` in the Komodo env to gate ingestion.
 
 **Verify connectivity:**
 ```bash
-curl -s 'http://homespun-loki:3100/ready'
+curl -s 'http://localhost:5341/api/events/signal?count=1'
 ```
 
-For detailed log analysis with LogQL queries, use the `/logs` skill.
+For detailed log analysis, use the `/logs` skill.
+
+**Span / tracer reference:** every span emitted by any tier is catalogued in
+[`docs/traces/dictionary.md`](docs/traces/dictionary.md). Add / rename /
+remove a span → update that file in the same PR. A drift check in each
+tier's test suite refuses to merge otherwise; see
+[`docs/traces/README.md`](docs/traces/README.md) for the workflow.
+
+**OTLP proxy:** the worker and web client never hit Seq or the Aspire
+dashboard directly. Both export through `POST /api/otlp/v1/logs` and
+`POST /api/otlp/v1/traces` on the server, which parses the protobuf body,
+runs `OtlpScrubber` (content-preview gating + secret-substring redaction),
+and fans out to Seq + the Aspire dashboard in parallel via `OtlpFanout`.
+Upstream sink failures are logged at Warning and swallowed — the proxy
+always returns 202 so OTLP client SDKs never retry-amplify sink outages.
+Full contract in [`docs/observability/otlp-proxy.md`](docs/observability/otlp-proxy.md).
+
+### Worker OTLP path
+
+The worker (`src/Homespun.Worker`) exports traces + logs via
+`@opentelemetry/sdk-node` from `src/instrumentation.ts`, which is the very
+first import of `src/index.ts` so `@opentelemetry/auto-instrumentations-node`
+patches Hono/http/undici before any other module binds them. The SDK
+targets `${OTLP_PROXY_URL}/traces` and `${OTLP_PROXY_URL}/logs`; the server's
+`DockerAgentExecutionService` injects `OTLP_PROXY_URL` (plus
+`OTEL_SERVICE_NAME=homespun.worker`, `HOMESPUN_SESSION_ID`,
+`HOMESPUN_ISSUE_ID`, `HOMESPUN_PROJECT_NAME`) into every spawned container.
+`docker stop --time 3` (not `docker kill`) is used on shutdown so the
+worker receives SIGTERM and flushes the OTel batch processors.
+
+**Do NOT enable** the following auto-instrumentations on the worker (all
+disabled in `instrumentation.ts` via
+`getNodeAutoInstrumentations({...})`):
+
+- `@opentelemetry/instrumentation-fs` — every Claude Agent SDK tool call,
+  OpenSpec snapshot, and Fleece read generates hundreds of `fs.readFile`
+  spans per second; it drowns Seq and destroys the signal-to-noise ratio.
+  Relevant I/O surfaces as explicit spans on service methods instead.
+- `@opentelemetry/instrumentation-net`, `@opentelemetry/instrumentation-dns`
+  — low-level noise with no correlation value.
+
+### Client OTel propagation
+
+The web client (`src/Homespun.Web`) bootstraps `WebTracerProvider` +
+`LoggerProvider` in `src/instrumentation.ts`, loaded as the first import of
+`main.tsx`. Fetch and XHR requests to `/api/*` are auto-instrumented, which
+injects a W3C `traceparent` header so server spans parent the browser
+span automatically. `/api/otlp/v1/*` is ignored to avoid telemetry feedback
+loops.
+
+**SignalR is special** because WebSocket transports do not expose per-frame
+headers. Propagation uses two symmetric mechanisms:
+
+- **Client → server**: every hub method invocation is wrapped in
+  `traceInvoke` (`src/lib/signalr/trace.ts`). The helper starts a client
+  span and prepends a traceparent string as arg 0 on the wire. The server's
+  `TraceparentHubFilter` (`Homespun.Features.Observability`) pulls arg 0
+  off every invocation, parses it as `ActivityContext`, and starts a
+  server-kind activity on the `Homespun.Signalr` `ActivitySource` parented
+  to the client context. Arg 1 (when a string) is tagged as
+  `homespun.session.id`.
+- **Server → client**: `SessionEventEnvelope.Traceparent` carries the
+  current server activity's W3C traceparent on every
+  `ReceiveSessionEvent` broadcast. The client's handler wraps the callback
+  in `withExtractedContext(envelope, …)` so downstream work runs under the
+  server's parent context.
+
+The native `Microsoft.AspNetCore.SignalR.Server` `ActivitySource` is
+**not** registered on the tracer provider — the filter owns the span so
+there is no double emission.
+
+Context manager choice: the web SDK uses `StackContextManager` (the
+default), not `ZoneContextManager`. Zone.js is not a runtime dependency.
+If you add async chains that need context propagation (promise
+continuations crossing I/O boundaries), wrap the boundary in
+`context.with(context.active(), fn)` at the call site — the default
+manager does not follow awaits across event-loop turns on its own.
 
 ## React Frontend Development
 
@@ -302,12 +379,12 @@ To start a server running in Mock Mode to investigate with the Playwright MCP:
 dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
 ```
 
-Server, Vite, and the PLG stack are started by the AppHost. Server logs, traces,
-and metrics stream to the Aspire dashboard via OTLP (URL printed at startup).
-Worker / container-resource logs are also visible in Loki via Grafana at
-`http://localhost:3000`. The server is reachable at `http://localhost:5101`
-(pinned port), and the Vite dev server at `http://localhost:5173`. Use the
-Playwright MCP tools against those URLs.
+Server, Vite, and Seq are started by the AppHost. Server logs, traces, and
+metrics stream to the Aspire dashboard via OTLP (URL printed at startup).
+Logs + traces are also visible in the Seq UI at `http://localhost:5341`.
+The server is reachable at `http://localhost:5101` (pinned port), and the
+Vite dev server at `http://localhost:5173`. Use the Playwright MCP tools
+against those URLs.
 
 ### Critical Shell Management Rules
 

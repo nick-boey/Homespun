@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // Logger mock must be declared before importing the SUT so that calls land on the
 // mocked `info` / `warn` helpers.
-vi.mock("#src/utils/logger.js", () => ({
+vi.mock("#src/utils/otel-logger.js", () => ({
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
@@ -19,7 +19,7 @@ import {
   type SdkInitMessageLike,
   type InventoryOptionsLike,
 } from "#src/services/session-inventory.js";
-import { info, warn } from "#src/utils/logger.js";
+import { info, warn } from "#src/utils/otel-logger.js";
 import { assertValidInventoryRecord } from "../helpers/inventory-schema.js";
 import { createSdkInitMessage } from "../helpers/sdk-init-fixture.js";
 
