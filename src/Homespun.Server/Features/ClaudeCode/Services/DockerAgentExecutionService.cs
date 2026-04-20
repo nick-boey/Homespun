@@ -1591,6 +1591,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
 
+        // Map host.docker.internal -> host gateway so the worker can reach the
+        // server's OTLP proxy on the host. Linux containers on user-defined
+        // networks do not resolve host.docker.internal via Docker's embedded
+        // DNS when the container's resolv.conf is overridden. Docker since
+        // 20.10 honors the `host-gateway` keyword here. Harmless in
+        // container-mode (server-inside-a-container) where the proxy URL
+        // uses the compose service name instead.
+        dockerArgs.Append("--add-host=host.docker.internal:host-gateway ");
+
         var userFlag = ProcessUserInfo.GetDockerUserFlag();
         if (!string.IsNullOrEmpty(userFlag))
         {

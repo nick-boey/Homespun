@@ -90,3 +90,151 @@ Each tier's test suite SHALL include a drift check that fails when span or trace
 - **WHEN** a contributor uses an interpolated span name (e.g. `SignalR.{hub}/{method}`) that cannot be matched statically
 - **THEN** an allowlist entry with a justifying comment exempts it from the drift check
 
+### Requirement: Server hosts an OTLP receiver for worker and client telemetry
+
+The server SHALL accept OTLP/HTTP protobuf at `POST /api/otlp/v1/logs` and `POST /api/otlp/v1/traces`. The receiver SHALL preserve `traceId` and `spanId` byte-for-byte when re-exporting to downstream sinks.
+
+#### Scenario: client ships logs through the server proxy
+- **WHEN** a client POSTs an `ExportLogsServiceRequest` protobuf body to `/api/otlp/v1/logs` with `Content-Type: application/x-protobuf`
+- **THEN** the server returns 202 Accepted with body `{"partialSuccess":{"rejectedLogRecords":0}}`
+- **AND** the log record's `traceId` and `spanId` reach Seq unchanged
+- **AND** the log record reaches the Aspire dashboard unchanged
+
+#### Scenario: malformed protobuf is rejected without fan-out
+- **WHEN** a POST body cannot be parsed as the expected `Export*ServiceRequest`
+- **THEN** the server returns 400 Bad Request
+- **AND** no upstream sink receives a dispatched request
+
+#### Scenario: unsupported Content-Type is rejected
+- **WHEN** a POST arrives with `Content-Type: application/json` (JSON-OTLP is not accepted)
+- **THEN** the server returns 415 Unsupported Media Type
+
+#### Scenario: gzip-encoded body is decompressed before parse
+- **WHEN** a POST arrives with `Content-Encoding: gzip`
+- **THEN** the server decompresses before parsing
+- **AND** downstream behaviour matches an uncompressed equivalent body
+
+#### Scenario: upstream sink failure does not propagate
+- **WHEN** the server parses a valid request but both Seq and the Aspire dashboard return 500
+- **THEN** the server still returns 202 to the client
+- **AND** a Warning log is emitted naming each failing destination
+
+#### Scenario: body size beyond 4 MiB is rejected
+- **WHEN** a POST body exceeds 4 MiB
+- **THEN** the server returns 413 Payload Too Large
+
+### Requirement: Content preview and secret attributes are scrubbed in the proxy
+
+The receiver SHALL enforce `SessionEventLog:ContentPreviewChars` against the attribute key `homespun.content.preview` and SHALL redact attribute values whose key (case-insensitive) contains any configured secret substring.
+
+#### Scenario: content preview removed when ContentPreviewChars is zero
+- **WHEN** `SessionEventLog:ContentPreviewChars = 0` and an incoming log record attribute has key `homespun.content.preview`
+- **THEN** the scrubber removes that attribute from the request before fan-out
+
+#### Scenario: content preview truncated when ContentPreviewChars is positive
+- **WHEN** `SessionEventLog:ContentPreviewChars = 80` and an incoming attribute value is longer than 80 characters
+- **THEN** the scrubber truncates the value to 80 characters followed by an ellipsis
+
+#### Scenario: authorization-bearing attribute is redacted
+- **WHEN** a log or span record contains an attribute with key matching `authorization` (case-insensitive)
+- **THEN** the scrubber replaces its string value with `[REDACTED]` before fan-out
+
+### Requirement: Receiver fans out to Seq and Aspire dashboard in parallel
+
+The proxy SHALL dispatch each accepted request to every configured destination concurrently. Destinations whose URL cannot be resolved SHALL be skipped silently without affecting others. The Seq leg is driven by the `OtlpFanout:SeqBaseUrl` config value; the Aspire leg is driven by the Aspire-injected env var `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+#### Scenario: both destinations resolvable
+- **WHEN** `OtlpFanout:SeqBaseUrl` is set AND `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+- **THEN** each accepted request triggers two outbound POSTs in parallel
+- **AND** each outbound body is byte-identical to the scrubbed request
+
+#### Scenario: Seq leg attaches the API key header
+- **WHEN** `OtlpFanout:SeqApiKey` is non-empty
+- **THEN** the outbound Seq POST includes `X-Seq-ApiKey: {value}`
+
+#### Scenario: Aspire leg forwards the dashboard auth headers
+- **WHEN** `OTEL_EXPORTER_OTLP_HEADERS` contains `key=value` pairs
+- **THEN** the outbound Aspire POST includes each pair as a request header
+
+#### Scenario: Aspire leg skipped when dashboard env absent
+- **WHEN** `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (e.g. production without Aspire)
+- **THEN** no outbound POST is made to the Aspire leg
+- **AND** the Seq leg still dispatches normally if configured
+
+### Requirement: Legacy telemetry-config endpoint is retired
+
+`TelemetryConfigController` and the `TelemetryConfigDto` SHALL be removed. No runtime API SHALL expose the legacy Application Insights connection string.
+
+#### Scenario: the endpoint no longer responds
+- **WHEN** a client requests `GET /api/telemetry-config`
+- **THEN** the server returns 404 Not Found
+
+### Requirement: Worker emits OpenTelemetry logs and traces
+
+The worker SHALL use `@opentelemetry/sdk-node` to emit logs and traces to the server's OTLP proxy. The worker SHALL NOT emit custom JSON stdout for ingestion; stdout is for local-debugging fallback only.
+
+#### Scenario: worker boot wires the OTel SDK
+- **WHEN** the worker process starts
+- **THEN** `src/instrumentation.ts` is imported before any other module
+- **AND** `NodeSDK.start()` is called before the Hono app begins listening
+
+#### Scenario: worker attaches identity resource attributes
+- **WHEN** the worker is spawned with env `HOMESPUN_SESSION_ID`, `HOMESPUN_ISSUE_ID`, `HOMESPUN_PROJECT_NAME`, `HOMESPUN_AGENT_MODE`
+- **THEN** every emitted log and span carries resource attributes `service.name = homespun.worker`, `homespun.session.id`, `homespun.issue.id`, `homespun.project.name`, `homespun.agent.mode`
+
+#### Scenario: worker exports reach Seq via the server proxy
+- **WHEN** the worker emits a log
+- **THEN** the request targets `${OTLP_PROXY_URL}/logs` with `Content-Type: application/x-protobuf`
+- **AND** the record arrives in Seq with the worker's resource attributes intact
+
+### Requirement: Worker trace context is inherited from the inbound HTTP request
+
+Trace context propagation from server to worker SHALL use the `traceparent` HTTP header handled by `@opentelemetry/instrumentation-http` auto-instrumentation. The worker SHALL NOT require a custom `TRACEPARENT` environment variable shim.
+
+#### Scenario: worker spans are linked to the server's outgoing span
+- **WHEN** the server POSTs to the worker with a traceparent header
+- **THEN** every span the worker emits while handling that request carries the same TraceId
+- **AND** the worker's root span's parent is the server's outgoing span
+
+### Requirement: Worker flushes batched telemetry on graceful shutdown
+
+The worker SHALL register SIGTERM and SIGINT handlers that `await sdk.shutdown()` before exiting. The server SHALL use `docker stop --time 3` (not `docker kill`) so workers receive SIGTERM.
+
+#### Scenario: server-initiated stop flushes worker telemetry
+- **WHEN** the server calls `StopContainerAsync` for a worker container
+- **THEN** the worker receives SIGTERM
+- **AND** at least one final OTLP batch is dispatched before the container exits
+
+#### Scenario: batch delay is short enough to minimise loss
+- **WHEN** the worker's log record processor is configured
+- **THEN** its `scheduledDelayMillis` is at most 1000 ms
+
+### Requirement: Server spawns worker containers with OTLP proxy env
+
+`DockerAgentExecutionService` SHALL inject `OTLP_PROXY_URL` into every `docker run` invocation. The URL SHALL resolve to the server's `/api/otlp/v1` endpoint from within the worker's container network view.
+
+#### Scenario: host-mode server resolves proxy URL to host.docker.internal
+- **WHEN** the server runs on the host (not in a container) and spawns a worker via DooD
+- **THEN** the worker receives `OTLP_PROXY_URL=http://host.docker.internal:5101/api/otlp/v1`
+
+#### Scenario: container-mode server resolves proxy URL to its container hostname
+- **WHEN** the server runs inside a container and spawns a sibling worker
+- **THEN** the worker receives `OTLP_PROXY_URL=http://server:8080/api/otlp/v1`
+
+### Requirement: Legacy worker logger is retired
+
+`src/Homespun.Worker/src/utils/logger.ts` and its tests SHALL be removed. All worker log call sites SHALL use `logs.getLogger('homespun.worker').emit(...)`.
+
+#### Scenario: legacy logger file absent
+- **WHEN** a developer searches the worker source tree
+- **THEN** no file at `src/utils/logger.ts` exists
+- **AND** no import of `./utils/logger` remains
+
+### Requirement: Client log controller is retired
+
+`/api/log/client` and its controller SHALL be removed once the worker no longer calls it. `ClientLogController.cs` and `ClientLogEntry.cs` SHALL be deleted.
+
+#### Scenario: legacy endpoint returns 404
+- **WHEN** any client POSTs to `/api/log/client`
+- **THEN** the server returns 404 Not Found
+

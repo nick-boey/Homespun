@@ -36,7 +36,6 @@ public sealed class OtlpReceiverController : ControllerBase
 
     [HttpPost("logs")]
     [RequestSizeLimit(MaxBodyBytes)]
-    [Consumes(ProtobufContentType)]
     public Task<IActionResult> Logs(CancellationToken ct)
         => ReceiveAsync(
             parse: ExportLogsServiceRequest.Parser.ParseFrom,
@@ -47,7 +46,6 @@ public sealed class OtlpReceiverController : ControllerBase
 
     [HttpPost("traces")]
     [RequestSizeLimit(MaxBodyBytes)]
-    [Consumes(ProtobufContentType)]
     public Task<IActionResult> Traces(CancellationToken ct)
         => ReceiveAsync(
             parse: ExportTraceServiceRequest.Parser.ParseFrom,
@@ -64,8 +62,7 @@ public sealed class OtlpReceiverController : ControllerBase
         CancellationToken ct)
         where T : IMessage<T>
     {
-        if (!string.Equals(Request.ContentType, ProtobufContentType, StringComparison.OrdinalIgnoreCase)
-            && !(Request.ContentType?.StartsWith(ProtobufContentType + ";", StringComparison.OrdinalIgnoreCase) ?? false))
+        if (!(Request.ContentType?.StartsWith(ProtobufContentType, StringComparison.OrdinalIgnoreCase) ?? false))
         {
             return StatusCode(StatusCodes.Status415UnsupportedMediaType);
         }
@@ -81,8 +78,11 @@ public sealed class OtlpReceiverController : ControllerBase
         T request;
         try
         {
-            await using var bodyStream = OpenBodyStream();
-            request = parse(bodyStream);
+            // Buffer body fully via async I/O before parsing — Google.Protobuf's
+            // ParseFrom(Stream) does synchronous reads, which Kestrel rejects by
+            // default (AllowSynchronousIO=false).
+            using var buffered = await ReadBodyAsync(ct).ConfigureAwait(false);
+            request = parse(buffered);
         }
         catch (InvalidProtocolBufferException ex)
         {
@@ -106,14 +106,27 @@ public sealed class OtlpReceiverController : ControllerBase
         return StatusCode(StatusCodes.Status202Accepted, partialSuccess);
     }
 
-    private Stream OpenBodyStream()
+    private async Task<MemoryStream> ReadBodyAsync(CancellationToken ct)
     {
+        var raw = new MemoryStream();
+        await Request.Body.CopyToAsync(raw, ct).ConfigureAwait(false);
+        raw.Position = 0;
+
         var encoding = Request.Headers.ContentEncoding;
-        if (encoding.Count > 0 && encoding.Any(e =>
-                string.Equals(e, "gzip", StringComparison.OrdinalIgnoreCase)))
+        var gzipped = encoding.Count > 0 && encoding.Any(e =>
+            string.Equals(e, "gzip", StringComparison.OrdinalIgnoreCase));
+        if (!gzipped)
         {
-            return new GZipStream(Request.Body, CompressionMode.Decompress, leaveOpen: false);
+            return raw;
         }
-        return Request.Body;
+
+        var decompressed = new MemoryStream();
+        await using (raw)
+        await using (var gz = new GZipStream(raw, CompressionMode.Decompress, leaveOpen: false))
+        {
+            await gz.CopyToAsync(decompressed, ct).ConfigureAwait(false);
+        }
+        decompressed.Position = 0;
+        return decompressed;
     }
 }

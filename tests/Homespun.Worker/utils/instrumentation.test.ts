@@ -25,10 +25,10 @@ describe('worker OTel bootstrap (src/instrumentation.ts)', () => {
     vi.stubEnv('OTLP_PROXY_URL', 'http://host.docker.internal:5101/api/otlp/v1');
 
     const traceExporterModule = await import(
-      '@opentelemetry/exporter-trace-otlp-http'
+      '@opentelemetry/exporter-trace-otlp-proto'
     );
     const logExporterModule = await import(
-      '@opentelemetry/exporter-logs-otlp-http'
+      '@opentelemetry/exporter-logs-otlp-proto'
     );
 
     const traceSpy = vi.spyOn(traceExporterModule, 'OTLPTraceExporter');

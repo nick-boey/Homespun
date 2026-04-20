@@ -21,14 +21,20 @@
  * would drown useful signal.
  */
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
+// Use the *-proto variants: server's OtlpReceiverController accepts
+// application/x-protobuf only. `@opentelemetry/exporter-*-otlp-http`
+// defaults to JSON and the server rejects it with HTTP 415.
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
 import {
   BatchLogRecordProcessor,
   ConsoleLogRecordExporter,
   SimpleLogRecordProcessor,
+  type ReadableLogRecord,
+  type LogRecordExporter,
   type LogRecordProcessor,
 } from '@opentelemetry/sdk-logs';
+import { ExportResultCode, type ExportResult } from '@opentelemetry/core';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
@@ -88,9 +94,44 @@ const logRecordProcessors: LogRecordProcessor[] = [
   new BatchLogRecordProcessor(logExporter, { scheduledDelayMillis: 1000 }),
 ];
 
-// Dev-only console exporter for local diagnostics — attaches a second log
-// processor that writes every record through `console.dir` so operators can
-// verify OTel emission without spinning up the server proxy.
+// Always-on stdout fallback — emits one human-readable line per record
+// (`[LEVEL] body` + any `exception.*` attributes) to process.stderr so
+// `docker logs <worker>` remains useful for at-the-host debugging even
+// when the OTLP proxy is unreachable or Seq is down.
+class StderrTextLogExporter implements LogRecordExporter {
+  export(
+    logs: ReadableLogRecord[],
+    resultCallback: (result: ExportResult) => void,
+  ): void {
+    for (const record of logs) {
+      const severity = record.severityText ?? 'INFO';
+      const body =
+        typeof record.body === 'string'
+          ? record.body
+          : JSON.stringify(record.body);
+      process.stderr.write(`[${severity}] ${body}\n`);
+      const attrs = record.attributes ?? {};
+      const excType = attrs['exception.type'];
+      const excMsg = attrs['exception.message'];
+      if (excType || excMsg) {
+        process.stderr.write(`  ${String(excType ?? '')}: ${String(excMsg ?? '')}\n`);
+      }
+    }
+    resultCallback({ code: ExportResultCode.SUCCESS });
+  }
+  shutdown(): Promise<void> {
+    return Promise.resolve();
+  }
+  forceFlush(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+logRecordProcessors.push(
+  new SimpleLogRecordProcessor(new StderrTextLogExporter()),
+);
+
+// Verbose JSON console exporter — opt-in via DEBUG_OTEL_CONSOLE=true for
+// local diagnostics that need full attribute + resource dumps.
 if (process.env.DEBUG_OTEL_CONSOLE === 'true') {
   logRecordProcessors.push(
     new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()),

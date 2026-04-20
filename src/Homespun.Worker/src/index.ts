@@ -34,7 +34,11 @@ const port = parseInt(process.env.PORT || '8080', 10);
 
 info(`Starting Homespun Worker on port ${port}...`);
 
-serve({ fetch: app.fetch, port });
+// Bind explicitly to 0.0.0.0 so the Docker bridge can reach the worker
+// over IPv4. Node's default when no hostname is passed binds `::` with
+// `IPV6_V6ONLY=1` on some kernels, which makes 172.17.0.2:8080 from the
+// host time out despite /proc/net/tcp6 showing LISTEN.
+serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
 
 info(`Homespun Worker listening on http://0.0.0.0:${port}`);
 

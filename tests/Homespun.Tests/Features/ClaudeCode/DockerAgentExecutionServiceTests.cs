@@ -82,6 +82,25 @@ public class DockerAgentExecutionServiceTests
     }
 
     [Test]
+    public void Spawned_container_maps_host_docker_internal_to_host_gateway()
+    {
+        var svc = Build();
+        var args = svc.BuildContainerDockerArgs(
+            containerName: "homespun-issue-proj-issue",
+            workingDirectory: "/tmp/clone",
+            useRm: false,
+            claudePath: null,
+            issueId: "issue-1",
+            projectName: "demo",
+            projectId: "proj-1");
+
+        Assert.That(args, Does.Contain("--add-host=host.docker.internal:host-gateway"),
+            "Worker on a user-defined bridge network must resolve " +
+            "host.docker.internal via the host-gateway keyword, otherwise " +
+            "the OTLP proxy at http://host.docker.internal:5101 is unreachable.");
+    }
+
+    [Test]
     public void Spawned_container_uses_configured_OTLP_proxy_URL()
     {
         var svc = Build(new DockerAgentExecutionOptions

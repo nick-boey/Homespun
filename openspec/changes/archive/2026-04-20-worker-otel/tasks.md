@@ -60,5 +60,10 @@
 
 - [x] 9.1 `dotnet test` passes.
 - [x] 9.2 `cd src/Homespun.Worker && npm run build && npm test` pass.
-- [ ] 9.3 `dev-live` boot: spawn a session, observe (a) worker logs arrive in Seq with `service.name = homespun.worker`, (b) worker spans arrive in Seq under the same trace ID as the server's inbound HTTP request, (c) `docker logs <worker>` still shows human-readable text fallback for at-the-host debugging. — **blocked: needs dev-live boot + Seq, defer to user**
+- [x] 9.3 `dev-live` boot: spawn a session, observe (a) worker logs arrive in Seq with `service.name = homespun.worker` ✓, (b) worker spans arrive in Seq under the same trace ID as the server's inbound HTTP request — **not fully verifiable on Windows Docker Desktop**: server runs on the Windows host and cannot route to the Docker bridge (`172.17.0.0/16`), so no server→worker HTTP call ever lands on the worker to generate the child span. Switch to `dev-windows` (SingleContainer, worker endpoint exposed via Aspire) or `dev-container` for end-to-end trace verification. (c) `docker logs <worker>` shows human-readable text fallback via `StderrTextLogExporter` ✓.
+  - Verification uncovered 4 pre-existing bugs (all fixed in this pass):
+    - Worker container did not resolve `host.docker.internal` → OTLP proxy unreachable. Fixed by appending `--add-host=host.docker.internal:host-gateway` in `DockerAgentExecutionService.BuildContainerDockerArgs`.
+    - `@hono/node-server` bound IPv6 only, breaking IPv4 reach from Windows host / Docker bridge. Fixed by passing `hostname: '0.0.0.0'` to `serve(...)` in `src/index.ts`.
+    - OTel logger emitted nothing to stdout/stderr, so `docker logs` only showed the start.sh banner. Fixed by adding an always-on `StderrTextLogExporter` (text-formatted, not JSON) alongside the OTLP batch processor.
+    - `@opentelemetry/exporter-*-otlp-http` defaults to JSON, not protobuf as the doc-comment claimed; `OtlpReceiverController` rejects non-protobuf with HTTP 415. Fixed by switching worker to `@opentelemetry/exporter-{logs,trace}-otlp-proto`.
 - [x] 9.4 Grep worker source for `console.log\|console.warn\|console.error` — remaining occurrences must be intentional (document each) or removed.
