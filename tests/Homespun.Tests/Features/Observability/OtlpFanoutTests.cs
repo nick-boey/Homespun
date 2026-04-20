@@ -101,6 +101,88 @@ public class OtlpFanoutTests
     }
 
     [Test]
+    public async Task Aspire_grpc_protocol_posts_framed_payload_to_service_method()
+    {
+        var handler = new CapturingHandler(
+            HttpStatusCode.OK,
+            trailers: new Dictionary<string, string> { ["grpc-status"] = "0" });
+        var fanout = BuildFanout(
+            handler,
+            seqBaseUrl: null,
+            seqApiKey: null,
+            aspireEndpoint: "https://dashboard:21178",
+            aspireProtocol: "grpc");
+
+        var payload = new ExportTraceServiceRequest();
+        var originalBytes = payload.ToByteArray();
+        await fanout.TracesAsync(payload, CancellationToken.None);
+
+        Assert.That(handler.Captured, Has.Count.EqualTo(1));
+        var captured = handler.Captured[0];
+        Assert.That(
+            captured.Uri.AbsoluteUri,
+            Is.EqualTo(
+                "https://dashboard:21178/opentelemetry.proto.collector.trace.v1.TraceService/Export"));
+        Assert.That(captured.ContentType, Is.EqualTo("application/grpc+proto"));
+        Assert.That(captured.Version, Is.EqualTo(HttpVersion.Version20));
+        Assert.That(captured.Headers.TryGetValues("TE", out var te), Is.True);
+        Assert.That(te!.Single(), Is.EqualTo("trailers"));
+
+        // 5-byte prefix (compression flag + BE length) + payload bytes.
+        Assert.That(captured.Body, Has.Length.EqualTo(5 + originalBytes.Length));
+        Assert.That(captured.Body[0], Is.EqualTo(0));
+        var frameLength = (uint)((captured.Body[1] << 24)
+            | (captured.Body[2] << 16)
+            | (captured.Body[3] << 8)
+            | captured.Body[4]);
+        Assert.That(frameLength, Is.EqualTo((uint)originalBytes.Length));
+        Assert.That(captured.Body[5..], Is.EqualTo(originalBytes));
+    }
+
+    [Test]
+    public async Task Aspire_grpc_protocol_uses_logs_service_method_for_logs_payloads()
+    {
+        var handler = new CapturingHandler(
+            HttpStatusCode.OK,
+            trailers: new Dictionary<string, string> { ["grpc-status"] = "0" });
+        var fanout = BuildFanout(
+            handler,
+            seqBaseUrl: null,
+            seqApiKey: null,
+            aspireEndpoint: "https://dashboard:21178",
+            aspireProtocol: "grpc");
+
+        await fanout.LogsAsync(new ExportLogsServiceRequest(), CancellationToken.None);
+
+        Assert.That(handler.Captured, Has.Count.EqualTo(1));
+        Assert.That(
+            handler.Captured[0].Uri.AbsoluteUri,
+            Is.EqualTo(
+                "https://dashboard:21178/opentelemetry.proto.collector.logs.v1.LogsService/Export"));
+    }
+
+    [Test]
+    public async Task Seq_leg_always_uses_http_protobuf_even_when_grpc_set_for_aspire()
+    {
+        var handler = new CapturingHandler(
+            HttpStatusCode.OK,
+            trailers: new Dictionary<string, string> { ["grpc-status"] = "0" });
+        var fanout = BuildFanout(
+            handler,
+            seqBaseUrl: "http://seq/ingest/otlp",
+            seqApiKey: null,
+            aspireEndpoint: "https://dashboard:21178",
+            aspireProtocol: "grpc");
+
+        await fanout.TracesAsync(new ExportTraceServiceRequest(), CancellationToken.None);
+
+        Assert.That(handler.Captured, Has.Count.EqualTo(2));
+        var seq = handler.Captured.Single(c => c.Uri.Host == "seq");
+        Assert.That(seq.Uri.AbsoluteUri, Is.EqualTo("http://seq/ingest/otlp/v1/traces"));
+        Assert.That(seq.ContentType, Is.EqualTo("application/x-protobuf"));
+    }
+
+    [Test]
     public async Task Both_legs_dispatch_in_parallel_with_byte_identical_payloads()
     {
         var handler = new CapturingHandler(HttpStatusCode.OK);
@@ -152,7 +234,8 @@ public class OtlpFanoutTests
         string? seqBaseUrl,
         string? seqApiKey,
         string? aspireEndpoint,
-        string? aspireHeaders = null)
+        string? aspireHeaders = null,
+        string? aspireProtocol = null)
     {
         var httpClientFactory = new StubHttpClientFactory(handler);
         var options = new TestOptionsMonitor<OtlpFanoutOptions>(new OtlpFanoutOptions
@@ -165,6 +248,7 @@ public class OtlpFanoutTests
             {
                 [OtlpFanout.AspireEndpointEnvKey] = aspireEndpoint,
                 [OtlpFanout.AspireHeadersEnvKey] = aspireHeaders,
+                [OtlpFanout.AspireProtocolEnvKey] = aspireProtocol,
             })
             .Build();
         return new OtlpFanout(httpClientFactory, options, config, NullLogger<OtlpFanout>.Instance);
@@ -173,9 +257,16 @@ public class OtlpFanoutTests
     private sealed class CapturingHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _status;
+        private readonly IReadOnlyDictionary<string, string>? _trailers;
         public List<CapturedRequest> Captured { get; } = new();
 
-        public CapturingHandler(HttpStatusCode status) => _status = status;
+        public CapturingHandler(
+            HttpStatusCode status,
+            IReadOnlyDictionary<string, string>? trailers = null)
+        {
+            _status = status;
+            _trailers = trailers;
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -191,14 +282,33 @@ public class OtlpFanoutTests
             {
                 headers.TryAddWithoutValidation(header.Key, header.Value);
             }
+            if (request.Content is not null)
+            {
+                foreach (var header in request.Content.Headers)
+                {
+                    headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
 
             Captured.Add(new CapturedRequest(
                 Uri: request.RequestUri!,
                 Body: bodyBytes,
                 ContentType: request.Content?.Headers.ContentType?.MediaType ?? string.Empty,
+                Version: request.Version,
                 Headers: headers));
 
-            return new HttpResponseMessage(_status);
+            var response = new HttpResponseMessage(_status)
+            {
+                Content = new ByteArrayContent(Array.Empty<byte>()),
+            };
+            if (_trailers is not null)
+            {
+                foreach (var kv in _trailers)
+                {
+                    response.TrailingHeaders.TryAddWithoutValidation(kv.Key, kv.Value);
+                }
+            }
+            return response;
         }
     }
 
@@ -206,6 +316,7 @@ public class OtlpFanoutTests
         Uri Uri,
         byte[] Body,
         string ContentType,
+        Version Version,
         System.Net.Http.Headers.HttpHeaders Headers);
 
     private sealed class StubHttpClientFactory : IHttpClientFactory

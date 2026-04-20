@@ -45,6 +45,7 @@ asserts that the reverse also holds.
 | `homespun.web.signalr`                  | client       | Tracer        | SignalR client-span wrapper + lifecycle span             |
 | `homespun.web.session-events`           | client       | Tracer        | Envelope rx + reducer-apply spans                        |
 | `homespun.worker`                       | worker       | Logger        | Hono worker logger (spans deferred — see Planned)        |
+| `homespun.worker.http`                  | worker       | Tracer        | Hono inbound-request SERVER spans from `traceparentMiddleware` (parent comes from the caller's `traceparent` header) |
 
 ---
 

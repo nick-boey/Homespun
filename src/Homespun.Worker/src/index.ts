@@ -16,9 +16,19 @@ import files from './routes/files.js';
 import { SessionManager } from './services/session-manager.js';
 import { emitBootInventory } from './services/session-inventory.js';
 import { info } from './utils/otel-logger.js';
+import { traceparentMiddleware } from './utils/traceparent-middleware.js';
 
 const app = new Hono();
 const sessionManager = new SessionManager();
+
+// Re-instate W3C trace propagation for inbound requests. See
+// `./utils/traceparent-middleware.ts` — `@opentelemetry/instrumentation-http`
+// does not emit SERVER spans for `@hono/node-server` requests, so without
+// this middleware every worker span becomes its own root trace and the
+// Aspire dashboard cannot link worker activity to the triggering server
+// request. Must be registered before `app.route(...)` so it wraps every
+// downstream handler.
+app.use('*', traceparentMiddleware);
 
 // Mount all routes under /api
 const api = new Hono();

@@ -61,11 +61,16 @@ config section.
 
 ## Destinations
 
-| Leg    | URL source                              | Auth header              |
-|--------|------------------------------------------|--------------------------|
-| Seq    | `OtlpFanout:SeqBaseUrl` (config)         | `X-Seq-ApiKey` when `OtlpFanout:SeqApiKey` set |
-| Aspire | `OTEL_EXPORTER_OTLP_ENDPOINT` (Aspire-injected env) | `OTEL_EXPORTER_OTLP_HEADERS` (`k=v,k=v`) |
+| Leg    | URL source                              | Protocol                                      | Auth header              |
+|--------|------------------------------------------|-----------------------------------------------|--------------------------|
+| Seq    | `OtlpFanout:SeqBaseUrl` (config)         | HTTP/1.1 + `application/x-protobuf`           | `X-Seq-ApiKey` when `OtlpFanout:SeqApiKey` set |
+| Aspire | `OTEL_EXPORTER_OTLP_ENDPOINT` (Aspire-injected env) | Driven by `OTEL_EXPORTER_OTLP_PROTOCOL` — `grpc` (default when Aspire injects it) → HTTP/2 + `application/grpc+proto` to `{endpoint}/opentelemetry.proto.collector.{trace,logs}.v1.{TraceService,LogsService}/Export`. Anything else → HTTP/1.1 POST to `{endpoint}/v1/{logs,traces}`. | `OTEL_EXPORTER_OTLP_HEADERS` (`k=v,k=v`) |
 
 Either leg whose URL resolves to null/empty is skipped silently. In
 production (docker-compose), Aspire is absent so the Aspire leg is
 automatically skipped.
+
+The gRPC path reuses the already-serialised protobuf bytes, wraps them in
+the 5-byte gRPC length-prefix frame (compression flag + big-endian length),
+and POSTs over HTTP/2. Non-zero `grpc-status` trailers are logged at
+Warning and swallowed — same contract as the HTTP/protobuf path.

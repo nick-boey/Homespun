@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Homespun.Server\Homespun.Server.csproj" />
-    <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Homespun.ServiceDefaults\Homespun.ServiceDefaults.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 
 </Project>
