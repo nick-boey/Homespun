@@ -26,8 +26,8 @@ import {
   W3CBaggagePropagator,
   W3CTraceContextPropagator,
 } from '@opentelemetry/core'
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch'
 import { XMLHttpRequestInstrumentation } from '@opentelemetry/instrumentation-xml-http-request'

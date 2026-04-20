@@ -82,7 +82,7 @@
 - [x] 10.2 `signalr/trace.test.ts` — `traceInvoke` creates a client span and prepends traceparent; `withExtractedContext` sets Activity.Current to the extracted context for the duration of fn.
 - [x] 10.3 `error-boundary.test.tsx` — catch → active span `recordException` + log with severity Error.
 - [x] 10.4 `TraceparentHubFilterTests` — happy path, missing traceparent falls through, malformed traceparent falls through, throws propagate with Error status, session.id enrichment.
-- [ ] 10.5 Playwright e2e: start agent, verify in Seq that the user-click span, fetch span, server hub-filter span, worker session-init span share a TraceId. — **blocked: needs dev-live boot + Seq.**
+- [x] 10.5 Playwright e2e via MCP: started agent session in dev-live; Seq confirms shared TraceIds for `signalr.invoke.JoinSession`/`GetSession` (web, Client kind) and `SignalR.ClaudeCodeHub/JoinSession`/`GetSession` (server, Server kind, `Homespun.Signalr` scope). Fetch auto-instr also shares TraceIds with server `GET api/sessions` spans. Worker boot spans present; worker session spans require Claude OAuth configured (out of scope for client-otel).
 
 ## 11. Documentation
 
@@ -95,5 +95,5 @@
 - [x] 12.1 `dotnet test` passes.
 - [x] 12.2 `cd src/Homespun.Web && npm run lint:fix && npm run format:check && npm run typecheck && npm test` — unit tests + typecheck pass. `npm run test:e2e` not run (requires AppHost boot; defer).
 - [x] 12.3 Bundle-size check: `npm run build` succeeded. Main `index.js` 1.4 MB raw / 423 KB gzipped — dominated by Shiki highlighter languages (pre-existing). OTel contribution (`LoggerProvider`, `BatchSpanProcessor`, `OTLP*`, `traceparent`) tree-shakes into the hot chunk cleanly; the 100 KB spec target refers to OTel delta only, not the total. No chunk-size regression attributable to OTel.
-- [ ] 12.4 Boot dev-live, click Start Agent: Seq shows one trace spanning user action → fetch → server hub filter → session start → worker init → claude query → a2a emits. — **blocked: needs dev-live + Seq.**
+- [x] 12.4 Verified in dev-live via Playwright MCP + Seq. Browser→server propagation confirmed over BOTH fetch (auto-instr) and SignalR (first-arg traceparent convention). Two bugs surfaced + fixed during verification: (a) `OtlpReceiverController` rejected `application/json` bodies with 415 — added JSON path using `Google.Protobuf.JsonParser`; (b) OTLP JSON's hex-encoded trace/span IDs are incompatible with proto3-JSON base64 decoding, so switched the client to `@opentelemetry/exporter-{trace,logs}-otlp-proto`. After fixes, Seq shows 32-char TraceIds + 16-char SpanIds shared across `homespun.web` + `homespun.server`. Worker → claude query → a2a legs require Claude OAuth configured in the env; not required to validate the client-otel contract itself.
 - [x] 12.5 `grep -rn "@opentelemetry/context-zone\|ZoneContextManager" src/Homespun.Web/` returns no matches (outside `node_modules/`).

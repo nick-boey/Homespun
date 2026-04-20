@@ -113,13 +113,28 @@ public class OtlpReceiverTests
         var payload = BuildLogsPayload();
         var (controller, fanout, _) = BuildController(
             payload.ToByteArray(),
-            contentType: "application/json");
+            contentType: "text/plain");
 
         var result = await controller.Logs(CancellationToken.None);
 
         Assert.That(result, Is.InstanceOf<StatusCodeResult>());
         Assert.That(((StatusCodeResult)result).StatusCode, Is.EqualTo(StatusCodes.Status415UnsupportedMediaType));
         Assert.That(fanout.LogDispatches, Is.Empty);
+    }
+
+    [Test]
+    public async Task Json_happy_path_returns_202_and_fan_out_called()
+    {
+        var payload = BuildLogsPayload();
+        var json = Google.Protobuf.JsonFormatter.Default.Format(payload);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var (controller, fanout, _) = BuildController(bytes, contentType: "application/json");
+
+        var result = await controller.Logs(CancellationToken.None);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(StatusCodes.Status202Accepted));
+        Assert.That(fanout.LogDispatches, Has.Count.EqualTo(1));
     }
 
     [Test]

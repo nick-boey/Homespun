@@ -19,6 +19,7 @@ public sealed class OtlpReceiverController : ControllerBase
 {
     internal const int MaxBodyBytes = 4 * 1024 * 1024;
     private const string ProtobufContentType = "application/x-protobuf";
+    private const string JsonContentType = "application/json";
 
     private readonly IOtlpScrubber _scrubber;
     private readonly IOtlpFanout _fanout;
@@ -60,9 +61,12 @@ public sealed class OtlpReceiverController : ControllerBase
         Func<T, CancellationToken, Task> dispatch,
         object partialSuccess,
         CancellationToken ct)
-        where T : IMessage<T>
+        where T : IMessage<T>, new()
     {
-        if (!(Request.ContentType?.StartsWith(ProtobufContentType, StringComparison.OrdinalIgnoreCase) ?? false))
+        var contentType = Request.ContentType;
+        var isProtobuf = contentType?.StartsWith(ProtobufContentType, StringComparison.OrdinalIgnoreCase) ?? false;
+        var isJson = contentType?.StartsWith(JsonContentType, StringComparison.OrdinalIgnoreCase) ?? false;
+        if (!isProtobuf && !isJson)
         {
             return StatusCode(StatusCodes.Status415UnsupportedMediaType);
         }
@@ -82,11 +86,24 @@ public sealed class OtlpReceiverController : ControllerBase
             // ParseFrom(Stream) does synchronous reads, which Kestrel rejects by
             // default (AllowSynchronousIO=false).
             using var buffered = await ReadBodyAsync(ct).ConfigureAwait(false);
-            request = parse(buffered);
+            if (isJson)
+            {
+                using var reader = new StreamReader(buffered);
+                request = JsonParser.Default.Parse<T>(reader);
+            }
+            else
+            {
+                request = parse(buffered);
+            }
         }
         catch (InvalidProtocolBufferException ex)
         {
             _logger.LogWarning(ex, "OTLP request rejected: malformed protobuf body");
+            return BadRequest();
+        }
+        catch (InvalidJsonException ex)
+        {
+            _logger.LogWarning(ex, "OTLP request rejected: malformed JSON body");
             return BadRequest();
         }
 
