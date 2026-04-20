@@ -5,7 +5,7 @@ namespace Homespun.Features.Observability;
 
 /// <summary>
 /// Mutates an incoming OTLP request in place before it is dispatched to
-/// downstream sinks. Enforces the <c>SessionEventLog:ContentPreviewChars</c>
+/// downstream sinks. Enforces the <c>SessionEventContent:ContentPreviewChars</c>
 /// gate and redacts attribute values whose key names a secret.
 /// </summary>
 public interface IOtlpScrubber

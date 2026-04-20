@@ -11,7 +11,7 @@ namespace Homespun.Tests.Features.Observability;
 
 /// <summary>
 /// Unit tests covering the two redaction rules <see cref="OtlpScrubber"/> owns:
-/// content-preview gating by <c>SessionEventLog:ContentPreviewChars</c> and
+/// content-preview gating by <c>SessionEventContent:ContentPreviewChars</c> and
 /// secret-substring attribute-key redaction.
 /// </summary>
 [TestFixture]
@@ -19,8 +19,8 @@ public class OtlpScrubberTests
 {
     private static OtlpScrubber BuildScrubber(int contentPreviewChars, params string[] secretSubstrings)
     {
-        var sessionOptions = new TestOptionsMonitor<SessionEventLogOptions>(
-            new SessionEventLogOptions { ContentPreviewChars = contentPreviewChars });
+        var contentOptions = new TestOptionsMonitor<SessionEventContentOptions>(
+            new SessionEventContentOptions { ContentPreviewChars = contentPreviewChars });
         var scrubberOptions = new TestOptionsMonitor<OtlpScrubberOptions>(
             new OtlpScrubberOptions
             {
@@ -28,7 +28,7 @@ public class OtlpScrubberTests
                     ? new List<string> { "authorization" }
                     : secretSubstrings.ToList(),
             });
-        return new OtlpScrubber(sessionOptions, scrubberOptions);
+        return new OtlpScrubber(contentOptions, scrubberOptions);
     }
 
     private static ExportLogsServiceRequest BuildLogsRequest(params KeyValue[] attributes)

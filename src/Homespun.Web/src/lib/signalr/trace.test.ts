@@ -1,15 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  context,
-  propagation,
-  ROOT_CONTEXT,
-  trace,
-  type Tracer,
-} from '@opentelemetry/api'
-import {
-  InMemorySpanExporter,
-  SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base'
+import { context, propagation, ROOT_CONTEXT, trace, type Tracer } from '@opentelemetry/api'
+import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { StackContextManager, WebTracerProvider } from '@opentelemetry/sdk-trace-web'
 import {
   CompositePropagator,
@@ -113,16 +104,17 @@ describe('signalr/trace helpers', () => {
   describe('traceInvoke', () => {
     it('creates a client span and prepends traceparent as the first argument', async () => {
       const invoke = vi.fn().mockResolvedValue('ok')
-      const result = await traceInvoke<string>(invoke as unknown as HubInvoke, 'JoinSession', 'session-123', true)
+      const result = await traceInvoke<string>(
+        invoke as unknown as HubInvoke,
+        'JoinSession',
+        'session-123',
+        true
+      )
 
       expect(result).toBe('ok')
       expect(invoke).toHaveBeenCalledTimes(1)
 
-      const [methodName, firstArg, ...rest] = invoke.mock.calls[0] as [
-        string,
-        string,
-        ...unknown[],
-      ]
+      const [methodName, firstArg, ...rest] = invoke.mock.calls[0] as [string, string, ...unknown[]]
       expect(methodName).toBe('JoinSession')
       expect(firstArg).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
       expect(rest).toEqual(['session-123', true])
@@ -141,7 +133,9 @@ describe('signalr/trace helpers', () => {
       const boom = new Error('boom')
       const invoke = vi.fn().mockRejectedValue(boom)
 
-      await expect(traceInvoke(invoke as unknown as HubInvoke, 'SendMessage', 's1', 'hi')).rejects.toBe(boom)
+      await expect(
+        traceInvoke(invoke as unknown as HubInvoke, 'SendMessage', 's1', 'hi')
+      ).rejects.toBe(boom)
 
       const spans = exporter.getFinishedSpans()
       expect(spans).toHaveLength(1)

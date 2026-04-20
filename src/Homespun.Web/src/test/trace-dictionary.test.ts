@@ -24,9 +24,7 @@ function findRepoRoot(start: string): string {
     }
     const parent = path.dirname(dir)
     if (parent === dir) {
-      throw new Error(
-        `docs/traces/dictionary.md not found walking up parents of ${start}`
-      )
+      throw new Error(`docs/traces/dictionary.md not found walking up parents of ${start}`)
     }
     dir = parent
   }
@@ -166,8 +164,7 @@ function walkSources(root: string): string[] {
 }
 
 // `const IDENT = '...'` or `const IDENT: T = '...'` (either quote style).
-const CONST_STRING_RE =
-  /\bconst\s+(?<name>\w+)(?:\s*:\s*[^=]+)?\s*=\s*(['"])(?<value>[^'"]+)\2/g
+const CONST_STRING_RE = /\bconst\s+(?<name>\w+)(?:\s*:\s*[^=]+)?\s*=\s*(['"])(?<value>[^'"]+)\2/g
 
 function collectConsts(text: string): Map<string, string> {
   const out = new Map<string, string>()
@@ -295,14 +292,14 @@ describe('trace dictionary — web', () => {
     const dict = parseDictionary(DICTIONARY_PATH)
     const scan = scanWebSources()
     const combined = new Set([...scan.tracerNames, ...scan.loggerNames])
-    const missing = [...combined]
-      .filter((n) => !dict.registryNames.has(n))
-      .sort()
+    const missing = [...combined].filter((n) => !dict.registryNames.has(n)).sort()
 
-    expect(missing, missing.length > 0
-      ? `Tracer/logger names in src/Homespun.Web/src not in docs/traces/dictionary.md registry: ${missing.join(', ')}. Add them to the Tracer / ActivitySource registry table.`
-      : 'ok')
-      .toEqual([])
+    expect(
+      missing,
+      missing.length > 0
+        ? `Tracer/logger names in src/Homespun.Web/src not in docs/traces/dictionary.md registry: ${missing.join(', ')}. Add them to the Tracer / ActivitySource registry table.`
+        : 'ok'
+    ).toEqual([])
   })
 
   it('every literal span name is documented under Client-originated traces', () => {
@@ -318,7 +315,10 @@ describe('trace dictionary — web', () => {
     }
 
     const detail = undocumented
-      .map((s) => `  - Span \`${s.name}\` used in ${s.relativePath}:${s.line} is not documented in docs/traces/dictionary.md`)
+      .map(
+        (s) =>
+          `  - Span \`${s.name}\` used in ${s.relativePath}:${s.line} is not documented in docs/traces/dictionary.md`
+      )
       .join('\n')
     throw new Error(
       `Undocumented span name(s) emitted by src/Homespun.Web/src:\n${detail}\n` +
@@ -355,9 +355,11 @@ describe('trace dictionary — web', () => {
       .filter((name) => !emitted.has(name) && !OrphanExemptSpans.has(name))
       .sort()
 
-    expect(orphans, orphans.length > 0
-      ? `Dictionary H3 entries under '## Client-originated traces' with no matching startSpan/startActiveSpan call in src/Homespun.Web/src: ${orphans.join(', ')}. Remove the entry or add its emit site — or add to OrphanExemptSpans with a justifying comment.`
-      : 'ok')
-      .toEqual([])
+    expect(
+      orphans,
+      orphans.length > 0
+        ? `Dictionary H3 entries under '## Client-originated traces' with no matching startSpan/startActiveSpan call in src/Homespun.Web/src: ${orphans.join(', ')}. Remove the entry or add its emit site — or add to OrphanExemptSpans with a justifying comment.`
+        : 'ok'
+    ).toEqual([])
   })
 })

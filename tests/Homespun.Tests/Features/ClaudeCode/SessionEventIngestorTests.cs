@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
@@ -5,15 +6,15 @@ using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
 /// <summary>
-/// TDD tests for <see cref="SessionEventIngestor"/>.
-/// Covers task 6.5 of the a2a-native-messaging OpenSpec change: append-before-broadcast
-/// ordering, envelope shape, and failure isolation.
+/// Tests for <see cref="SessionEventIngestor"/>: append-before-broadcast
+/// ordering, envelope shape, failure isolation, and span emission shape.
+/// Spans are captured with an in-memory <see cref="ActivityListener"/>
+/// subscribed to <c>Homespun.SessionPipeline</c>.
 /// </summary>
 [TestFixture]
 public class SessionEventIngestorTests
@@ -64,6 +65,18 @@ public class SessionEventIngestorTests
 
     private static A2AEventRecord Record(long seq, string eventId, string kind) =>
         new(seq, SessionId, eventId, kind, DateTime.UtcNow, Payload(kind));
+
+    private static ActivityListener CaptureSpans(List<Activity> sink)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = src => src.Name == HomespunActivitySources.SessionPipeline,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = a => sink.Add(a),
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
 
     // ---------------- Ordering ----------------
 
@@ -127,7 +140,6 @@ public class SessionEventIngestorTests
                 It.IsAny<CancellationToken>()))
             .Callback<string, object?[], CancellationToken>((_, args, _) =>
             {
-                // args: [sessionId, envelope]
                 if (args.Length >= 2 && args[1] is SessionEventEnvelope env)
                 {
                     captured.Add(env);
@@ -135,7 +147,6 @@ public class SessionEventIngestorTests
             })
             .Returns(Task.CompletedTask);
 
-        // An A2A message JSON shape the parser accepts (matches A2AMessageParserTests fixture).
         var payload = JsonDocument.Parse("""
         {
             "kind": "message",
@@ -181,97 +192,12 @@ public class SessionEventIngestorTests
             .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("hub is down"));
 
-        // Broadcast failure must not propagate — the append already succeeded and future
-        // replays will serve this event.
         var payload = JsonDocument.Parse("""{"id":"t-3","status":{"state":"submitted"}}""").RootElement;
         await _ingestor.IngestAsync(ProjectId, SessionId, "task", payload);
 
         _storeMock.Verify(s =>
             s.AppendAsync(ProjectId, SessionId, "task", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
             Times.Once);
-    }
-
-    [Test]
-    public async Task LoggingDoesNotReorderOrDropEnvelopes()
-    {
-        var payload = JsonDocument.Parse("""
-        {
-            "kind": "message",
-            "messageId": "m-1",
-            "role": "agent",
-            "parts": [ { "kind": "text", "text": "hello world" } ],
-            "contextId": "ctx-1",
-            "taskId": "t-1"
-        }
-        """).RootElement;
-
-        var translated = new AGUIBaseEvent[]
-        {
-            AGUIEventFactory.CreateTextMessageStart("m-1"),
-            AGUIEventFactory.CreateTextMessageContent("m-1", "hello"),
-            AGUIEventFactory.CreateTextMessageEnd("m-1"),
-        };
-
-        async Task<List<SessionEventEnvelope>> RunAsync(SessionEventLogOptions options)
-        {
-            var storeMock = new Mock<IA2AEventStore>();
-            storeMock.Setup(s => s.AppendAsync(ProjectId, SessionId, "message", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(Record(9, "event-9", "message"));
-
-            var translatorMock = new Mock<IA2AToAGUITranslator>();
-            translatorMock.Setup(t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()))
-                .Returns(translated);
-
-            var groupClient = new Mock<IClientProxy>();
-            var captured = new List<SessionEventEnvelope>();
-            groupClient.Setup(c => c.SendCoreAsync(AGUIEventType.ReceiveSessionEvent, It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
-                .Callback<string, object?[], CancellationToken>((_, args, _) =>
-                {
-                    if (args.Length >= 2 && args[1] is SessionEventEnvelope env) captured.Add(env);
-                })
-                .Returns(Task.CompletedTask);
-
-            var hubClients = new Mock<IHubClients>();
-            hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(groupClient.Object);
-            var hub = new Mock<IHubContext<ClaudeCodeHub>>();
-            hub.SetupGet(h => h.Clients).Returns(hubClients.Object);
-
-            var ingestor = new SessionEventIngestor(
-                storeMock.Object,
-                translatorMock.Object,
-                hub.Object,
-                new Mock<ILogger<SessionEventIngestor>>().Object,
-                new NullServiceProvider(),
-                Options.Create(options));
-
-            await ingestor.IngestAsync(ProjectId, SessionId, "message", payload);
-            return captured;
-        }
-
-        // Run once with all hops disabled (no logging), once with max logging (content preview on).
-        var noLogging = new SessionEventLogOptions
-        {
-            ContentPreviewChars = 0,
-            Hops = new Dictionary<string, SessionEventLogOptions.HopSettings>
-            {
-                [Homespun.Shared.Models.Observability.SessionEventHops.ServerSseRx] = new() { Enabled = false },
-                [Homespun.Shared.Models.Observability.SessionEventHops.ServerIngestAppend] = new() { Enabled = false },
-                [Homespun.Shared.Models.Observability.SessionEventHops.ServerAguiTranslate] = new() { Enabled = false },
-                [Homespun.Shared.Models.Observability.SessionEventHops.ServerSignalrTx] = new() { Enabled = false },
-            },
-        };
-        var maxLogging = new SessionEventLogOptions { ContentPreviewChars = 80 };
-
-        var capturedNoLogging = await RunAsync(noLogging);
-        var capturedMaxLogging = await RunAsync(maxLogging);
-
-        Assert.That(capturedMaxLogging, Has.Count.EqualTo(capturedNoLogging.Count));
-        for (var i = 0; i < capturedNoLogging.Count; i++)
-        {
-            Assert.That(capturedMaxLogging[i].Seq, Is.EqualTo(capturedNoLogging[i].Seq));
-            Assert.That(capturedMaxLogging[i].EventId, Is.EqualTo(capturedNoLogging[i].EventId));
-            Assert.That(capturedMaxLogging[i].Event.Type, Is.EqualTo(capturedNoLogging[i].Event.Type));
-        }
     }
 
     [Test]
@@ -298,8 +224,6 @@ public class SessionEventIngestorTests
             .Returns(Task.CompletedTask);
 
         var payload = JsonDocument.Parse("""{"weird":"payload"}""").RootElement;
-        // unknown-kind is not an A2A event kind, so the parser returns null and the
-        // ingestor must still deliver a Custom "raw" envelope.
         await _ingestor.IngestAsync(ProjectId, SessionId, "unknown-kind", payload);
 
         Assert.That(captured, Has.Count.EqualTo(1));
@@ -307,9 +231,56 @@ public class SessionEventIngestorTests
         var custom = (CustomEvent)captured[0].Event;
         Assert.That(custom.Name, Is.EqualTo(AGUICustomEventName.Raw));
 
-        // Translator must not be called for unparsable input — that's the escape hatch.
         _translatorMock.Verify(
             t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()),
             Times.Never);
+    }
+
+    // ---------------- Span emission ----------------
+
+    [Test]
+    public async Task IngestAsync_EmitsIngestSpanWithOrderedEvents()
+    {
+        _storeMock
+            .Setup(s => s.AppendAsync(ProjectId, SessionId, "message", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Record(5, "event-5", "message"));
+        _translatorMock
+            .Setup(t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()))
+            .Returns(new AGUIBaseEvent[] { AGUIEventFactory.CreateTextMessageStart("m-1") });
+        _groupClientMock
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var spans = new List<Activity>();
+        using var listener = CaptureSpans(spans);
+
+        var payload = JsonDocument.Parse("""
+        {
+            "kind": "message",
+            "messageId": "m-1",
+            "role": "agent",
+            "parts": [ { "kind": "text", "text": "hi" } ],
+            "contextId": "ctx-1",
+            "taskId": "t-1"
+        }
+        """).RootElement;
+        await _ingestor.IngestAsync(ProjectId, SessionId, "message", payload);
+
+        var ingest = spans.SingleOrDefault(s => s.OperationName == "homespun.session.ingest");
+        Assert.That(ingest, Is.Not.Null, "expected exactly one homespun.session.ingest span");
+
+        var events = ingest!.Events.Select(e => e.Name).ToArray();
+        Assert.That(events, Is.EqualTo(new[] { "sse.rx", "ingest.append", "signalr.tx" }));
+
+        Assert.That(ingest.GetTagItem("homespun.session.id"), Is.EqualTo(SessionId));
+        Assert.That(ingest.GetTagItem("homespun.a2a.kind"), Is.EqualTo("message"));
+        Assert.That(ingest.GetTagItem("homespun.seq"), Is.EqualTo(5L));
+        Assert.That(ingest.GetTagItem("homespun.event.id"), Is.EqualTo("event-5"));
+        Assert.That(ingest.GetTagItem("homespun.message.id"), Is.EqualTo("m-1"));
+        Assert.That(ingest.GetTagItem("homespun.task.id"), Is.EqualTo("t-1"));
+
+        var translate = spans.SingleOrDefault(s => s.OperationName == "homespun.agui.translate");
+        Assert.That(translate, Is.Not.Null, "expected exactly one homespun.agui.translate child span");
+        Assert.That(translate!.Parent?.OperationName, Is.EqualTo("homespun.session.ingest"));
     }
 }

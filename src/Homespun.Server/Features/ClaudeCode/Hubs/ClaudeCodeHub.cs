@@ -1,12 +1,11 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Observability;
-using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Hubs;
 
@@ -25,31 +24,42 @@ namespace Homespun.Features.ClaudeCode.Hubs;
 /// </summary>
 public class ClaudeCodeHub(
     IClaudeSessionService sessionService,
-    ILogger<ClaudeCodeHub> logger,
-    IOptions<SessionEventLogOptions> sessionEventLogOptions) : Hub
+    ILogger<ClaudeCodeHub> logger) : Hub
 {
-    private readonly SessionEventLogOptions _sessionEventLogOptions = sessionEventLogOptions.Value;
+    private const string ConnectActivityKey = "Homespun.Signalr.ConnectActivity";
 
     public override Task OnConnectedAsync()
     {
-        SessionEventLog.LogHubHop(
-            logger,
-            _sessionEventLogOptions,
-            SessionEventHops.ServerHubConnected,
-            sessionId: "unknown",
-            connectionId: Context.ConnectionId);
+        var activity = HomespunActivitySources.SignalrSource.StartActivity("homespun.signalr.connect", ActivityKind.Server);
+        if (activity is not null)
+        {
+            activity.SetTag("signalr.connection.id", Context.ConnectionId);
+            activity.AddEvent(new ActivityEvent(SessionEventSpanEvents.Connected));
+            Context.Items[ConnectActivityKey] = activity;
+        }
+        _ = logger;
         return base.OnConnectedAsync();
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        SessionEventLog.LogHubHop(
-            logger,
-            _sessionEventLogOptions,
-            SessionEventHops.ServerHubDisconnected,
-            sessionId: "unknown",
-            connectionId: Context.ConnectionId,
-            detail: exception is null ? null : $"reason={exception.Message}");
+        if (Context.Items.TryGetValue(ConnectActivityKey, out var value) && value is Activity activity)
+        {
+            var disconnectEvent = new ActivityEvent(
+                SessionEventSpanEvents.Disconnected,
+                tags: exception is null
+                    ? default
+                    : new ActivityTagsCollection { ["reason"] = exception.Message });
+            activity.AddEvent(disconnectEvent);
+            if (exception is not null)
+            {
+                activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+                activity.AddException(exception);
+            }
+            activity.Stop();
+            activity.Dispose();
+            Context.Items.Remove(ConnectActivityKey);
+        }
         return base.OnDisconnectedAsync(exception);
     }
 
@@ -59,14 +69,11 @@ public class ClaudeCodeHub(
     public async Task JoinSession(string traceparent, string sessionId)
     {
         _ = traceparent;
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{sessionId}");
+        using var activity = HomespunActivitySources.SignalrSource.StartActivity("homespun.signalr.join", ActivityKind.Server);
+        activity?.SetTag("homespun.session.id", sessionId);
+        activity?.SetTag("signalr.connection.id", Context.ConnectionId);
 
-        SessionEventLog.LogHubHop(
-            logger,
-            _sessionEventLogOptions,
-            SessionEventHops.ServerHubJoin,
-            sessionId: sessionId,
-            connectionId: Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{sessionId}");
 
         // Send current session state to the joining client
         var session = sessionService.GetSession(sessionId);
@@ -82,14 +89,11 @@ public class ClaudeCodeHub(
     public async Task LeaveSession(string traceparent, string sessionId)
     {
         _ = traceparent;
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"session-{sessionId}");
+        using var activity = HomespunActivitySources.SignalrSource.StartActivity("homespun.signalr.leave", ActivityKind.Server);
+        activity?.SetTag("homespun.session.id", sessionId);
+        activity?.SetTag("signalr.connection.id", Context.ConnectionId);
 
-        SessionEventLog.LogHubHop(
-            logger,
-            _sessionEventLogOptions,
-            SessionEventHops.ServerHubLeave,
-            sessionId: sessionId,
-            connectionId: Context.ConnectionId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"session-{sessionId}");
     }
 
     /// <summary>

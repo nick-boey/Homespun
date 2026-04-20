@@ -39,7 +39,8 @@ asserts that the reverse also holds.
 | `Homespun.AgentOrchestration`           | server       | ActivitySource| Session + agent lifecycle (reserved — see Planned)       |
 | `Homespun.GitClone`                     | server       | ActivitySource| Clone / worktree ops (reserved — see Planned)            |
 | `Homespun.FleeceSync`                   | server       | ActivitySource| Fleece issue sync (reserved — see Planned)               |
-| `Homespun.Signalr`                      | server       | ActivitySource| `TraceparentHubFilter` hub-invocation spans              |
+| `Homespun.Signalr`                      | server       | ActivitySource| `TraceparentHubFilter` hub-invocation + `ClaudeCodeHub` connect/join/leave spans |
+| `Homespun.SessionPipeline`              | server       | ActivitySource| A2A ingest + AG-UI translate spans                       |
 | `homespun.web`                          | client       | Tracer+Logger | Root React app tracer and logger                         |
 | `homespun.web.signalr`                  | client       | Tracer        | SignalR client-span wrapper + lifecycle span             |
 | `homespun.web.session-events`           | client       | Tracer        | Envelope rx + reducer-apply spans                        |
@@ -152,15 +153,95 @@ and no double-emission occurs (see comment in `Extensions.cs`).
 - **Records exceptions:** rethrown exceptions from the downstream method are
   attached via `AddException` and the status is set to `Error`.
 
+### `homespun.session.ingest`
+
+Server-side A2A ingest span. Emitted by
+`src/Homespun.Server/Features/ClaudeCode/Services/SessionEventIngestor.cs`
+on the `Homespun.SessionPipeline` ActivitySource — one per A2A event
+received from a worker. Carries the append-before-broadcast pipeline as
+ordered span events.
+
+- **Originator:** server
+- **Kind:** `CONSUMER`
+- **Parent:** the inbound worker SSE `http.server.request` span.
+- **Required attrs:** `homespun.session.id`, `homespun.a2a.kind`,
+  `homespun.seq`, `homespun.event.id`.
+- **Optional attrs:** `homespun.task.id`, `homespun.message.id`,
+  `homespun.artifact.id`, `homespun.content.preview` (gated by
+  `SessionEventContent:ContentPreviewChars`).
+- **Events:** `sse.rx` (before parse), `ingest.append` (after
+  `A2AEventStore.AppendAsync`), `signalr.tx` (after the envelope broadcast).
+- **Child spans:** `homespun.agui.translate`.
+- **Records exceptions:** broadcast failure is attached via `AddException`
+  and the status set to `Error`; the append is not reversed.
+
+### `homespun.agui.translate`
+
+Child of `homespun.session.ingest`. Covers the pure A2A → AG-UI translator
+call. Same emitter file as the parent span.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `homespun.session.ingest`.
+- **Required attrs:** `homespun.session.id`, `homespun.a2a.kind`.
+
+### `homespun.signalr.connect`
+
+Long-lived hub-connection span. Emitted by
+`src/Homespun.Server/Features/ClaudeCode/Hubs/ClaudeCodeHub.cs`
+`OnConnectedAsync`; stopped in `OnDisconnectedAsync`. One span per SignalR
+connection, held across the connection's lifetime in `Context.Items`.
+
+- **Originator:** server
+- **Kind:** `SERVER`
+- **Required attrs:** `signalr.connection.id`.
+- **Events:** `connected` (at start), `disconnected` (at end; carries a
+  `reason` tag when the disconnect exception is non-null).
+- **Records exceptions:** disconnect exceptions are attached via
+  `AddException` and the status set to `Error`.
+
+### `homespun.signalr.join`
+
+Discrete join span. Emitted by
+`src/Homespun.Server/Features/ClaudeCode/Hubs/ClaudeCodeHub.cs`
+`JoinSession`.
+
+- **Originator:** server
+- **Kind:** `SERVER`
+- **Parent:** the matching `SignalR.ClaudeCodeHub/JoinSession` span started
+  by `TraceparentHubFilter`.
+- **Required attrs:** `homespun.session.id`, `signalr.connection.id`.
+
+### `homespun.signalr.leave`
+
+Discrete leave span. Emitted by
+`src/Homespun.Server/Features/ClaudeCode/Hubs/ClaudeCodeHub.cs`
+`LeaveSession`.
+
+- **Originator:** server
+- **Kind:** `SERVER`
+- **Parent:** the matching `SignalR.ClaudeCodeHub/LeaveSession` span started
+  by `TraceparentHubFilter`.
+- **Required attrs:** `homespun.session.id`, `signalr.connection.id`.
+
 ---
 
 ## Worker-originated traces
 
-No statically-named worker spans exist yet — the worker currently emits
-structured logs only, under the `homespun.worker` logger. Spans are deferred
-to the `worker-spans` change (see [Planned / reserved](#planned--reserved)).
-This section is retained so the worker drift check has a canonical place to
-add future entries.
+### `homespun.a2a.emit`
+
+Emitted by `src/Homespun.Worker/src/services/sse-writer.ts` on the
+`homespun.worker` tracer — one per A2A event written to the SSE response
+stream. Represents the worker → server handoff.
+
+- **Originator:** worker
+- **Kind:** `PRODUCER`
+- **Parent:** the active Hono request span (auto-instrumentation).
+- **Required attrs:** `homespun.session.id`, `homespun.a2a.kind`.
+- **Optional attrs:** `homespun.task.id`, `homespun.message.id`,
+  `homespun.artifact.id`, `homespun.status.timestamp`, `homespun.agui.type`,
+  `homespun.agui.custom_name`, `homespun.seq`, `homespun.event.id`,
+  `homespun.content.preview` (gated by `CONTENT_PREVIEW_CHARS` env).
 
 ---
 
@@ -204,7 +285,6 @@ Planned span surface covered by the sibling `worker-spans` change:
 
 - `homespun.worker.session.init` — SERVER kind.
 - `homespun.claude.query` — CLIENT kind, carries `gen_ai.*` attrs.
-- `homespun.a2a.emit` — PRODUCER kind, child of `homespun.claude.query`.
 
 ---
 

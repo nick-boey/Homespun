@@ -58,9 +58,18 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
 // Register custom Homespun activity sources for tracing
 builder.Services.AddHomespunInstrumentation();
 
-// SessionEventLog — shared structured logging for the A2A → AG-UI pipeline.
-builder.Services.Configure<SessionEventLogOptions>(
-    builder.Configuration.GetSection(SessionEventLogOptions.SectionName));
+// SessionEventContent — content-preview gating for session-pipeline spans.
+// The new `SessionEventContent` section is authoritative; the legacy
+// `SessionEventLog` section is read as a fallback for one release so existing
+// deployments keep working through the hop-log → span migration.
+builder.Services.Configure<SessionEventContentOptions>(options =>
+{
+    var primary = builder.Configuration.GetSection(SessionEventContentOptions.SectionName);
+    var legacy = builder.Configuration.GetSection(SessionEventContentOptions.LegacySectionName);
+    var source = primary.Exists() ? primary : legacy;
+    source.Bind(options);
+});
+builder.Services.AddSingleton<IContentPreviewGate, ContentPreviewGate>();
 
 // OTLP receiver proxy (POST /api/otlp/v1/{logs,traces}): worker + client ship
 // OTLP to the server, which scrubs + fans out to Seq + the Aspire dashboard.
@@ -265,8 +274,7 @@ else
     builder.Services.AddSingleton<IA2AEventStore>(sp =>
         new A2AEventStore(
             messageCacheDir,
-            sp.GetRequiredService<ILogger<A2AEventStore>>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>()));
+            sp.GetRequiredService<ILogger<A2AEventStore>>()));
 
     // Pure A2A → AG-UI translator used by both the live ingestion path and the replay endpoint.
     builder.Services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
@@ -403,17 +411,30 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// SessionEventLog: warn if content previews are enabled in Production — this
-// ships raw event text to Seq, which may leak sensitive content.
-var sessionEventLogOptions = app.Services
-    .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventLogOptions>>().Value;
-if (app.Environment.IsProduction() && sessionEventLogOptions.ContentPreviewChars > 0)
+// SessionEventContent: warn if content previews are enabled in Production —
+// this ships raw event text to Seq span attributes, which may leak sensitive
+// content. Also log a deprecation warning if the legacy config section was
+// consulted.
+var sessionEventContentOptions = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionEventContentOptions>>().Value;
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("Homespun.SessionEvents");
+
+var primarySection = builder.Configuration.GetSection(SessionEventContentOptions.SectionName);
+var legacySection = builder.Configuration.GetSection(SessionEventContentOptions.LegacySectionName);
+if (!primarySection.Exists() && legacySection.Exists())
 {
-    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
-        .CreateLogger("Homespun.SessionEvents");
     startupLogger.LogWarning(
-        "SessionEventLog:ContentPreviewChars is set to {Chars} in Production. Event content previews will be written to logs.",
-        sessionEventLogOptions.ContentPreviewChars);
+        "Config section '{Legacy}' is deprecated; rename to '{Primary}'. The legacy name will be removed in the next release.",
+        SessionEventContentOptions.LegacySectionName,
+        SessionEventContentOptions.SectionName);
+}
+
+if (app.Environment.IsProduction() && sessionEventContentOptions.ContentPreviewChars > 0)
+{
+    startupLogger.LogWarning(
+        "SessionEventContent:ContentPreviewChars is set to {Chars} in Production. Event content previews will be attached to span attributes.",
+        sessionEventContentOptions.ContentPreviewChars);
 }
 
 // Configure the HTTP request pipeline

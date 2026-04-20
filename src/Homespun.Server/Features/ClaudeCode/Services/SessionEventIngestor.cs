@@ -4,10 +4,8 @@ using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Observability;
-using Homespun.Shared.Models.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -31,9 +29,12 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// </list>
 ///
 /// <para>
-/// Translation and broadcast failures MUST NOT reverse the append. If persistence succeeded
-/// but broadcast failed, the next refresh will still serve the event from the log; that is
-/// the append-before-broadcast guarantee in action.
+/// Every ingestion emits a <c>homespun.session.ingest</c> span on
+/// <see cref="HomespunActivitySources.SessionPipelineSource"/> with span events
+/// <c>sse.rx</c>, <c>ingest.append</c>, and <c>signalr.tx</c> in order. A child
+/// <c>homespun.agui.translate</c> span covers the translator call. Translation
+/// and broadcast failures MUST NOT reverse the append — if persistence succeeded
+/// but broadcast failed the next refresh will still serve the event from the log.
 /// </para>
 /// </summary>
 public sealed class SessionEventIngestor : ISessionEventIngestor
@@ -43,7 +44,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
     private readonly IHubContext<ClaudeCodeHub> _hub;
     private readonly ILogger<SessionEventIngestor> _logger;
     private readonly IServiceProvider _serviceProvider;
-    private readonly SessionEventLogOptions _sessionEventLogOptions;
+    private readonly IContentPreviewGate _previewGate;
 
     public SessionEventIngestor(
         IA2AEventStore store,
@@ -51,14 +52,14 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         IHubContext<ClaudeCodeHub> hub,
         ILogger<SessionEventIngestor> logger,
         IServiceProvider serviceProvider,
-        IOptions<SessionEventLogOptions>? sessionEventLogOptions = null)
+        IContentPreviewGate? previewGate = null)
     {
         _store = store;
         _translator = translator;
         _hub = hub;
         _logger = logger;
         _serviceProvider = serviceProvider;
-        _sessionEventLogOptions = sessionEventLogOptions?.Value ?? new SessionEventLogOptions();
+        _previewGate = previewGate ?? new NoopContentPreviewGate();
     }
 
     /// <inheritdoc />
@@ -69,72 +70,84 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         JsonElement payload,
         CancellationToken cancellationToken = default)
     {
+        using var ingestSpan = HomespunActivitySources.SessionPipelineSource.StartActivity("homespun.session.ingest", ActivityKind.Consumer);
+
+        ingestSpan?.SetTag("homespun.session.id", sessionId);
+        ingestSpan?.SetTag("homespun.a2a.kind", eventKind);
+
+        ingestSpan?.AddEvent(new ActivityEvent(SessionEventSpanEvents.SseRx));
+
         // Step 1: persist — this assigns seq + eventId and flushes before any client sees it.
         var record = await _store.AppendAsync(projectId, sessionId, eventKind, payload, cancellationToken);
+
+        ingestSpan?.SetTag("homespun.seq", record.Seq);
+        ingestSpan?.SetTag("homespun.event.id", record.EventId);
+        ingestSpan?.AddEvent(new ActivityEvent(SessionEventSpanEvents.IngestAppend));
 
         // Step 2: translate. The translator is deliberately tolerant of unknown shapes and
         // never throws; a null parsed result is itself a "we could not parse this" signal and
         // gets wrapped in a raw Custom envelope so the client still receives something.
         var ctx = new TranslationContext(sessionId, RunId: sessionId);
         var parsed = A2AMessageParser.ParseSseEvent(eventKind, payload.GetRawText());
-        IEnumerable<AGUIBaseEvent> aguiEvents;
-        if (parsed is null)
-        {
-            aguiEvents = new[]
-            {
-                AGUIEventFactory.CreateCustomEvent(
-                    AGUICustomEventName.Raw,
-                    new { original = payload }),
-            };
-        }
-        else
-        {
-            aguiEvents = _translator.Translate(parsed, ctx);
 
-            // Tool-use dispatch: for A2A Message events carrying tool_use blocks,
-            // route workflow_signal and Write (plan-capture) side effects through
-            // ToolInteractionService. AskUserQuestion/ExitPlanMode are intercepted by
-            // the worker's canUseTool and surface as input-required status-updates, so
-            // they fall outside this tap.
-            if (parsed is ParsedAgentMessage agentMsg)
-            {
-                await DispatchToolUsesAsync(sessionId, agentMsg, cancellationToken);
-            }
-        }
-
-        // Step 3: broadcast. One envelope per translated AG-UI event, all sharing the parent
-        // A2A event's seq and eventId so live and replay produce identical envelope streams.
         ExtractParentCorrelation(
             parsed,
             out var parentTaskId,
             out var parentMessageId,
             out var parentArtifactId,
-            out var parentStatusTimestamp);
+            out _);
 
+        if (parentTaskId is not null) ingestSpan?.SetTag("homespun.task.id", parentTaskId);
+        if (parentMessageId is not null) ingestSpan?.SetTag("homespun.message.id", parentMessageId);
+        if (parentArtifactId is not null) ingestSpan?.SetTag("homespun.artifact.id", parentArtifactId);
+
+        var preview = _previewGate.Gate(ExtractPreview(parsed, payload.GetRawText()));
+        if (preview is not null)
+        {
+            ingestSpan?.SetTag("homespun.content.preview", preview);
+        }
+
+        IEnumerable<AGUIBaseEvent> aguiEvents;
+        using (var translateSpan = HomespunActivitySources.SessionPipelineSource.StartActivity("homespun.agui.translate", ActivityKind.Internal))
+        {
+            translateSpan?.SetTag("homespun.a2a.kind", eventKind);
+            translateSpan?.SetTag("homespun.session.id", sessionId);
+
+            if (parsed is null)
+            {
+                aguiEvents = new[]
+                {
+                    AGUIEventFactory.CreateCustomEvent(
+                        AGUICustomEventName.Raw,
+                        new { original = payload }),
+                };
+            }
+            else
+            {
+                aguiEvents = _translator.Translate(parsed, ctx).ToList();
+
+                // Tool-use dispatch: for A2A Message events carrying tool_use blocks,
+                // route workflow_signal and Write (plan-capture) side effects through
+                // ToolInteractionService. AskUserQuestion/ExitPlanMode are intercepted by
+                // the worker's canUseTool and surface as input-required status-updates, so
+                // they fall outside this tap.
+                if (parsed is ParsedAgentMessage agentMsg)
+                {
+                    await DispatchToolUsesAsync(sessionId, agentMsg, cancellationToken);
+                }
+            }
+        }
+
+        // Step 3: broadcast. One envelope per translated AG-UI event, all sharing the parent
+        // A2A event's seq and eventId so live and replay produce identical envelope streams.
         try
         {
             foreach (var agui in aguiEvents)
             {
-                // server.agui.translate hop: one per AG-UI envelope produced from the parent A2A event.
-                SessionEventLog.LogAGUIHop(
-                    _logger,
-                    _sessionEventLogOptions,
-                    hop: SessionEventHops.ServerAguiTranslate,
-                    sessionId: sessionId,
-                    agui: agui,
-                    seq: record.Seq,
-                    eventId: record.EventId,
-                    parentMessageId: parentMessageId,
-                    parentArtifactId: parentArtifactId,
-                    parentStatusTimestamp: parentStatusTimestamp,
-                    parentTaskId: parentTaskId,
-                    a2aKind: eventKind);
-
-                // Capture the W3C traceparent for the current activity so the
-                // client can parent its reducer-apply span to this broadcast
-                // span. The hub filter on the inbound invoke side populates
-                // Activity.Current; on replay paths this will be null and the
-                // client falls back to its own root span.
+                // Capture the W3C traceparent for the current activity (the ingest span,
+                // parented to the worker SSE HTTP span) so the client can parent its
+                // reducer-apply span to this broadcast. On replay this will be null and
+                // the client falls back to its own root span.
                 var envelope = new SessionEventEnvelope(
                     Seq: record.Seq,
                     SessionId: record.SessionId,
@@ -142,28 +155,17 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                     Event: agui,
                     Traceparent: FormatCurrentTraceparent());
                 await _hub.BroadcastSessionEvent(sessionId, envelope);
-
-                // server.signalr.tx hop: emitted after the SignalR dispatch returns.
-                SessionEventLog.LogAGUIHop(
-                    _logger,
-                    _sessionEventLogOptions,
-                    hop: SessionEventHops.ServerSignalrTx,
-                    sessionId: sessionId,
-                    agui: agui,
-                    seq: record.Seq,
-                    eventId: record.EventId,
-                    parentMessageId: parentMessageId,
-                    parentArtifactId: parentArtifactId,
-                    parentStatusTimestamp: parentStatusTimestamp,
-                    parentTaskId: parentTaskId,
-                    a2aKind: eventKind);
             }
+
+            ingestSpan?.AddEvent(new ActivityEvent(SessionEventSpanEvents.SignalrTx));
         }
         catch (Exception ex)
         {
             // Broadcast failure does not roll back the append — future replay requests will
             // still serve this event from the log. Log and swallow so a transient hub
             // problem doesn't tear down the SSE consumer.
+            ingestSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            ingestSpan?.AddException(ex);
             _logger.LogWarning(ex,
                 "Failed to broadcast SessionEventEnvelope seq={Seq} eventId={EventId} for session {SessionId}",
                 record.Seq, record.EventId, sessionId);
@@ -200,6 +202,22 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                 artifactId = pa.ArtifactUpdate.Artifact?.ArtifactId;
                 break;
         }
+    }
+
+    private static string? ExtractPreview(ParsedA2AEvent? parsed, string? rawJson)
+    {
+        if (parsed is ParsedAgentMessage pm && pm.Message.Parts is not null)
+        {
+            foreach (var part in pm.Message.Parts)
+            {
+                if (part is TextPart tp && !string.IsNullOrEmpty(tp.Text))
+                {
+                    return tp.Text;
+                }
+            }
+        }
+
+        return rawJson;
     }
 
     /// <summary>
@@ -261,6 +279,8 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                 _logger.LogWarning(ex, "Tool-use dispatch failed for {ToolName} in session {SessionId}", toolName, sessionId);
             }
         }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -281,5 +301,10 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
         var flags = (activity.ActivityTraceFlags & ActivityTraceFlags.Recorded) != 0 ? "01" : "00";
         return $"00-{activity.TraceId.ToHexString()}-{activity.SpanId.ToHexString()}-{flags}";
+    }
+
+    private sealed class NoopContentPreviewGate : IContentPreviewGate
+    {
+        public string? Gate(string? text) => null;
     }
 }

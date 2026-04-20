@@ -20,7 +20,7 @@ survives byte-for-byte end-to-end.
 ┌─────────┐         │         │  cap, gzip, 415/400)│
 │ client  │─────────┘         └──────────┬──────────┘
 └─────────┘                              │
-                                   Scrub │  (SessionEventLog:ContentPreviewChars,
+                                   Scrub │  (SessionEventContent:ContentPreviewChars,
                                          │   secret-substring → [REDACTED])
                                          ▼
                                  ┌──────────────┐
@@ -38,7 +38,7 @@ Two mutations happen before fan-out (see
 `Homespun.Features.Observability.OtlpScrubber`):
 
 1. Attribute key `homespun.content.preview`
-    - When `SessionEventLog:ContentPreviewChars == 0` → attribute removed.
+    - When `SessionEventContent:ContentPreviewChars == 0` → attribute removed.
     - Otherwise string value truncated to `Chars` chars + `…`.
 2. Any attribute whose key contains a configured secret substring
    (`token`, `secret`, `password`, `authorization`, `credential` by default,

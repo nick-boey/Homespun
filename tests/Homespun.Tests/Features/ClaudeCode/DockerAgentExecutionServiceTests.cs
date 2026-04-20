@@ -1,10 +1,8 @@
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Observability;
 using Homespun.Features.Secrets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using NUnit.Framework;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -26,8 +24,7 @@ public class DockerAgentExecutionServiceTests
             }),
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
-            new Mock<Homespun.Features.ClaudeCode.Services.ISessionEventIngestor>().Object,
-            Options.Create(new SessionEventLogOptions()));
+            new Mock<Homespun.Features.ClaudeCode.Services.ISessionEventIngestor>().Object);
     }
 
     [Test]

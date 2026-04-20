@@ -5,9 +5,13 @@
  * attach `exception.*` attributes and, when inside a span, call
  * `span.recordException(err)` so Seq surfaces them on the trace timeline.
  *
- * The legacy `sessionEventLog` / `extractA2ACorrelation` / `extractMessagePreview`
- * helpers are preserved (under TODO comments) so existing call sites keep
- * compiling while `session-event-log-to-spans` converts them to real spans.
+ * The hop-based `sessionEventLog` helper has been retired — every previous
+ * call site now starts a `homespun.a2a.emit` PRODUCER span via the worker
+ * tracer. The correlation-extraction helpers (`extractA2ACorrelation`,
+ * `extractMessagePreview`) remain so span callers can reuse the same
+ * attribute shape, and `gateContentPreview` replaces the pair of
+ * `getContentPreviewChars()` + `truncatePreview()` helpers that used to gate
+ * the `ContentPreview` hop-log field.
  */
 import { logs, SeverityNumber, type AnyValueMap } from '@opentelemetry/api-logs';
 import { trace, type Span } from '@opentelemetry/api';
@@ -33,8 +37,6 @@ function attachException(err: unknown): AnyValueMap {
   return attrs;
 }
 
-// Legacy exports retained for backward compatibility. `debug(...)` is still
-// gated by DEBUG_LOGGING to preserve the original noise-reduction behaviour.
 const debugEnabled = process.env.DEBUG_LOGGING === 'true';
 
 export function debug(message: string): void {
@@ -117,20 +119,8 @@ export function sdkDebug(direction: 'tx' | 'rx', msg: unknown): void {
 }
 
 // ---------------------------------------------------------------------------
-// Session-event-log compatibility shim.
-//
-// The hop-based SessionEventLog entries are owned by
-// `session-event-log-to-spans` (change #6). Until that converts them to
-// proper spans, every legacy `sessionEventLog(...)` call is forwarded to a
-// DEBUG-severity OTel log with a `homespun.deprecated.hop` attribute so the
-// records remain searchable while they wait on migration.
+// Span-attribute helpers for the `homespun.a2a.emit` span call sites.
 // ---------------------------------------------------------------------------
-
-export const SessionEventHop = {
-  WorkerA2AEmit: 'worker.a2a.emit',
-} as const;
-export type SessionEventHopValue =
-  (typeof SessionEventHop)[keyof typeof SessionEventHop];
 
 export interface SessionEventLogFields {
   SessionId: string;
@@ -146,7 +136,7 @@ export interface SessionEventLogFields {
   EventId?: string;
 }
 
-export function getContentPreviewChars(): number {
+function getContentPreviewChars(): number {
   const raw = process.env.CONTENT_PREVIEW_CHARS;
   if (raw === undefined || raw === '') {
     return process.env.NODE_ENV === 'production' ? 0 : 80;
@@ -155,61 +145,19 @@ export function getContentPreviewChars(): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-export function truncatePreview(
+/**
+ * Returns <paramref name="text"/> truncated to the configured preview budget
+ * followed by an ellipsis when longer. Returns <c>undefined</c> when the
+ * budget is zero or the text is null/undefined so the caller can skip the
+ * <c>homespun.content.preview</c> attribute entirely.
+ */
+export function gateContentPreview(
   text: string | null | undefined,
-  chars: number,
 ): string | undefined {
+  const chars = getContentPreviewChars();
   if (chars <= 0 || text === undefined || text === null) return undefined;
   if (text.length <= chars) return text;
   return text.slice(0, chars) + '\u2026';
-}
-
-/**
- * TODO(#session-event-log-to-spans): replace every call site with a real
- * span. In the meantime this emits a DEBUG log carrying the same fields as
- * attributes so ops can grep for the hop in Seq.
- */
-export function sessionEventLog(
-  hop: SessionEventHopValue,
-  fields: SessionEventLogFields,
-): void {
-  const attrs: AnyValueMap = {
-    'homespun.deprecated.hop': hop,
-    'homespun.session.id': fields.SessionId,
-  };
-  if (fields.TaskId !== undefined) attrs['homespun.task.id'] = fields.TaskId;
-  if (fields.MessageId !== undefined)
-    attrs['homespun.message.id'] = fields.MessageId;
-  if (fields.ArtifactId !== undefined)
-    attrs['homespun.artifact.id'] = fields.ArtifactId;
-  if (fields.StatusTimestamp !== undefined)
-    attrs['homespun.status.timestamp'] = fields.StatusTimestamp;
-  if (fields.A2AKind !== undefined) attrs['homespun.a2a.kind'] = fields.A2AKind;
-  if (fields.AGUIType !== undefined)
-    attrs['homespun.agui.type'] = fields.AGUIType;
-  if (fields.AGUICustomName !== undefined)
-    attrs['homespun.agui.custom_name'] = fields.AGUICustomName;
-  if (fields.ContentPreview !== undefined)
-    attrs['homespun.content.preview'] = fields.ContentPreview;
-  if (fields.Seq !== undefined) attrs['homespun.seq'] = fields.Seq;
-  if (fields.EventId !== undefined) attrs['homespun.event.id'] = fields.EventId;
-
-  getLogger().emit({
-    severityNumber: SeverityNumber.DEBUG,
-    severityText: 'Debug',
-    body: buildSessionEventLogMessage(hop, fields),
-    attributes: attrs,
-  });
-}
-
-function buildSessionEventLogMessage(
-  hop: string,
-  fields: SessionEventLogFields,
-): string {
-  const parts: string[] = [hop];
-  if (fields.A2AKind) parts.push(`a2aKind=${fields.A2AKind}`);
-  if (fields.MessageId) parts.push(`msg=${fields.MessageId.slice(0, 8)}`);
-  return parts.join(' ');
 }
 
 export function extractA2ACorrelation(

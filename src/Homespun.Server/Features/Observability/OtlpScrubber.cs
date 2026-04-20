@@ -10,8 +10,8 @@ namespace Homespun.Features.Observability;
 /// Default <see cref="IOtlpScrubber"/>. Walks the request's attribute trees
 /// once and applies the two redaction rules required by the proxy spec:
 ///   1. <c>homespun.content.preview</c> → truncate to
-///      <see cref="SessionEventLogOptions.ContentPreviewChars"/>; remove when
-///      <c>Chars == 0</c>.
+///      <see cref="SessionEventContentOptions.ContentPreviewChars"/>; remove
+///      when <c>Chars == 0</c>.
 ///   2. Secret-substring match on attribute key → replace string value with
 ///      <c>[REDACTED]</c>, clear non-string value kinds.
 /// </summary>
@@ -20,20 +20,20 @@ public sealed class OtlpScrubber : IOtlpScrubber
     internal const string ContentPreviewAttributeKey = "homespun.content.preview";
     internal const string RedactedValue = "[REDACTED]";
 
-    private readonly IOptionsMonitor<SessionEventLogOptions> _sessionEventLogOptions;
+    private readonly IOptionsMonitor<SessionEventContentOptions> _contentOptions;
     private readonly IOptionsMonitor<OtlpScrubberOptions> _scrubberOptions;
 
     public OtlpScrubber(
-        IOptionsMonitor<SessionEventLogOptions> sessionEventLogOptions,
+        IOptionsMonitor<SessionEventContentOptions> contentOptions,
         IOptionsMonitor<OtlpScrubberOptions> scrubberOptions)
     {
-        _sessionEventLogOptions = sessionEventLogOptions;
+        _contentOptions = contentOptions;
         _scrubberOptions = scrubberOptions;
     }
 
     public void Scrub(ExportLogsServiceRequest req)
     {
-        var chars = _sessionEventLogOptions.CurrentValue.ContentPreviewChars;
+        var chars = _contentOptions.CurrentValue.ContentPreviewChars;
         var secrets = _scrubberOptions.CurrentValue.SecretSubstrings;
 
         foreach (var rl in req.ResourceLogs)
@@ -50,7 +50,7 @@ public sealed class OtlpScrubber : IOtlpScrubber
 
     public void Scrub(ExportTraceServiceRequest req)
     {
-        var chars = _sessionEventLogOptions.CurrentValue.ContentPreviewChars;
+        var chars = _contentOptions.CurrentValue.ContentPreviewChars;
         var secrets = _scrubberOptions.CurrentValue.SecretSubstrings;
 
         foreach (var rs in req.ResourceSpans)

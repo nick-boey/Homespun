@@ -10,12 +10,9 @@ vi.mock('#src/utils/otel-logger.js', () => ({
   error: vi.fn(),
   warn: vi.fn(),
   debug: vi.fn(),
-  sessionEventLog: vi.fn(),
-  SessionEventHop: { WorkerA2AEmit: 'worker.a2a.emit' },
   extractA2ACorrelation: vi.fn((kind: string) => ({ SessionId: '', A2AKind: kind })),
   extractMessagePreview: vi.fn(() => undefined),
-  getContentPreviewChars: vi.fn(() => 0),
-  truncatePreview: vi.fn((t: string | undefined) => t),
+  gateContentPreview: vi.fn(() => undefined),
 }));
 
 import { info, debug } from '#src/utils/otel-logger.js';

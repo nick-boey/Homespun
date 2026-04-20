@@ -30,9 +30,9 @@ namespace Homespun.Features.Observability;
 /// </summary>
 public sealed class TraceparentHubFilter : IHubFilter
 {
-    internal const string ActivitySourceName = "Homespun.Signalr";
+    internal const string ActivitySourceName = HomespunActivitySources.Signalr;
 
-    private static readonly ActivitySource Source = new(ActivitySourceName);
+    private static readonly ActivitySource Source = HomespunActivitySources.SignalrSource;
 
     public async ValueTask<object?> InvokeMethodAsync(
         HubInvocationContext invocationContext,

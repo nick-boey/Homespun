@@ -1,5 +1,12 @@
-import { vi } from 'vitest';
-import { formatSSE, streamSessionEvents } from '#src/services/sse-writer.js';
+import { afterEach, beforeEach, vi } from 'vitest';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+  type ReadableSpan,
+} from '@opentelemetry/sdk-trace-base';
+import { trace } from '@opentelemetry/api';
+import { emitAndFormatSSE, formatSSE, streamSessionEvents } from '#src/services/sse-writer.js';
 import { createMockSessionManager } from '../helpers/mock-session-manager.js';
 import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
@@ -145,5 +152,71 @@ describe('streamSessionEvents (A2A Protocol)', () => {
     );
     expect(errorEvent).toBeDefined();
     expect(errorEvent!.data.final).toBe(true);
+  });
+});
+
+describe('emitAndFormatSSE — homespun.a2a.emit span', () => {
+  let exporter: InMemorySpanExporter;
+  let provider: BasicTracerProvider;
+
+  beforeEach(() => {
+    exporter = new InMemorySpanExporter();
+    provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    trace.setGlobalTracerProvider(provider);
+  });
+
+  afterEach(async () => {
+    await provider.shutdown();
+    exporter.reset();
+    trace.disable();
+  });
+
+  function findEmitSpan(): ReadableSpan | undefined {
+    return exporter.getFinishedSpans().find((s) => s.name === 'homespun.a2a.emit');
+  }
+
+  it('emits one homespun.a2a.emit span per call with correlation attrs', () => {
+    emitAndFormatSSE('sess-A', 'message', {
+      kind: 'message',
+      messageId: 'm-1',
+      contextId: 'sess-A',
+      taskId: 't-1',
+      parts: [{ kind: 'text', text: 'hi' }],
+    });
+
+    const span = findEmitSpan();
+    expect(span).toBeDefined();
+    expect(span!.attributes['homespun.session.id']).toBe('sess-A');
+    expect(span!.attributes['homespun.a2a.kind']).toBe('message');
+    expect(span!.attributes['homespun.message.id']).toBe('m-1');
+    expect(span!.attributes['homespun.task.id']).toBe('t-1');
+  });
+
+  it('falls back to caller-supplied sessionId when payload contextId is absent', () => {
+    emitAndFormatSSE('sess-B', 'status-update', {
+      kind: 'status-update',
+      taskId: 't-2',
+      status: { state: 'working', timestamp: '2026-04-20T00:00:00Z' },
+    });
+
+    const span = findEmitSpan();
+    expect(span!.attributes['homespun.session.id']).toBe('sess-B');
+    expect(span!.attributes['homespun.status.timestamp']).toBe('2026-04-20T00:00:00Z');
+  });
+
+  it('omits content preview by default in non-production env', () => {
+    // gateContentPreview returns undefined for events that aren't "message" kind,
+    // and gates by CONTENT_PREVIEW_CHARS for message kinds. Without the env set,
+    // tests run with NODE_ENV=test → non-production default of 80 chars.
+    emitAndFormatSSE('sess-C', 'task', {
+      kind: 'task',
+      id: 't-3',
+      contextId: 'sess-C',
+    });
+
+    const span = findEmitSpan();
+    expect(span!.attributes['homespun.content.preview']).toBeUndefined();
   });
 });

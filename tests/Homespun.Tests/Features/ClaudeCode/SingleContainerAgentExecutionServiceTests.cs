@@ -1,9 +1,7 @@
 using System.Runtime.InteropServices;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -28,8 +26,7 @@ public class SingleContainerAgentExecutionServiceTests
         return new SingleContainerAgentExecutionService(
             opts,
             NullLogger<SingleContainerAgentExecutionService>.Instance,
-            ingestor ?? new Mock<ISessionEventIngestor>().Object,
-            Options.Create(new SessionEventLogOptions()));
+            ingestor ?? new Mock<ISessionEventIngestor>().Object);
     }
 
     [Test]
