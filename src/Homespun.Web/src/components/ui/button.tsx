@@ -1,3 +1,4 @@
+// Custom: extra size variants (xs / touch / icon-*) beyond the shadcn registry — see components/ui/INVENTORY.md.
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Slot } from 'radix-ui'
