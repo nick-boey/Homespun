@@ -1,5 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FleeceIssueSync, type FleecePullResult, type FleeceIssueSyncResult } from '@/api'
+import {
+  FleeceIssueSync,
+  PullRequests,
+  type FleecePullResult,
+  type FleeceIssueSyncResult,
+  type SyncResult,
+} from '@/api'
 import { taskGraphQueryKey } from '@/features/issues/hooks/use-task-graph'
 import { openPullRequestsQueryKey } from '@/features/pull-requests/hooks/use-open-pull-requests'
 import { mergedPullRequestsQueryKey } from '@/features/pull-requests/hooks/use-merged-pull-requests'
@@ -95,11 +101,11 @@ export function useFleeceSync(): UseFleeceSyncResult {
 export interface UsePullAndSyncResult {
   pullAll: (projectId: string) => Promise<{
     fleecePull: FleecePullResult
-    prSync: { imported?: number; updated?: number; removed?: number }
+    prSync: SyncResult | undefined
   }>
   syncAll: (projectId: string) => Promise<{
     fleeceSync: FleeceIssueSyncResult
-    prSync: { imported?: number; updated?: number; removed?: number }
+    prSync: SyncResult | undefined
   }>
   isPulling: boolean
   isSyncing: boolean
@@ -114,13 +120,21 @@ export interface UsePullAndSyncResult {
 export function usePullAndSync(): UsePullAndSyncResult {
   const queryClient = useQueryClient()
 
+  const invalidateSyncQueries = (projectId: string) => {
+    queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    queryClient.invalidateQueries({ queryKey: openPullRequestsQueryKey(projectId) })
+    queryClient.invalidateQueries({ queryKey: mergedPullRequestsQueryKey(projectId) })
+  }
+
   const pullMutation = useMutation({
     mutationFn: async (projectId: string) => {
       const [fleeceResponse, prResponse] = await Promise.all([
         FleeceIssueSync.postApiFleeceSyncByProjectIdPull({
           path: { projectId },
         }),
-        fetch(`/api/projects/${projectId}/sync`, { method: 'POST' }).then((r) => r.json()),
+        PullRequests.postApiProjectsByProjectIdSync({
+          path: { projectId },
+        }),
       ])
 
       if (fleeceResponse.error || !fleeceResponse.data) {
@@ -129,14 +143,10 @@ export function usePullAndSync(): UsePullAndSyncResult {
 
       return {
         fleecePull: fleeceResponse.data,
-        prSync: prResponse as { imported?: number; updated?: number; removed?: number },
+        prSync: prResponse.data,
       }
     },
-    onSuccess: (_data, projectId) => {
-      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
-      queryClient.invalidateQueries({ queryKey: openPullRequestsQueryKey(projectId) })
-      queryClient.invalidateQueries({ queryKey: mergedPullRequestsQueryKey(projectId) })
-    },
+    onSuccess: (_data, projectId) => invalidateSyncQueries(projectId),
   })
 
   const syncMutation = useMutation({
@@ -145,7 +155,9 @@ export function usePullAndSync(): UsePullAndSyncResult {
         FleeceIssueSync.postApiFleeceSyncByProjectIdSync({
           path: { projectId },
         }),
-        fetch(`/api/projects/${projectId}/sync`, { method: 'POST' }).then((r) => r.json()),
+        PullRequests.postApiProjectsByProjectIdSync({
+          path: { projectId },
+        }),
       ])
 
       if (fleeceResponse.error || !fleeceResponse.data) {
@@ -154,14 +166,10 @@ export function usePullAndSync(): UsePullAndSyncResult {
 
       return {
         fleeceSync: fleeceResponse.data,
-        prSync: prResponse as { imported?: number; updated?: number; removed?: number },
+        prSync: prResponse.data,
       }
     },
-    onSuccess: (_data, projectId) => {
-      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
-      queryClient.invalidateQueries({ queryKey: openPullRequestsQueryKey(projectId) })
-      queryClient.invalidateQueries({ queryKey: mergedPullRequestsQueryKey(projectId) })
-    },
+    onSuccess: (_data, projectId) => invalidateSyncQueries(projectId),
   })
 
   return {

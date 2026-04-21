@@ -7,8 +7,9 @@ import {
   useRouterState,
 } from '@tanstack/react-router'
 import { MoreHorizontal, Pencil, Trash2, Settings, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useProject, PullSyncButton } from '@/features/projects'
+import { useProject, PullSyncButton, useDeleteProject } from '@/features/projects'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +19,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export const Route = createFileRoute('/projects/$projectId')({
@@ -38,8 +49,16 @@ function ProjectLayout() {
   const currentPath = useRouterState({ select: (s) => s.location.pathname })
   const navigate = useNavigate()
   const { project, isLoading, isError, refetch } = useProject(projectId)
+  const deleteProject = useDeleteProject()
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   const projectName = project?.name ?? `Project ${projectId}`
+
+  const handleDelete = async () => {
+    await deleteProject.mutateAsync(projectId)
+    setIsDeleteDialogOpen(false)
+    navigate({ to: '/' })
+  }
 
   useBreadcrumbSetter([{ title: 'Projects', url: '/' }, { title: projectName }], [projectName])
 
@@ -128,12 +147,38 @@ function ProjectLayout() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={(e) => {
+                e.preventDefault()
+                setIsDeleteDialogOpen(true)
+              }}
+            >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Project
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Project</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{projectName}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleteProject.isPending}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <nav
