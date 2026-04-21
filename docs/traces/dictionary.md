@@ -41,6 +41,9 @@ asserts that the reverse also holds.
 | `Homespun.FleeceSync`                   | server       | ActivitySource| Fleece issue sync (reserved — see Planned)               |
 | `Homespun.Signalr`                      | server       | ActivitySource| `TraceparentHubFilter` hub-invocation + `ClaudeCodeHub` connect/join/leave spans |
 | `Homespun.SessionPipeline`              | server       | ActivitySource| A2A ingest + AG-UI translate spans                       |
+| `Homespun.Gitgraph`                     | server       | ActivitySource| `GraphService.BuildEnhancedTaskGraphAsync` + taskgraph sub-phase spans |
+| `Homespun.OpenSpec`                     | server       | ActivitySource| Enricher / resolver / scanner / reconciler spans         |
+| `Homespun.Commands`                     | server       | ActivitySource| `CommandRunner.RunAsync` subprocess spans                |
 | `homespun.web`                          | client       | Tracer+Logger | Root React app tracer and logger                         |
 | `homespun.web.signalr`                  | client       | Tracer        | SignalR client-span wrapper + lifecycle span             |
 | `homespun.web.session-events`           | client       | Tracer        | Envelope rx + reducer-apply spans                        |
@@ -212,6 +215,135 @@ Discrete join span. Emitted by
 - **Parent:** the matching `SignalR.ClaudeCodeHub/JoinSession` span started
   by `TraceparentHubFilter`.
 - **Required attrs:** `homespun.session.id`, `signalr.connection.id`.
+
+### `graph.taskgraph.build`
+
+Wraps `GraphService.BuildEnhancedTaskGraphAsync`. Parent of the three
+taskgraph sub-phase spans and of every enrichment span emitted below it.
+Emitted on the `Homespun.Gitgraph` ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Required attrs:** `project.id`.
+
+### `graph.taskgraph.fleece.scan`
+
+Wraps `IProjectFleeceService.GetTaskGraphWithAdditionalIssuesAsync` inside
+`BuildEnhancedTaskGraphAsync`. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `graph.taskgraph.build`.
+- **Required attrs:** `project.id`.
+
+### `graph.taskgraph.sessions`
+
+Wraps the agent-session lookup + matching loop inside
+`BuildEnhancedTaskGraphAsync`. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `graph.taskgraph.build`.
+- **Required attrs:** `project.id`.
+
+### `graph.taskgraph.prcache`
+
+Wraps the merged/closed PR cache read + response projection inside
+`BuildEnhancedTaskGraphAsync`. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `graph.taskgraph.build`.
+- **Required attrs:** `project.id`.
+
+### `openspec.enrich`
+
+Wraps `IssueGraphOpenSpecEnricher.EnrichAsync`. Parent of every
+`openspec.enrich.node` span and downstream OpenSpec spans. Emitted on the
+`Homespun.OpenSpec` ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `graph.taskgraph.build`.
+- **Required attrs:** `project.id`.
+- **Optional attrs:** `graph.node.count`.
+
+### `openspec.enrich.node`
+
+One span per visible node processed inside `EnrichAsync`. Same
+ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.enrich`.
+- **Required attrs:** `issue.id`, `branch.source`.
+
+### `openspec.state.resolve`
+
+Wraps `BranchStateResolverService.GetOrScanAsync`. Same ActivitySource.
+`cache.hit=true` short-circuits the downstream `openspec.reconcile` +
+`openspec.scan.branch` spans.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.enrich.node` (or root when called outside the
+  enrichment flow).
+- **Required attrs:** `project.id`, `cache.hit`.
+
+### `openspec.reconcile`
+
+Wraps `ChangeReconciliationService.ReconcileAsync`. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.state.resolve`.
+- **Required attrs:** `project.id`.
+
+### `openspec.scan.branch`
+
+Wraps `ChangeScannerService.ScanBranchAsync`. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.reconcile` during the hot path; also emitted as
+  a direct child of `openspec.enrich` by `ScanMainOrphansAsync`.
+
+### `openspec.artifact.state`
+
+Wraps `ChangeScannerService.GetArtifactStateAsync`. Same ActivitySource.
+`cache.hit=true` means the mtime-keyed micro-cache short-circuited the
+`openspec status` subprocess.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.scan.branch`.
+- **Required attrs:** `change.name`.
+- **Optional attrs:** `cache.hit` (set once the Tier 4 micro-cache lands).
+
+### `openspec.branch.resolve`
+
+Wraps `IssueBranchResolverService.ResolveIssueBranchAsync`. Same
+ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** `openspec.enrich.node` (or root when called outside the
+  enrichment flow).
+- **Required attrs:** `project.id`, `issue.id`.
+
+### `cmd.run`
+
+Wraps `CommandRunner.RunAsync` — every `openspec` / `git` / `gh` / `bd`
+subprocess the server spawns. Emitted on the `Homespun.Commands`
+ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** whatever activity is active at the call site (e.g.
+  `openspec.artifact.state`, `openspec.scan.branch`).
+- **Required attrs:** `cmd.name`, `cmd.exit_code`, `cmd.duration_ms`.
+- **Records exceptions:** subprocess-launch failures set status to
+  `Error` and attach the exception message.
 
 ### `homespun.signalr.leave`
 

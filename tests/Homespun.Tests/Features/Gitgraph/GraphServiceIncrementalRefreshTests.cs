@@ -99,6 +99,7 @@ public class GraphServiceIncrementalRefreshTests
             _mockCacheService.Object,
             _mockPrStatusResolver.Object,
             new Mock<Homespun.Features.OpenSpec.Services.IIssueGraphOpenSpecEnricher>().Object,
+            new Mock<Homespun.Features.Git.IGitCloneService>().Object,
             _mockLogger.Object);
     }
 

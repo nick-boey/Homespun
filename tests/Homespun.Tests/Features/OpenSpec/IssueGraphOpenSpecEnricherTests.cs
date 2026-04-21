@@ -47,7 +47,7 @@ public class IssueGraphOpenSpecEnricherTests
     public async Task EnrichAsync_IssueWithoutBranch_ReportsNoBranchState()
     {
         var response = ResponseWith("issue-1");
-        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1"))
+        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1", It.IsAny<BranchResolutionContext>()))
             .ReturnsAsync((string?)null);
 
         await _enricher.EnrichAsync(ProjectId, response);
@@ -61,7 +61,7 @@ public class IssueGraphOpenSpecEnricherTests
     public async Task EnrichAsync_BranchExistsNoChange_ReportsExistsNone()
     {
         var response = ResponseWith("issue-1");
-        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1"))
+        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1", It.IsAny<BranchResolutionContext>()))
             .ReturnsAsync("feat/foo+issue-1");
         _stateResolver.Setup(s => s.GetOrScanAsync(ProjectId, "feat/foo+issue-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchStateSnapshot
@@ -201,9 +201,9 @@ public class IssueGraphOpenSpecEnricherTests
     public async Task EnrichAsync_ErrorInResolver_SwallowsAndContinues()
     {
         var response = ResponseWith("issue-1", "issue-2");
-        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1"))
+        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-1", It.IsAny<BranchResolutionContext>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
-        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-2"))
+        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, "issue-2", It.IsAny<BranchResolutionContext>()))
             .ReturnsAsync((string?)null);
 
         await _enricher.EnrichAsync(ProjectId, response);
@@ -228,7 +228,7 @@ public class IssueGraphOpenSpecEnricherTests
     private void ConfigureSnapshot(string issueId, SnapshotChange change)
     {
         var branch = $"feat/auto+{issueId}";
-        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, issueId)).ReturnsAsync(branch);
+        _branchResolver.Setup(b => b.ResolveIssueBranchAsync(ProjectId, issueId, It.IsAny<BranchResolutionContext>())).ReturnsAsync(branch);
         _stateResolver.Setup(s => s.GetOrScanAsync(ProjectId, branch, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchStateSnapshot
             {

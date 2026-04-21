@@ -2,7 +2,9 @@ using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Git;
 using Homespun.Features.GitHub;
+using Homespun.Features.Gitgraph.Telemetry;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
@@ -27,6 +29,7 @@ public class GraphService(
     IGraphCacheService cacheService,
     IPRStatusResolver prStatusResolver,
     IIssueGraphOpenSpecEnricher openSpecEnricher,
+    IGitCloneService cloneService,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -563,6 +566,9 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<TaskGraphResponse?> BuildEnhancedTaskGraphAsync(string projectId, int maxPastPRs = 5)
     {
+        using var buildActivity = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.build");
+        buildActivity?.SetTag("project.id", projectId);
+
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
         {
@@ -576,10 +582,15 @@ public class GraphService(
             // These issues should be included in the task graph regardless of their status
             var openPrLinkedIssueIds = GetOpenPrLinkedIssueIds(projectId);
 
-            // Get task graph from Fleece.Core, including issues linked to open PRs
-            var taskGraph = await fleeceService.GetTaskGraphWithAdditionalIssuesAsync(
-                project.LocalPath,
-                openPrLinkedIssueIds);
+            global::Fleece.Core.Models.TaskGraph? taskGraph;
+            using (var fleeceScan = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.fleece.scan"))
+            {
+                fleeceScan?.SetTag("project.id", projectId);
+                taskGraph = await fleeceService.GetTaskGraphWithAdditionalIssuesAsync(
+                    project.LocalPath,
+                    openPrLinkedIssueIds);
+            }
+
             if (taskGraph == null)
             {
                 logger.LogDebug("No task graph available for project {ProjectId}", projectId);
@@ -599,83 +610,95 @@ public class GraphService(
                 }).ToList()
             };
 
-            // Get merged/closed PRs
-            cacheService.LoadCacheForProject(projectId, project.LocalPath);
-            var cachedData = cacheService.GetCachedPRData(projectId);
-
-            if (cachedData != null)
+            using (var prCacheSpan = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.prcache"))
             {
-                var closedPrs = cachedData.ClosedPrs
-                    .Where(pr => pr.Status == PullRequestStatus.Merged || pr.Status == PullRequestStatus.Closed)
-                    .OrderBy(pr => pr.MergedAt ?? pr.ClosedAt ?? pr.CreatedAt)  // Oldest at top, newest at bottom
-                    .ToList();
+                prCacheSpan?.SetTag("project.id", projectId);
+                // Get merged/closed PRs
+                cacheService.LoadCacheForProject(projectId, project.LocalPath);
+                var cachedData = cacheService.GetCachedPRData(projectId);
 
-                var totalClosedPrs = closedPrs.Count;
-                // Take the most recent N PRs (from the end of the sorted list)
-                var shownPrs = closedPrs.Count > maxPastPRs
-                    ? closedPrs.Skip(closedPrs.Count - maxPastPRs).ToList()
-                    : closedPrs;
-
-                response.MergedPrs = shownPrs.Select(pr => new TaskGraphPrResponse
+                if (cachedData != null)
                 {
-                    Number = pr.Number,
-                    Title = pr.Title,
-                    Url = pr.HtmlUrl,
-                    IsMerged = pr.Status == PullRequestStatus.Merged,
-                    HasDescription = !string.IsNullOrWhiteSpace(pr.Body)
-                }).ToList();
+                    var closedPrs = cachedData.ClosedPrs
+                        .Where(pr => pr.Status == PullRequestStatus.Merged || pr.Status == PullRequestStatus.Closed)
+                        .OrderBy(pr => pr.MergedAt ?? pr.ClosedAt ?? pr.CreatedAt)  // Oldest at top, newest at bottom
+                        .ToList();
 
-                response.HasMorePastPrs = totalClosedPrs > maxPastPRs;
-                response.TotalPastPrsShown = shownPrs.Count;
+                    var totalClosedPrs = closedPrs.Count;
+                    // Take the most recent N PRs (from the end of the sorted list)
+                    var shownPrs = closedPrs.Count > maxPastPRs
+                        ? closedPrs.Skip(closedPrs.Count - maxPastPRs).ToList()
+                        : closedPrs;
+
+                    response.MergedPrs = shownPrs.Select(pr => new TaskGraphPrResponse
+                    {
+                        Number = pr.Number,
+                        Title = pr.Title,
+                        Url = pr.HtmlUrl,
+                        IsMerged = pr.Status == PullRequestStatus.Merged,
+                        HasDescription = !string.IsNullOrWhiteSpace(pr.Body)
+                    }).ToList();
+
+                    response.HasMorePastPrs = totalClosedPrs > maxPastPRs;
+                    response.TotalPastPrsShown = shownPrs.Count;
+                }
             }
 
-            // Get agent statuses
-            var sessions = sessionStore.GetByProjectId(projectId);
-            logger.LogInformation(
-                "Found {SessionCount} sessions for project {ProjectId}",
-                sessions.Count, projectId);
-
-            // Filter out sessions without EntityId and group by EntityId
-            var validSessions = sessions.Where(s => !string.IsNullOrWhiteSpace(s.EntityId)).ToList();
-            logger.LogInformation(
-                "Filtered {ValidCount} valid sessions from {TotalCount} total sessions (excluded {ExcludedCount} with null/empty EntityId)",
-                validSessions.Count, sessions.Count, sessions.Count - validSessions.Count);
-
-            var sessionsByEntityId = validSessions
-                .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
-
-            logger.LogInformation(
-                "Sessions grouped by entity ID: {EntityIds}",
-                string.Join(", ", sessionsByEntityId.Keys.Select(k => $"'{k}'")));
-
-            foreach (var node in response.Nodes)
+            using (var sessionsSpan = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.sessions"))
             {
-                if (string.IsNullOrWhiteSpace(node.Issue?.Id))
-                {
-                    logger.LogWarning(
-                        "Skipping node with null or empty issue ID. Title: {Title}",
-                        node.Issue?.Title ?? "N/A");
-                    continue;
-                }
+                sessionsSpan?.SetTag("project.id", projectId);
 
+                // Get agent statuses
+                var sessions = sessionStore.GetByProjectId(projectId);
                 logger.LogDebug(
-                    "Checking session for issue '{IssueId}' (Title: {IssueTitle})",
-                    node.Issue.Id, node.Issue.Title);
+                    "Found {SessionCount} sessions for project {ProjectId}",
+                    sessions.Count, projectId);
 
-                if (sessionsByEntityId.TryGetValue(node.Issue.Id, out var session))
-                {
-                    var statusData = CreateAgentStatusData(session);
-                    response.AgentStatuses[node.Issue.Id] = statusData;
-                    logger.LogInformation(
-                        "Matched session for issue '{IssueId}': SessionId={SessionId}, Status={Status}, IsActive={IsActive}",
-                        node.Issue.Id, session.Id, session.Status, statusData.IsActive);
-                }
-                else
+                // Filter out sessions without EntityId and group by EntityId
+                var validSessions = sessions.Where(s => !string.IsNullOrWhiteSpace(s.EntityId)).ToList();
+                logger.LogDebug(
+                    "Filtered {ValidCount} valid sessions from {TotalCount} total sessions (excluded {ExcludedCount} with null/empty EntityId)",
+                    validSessions.Count, sessions.Count, sessions.Count - validSessions.Count);
+
+                var sessionsByEntityId = validSessions
+                    .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
+
+                if (logger.IsEnabled(LogLevel.Debug))
                 {
                     logger.LogDebug(
-                        "No session found for issue '{IssueId}' (available keys: {AvailableKeys})",
-                        node.Issue.Id, string.Join(", ", sessionsByEntityId.Keys.Take(5).Select(k => $"'{k}'")));
+                        "Sessions grouped by entity ID: {EntityIds}",
+                        string.Join(", ", sessionsByEntityId.Keys.Select(k => $"'{k}'")));
+                }
+
+                foreach (var node in response.Nodes)
+                {
+                    if (string.IsNullOrWhiteSpace(node.Issue?.Id))
+                    {
+                        logger.LogWarning(
+                            "Skipping node with null or empty issue ID. Title: {Title}",
+                            node.Issue?.Title ?? "N/A");
+                        continue;
+                    }
+
+                    logger.LogDebug(
+                        "Checking session for issue '{IssueId}' (Title: {IssueTitle})",
+                        node.Issue.Id, node.Issue.Title);
+
+                    if (sessionsByEntityId.TryGetValue(node.Issue.Id, out var session))
+                    {
+                        var statusData = CreateAgentStatusData(session);
+                        response.AgentStatuses[node.Issue.Id] = statusData;
+                        logger.LogDebug(
+                            "Matched session for issue '{IssueId}': SessionId={SessionId}, Status={Status}, IsActive={IsActive}",
+                            node.Issue.Id, session.Id, session.Status, statusData.IsActive);
+                    }
+                    else if (logger.IsEnabled(LogLevel.Debug))
+                    {
+                        logger.LogDebug(
+                            "No session found for issue '{IssueId}' (available keys: {AvailableKeys})",
+                            node.Issue.Id, string.Join(", ", sessionsByEntityId.Keys.Take(5).Select(k => $"'{k}'")));
+                    }
                 }
             }
 
@@ -698,7 +721,16 @@ public class GraphService(
             }
 
             // Enrich with OpenSpec per-issue state and main-branch orphans.
-            await openSpecEnricher.EnrichAsync(projectId, response);
+            // Build the branch-resolution context once so the enricher does not fan out
+            // to `ListClonesAsync` / `GetPullRequestsByProject` per visible node.
+            var clones = await cloneService.ListClonesAsync(project.LocalPath);
+            var prBranches = dataStore.GetPullRequestsByProject(projectId)
+                .Where(p => !string.IsNullOrEmpty(p.BeadsIssueId) && !string.IsNullOrEmpty(p.BranchName))
+                .GroupBy(p => p.BeadsIssueId!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().BranchName!, StringComparer.Ordinal);
+            var branchContext = new BranchResolutionContext(clones, prBranches);
+
+            await openSpecEnricher.EnrichAsync(projectId, response, branchContext);
 
             logger.LogDebug(
                 "Built enhanced task graph for project {ProjectId}: {NodeCount} nodes, {PrCount} merged PRs, {AgentCount} agent statuses, {LinkedPrCount} linked PRs, {OpenSpecStateCount} OpenSpec states",

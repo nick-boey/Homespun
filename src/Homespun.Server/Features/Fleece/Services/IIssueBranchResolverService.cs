@@ -14,4 +14,12 @@ public interface IIssueBranchResolverService
     /// <param name="issueId">The issue ID to resolve the branch for</param>
     /// <returns>The resolved branch name, or null if no matching PR or clone found</returns>
     Task<string?> ResolveIssueBranchAsync(string projectId, string issueId);
+
+    /// <summary>
+    /// Hot-path overload that avoids per-node <see cref="IGitCloneService.ListClonesAsync"/>
+    /// fan-out. The caller prepares a <see cref="BranchResolutionContext"/> once per
+    /// request and this method reads from it instead of calling the data store / clone
+    /// service.
+    /// </summary>
+    Task<string?> ResolveIssueBranchAsync(string projectId, string issueId, BranchResolutionContext context);
 }

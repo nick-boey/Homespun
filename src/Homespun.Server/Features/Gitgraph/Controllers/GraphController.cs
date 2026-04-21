@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Homespun.Features.Fleece;
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Shared.Models.Fleece;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +10,9 @@ namespace Homespun.Features.Gitgraph.Controllers;
 [ApiController]
 [Route("api/graph")]
 [Produces("application/json")]
-public class GraphController(IGraphService graphService) : ControllerBase
+public class GraphController(
+    IGraphService graphService,
+    IProjectTaskGraphSnapshotStore? snapshotStore = null) : ControllerBase
 {
     [HttpGet("{projectId}")]
     [ProducesResponseType<GitgraphJsonData>(StatusCodes.Status200OK)]
@@ -23,7 +27,8 @@ public class GraphController(IGraphService graphService) : ControllerBase
     /// <summary>
     /// Performs an incremental refresh: fetches only open PRs from GitHub,
     /// compares with cache to detect newly closed PRs, and updates the cache.
-    /// Falls back to full fetch if no cache exists.
+    /// Falls back to full fetch if no cache exists. Also invalidates any
+    /// warm task-graph snapshots so the next /taskgraph/data call rebuilds.
     /// </summary>
     [HttpPost("{projectId}/refresh")]
     [ProducesResponseType<GitgraphJsonData>(StatusCodes.Status200OK)]
@@ -32,6 +37,7 @@ public class GraphController(IGraphService graphService) : ControllerBase
         [FromQuery] int? maxPastPRs)
     {
         var data = await graphService.IncrementalRefreshAsync(projectId, maxPastPRs);
+        snapshotStore?.InvalidateProject(projectId);
         return Ok(data);
     }
 
@@ -78,6 +84,23 @@ public class GraphController(IGraphService graphService) : ControllerBase
         string projectId,
         [FromQuery] int maxPastPRs = 5)
     {
+        if (snapshotStore is not null)
+        {
+            var cached = snapshotStore.TryGet(projectId, maxPastPRs);
+            if (cached is not null)
+            {
+                Activity.Current?.SetTag("snapshot.hit", true);
+                return Ok(cached.Response);
+            }
+
+            Activity.Current?.SetTag("snapshot.hit", false);
+            var computed = await graphService.BuildEnhancedTaskGraphAsync(projectId, maxPastPRs);
+            if (computed is null)
+                return NotFound("No task graph available for this project.");
+            snapshotStore.Store(projectId, maxPastPRs, computed, DateTimeOffset.UtcNow);
+            return Ok(computed);
+        }
+
         var taskGraph = await graphService.BuildEnhancedTaskGraphAsync(projectId, maxPastPRs);
         if (taskGraph == null)
             return NotFound("No task graph available for this project.");
