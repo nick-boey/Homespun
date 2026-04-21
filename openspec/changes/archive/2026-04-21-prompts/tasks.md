@@ -5,9 +5,9 @@ description: "Retrospective task list for the migrated Prompts feature"
 # Tasks: Prompts
 
 **Input**: Design documents from `/specs/prompts/`
-**Status**: Migrated — all in-scope tasks reflect work that is already complete. Gaps are left **unchecked** and tracked in `follow-up-issues.md`.
+**Status**: **SUPERSEDED — archived as obsolete.** Migrated on 2026-04-15 as as-built documentation of the DB-backed prompt catalogue. Feature removed in commit `82daaf17` (2026-04-17, PR #779) and replaced by skills-catalogue. The 13 unchecked items below are no longer gaps — they targeted code that no longer exists. Follow-up issue `fleece:uST4Ic` closed as obsolete.
 
-> **Migration semantics.** `[x]` marks observed as-built work. Unchecked items are real, remediable gaps — do not delete them. Task groups mirror the user-story structure of `spec.md` so the backlog remains coherent with the SDD workflow going forward.
+> **Migration semantics.** `[x]` marks observed as-built work (all observations are now historical — the code has since been deleted). Unchecked items *were* remediable gaps at the time of migration; after the 2026-04-17 removal they became non-issues. Left in place as a historical snapshot of the as-migrated state.
 
 ## Path Conventions (Homespun)
 
