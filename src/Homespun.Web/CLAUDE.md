@@ -26,25 +26,24 @@ Configuration is in `components.json`:
 - CSS Variables: enabled
 - Icon library: lucide
 
-### prompt-kit (Chat Components)
+The classification of every file in `components/ui/` — native shadcn primitive, intentionally-custom, or prompt-kit (chat-owned) — is captured in `src/components/ui/INVENTORY.md`. Check that file before editing or replacing anything there.
 
-For AI chat interface components, use the prompt-kit library. These components are built on shadcn/ui and Tailwind.
+### Chat surface
 
-Add prompt-kit components:
+The chat surface under `features/sessions/` is currently built on prompt-kit primitives (`message`, `markdown`, `code-block`, `prompt-input`, `thinking-bar`, `loader`, `scroll-to-bottom`, `text-shimmer`). Those components are being replaced wholesale by the Assistant UI runtime under the `chat-assistant-ui` OpenSpec change — **do not author new chat components in `components/ui/`**, and prefer waiting for the Assistant UI migration to land before extending the chat surface.
+
+### Storybook
+
+Storybook 10 runs against the real Tailwind v4 theme (`src/index.css`). Stories are co-located with their components as `*.stories.tsx` under `src/**`. Every shadcn-native and `divergent-keep` primitive in `components/ui/` has a story.
 
 ```bash
-npx shadcn@latest add "https://prompt-kit.com/c/prompt-input.json"
-npx shadcn@latest add "https://prompt-kit.com/c/message.json"
-npx shadcn@latest add "https://prompt-kit.com/c/markdown.json"
+cd src/Homespun.Web
+
+# Dev server
+npm run storybook        # http://localhost:6006
+
+# Static build (part of the pre-PR checklist)
+npm run build-storybook
 ```
 
-Available prompt-kit components:
-
-- **prompt-input** - Chat input with file attachments
-- **message** - Chat message display
-- **markdown** - Markdown rendering with syntax highlighting
-- **code-block** - Code display with copy button
-- **thinking-bar** - AI thinking indicator
-- **loader** - Loading animations
-
-**Use prompt-kit components for all chat and AI-related UI.** Do not create custom chat components.
+When adding a new shadcn primitive via `npx shadcn@latest add <name>`, add a co-located `<name>.stories.tsx` with at minimum a Default story, and an interactive `play` story for anything portal-rendered or with toggle state. The `build-storybook` step in the pre-PR checklist in the project-root `CLAUDE.md` catches story drift at author time.

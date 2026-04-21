@@ -1,2 +1,4 @@
 dist
+storybook-static
 src/routeTree.gen.ts
+src/api/generated

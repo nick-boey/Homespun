@@ -28,3 +28,6 @@ swagger.json
 
 # Playwright report
 playwright-report/*
+
+# Storybook build output
+storybook-static

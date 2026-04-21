@@ -54,6 +54,9 @@ npm test
 
 # Run e2e tests
 npm test:e2e
+
+# Build Storybook (catches story drift at author time)
+npm run build-storybook
 ```
 
 These checks are run in CI and will cause the PR to fail if not passing. Always verify locally first.
