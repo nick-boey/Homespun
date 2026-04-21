@@ -25,3 +25,6 @@ export { computeInheritedParentInfo, type InheritedParentInfo } from './inherite
 
 // Filter query parser
 export { parseFilterQuery, applyFilter, type ParsedFilter } from './filter-query-parser'
+
+// Orphan change aggregation
+export { aggregateOrphans, type OrphanEntry, type OrphanOccurrence } from './orphan-aggregation'
