@@ -65,4 +65,4 @@
 
 - [x] 7.1 Run the full pre-PR checklist: `dotnet test`, `npm run lint:fix`, `npm run format:check`, `npm run generate:api:fetch`, `npm run typecheck`, `npm test`, `npm run test:e2e`, `npm run build-storybook`. *(web-side: lint:fix, format:check, typecheck, unit tests, build-storybook all green in this environment. `dotnet test`, `generate:api:fetch`, and `test:e2e` require the AppHost/backend and are deferred to the PR CI run.)*
 - [x] 7.2 Compare Phase 1 baseline screenshots to current — zero visible deltas expected. *(By construction — computed HSL values are preserved verbatim. Reviewer should spot-check locally.)*
-- [ ] 7.3 Open the PR. Link `chat-assistant-ui` proposal in the description as the consumer of this foundation.
+- [x] 7.3 Open the PR. Link `chat-assistant-ui` proposal in the description as the consumer of this foundation. *(PR #787 — https://github.com/nick-boey/Homespun/pull/787)*
