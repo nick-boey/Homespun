@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fleece.Core.Models;
 using Homespun.Shared.Models.Fleece;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -19,10 +20,14 @@ public sealed class IssueHistoryService : IIssueHistoryService
 
     private readonly ILogger<IssueHistoryService> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly int _maxHistoryEntries;
 
-    public IssueHistoryService(ILogger<IssueHistoryService> logger)
+    public IssueHistoryService(
+        ILogger<IssueHistoryService> logger,
+        IOptions<FleeceHistoryOptions> options)
     {
         _logger = logger;
+        _maxHistoryEntries = options.Value.MaxHistoryEntries;
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -455,12 +460,12 @@ public sealed class IssueHistoryService : IIssueHistoryService
     private async Task PruneOldEntriesAsync(string projectPath, CancellationToken ct)
     {
         var state = await GetStateInternalAsync(projectPath, ct);
-        if (state.Timestamps.Count <= IIssueHistoryService.MaxHistoryEntries)
+        if (state.Timestamps.Count <= _maxHistoryEntries)
         {
             return;
         }
 
-        var entriesToRemove = state.Timestamps.Count - IIssueHistoryService.MaxHistoryEntries;
+        var entriesToRemove = state.Timestamps.Count - _maxHistoryEntries;
         var timestampsToDelete = state.Timestamps.Take(entriesToRemove).ToList();
 
         foreach (var timestamp in timestampsToDelete)

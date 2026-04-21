@@ -49,9 +49,9 @@ description: "Retrospective task list for the migrated Fleece Issues feature"
 - [x] T015 `INotificationHubClient` contract (`src/Homespun.Shared/Hubs/INotificationHubClient.cs`) — `IssuesChanged`, `BranchIdGenerated/Failed`, `AgentStarting/Failed`.
 - [x] T016 Swashbuckle annotations on all three controllers so OpenAPI emits every `Issue*` / `Fleece*` / `*AgentChanges*` DTO.
 - [x] T017 Generated OpenAPI client refreshed under `src/Homespun.Web/src/api/generated/` covering `/api/issues*`, `/api/issues-agent/*`, `/api/fleece-sync/*`, `/api/projects/{projectId}/issues*`.
-- [ ] T018 Rename `FleeceService.cs` → `ProjectFleeceService.cs` and `IFleeceService.cs` → `IProjectFleeceService.cs`. **DEFERRED → fleece:3dd87s**
-- [ ] T019 Split `FleeceChangeApplicationService.cs` into `IFleeceChangeApplicationService.cs`, `FleeceChangeApplicationService.cs`, `IFleeceConflictDetectionService.cs`, `FleeceConflictDetectionService.cs`. **DEFERRED → fleece:3dd87s**
-- [ ] T020 Rationalise the two `IssueDto.cs` files across `Shared/Models/{Fleece,Issues}/`. **DEFERRED → fleece:3dd87s**
+- [x] T018 Rename `FleeceService.cs` → `ProjectFleeceService.cs` and `IFleeceService.cs` → `IProjectFleeceService.cs`.
+- [x] T019 Split `FleeceChangeApplicationService.cs` into `IFleeceChangeApplicationService.cs`, `FleeceChangeApplicationService.cs`, `IFleeceConflictDetectionService.cs`, `FleeceConflictDetectionService.cs`.
+- [x] T020 Rationalise the two `IssueDto.cs` files across `Shared/Models/{Fleece,Issues}/`.
 
 **Checkpoint**: Foundation landed — per-story work flows from here.
 
@@ -84,7 +84,7 @@ description: "Retrospective task list for the migrated Fleece Issues feature"
 - [x] T036 [P] [US1] Web `useKeyboardNavigation` + `useToolbarShortcuts` + `useIssueSelection` driving the task-graph selection + keyboard-driven editing.
 - [x] T037 [P] [US1] Web `filter-query-parser.ts` supporting `status:`, `type:`, `priority:`, `assignee:`, `me`, free-text (FR-012).
 - [x] T038 [US1] Route `routes/projects.$projectId.issues.tsx` (layout `<Outlet />`) + `routes/projects.$projectId.issues.index.tsx` (task-graph view + `<RunAgentDialog>` + `<AssignIssueDialog>`).
-- [ ] T039 [US1] Wrap `GET /api/projects/{projectId}/issues/assignees` response in a `ProjectAssigneesResponse` DTO and regenerate the OpenAPI client. **DEFERRED → fleece:3dd87s**
+- [x] T039 [US1] Wrap `GET /api/projects/{projectId}/issues/assignees` response in a `ProjectAssigneesResponse` DTO and regenerate the OpenAPI client.
 
 **Checkpoint**: US1 shippable independently — in production since before migration.
 
@@ -213,7 +213,7 @@ description: "Retrospective task list for the migrated Fleece Issues feature"
 - [x] T094 [P] [US7] `tests/Homespun.Tests/Features/Fleece/FleeceIssuesSyncServiceTests.cs` (1117 cases).
 - [x] T095 [P] [US7] `tests/Homespun.Tests/Features/Fleece/FleeceIssueSyncIntegrationTests.cs` (688 cases — real `git` subprocess).
 - [x] T096 [P] [US7] `tests/Homespun.Api.Tests/Features/FleeceSyncApiTests.cs` (243 cases).
-- [ ] T097 [US7] Playwright `e2e/fleece-sync.spec.ts` covering sync happy path, pull-while-behind, discard-and-pull preserves `.fleece/`. **DEFERRED → fleece:3dd87s**
+- [x] T097 [US7] Playwright `e2e/fleece-sync.spec.ts` covering sync happy path, pull-while-behind, discard-and-pull preserves `.fleece/`.
 
 ### Implementation
 
@@ -241,7 +241,7 @@ description: "Retrospective task list for the migrated Fleece Issues feature"
 - [x] T107 [P] [US8] `ProjectFleeceService.ApplyHistorySnapshotAsync` — rewrite cache + queue disk write.
 - [x] T108 [P] [US8] `IssuesController.GetHistoryState` / `Undo` / `Redo`.
 - [x] T109 [P] [US8] Web `useIssueHistory` + toolbar shortcut bindings.
-- [ ] T110 [US8] Make `MaxHistoryEntries` configurable via `IOptions<FleeceHistoryOptions>`; add a bound-honoured test. **DEFERRED → fleece:3dd87s**
+- [x] T110 [US8] Make `MaxHistoryEntries` configurable via `IOptions<FleeceHistoryOptions>`; add a bound-honoured test.
 
 ---
 
@@ -251,8 +251,8 @@ description: "Retrospective task list for the migrated Fleece Issues feature"
 - [x] T112 [P] [polish] `IssueTreeFormatter` + tests — textual tree output for CLI-style display.
 - [x] T113 [P] [polish] `IssueDtoMapperTests` asserts the Issue→IssueResponse mapping preserves every field.
 - [x] T114 [P] [polish] `MockFleeceIssuesSyncService` — Mock Mode implementation of the sync service, no real `git` calls.
-- [ ] T115 [polish] Delete the dead `RunAgentResponse` DTO from `IssueRequests.cs` and regenerate the OpenAPI client. **DEFERRED → fleece:3dd87s**
-- [ ] T116 [polish] Document or realign the `IssuesAgentController` route pattern (`/api/issues-agent/{sessionId}/*` vs `{projectId}` elsewhere). **DEFERRED → fleece:3dd87s**
+- [x] T115 [polish] Delete the dead `RunAgentResponse` DTO from `IssueRequests.cs` and regenerate the OpenAPI client.
+- [x] T116 [polish] Document or realign the `IssuesAgentController` route pattern (`/api/issues-agent/{sessionId}/*` vs `{projectId}` elsewhere).
 
 ---
 

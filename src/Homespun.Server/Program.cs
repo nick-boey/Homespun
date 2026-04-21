@@ -155,6 +155,8 @@ else
     builder.Services.AddScoped<ISearchablePrService, SearchablePrService>();
 
     // Fleece services (file-based issue tracking)
+    builder.Services.Configure<FleeceHistoryOptions>(
+        builder.Configuration.GetSection(FleeceHistoryOptions.SectionName));
     builder.Services.AddSingleton<IssueSerializationQueueService>();
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());

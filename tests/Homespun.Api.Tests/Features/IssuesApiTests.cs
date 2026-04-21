@@ -400,8 +400,9 @@ public class IssuesApiTests
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var assignees = await response.Content.ReadFromJsonAsync<List<string>>(JsonOptions);
-        Assert.That(assignees, Is.Not.Null);
+        var assigneesResponse = await response.Content.ReadFromJsonAsync<ProjectAssigneesResponse>(JsonOptions);
+        Assert.That(assigneesResponse, Is.Not.Null);
+        Assert.That(assigneesResponse!.Assignees, Is.Not.Null);
     }
 
     [Test]

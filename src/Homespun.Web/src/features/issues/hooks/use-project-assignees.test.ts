@@ -34,7 +34,7 @@ describe('useProjectAssignees', () => {
   it('fetches assignees for project', async () => {
     const mockAssignees = ['alice@example.com', 'bob@example.com']
     vi.mocked(Issues.getApiProjectsByProjectIdIssuesAssignees).mockResolvedValue({
-      data: mockAssignees,
+      data: { assignees: mockAssignees },
       error: undefined,
     } as never)
 
@@ -60,7 +60,7 @@ describe('useProjectAssignees', () => {
 
   it('returns empty array when no assignees', async () => {
     vi.mocked(Issues.getApiProjectsByProjectIdIssuesAssignees).mockResolvedValue({
-      data: [],
+      data: { assignees: [] },
       error: undefined,
     } as never)
 

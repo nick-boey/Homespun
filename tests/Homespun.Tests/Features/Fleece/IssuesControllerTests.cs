@@ -1237,7 +1237,8 @@ public class IssuesControllerTests
         // Assert
         Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
         var okResult = (OkObjectResult)result.Result!;
-        var assignees = (List<string>)okResult.Value!;
+        var response = (ProjectAssigneesResponse)okResult.Value!;
+        var assignees = response.Assignees;
 
         Assert.That(assignees, Has.Count.EqualTo(2));
         Assert.That(assignees, Contains.Item("alice@example.com"));
@@ -1270,7 +1271,8 @@ public class IssuesControllerTests
         // Assert
         Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
         var okResult = (OkObjectResult)result.Result!;
-        var assignees = (List<string>)okResult.Value!;
+        var response = (ProjectAssigneesResponse)okResult.Value!;
+        var assignees = response.Assignees;
 
         Assert.That(assignees, Contains.Item(currentUserEmail));
         Assert.That(assignees, Contains.Item("alice@example.com"));
