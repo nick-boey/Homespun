@@ -11,10 +11,13 @@
     <ItemGroup>
         <InternalsVisibleTo Include="Homespun.Tests" />
         <InternalsVisibleTo Include="Homespun.Api.Tests" />
+        <!-- Lets Moq/Castle generate proxies for internal interfaces in tests. -->
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
     </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="A2A" Version="0.3.3-preview" />
+        <PackageReference Include="Anthropic" Version="12.16.0" />
         <PackageReference Include="Fleece.Core" Version="2.1.1" />
         <PackageReference Include="Google.Protobuf" Version="3.28.*" />
         <PackageReference Include="Grpc.Tools" Version="2.68.*">

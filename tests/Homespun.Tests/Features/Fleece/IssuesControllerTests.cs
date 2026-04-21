@@ -42,6 +42,7 @@ public class IssuesControllerTests
     private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<IAgentStartBackgroundService> _agentStartBackgroundServiceMock = null!;
     private Mock<IAgentStartupTracker> _agentStartupTrackerMock = null!;
+    private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
@@ -82,6 +83,10 @@ public class IssuesControllerTests
         _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _agentStartBackgroundServiceMock = new Mock<IAgentStartBackgroundService>();
         _agentStartupTrackerMock = new Mock<IAgentStartupTracker>();
+        _modelCatalogMock = new Mock<IModelCatalogService>();
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
         _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
@@ -109,6 +114,7 @@ public class IssuesControllerTests
             _fleeceIssuesSyncServiceMock.Object,
             _agentStartBackgroundServiceMock.Object,
             _agentStartupTrackerMock.Object,
+            _modelCatalogMock.Object,
             NullLogger<IssuesController>.Instance);
 
         // Set up HTTP context for controller
@@ -1288,4 +1294,44 @@ public class IssuesControllerTests
     }
 
     #endregion
+
+    [Test]
+    public async Task RunAgent_resolves_request_model_alias_through_catalog()
+    {
+        var issueId = "ABC123";
+        var issue = new Issue
+        {
+            Id = issueId,
+            Title = "Resolve model",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTimeOffset.UtcNow,
+        };
+
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _fleeceServiceMock.Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId)).ReturnsAsync(issue);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync("sonnet", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("claude-sonnet-4-6-20250601");
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            Mode = SessionMode.Build,
+            Model = "sonnet",
+        };
+
+        var result = await _controller.RunAgent(issueId, request);
+
+        Assert.That(result.Result, Is.TypeOf<AcceptedResult>());
+        _modelCatalogMock.Verify(
+            m => m.ResolveModelIdAsync("sonnet", It.IsAny<CancellationToken>()),
+            Times.Once);
+        _agentStartBackgroundServiceMock.Verify(
+            x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(r => r.Model == "claude-sonnet-4-6-20250601")),
+            Times.Once);
+    }
 }

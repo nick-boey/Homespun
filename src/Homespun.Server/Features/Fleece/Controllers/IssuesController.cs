@@ -36,6 +36,7 @@ public class IssuesController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IAgentStartBackgroundService agentStartBackgroundService,
     IAgentStartupTracker agentStartupTracker,
+    IModelCatalogService modelCatalog,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -518,8 +519,10 @@ public class IssuesController(
         var branchName = await branchResolverService.ResolveIssueBranchAsync(request.ProjectId, issueId)
             ?? BranchNameGenerator.GenerateBranchName(issue);
 
-        // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "sonnet";
+        // Determine model — catalog resolves nulls + short aliases into concrete ids.
+        var model = await modelCatalog.ResolveModelIdAsync(
+            request.Model ?? project.DefaultModel,
+            HttpContext.RequestAborted);
 
         // Queue background agent startup
         await agentStartBackgroundService.QueueAgentStartAsync(new AgentOrchestration.Services.AgentStartRequest

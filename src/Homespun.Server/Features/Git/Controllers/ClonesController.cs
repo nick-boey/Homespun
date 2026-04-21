@@ -19,6 +19,7 @@ public class ClonesController(
     IProjectService projectService,
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IClaudeSessionService sessionService,
+    IModelCatalogService modelCatalog,
     ILogger<ClonesController> logger) : ControllerBase
 {
     /// <summary>
@@ -160,8 +161,10 @@ public class ClonesController(
             logger.LogWarning("Failed to pull latest changes for clone at {ClonePath}, continuing anyway", clonePath);
         }
 
-        // Determine model
-        var model = project.DefaultModel ?? "sonnet";
+        // Determine model — catalog resolves nulls + short aliases into concrete ids.
+        var model = await modelCatalog.ResolveModelIdAsync(
+            project.DefaultModel,
+            HttpContext.RequestAborted);
 
         // Create session in Plan mode using branch name as entity ID
         var session = await sessionService.StartSessionAsync(

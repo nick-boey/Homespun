@@ -2,9 +2,12 @@ using Homespun.Features.ClaudeCode.Controllers;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
@@ -18,6 +21,7 @@ public class SessionsControllerTests
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IContainerQueryService> _containerServiceMock = null!;
+    private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<ILogger<SessionsController>> _loggerMock = null!;
 
     [SetUp]
@@ -26,11 +30,16 @@ public class SessionsControllerTests
         _sessionServiceMock = new Mock<IClaudeSessionService>();
         _projectServiceMock = new Mock<IProjectService>();
         _containerServiceMock = new Mock<IContainerQueryService>();
+        _modelCatalogMock = new Mock<IModelCatalogService>();
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
         _loggerMock = new Mock<ILogger<SessionsController>>();
         _controller = new SessionsController(
             _sessionServiceMock.Object,
             _projectServiceMock.Object,
             _containerServiceMock.Object,
+            _modelCatalogMock.Object,
             _loggerMock.Object);
     }
 
@@ -281,4 +290,56 @@ public class SessionsControllerTests
     }
 
     #endregion
+
+    [Test]
+    public async Task Create_resolves_short_alias_before_starting_session()
+    {
+        var project = new Project
+        {
+            Id = "p1",
+            Name = "Demo",
+            LocalPath = "/repos/demo",
+            DefaultBranch = "main",
+            DefaultModel = null,
+        };
+        _projectServiceMock.Setup(p => p.GetByIdAsync("p1")).ReturnsAsync(project);
+
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync("opus", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("claude-opus-4-7-20251101");
+
+        _sessionServiceMock
+            .Setup(s => s.StartSessionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<SessionMode>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ClaudeSession
+            {
+                Id = "s1",
+                EntityId = "e1",
+                ProjectId = "p1",
+                WorkingDirectory = "/repos/demo",
+                Model = "claude-opus-4-7-20251101",
+                Mode = SessionMode.Plan,
+                Status = ClaudeSessionStatus.Running,
+            });
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext(),
+        };
+
+        var result = await _controller.Create(
+            new CreateSessionRequest { EntityId = "e1", ProjectId = "p1", Model = "opus" },
+            CancellationToken.None);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>().Or.InstanceOf<ObjectResult>());
+        _modelCatalogMock.Verify(m => m.ResolveModelIdAsync("opus", It.IsAny<CancellationToken>()), Times.Once);
+        _sessionServiceMock.Verify(s => s.StartSessionAsync(
+            "e1", "p1", "/repos/demo",
+            It.IsAny<SessionMode>(),
+            "claude-opus-4-7-20251101",
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

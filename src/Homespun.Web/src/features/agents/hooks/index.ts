@@ -9,3 +9,8 @@ export { useAllSessionsCount, allSessionsCountQueryKey } from './use-all-session
 export { useEnsureClone } from './use-ensure-clone'
 export { useBranches, branchesQueryKey } from './use-branches'
 export { useGenerateBranchId, type GenerateBranchIdResult } from './use-generate-branch-id'
+export {
+  useAvailableModels,
+  availableModelsQueryKey,
+  type UseAvailableModelsResult,
+} from './use-available-models'

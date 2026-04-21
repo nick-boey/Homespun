@@ -3,9 +3,21 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RunAgentDialog } from './run-agent-dialog'
-import { Issues, IssuesAgent, Skills, SessionMode, SkillCategory, SkillArgKind } from '@/api'
+import {
+  Issues,
+  IssuesAgent,
+  Models,
+  Skills,
+  SessionMode,
+  SkillCategory,
+  SkillArgKind,
+} from '@/api'
 import type { ReactNode } from 'react'
-import type { DiscoveredSkills, RunAgentAcceptedResponse } from '@/api/generated/types.gen'
+import type {
+  ClaudeModelInfo,
+  DiscoveredSkills,
+  RunAgentAcceptedResponse,
+} from '@/api/generated/types.gen'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -21,6 +33,9 @@ vi.mock('@/api', async (importOriginal) => {
     IssuesAgent: {
       postApiIssuesAgentSession: vi.fn(),
     },
+    Models: {
+      getApiModels: vi.fn(),
+    },
   }
 })
 
@@ -32,6 +47,26 @@ vi.mock('@tanstack/react-router', () => ({
 const mockGetSkills = vi.mocked(Skills.getApiSkillsProjectByProjectId)
 const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 const mockCreateIssuesAgentSession = vi.mocked(IssuesAgent.postApiIssuesAgentSession)
+const mockGetModels = vi.mocked(Models.getApiModels)
+
+const MOCK_MODELS: ClaudeModelInfo[] = [
+  {
+    id: 'claude-opus-4-7-20251101',
+    displayName: 'Claude Opus 4.7',
+    createdAt: '2025-11-01T00:00:00Z',
+    isDefault: true,
+  },
+  {
+    id: 'claude-sonnet-4-6-20250601',
+    displayName: 'Claude Sonnet 4.6',
+    createdAt: '2025-06-01T00:00:00Z',
+  },
+  {
+    id: 'claude-haiku-4-5-20251001',
+    displayName: 'Claude Haiku 4.5',
+    createdAt: '2025-10-01T00:00:00Z',
+  },
+]
 
 function createMockResponse<T>(data: T) {
   return {
@@ -94,6 +129,7 @@ describe('RunAgentDialog', () => {
 
     mockGetSkills.mockResolvedValue(createMockResponse(MOCK_SKILLS))
     mockRunAgent.mockResolvedValue(createMockResponse(createMockRunAgentResponse()))
+    mockGetModels.mockResolvedValue(createMockResponse(MOCK_MODELS))
   })
 
   it('renders nothing when closed', () => {
@@ -430,6 +466,155 @@ describe('RunAgentDialog', () => {
           params: { sessionId: 'session-123' },
         })
       })
+    })
+  })
+
+  describe('model dropdown sourced from useAvailableModels', () => {
+    it('populates task-tab dropdown with models from the API', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+      const modelCombo = await within(taskTab).findByRole('combobox', { name: 'Select model' })
+
+      await waitFor(() => {
+        expect(modelCombo).not.toBeDisabled()
+      })
+
+      await user.click(modelCombo)
+
+      const listbox = await screen.findByRole('listbox')
+      expect(within(listbox).getByText(/Claude Opus 4\.7/)).toBeInTheDocument()
+      expect(within(listbox).getByText(/Claude Sonnet 4\.6/)).toBeInTheDocument()
+      expect(within(listbox).getByText(/Claude Haiku 4\.5/)).toBeInTheDocument()
+    })
+
+    it('uses the isDefault model when localStorage is empty and sends its id to the API', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
+      await waitFor(() => {
+        expect(within(taskTab).getByRole('button', { name: /start agent/i })).not.toBeDisabled()
+      })
+
+      await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockRunAgent).toHaveBeenCalledWith({
+          path: { issueId: 'issue-456' },
+          body: expect.objectContaining({
+            model: 'claude-opus-4-7-20251101',
+          }),
+        })
+      })
+    })
+
+    it('normalizes a stored tier-prefix alias (opus) to the newest opus in the catalog', async () => {
+      const user = userEvent.setup()
+      localStorage.setItem('agent-launcher-model', 'opus')
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
+      await waitFor(() => {
+        expect(within(taskTab).getByRole('button', { name: /start agent/i })).not.toBeDisabled()
+      })
+
+      await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockRunAgent).toHaveBeenCalledWith({
+          path: { issueId: 'issue-456' },
+          body: expect.objectContaining({
+            model: 'claude-opus-4-7-20251101',
+          }),
+        })
+      })
+    })
+
+    it('falls to default when stored id is not in the current catalog', async () => {
+      const user = userEvent.setup()
+      localStorage.setItem('agent-launcher-model', 'claude-obsolete-id-20200101')
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
+      await waitFor(() => {
+        expect(within(taskTab).getByRole('button', { name: /start agent/i })).not.toBeDisabled()
+      })
+
+      await user.click(within(taskTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(mockRunAgent).toHaveBeenCalledWith({
+          path: { issueId: 'issue-456' },
+          body: expect.objectContaining({
+            model: 'claude-opus-4-7-20251101',
+          }),
+        })
+      })
+    })
+
+    it('disables the start button while the catalog is loading', () => {
+      mockGetModels.mockImplementation(
+        () =>
+          new Promise(() => {}) as Promise<{
+            data: ClaudeModelInfo[]
+            request: Request
+            response: Response
+          }>
+      )
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+      expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeDisabled()
     })
   })
 })
