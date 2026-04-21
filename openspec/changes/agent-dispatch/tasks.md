@@ -70,7 +70,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T020 [P] `StackedPrAgentStartTests` in `tests/Homespun.Api.Tests/Features/AgentOrchestration/` — explicit override, prior-sibling-PR auto-pick, default fallback.
 - [x] T021 [P] `run-agent-dialog.test.tsx` and `use-run-agent.test.ts`.
 - [x] T022 [P] `use-start-agent.test.tsx`, `use-agent-prompts.test.tsx`, `use-ensure-clone.test.tsx`.
-- [ ] T023 **GP-1**: API test covering the `202 Accepted` happy path of `POST /api/issues/{issueId}/run` — see FI-1.
+- [ ] T023 **GP-1**: API test covering the `202 Accepted` happy path of `POST /api/issues/{issueId}/run` **DEFERRED → fleece:ckmk8k**
 
 ### Checkpoint
 
@@ -101,8 +101,8 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T034 [P] `TaskQueueWorkflowTests` — workflow callback registration per item.
 - [x] T035 [P] `QueueControllerTests` — unit coverage of controller wiring.
 - [x] T036 [P] `QueueApiTests` — integration coverage via WebApplicationFactory.
-- [ ] T037 **GP-5**: regression test that a throwing `IWorkflowSessionCallback.RegisterSession` is surfaced to the client cleanly — see FI-5.
-- [ ] T038 **GP-6**: pagination for `GET /queue/status` + test — see FI-6.
+- [ ] T037 **GP-5**: regression test that a throwing `IWorkflowSessionCallback.RegisterSession` is surfaced to the client cleanly **DEFERRED → fleece:ckmk8k**
+- [ ] T038 **GP-6**: pagination for `GET /queue/status` + test **DEFERRED → fleece:ckmk8k**
 
 ### Checkpoint
 
@@ -137,8 +137,8 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T050 [P] `BranchIdBackgroundServiceTests` — sidecar-failure fallback.
 - [x] T051 [P] `MiniPromptServiceTests` — HTTP client behaviour + timeout handling.
 - [x] T052 [P] `use-generate-branch-id.test.tsx`, `use-branches.test.tsx`, `base-branch-selector.test.tsx`.
-- [ ] T053 **GP-3**: `BaseBranchSelector` explicit error fallback when `useBranches` rejects — see FI-3.
-- [ ] T054 **GP-4**: sidecar health check at startup + fallback on the sync endpoint — see FI-4.
+- [ ] T053 **GP-3**: `BaseBranchSelector` explicit error fallback when `useBranches` rejects **DEFERRED → fleece:ckmk8k**
+- [ ] T054 **GP-4**: sidecar health check at startup + fallback on the sync endpoint **DEFERRED → fleece:ckmk8k**
 
 ### Checkpoint
 
@@ -164,7 +164,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T060 [P] `active-agents-indicator.test.tsx`, `use-active-session-count.test.tsx`, `use-all-sessions-count.test.tsx`.
 - [x] T061 [P] `agent-status-indicator.test.tsx`, `agent-control-panel.test.tsx`.
 - [x] T062 [P] `use-project-sessions.test.tsx`.
-- [ ] T063 **GP-2**: consistent UI handler for `AgentStartFailed` so failures surface even after the user navigates away — see FI-2.
+- [ ] T063 **GP-2**: consistent UI handler for `AgentStartFailed` so failures surface even after the user navigates away **DEFERRED → fleece:ckmk8k**
 
 ### Checkpoint
 
@@ -177,7 +177,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T065 SignalR hub methods `BroadcastAgentStarting` / `BroadcastAgentStartFailed` on `NotificationHub` used by `AgentStartBackgroundService`.
 - [x] T066 OpenAPI surface: `RunAgent*` and `Orchestration*` DTOs appear in the generated client under `src/Homespun.Web/src/api/generated/`.
 - [x] T067 Shared contract discipline: no hand-duplicated DTOs between server and web (Constitution §III verified by grep).
-- [ ] T068 **FI-1**: Playwright e2e coverage for the full "Run Agent → AgentStarting broadcast → session streaming" loop (covers GP-1 alongside the 202 API test).
+- [ ] T068 **FI-1**: Playwright e2e coverage for the full "Run Agent → AgentStarting broadcast → session streaming" loop (covers GP-1 alongside the 202 API test). **DEFERRED → fleece:ckmk8k**
 
 ---
 

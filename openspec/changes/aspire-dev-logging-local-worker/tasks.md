@@ -28,9 +28,9 @@
 
 ## 5. Spike: Grafana Alloy OTLP → Loki replacement for Promtail
 
-- [ ] 5.1 In a scratch branch, add a `grafana/alloy` container resource to `src/Homespun.AppHost/Program.cs` alongside Loki and Grafana. Mount a minimal `config/alloy/config.alloy` that accepts OTLP logs on a fixed port and forwards them to Loki at `http://loki:3100/otlp`.
-- [ ] 5.2 Set `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<alloy-endpoint>` on the server resource (in addition to the existing `OTEL_EXPORTER_OTLP_ENDPOINT` pointed at the Aspire dashboard).
-- [ ] 5.3 Verify post-boot: curl the server, then query Loki directly (`curl -sG http://localhost:3100/loki/api/v1/query_range --data-urlencode 'query={service_name="server"}'`) and confirm at least one log line is returned for the current session (new `service_instance_id`). Also verify `aspire otel logs server` still returns entries.
+- [x] 5.1 In a scratch branch, add a `grafana/alloy` container resource to `src/Homespun.AppHost/Program.cs` alongside Loki and Grafana. Mount a minimal `config/alloy/config.alloy` that accepts OTLP logs on a fixed port and forwards them to Loki at `http://loki:3100/otlp`. **SUPERSEDED by seq-replaces-plg**
+- [x] 5.2 Set `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<alloy-endpoint>` on the server resource (in addition to the existing `OTEL_EXPORTER_OTLP_ENDPOINT` pointed at the Aspire dashboard). **SUPERSEDED by seq-replaces-plg**
+- [x] 5.3 Verify post-boot: curl the server, then query Loki directly (`curl -sG http://localhost:3100/loki/api/v1/query_range --data-urlencode 'query={service_name="server"}'`) and confirm at least one log line is returned for the current session (new `service_instance_id`). Also verify `aspire otel logs server` still returns entries. **SUPERSEDED by seq-replaces-plg**
 - [x] 5.4 If the spike works end-to-end, proceed to Task 6 (land Alloy). If it does not, fall back to Task 7 (keep Promtail, fix its mounts + apply labels).
 
 > Spike deferred — requires live Docker boot that isn't available in the implementation
@@ -39,10 +39,10 @@
 
 ## 6. Land Alloy replacement for Promtail (if Task 5 passed)
 
-- [ ] 6.1 Move the spike's Alloy resource into the final `Program.cs` location (alongside Loki + Grafana). Remove the Promtail container resource from `Program.cs`.
-- [ ] 6.2 Create `config/alloy/config.alloy` with the OTLP receiver + Loki writer config used in the spike. Do not delete `config/promtail-config.yml` — it is still used by `docker-compose.yml` in prod.
-- [ ] 6.3 Update `config/grafana/provisioning/datasources/datasources.yml` only if label conventions differ between Promtail-pushed and Alloy-pushed log streams (derived fields may need adjustment).
-- [ ] 6.4 Update `CLAUDE.md` "Accessing Application Logs" section to reflect the Alloy-based flow (Loki URL + Grafana URL unchanged; pipeline diagram updated).
+- [x] 6.1 Move the spike's Alloy resource into the final `Program.cs` location (alongside Loki + Grafana). Remove the Promtail container resource from `Program.cs`. **SUPERSEDED by seq-replaces-plg**
+- [x] 6.2 Create `config/alloy/config.alloy` with the OTLP receiver + Loki writer config used in the spike. Do not delete `config/promtail-config.yml` — it is still used by `docker-compose.yml` in prod. **SUPERSEDED by seq-replaces-plg**
+- [x] 6.3 Update `config/grafana/provisioning/datasources/datasources.yml` only if label conventions differ between Promtail-pushed and Alloy-pushed log streams (derived fields may need adjustment). **SUPERSEDED by seq-replaces-plg**
+- [x] 6.4 Update `CLAUDE.md` "Accessing Application Logs" section to reflect the Alloy-based flow (Loki URL + Grafana URL unchanged; pipeline diagram updated). **SUPERSEDED by seq-replaces-plg**
 
 > Skipped — Task 5 was deferred, so Task 7 was taken instead.
 

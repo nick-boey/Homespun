@@ -151,9 +151,9 @@ No server, web, shared, or infra paths are touched by this feature (confirmed in
       npm test
       ```
 - [X] T038 Verify operationally in mock mode per `specs/001-worker-skills-logging/quickstart.md` §3 — trigger create, resume, boot; confirm one `inventory event=...` line per event; confirm no secrets (`grep -E "GITHUB_TOKEN|GH_TOKEN|Bearer" logs/mock-backend.log` against inventory lines should return zero rows)
-- [ ] T039 Move the Fleece issue to `review` and link the PR: `fleece edit <id> -s review --linked-pr <pr-number>`; commit `.fleece/` alongside code (or `fleece commit --ci`)
-- [ ] T040 Open the PR using Conventional Commits with the PR number suffix (e.g. `feat(worker): log available skills and plugins per session (#NN)`), base against `main`, include the `specs/001-worker-skills-logging/` directory in the PR
-- [ ] T041 After merge: `fleece edit <id> -s complete`
+- [x] T039 Move the Fleece issue to `review` and link the PR: `fleece edit <id> -s review --linked-pr <pr-number>`; commit `.fleece/` alongside code (or `fleece commit --ci`) **DONE** (fleece:SFq3pB)
+- [x] T040 Open the PR using Conventional Commits with the PR number suffix (e.g. `feat(worker): log available skills and plugins per session (#NN)`), base against `main`, include the `specs/001-worker-skills-logging/` directory in the PR **DONE** — PR #771 `feat(worker): log available skills and plugins per session` merged
+- [x] T041 After merge: `fleece edit <id> -s complete` **DONE** (fleece:SFq3pB status = Complete)
 
 ---
 

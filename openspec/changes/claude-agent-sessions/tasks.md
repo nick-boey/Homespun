@@ -64,9 +64,8 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 - [x] T019 [P] [US1] `tests/Homespun.Api.Tests/Features/SessionsApiTests.cs` — full-stack HTTP session tests.
 - [x] T020 [P] [US1] Web component tests co-located under `features/sessions/components/*.test.tsx` for `MessageList`, `ChatInput`, `SessionCard`, tool renderers.
 - [x] T021 [P] [US1] Web hook tests: `useSession.test.ts`, `useSessions.test.ts`, `useSessionsSignalR.test.ts`, `useSessionMessages.test.ts`.
-- [ ] T022 [US1] Playwright e2e in `src/Homespun.Web/e2e/sessions/stream-session.spec.ts` covering create → send → stream. **GAP → FI-1**
-- [ ] T023 [P] [US1] Worker unit tests for `session-manager.ts` and `sse-writer.ts`. **GAP → FI-2**
-
+- [ ] T022 [US1] Playwright e2e in `src/Homespun.Web/e2e/sessions/stream-session.spec.ts` covering create → send → stream. **DEFERRED → fleece:EYE183**
+- [ ] T023 [P] [US1] Worker unit tests for `session-manager.ts` and `sse-writer.ts`. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T024 [P] [US1] `Services/ClaudeSessionService.cs` (façade).
@@ -94,8 +93,7 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 - [x] T037 [P] [US2] `tests/Homespun.Tests/Features/ClaudeCode/ToolInteractionServiceTests.cs` — `ExitPlanMode` flow.
 - [x] T038 [P] [US2] Server API test for `POST /api/sessions/{id}` plan approval path (covered in `SessionsApiTests`).
 - [x] T039 [P] [US2] Web `PlanApprovalPanel.test.tsx` + `useApprovePlan.test.ts`.
-- [ ] T040 [US2] Playwright e2e `src/Homespun.Web/e2e/sessions/plan-approval.spec.ts`. **GAP → FI-1**
-
+- [ ] T040 [US2] Playwright e2e `src/Homespun.Web/e2e/sessions/plan-approval.spec.ts`. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T041 [P] [US2] `Services/ToolInteractionService.cs` — ExitPlanMode handling, approve / reject / execute.
@@ -111,8 +109,7 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 
 - [x] T045 [P] [US3] `ToolInteractionServiceTests.cs` — `AskUserQuestion` path.
 - [x] T046 [P] [US3] Web Q&A component + hook tests.
-- [ ] T047 [US3] Playwright e2e `src/Homespun.Web/e2e/sessions/question-answer.spec.ts`. **GAP → FI-1**
-
+- [ ] T047 [US3] Playwright e2e `src/Homespun.Web/e2e/sessions/question-answer.spec.ts`. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T048 [P] [US3] `ToolInteractionService` AskUserQuestion flow — `PendingQuestion` capture + answer resume.
@@ -129,9 +126,8 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 - [x] T052 [P] [US4] `SessionMetadataStoreTests.cs` + `ClaudeSessionStoreTests.cs`.
 - [x] T053 [P] [US4] `SessionCacheController` tests (API-side, in `SessionsApiTests`).
 - [x] T054 [P] [US4] Web `useSessionHistory.test.ts` + history tab component tests.
-- [ ] T055 [US4] Playwright e2e `src/Homespun.Web/e2e/sessions/resume-session.spec.ts`. **GAP → FI-1**
-- [ ] T056 [US4] Worker tests for `session-discovery.ts`. **GAP → FI-2**
-
+- [ ] T055 [US4] Playwright e2e `src/Homespun.Web/e2e/sessions/resume-session.spec.ts`. **DEFERRED → fleece:EYE183**
+- [ ] T056 [US4] Worker tests for `session-discovery.ts`. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T057 [P] [US4] `Services/MessageCacheStore.cs` + `SessionMetadataStore.cs` + `ClaudeSessionDiscovery.cs`.
@@ -148,8 +144,7 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 
 - [x] T062 [P] [US5] `ClaudeSessionServiceTests` / `SessionLifecycleServiceTests` — `SetSessionMode_*`, `SetSessionModel_*`.
 - [x] T063 [P] [US5] Web `useChangeSessionSettings.test.ts`.
-- [ ] T064 [US5] Playwright e2e `src/Homespun.Web/e2e/sessions/switch-mode-model.spec.ts`. **GAP → FI-1**
-
+- [ ] T064 [US5] Playwright e2e `src/Homespun.Web/e2e/sessions/switch-mode-model.spec.ts`. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T065 [P] [US5] `SessionLifecycleService.SetSessionModeAsync` / `SetSessionModelAsync`.
@@ -164,8 +159,7 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 
 - [x] T068 [P] [US6] `ClaudeSessionServiceTests` — `ClearContext_*`, `Interrupt_*`, `Stop_*`.
 - [x] T069 [P] [US6] Web `useClearContext.test.ts`.
-- [ ] T070 [US6] Playwright e2e covering clear / interrupt / stop. **GAP → FI-1**
-
+- [ ] T070 [US6] Playwright e2e covering clear / interrupt / stop. **DEFERRED → fleece:EYE183**
 ### Implementation
 
 - [x] T071 [P] [US6] Server: `ClearContextAndStartNew`, `InterruptSession`, `StopSession` on both HTTP and hub.
@@ -182,22 +176,18 @@ description: "Retrospective task list for the migrated Claude Agent Sessions fea
 - [x] T075 [P] `Services/AgentStartupTracker.cs` — startup progress.
 - [x] T076 [P] `Services/HooksService.cs` — startup / shutdown hooks.
 - [x] T077 [P] `tests/.../ContainerDiscoveryServiceTests.cs`, `AgentStartupTrackerTests.cs`, `DockerAgentExecutionServiceTests.cs`.
-- [ ] T078 **Persist and restore mode/model correctly on recovery** — remove hardcoded Build/"sonnet" in `DockerAgentExecutionService.cs` (~L1102, L1165). **GAP → FI-3**
-
+- [ ] T078 **Persist and restore mode/model correctly on recovery** — remove hardcoded Build/"sonnet" in `DockerAgentExecutionService.cs` (~L1102, L1165). **DEFERRED → fleece:EYE183**
 ### Request safety
 
-- [ ] T079 **Return a correlation handle from `POST /api/sessions` instead of fire-and-forget** in `SessionsController.cs`. **GAP → FI-4**
-- [ ] T080 **Add synchronisation to `ClaudeSessionStore`** (concurrent dictionary / lock) — `Services/ClaudeSessionStore.cs`. **GAP → FI-5**
-
+- [ ] T079 **Return a correlation handle from `POST /api/sessions` instead of fire-and-forget** in `SessionsController.cs`. **DEFERRED → fleece:EYE183**
+- [ ] T080 **Add synchronisation to `ClaudeSessionStore`** (concurrent dictionary / lock) — `Services/ClaudeSessionStore.cs`. **DEFERRED → fleece:EYE183**
 ### Plan artefacts
 
 - [x] T081 [P] `PlanFilePath` / `PlanContent` plumbing on `ClaudeSession` + `PlanApprovalPanel` consumption.
-- [ ] T082 **Own plan-file lifecycle** (delete on session stop / container removal; degrade gracefully when file is missing). **GAP → FI-6**
-
+- [ ] T082 **Own plan-file lifecycle** (delete on session stop / container removal; degrade gracefully when file is missing). **DEFERRED → fleece:EYE183**
 ### Context management
 
-- [ ] T083 **Automatic context management** — summarise or trim long sessions before they exceed the model's context window. **GAP → FI-7**
-
+- [ ] T083 **Automatic context management** — summarise or trim long sessions before they exceed the model's context window. **DEFERRED → fleece:EYE183**
 ---
 
 ## Dependencies & Execution Order
