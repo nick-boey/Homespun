@@ -30,6 +30,7 @@ public class IssuesAgentControllerTests
     private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
+    private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<IGraphService> _graphServiceMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
     private Mock<ILogger<IssuesAgentController>> _loggerMock = null!;
@@ -55,6 +56,10 @@ public class IssuesAgentControllerTests
         _dataStoreMock = new Mock<IDataStore>();
         _cloneServiceMock = new Mock<IGitCloneService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
+        _modelCatalogMock = new Mock<IModelCatalogService>();
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
         _graphServiceMock = new Mock<IGraphService>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
         _loggerMock = new Mock<ILogger<IssuesAgentController>>();
@@ -69,6 +74,7 @@ public class IssuesAgentControllerTests
             _dataStoreMock.Object,
             _cloneServiceMock.Object,
             _sessionServiceMock.Object,
+            _modelCatalogMock.Object,
             _graphServiceMock.Object,
             _notificationHubMock.Object,
             _loggerMock.Object);
@@ -318,5 +324,31 @@ var request = new CreateIssuesAgentSessionRequest
         _sessionServiceMock.Verify(s => s.SendMessageAsync(
             "session-abc", "Do the work", SessionMode.Plan,
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task CreateSession_resolves_request_model_alias_through_catalog()
+    {
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync("opus", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("claude-opus-4-7-20251101");
+
+        var request = new CreateIssuesAgentSessionRequest
+        {
+            ProjectId = TestProject.Id,
+            UserInstructions = "Do the work",
+            Model = "opus",
+        };
+
+        await _controller.CreateSession(request);
+
+        _modelCatalogMock.Verify(
+            m => m.ResolveModelIdAsync("opus", It.IsAny<CancellationToken>()),
+            Times.Once);
+        _sessionServiceMock.Verify(s => s.StartSessionAsync(
+            It.IsAny<string>(), TestProject.Id, It.IsAny<string>(),
+            It.IsAny<SessionMode>(),
+            "claude-opus-4-7-20251101",
+            It.IsAny<string?>()), Times.Once);
     }
 }

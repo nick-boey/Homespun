@@ -29,6 +29,7 @@ public class IssuesAgentController(
     IDataStore dataStore,
     IGitCloneService cloneService,
     IClaudeSessionService sessionService,
+    IModelCatalogService modelCatalog,
     IGraphService graphService,
     IHubContext<NotificationHub> notificationHub,
     ILogger<IssuesAgentController> logger) : ControllerBase
@@ -107,8 +108,11 @@ public class IssuesAgentController(
         // Session mode: use explicit mode from request, default to Build
         var sessionMode = request.Mode ?? SessionMode.Build;
 
-        // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "opus";
+        // Determine model — resolve through the catalog so short aliases
+        // ("opus", "sonnet") and nulls map to the newest concrete id.
+        var model = await modelCatalog.ResolveModelIdAsync(
+            request.Model ?? project.DefaultModel,
+            HttpContext.RequestAborted);
 
         // Use SelectedIssueId as entityId when available, otherwise fall back to branch name
         var entityId = !string.IsNullOrWhiteSpace(request.SelectedIssueId)

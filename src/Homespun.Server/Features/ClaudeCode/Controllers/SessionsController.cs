@@ -18,6 +18,7 @@ public class SessionsController(
     IClaudeSessionService sessionService,
     IProjectService projectService,
     IContainerQueryService containerService,
+    IModelCatalogService modelCatalog,
     ILogger<SessionsController> logger) : ControllerBase
 {
     /// <summary>
@@ -110,7 +111,9 @@ public class SessionsController(
     [ProducesResponseType<ClaudeSession>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ClaudeSession>> Create([FromBody] CreateSessionRequest request)
+    public async Task<ActionResult<ClaudeSession>> Create(
+        [FromBody] CreateSessionRequest request,
+        CancellationToken cancellationToken)
     {
         var project = await projectService.GetByIdAsync(request.ProjectId);
         if (project == null)
@@ -119,7 +122,9 @@ public class SessionsController(
         }
 
         var workingDirectory = request.WorkingDirectory ?? project.LocalPath;
-        var model = request.Model ?? project.DefaultModel ?? "sonnet";
+        var model = await modelCatalog.ResolveModelIdAsync(
+            request.Model ?? project.DefaultModel,
+            cancellationToken);
 
         try
         {

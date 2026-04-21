@@ -128,6 +128,11 @@ public static class MockServiceExtensions
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
+        // Model catalog — mock never reaches out to Anthropic so IAnthropicClient
+        // stays unregistered; MockModelCatalogService is self-contained.
+        services.AddMemoryCache();
+        services.AddSingleton<IModelCatalogService, MockModelCatalogService>();
+
         // Always use the real session pipeline; IAgentExecutionService picks between the
         // Docker/SingleContainer/Mock executors based on AgentExecution:Mode.
         services.AddClaudeSessionServices(options, configuration);
