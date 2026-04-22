@@ -1,8 +1,12 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Snapshots;
+using Homespun.Features.Notifications;
 using Homespun.Features.OpenSpec.Telemetry;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.OpenSpec;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.OpenSpec.Services;
@@ -12,14 +16,17 @@ namespace Homespun.Features.OpenSpec.Services;
 /// auto-links single orphans and auto-completes Fleece issues when their change has archived.
 ///
 /// Both side-effects (sidecar write + archive-triggered Fleece transition)
-/// invalidate any warm task-graph snapshot for the project so the next
-/// `/taskgraph/data` call recomputes without waiting for the refresher tick.
+/// invalidate any warm task-graph snapshot for the project and broadcast
+/// <c>IssuesChanged</c> via <see cref="NotificationHubExtensions.BroadcastIssueTopologyChanged"/>
+/// so connected clients refetch without waiting for the refresher tick.
 /// </summary>
 public class ChangeReconciliationService(
     IChangeScannerService scanner,
     IFleeceIssueTransitionService transitionService,
     ILogger<ChangeReconciliationService> logger,
-    IProjectTaskGraphSnapshotStore? snapshotStore = null) : IChangeReconciliationService
+    IProjectTaskGraphSnapshotStore? snapshotStore = null,
+    IHubContext<NotificationHub>? notificationHub = null,
+    IServiceProvider? services = null) : IChangeReconciliationService
 {
     /// <inheritdoc />
     public async Task<BranchScanResult> ReconcileAsync(
@@ -39,7 +46,7 @@ public class ChangeReconciliationService(
         if (linkedOrphan is not null)
         {
             scan = await scanner.ScanBranchAsync(clonePath, branchFleeceId, baseBranch, ct);
-            snapshotStore?.InvalidateProject(projectId);
+            await InvalidateAndBroadcastAsync(projectId);
         }
 
         // 2. Auto-transition fleece issue to complete when any linked change is archived.
@@ -59,11 +66,25 @@ public class ChangeReconciliationService(
                 }
                 else
                 {
-                    snapshotStore?.InvalidateProject(projectId);
+                    await InvalidateAndBroadcastAsync(projectId);
                 }
             }
         }
 
         return scan;
+    }
+
+    private async Task InvalidateAndBroadcastAsync(string projectId)
+    {
+        if (notificationHub is not null && services is not null)
+        {
+            await notificationHub.BroadcastIssueTopologyChanged(
+                services, projectId, IssueChangeType.Updated, issueId: null);
+        }
+        else
+        {
+            // Fallback for tests that don't wire the hub — preserve the pre-existing invalidation.
+            snapshotStore?.InvalidateProject(projectId);
+        }
     }
 }

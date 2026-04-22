@@ -3,7 +3,7 @@
  */
 
 import type { HubConnection } from '@microsoft/signalr'
-import type { NotificationDto, IssueChangeType } from '@/types/signalr'
+import type { NotificationDto, IssueChangeType, IssueFieldPatch } from '@/types/signalr'
 
 // ============================================================================
 // Event Handler Types
@@ -13,6 +13,7 @@ export interface NotificationHubEvents {
   onNotificationAdded?: (notification: NotificationDto) => void
   onNotificationDismissed?: (notificationId: string) => void
   onIssuesChanged?: (projectId: string, changeType: IssueChangeType, issueId: string) => void
+  onIssueFieldsPatched?: (projectId: string, issueId: string, patch: IssueFieldPatch) => void
   onBranchIdGenerated?: (
     issueId: string,
     projectId: string,
@@ -50,6 +51,7 @@ export function registerNotificationHubEvents(
   register('NotificationAdded', handlers.onNotificationAdded)
   register('NotificationDismissed', handlers.onNotificationDismissed)
   register('IssuesChanged', handlers.onIssuesChanged)
+  register('IssueFieldsPatched', handlers.onIssueFieldsPatched)
   register('BranchIdGenerated', handlers.onBranchIdGenerated)
   register('BranchIdGenerationFailed', handlers.onBranchIdGenerationFailed)
 

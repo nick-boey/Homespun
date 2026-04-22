@@ -15,6 +15,7 @@ using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -111,10 +112,16 @@ public class IssuesControllerTests
             _agentStartupTrackerMock.Object,
             NullLogger<IssuesController>.Instance);
 
-        // Set up HTTP context for controller
+        // Set up HTTP context for controller. RequestServices is consulted by
+        // NotificationHubExtensions.BroadcastIssueTopologyChanged to resolve
+        // IProjectTaskGraphSnapshotStore / ITaskGraphSnapshotRefresher, so an
+        // empty provider is required even when those services are unregistered.
         _controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext()
+            HttpContext = new DefaultHttpContext
+            {
+                RequestServices = new ServiceCollection().BuildServiceProvider()
+            }
         };
     }
 
@@ -280,9 +287,47 @@ public class IssuesControllerTests
     #region Update Tests
 
     [Test]
-    public async Task Update_BroadcastsIssuesChangedEvent_WithUpdatedChangeType()
+    public async Task Update_WithTopologyField_BroadcastsIssuesChangedEvent_WithUpdatedChangeType()
     {
-        // Arrange
+        // Arrange — topology-class field (Status) forces the invalidation broadcast.
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Updated Issue", IssueType.Bug);
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(It.IsAny<string>(), issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestIssue(issueId, "Original Issue", IssueType.Bug));
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Status = IssueStatus.Progress };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert
+        _groupClientsMock.Verify(
+            x => x.SendCoreAsync("IssuesChanged",
+                It.Is<object?[]>(args =>
+                    (string)args[0]! == TestProject.Id &&
+                    (IssueChangeType)args[1]! == IssueChangeType.Updated &&
+                    (string)args[2]! == issueId),
+                default),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Update_WithPatchableFieldsOnly_BroadcastsIssueFieldsPatched()
+    {
+        // Arrange — a title-only edit is structure-preserving and must route through
+        // the in-place patch path, emitting IssueFieldsPatched instead of IssuesChanged.
         var issueId = "ABC123";
         var issue = CreateTestIssue(issueId, "Updated Issue", IssueType.Bug);
 
@@ -307,11 +352,10 @@ public class IssuesControllerTests
 
         // Assert
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged",
+            x => x.SendCoreAsync("IssueFieldsPatched",
                 It.Is<object?[]>(args =>
                     (string)args[0]! == TestProject.Id &&
-                    (IssueChangeType)args[1]! == IssueChangeType.Updated &&
-                    (string)args[2]! == issueId),
+                    (string)args[1]! == issueId),
                 default),
             Times.Once);
     }

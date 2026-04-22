@@ -116,6 +116,24 @@ export interface NotificationDto {
 
 export type IssueChangeType = 'created' | 'updated' | 'deleted'
 
+/**
+ * Partial update payload for the structure-preserving subset of an issue's
+ * fields. Null / undefined means "unchanged"; non-null values overlay the
+ * existing values on the cached node. Matches the server-side
+ * `Homespun.Shared.Models.Fleece.IssueFieldPatch` DTO, carried on the
+ * `IssueFieldsPatched` SignalR event.
+ */
+export interface IssueFieldPatch {
+  title?: string | null
+  description?: string | null
+  priority?: number | null
+  tags?: string[] | null
+  assignedTo?: string | null
+  createdBy?: string | null
+  executionMode?: 'series' | 'parallel' | null
+  lastUpdate?: string | null
+}
+
 // ============================================================================
 // AG-UI Event Types
 // ============================================================================
