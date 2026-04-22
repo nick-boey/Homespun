@@ -134,17 +134,23 @@ The shared DTO `ClaudeModelInfo` SHALL expose exactly the fields required by the
 #### Scenario: Fallback models are available as a static list
 
 - **WHEN** any caller reads `ClaudeModelInfo.FallbackModels`
-- **THEN** it SHALL be a deterministic list containing one entry per short-alias tier (`opus`, `sonnet`, `haiku`) with plausible full ids and fixed past `CreatedAt` timestamps suitable for tests
+- **THEN** it SHALL be a deterministic list containing one entry per short-alias tier with `Id` equal to the tier alias (`opus`, `sonnet`, `haiku`) — the Claude Agent SDK accepts these directly — plus fixed past `CreatedAt` timestamps suitable for tests
 
-### Requirement: Mock mode and tests never reach the Anthropic API
+### Requirement: Mock mode catalog wiring is gated on `UseLiveClaudeSessions`
 
-In mock profiles (`dev-mock`) and in all automated tests, `IModelCatalogService` SHALL be implemented by `MockModelCatalogService`, which returns `ClaudeModelInfo.FallbackModels` without constructing or invoking `IAnthropicClient`.
+In mock profiles where `MockMode:UseLiveClaudeSessions` is `false` (`dev-mock` and the default-configured automated test suite), `IModelCatalogService` SHALL be implemented by `MockModelCatalogService`, which returns `ClaudeModelInfo.FallbackModels` without constructing or invoking `IAnthropicClient`. In mock profiles where `UseLiveClaudeSessions` is `true` (`dev-live`, `dev-windows`, `dev-container`), `IModelCatalogService` SHALL be implemented by the live `ModelCatalogService` so `/api/models` reflects the real Anthropic catalogue; the fallback list is used only on SDK failure per the cache-miss failure rule.
 
-#### Scenario: Mock profile returns fallback catalog
+#### Scenario: dev-mock returns fallback catalog
 
-- **WHEN** the server is launched with `dev-mock` and `GET /api/models` is called
+- **WHEN** the server is launched with `dev-mock` (`UseLiveClaudeSessions=false`) and `GET /api/models` is called
 - **THEN** the response SHALL be exactly the entries from `ClaudeModelInfo.FallbackModels` with the default-selection rule applied
 - **AND** no HTTP request to `api.anthropic.com` SHALL have been issued
+
+#### Scenario: dev-live returns the live Anthropic catalogue
+
+- **WHEN** the server is launched with `dev-live` / `dev-windows` / `dev-container` (`UseLiveClaudeSessions=true`) and `GET /api/models` is called
+- **THEN** the service SHALL invoke the Anthropic SDK and return the live catalogue with the default-selection rule applied
+- **AND** the fallback list SHALL only be returned if the SDK call fails
 
 #### Scenario: Mock service does not construct the Anthropic client
 

@@ -196,13 +196,12 @@ else
     builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 
     // Anthropic model catalog (live path): authoritative list of available
-    // Claude models fetched via the official SDK and cached in-process.
+    // Claude models fetched via HTTP against /v1/models and cached in-process.
+    // We bypass the SDK here because its Models.List path rejects OAuth tokens
+    // ("OAuth authentication is currently not supported") while the same token
+    // is accepted verbatim as `x-api-key` by the REST endpoint.
     builder.Services.AddMemoryCache();
-    builder.Services.AddSingleton<Anthropic.IAnthropicClient>(_ =>
-    {
-        var token = Environment.GetEnvironmentVariable("CLAUDE_CODE_OAUTH_TOKEN") ?? string.Empty;
-        return new Anthropic.AnthropicClient(new Anthropic.Core.ClientOptions { AuthToken = token });
-    });
+    builder.Services.AddHttpClient(AnthropicModelSource.HttpClientName);
     builder.Services.AddSingleton<IAnthropicModelSource, AnthropicModelSource>();
     builder.Services.AddSingleton<IModelCatalogService>(sp => new ModelCatalogService(
         sp.GetRequiredService<IAnthropicModelSource>(),

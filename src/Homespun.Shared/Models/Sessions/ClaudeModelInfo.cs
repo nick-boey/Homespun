@@ -29,27 +29,28 @@ public class ClaudeModelInfo
 
     /// <summary>
     /// Fallback catalog used when the Anthropic API is unavailable and in mock mode.
-    /// One entry per short-alias tier with plausible full ids and fixed past
-    /// <c>CreatedAt</c> timestamps so ordering is deterministic in tests.
+    /// One entry per short-alias tier; the ids are the tier aliases themselves
+    /// (<c>opus</c>/<c>sonnet</c>/<c>haiku</c>) which the Claude Agent SDK accepts
+    /// directly, avoiding drift against a hardcoded dated snapshot.
     /// </summary>
     public static readonly IReadOnlyList<ClaudeModelInfo> FallbackModels =
     [
         new ClaudeModelInfo
         {
-            Id = "claude-opus-4-6-20250101",
-            DisplayName = "Claude Opus 4.6",
+            Id = "opus",
+            DisplayName = "Opus",
             CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         },
         new ClaudeModelInfo
         {
-            Id = "claude-sonnet-4-6-20250101",
-            DisplayName = "Claude Sonnet 4.6",
+            Id = "sonnet",
+            DisplayName = "Sonnet",
             CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         },
         new ClaudeModelInfo
         {
-            Id = "claude-haiku-4-5-20250101",
-            DisplayName = "Claude Haiku 4.5",
+            Id = "haiku",
+            DisplayName = "Haiku",
             CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         }
     ];

@@ -1,4 +1,3 @@
-using Anthropic;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,15 +7,15 @@ namespace Homespun.Tests.Features.ClaudeCode;
 public class MockModelCatalogServiceTests
 {
     [Test]
-    public async Task ListAsync_never_constructs_anthropic_client()
+    public async Task ListAsync_never_constructs_live_model_source()
     {
         var services = new ServiceCollection();
 
-        // If anything in the mock path resolves IAnthropicClient, this factory
-        // throws — proving the mock never pulls on the live SDK client.
-        services.AddSingleton<IAnthropicClient>(_ =>
+        // If anything in the mock path resolves IAnthropicModelSource, this
+        // factory throws — proving the mock never pulls on the live REST source.
+        services.AddSingleton<IAnthropicModelSource>(_ =>
             throw new InvalidOperationException(
-                "MockModelCatalogService must not construct IAnthropicClient."));
+                "MockModelCatalogService must not construct IAnthropicModelSource."));
 
         services.AddSingleton<IModelCatalogService, MockModelCatalogService>();
 
