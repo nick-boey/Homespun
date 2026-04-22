@@ -48,6 +48,9 @@ public static class MockServiceExtensions
         // Register the FleeceIssueSeeder for seeding issues to JSONL files
         services.AddSingleton<FleeceIssueSeeder>();
 
+        // Register the OpenSpecMockSeeder for seeding openspec/ content and per-branch deltas
+        services.AddSingleton<OpenSpecMockSeeder>();
+
         // Register real JsonDataStore with temp file path
         services.AddSingleton<IDataStore>(sp =>
         {

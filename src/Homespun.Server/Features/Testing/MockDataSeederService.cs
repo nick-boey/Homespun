@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Homespun.Features.Git;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
 
@@ -13,17 +14,40 @@ public class MockDataSeederService : IHostedService
     private readonly IDataStore _dataStore;
     private readonly ITempDataFolderService _tempFolderService;
     private readonly FleeceIssueSeeder _fleeceIssueSeeder;
+    private readonly OpenSpecMockSeeder _openSpecMockSeeder;
+    private readonly IGitCloneService _gitCloneService;
     private readonly ILogger<MockDataSeederService> _logger;
+
+    /// <summary>
+    /// Single source of truth mapping each seeded PR's <see cref="PullRequest.BranchName"/>
+    /// (including the <c>+{issueId}</c> suffix required by <see cref="BranchNameParser"/>)
+    /// to the Fleece issue id that owns the branch. Drives both <see cref="PullRequest.BeadsIssueId"/>
+    /// assignment in <see cref="SeedPullRequestsAsync"/> and the per-branch scenario selection
+    /// in <see cref="OpenSpecMockSeeder.SeedBranchAsync"/>.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> BranchToFleeceId =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["feature/user-auth+ISSUE-001"] = "ISSUE-001",
+            ["feature/dark-mode+ISSUE-002"] = "ISSUE-002",
+            ["feature/api-v2+ISSUE-006"] = "ISSUE-006",
+            ["feature/logging+ISSUE-003"] = "ISSUE-003",
+            ["refactor/database-layer+ISSUE-014"] = "ISSUE-014",
+        };
 
     public MockDataSeederService(
         IDataStore dataStore,
         ITempDataFolderService tempFolderService,
         FleeceIssueSeeder fleeceIssueSeeder,
+        OpenSpecMockSeeder openSpecMockSeeder,
+        IGitCloneService gitCloneService,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
         _tempFolderService = tempFolderService;
         _fleeceIssueSeeder = fleeceIssueSeeder;
+        _openSpecMockSeeder = openSpecMockSeeder;
+        _gitCloneService = gitCloneService;
         _logger = logger;
     }
 
@@ -37,6 +61,8 @@ public class MockDataSeederService : IHostedService
             await SeedProjectsAsync();
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
+            await SeedOpenSpecAsync(cancellationToken);
+            await SeedClonesAsync();
             // Agent prompts are now filesystem skills (auto-discovered, no seeding).
             // Session seeding from legacy JSONL ClaudeMessage fixtures was removed along
             // with the JsonlSessionLoader / MessageCacheStore pipeline. Mock mode now
@@ -51,6 +77,31 @@ public class MockDataSeederService : IHostedService
         {
             _logger.LogError(ex, "Failed to seed mock data");
         }
+    }
+
+    private async Task SeedOpenSpecAsync(CancellationToken ct)
+    {
+        var demoProjectPath = _tempFolderService.GetProjectPath("demo-project");
+        await _openSpecMockSeeder.SeedAsync(demoProjectPath, BranchToFleeceId, ct);
+        _logger.LogDebug("Seeded openspec content to {ProjectPath}", demoProjectPath);
+    }
+
+    /// <summary>
+    /// Pre-creates a clone for each seeded PR's branch so the per-branch openspec deltas
+    /// are present on disk before the first <c>/taskgraph/data</c> request fires. Each
+    /// <see cref="MockGitCloneService.CreateCloneAsync"/> invocation copies the main
+    /// project's <c>openspec/</c> + <c>.fleece/</c> trees into the clone and asks the
+    /// seeder to apply branch-specific deltas. No-op in live-Claude mode (the clone
+    /// service short-circuits to the shared workspace there).
+    /// </summary>
+    private async Task SeedClonesAsync()
+    {
+        var demoProjectPath = _tempFolderService.GetProjectPath("demo-project");
+        foreach (var branch in BranchToFleeceId.Keys)
+        {
+            await _gitCloneService.CreateCloneAsync(demoProjectPath, branch);
+        }
+        _logger.LogDebug("Seeded {Count} clone directories for demo PRs", BranchToFleeceId.Count);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -122,28 +173,30 @@ public class MockDataSeederService : IHostedService
     {
         var now = DateTime.UtcNow;
 
-        // PR 1: In Development
+        // PR 1: In Development — inherited-change scenario
         var pr1 = new PullRequest
         {
             Id = "pr-feature-auth",
             ProjectId = "demo-project",
             Title = "Add user authentication",
             Description = "Implement JWT-based authentication for the API",
-            BranchName = "feature/user-auth",
+            BranchName = "feature/user-auth+ISSUE-001",
+            BeadsIssueId = BranchToFleeceId["feature/user-auth+ISSUE-001"],
             Status = OpenPullRequestStatus.InDevelopment,
             CreatedAt = now.AddDays(-3),
             UpdatedAt = now.AddHours(-2)
         };
         await _dataStore.AddPullRequestAsync(pr1);
 
-        // PR 2: Ready for Review (has GitHub PR number)
+        // PR 2: Ready for Review — multi-orphan scenario
         var pr2 = new PullRequest
         {
             Id = "pr-dark-mode",
             ProjectId = "demo-project",
             Title = "Implement dark mode",
             Description = "Add dark mode support with theme switching",
-            BranchName = "feature/dark-mode",
+            BranchName = "feature/dark-mode+ISSUE-002",
+            BeadsIssueId = BranchToFleeceId["feature/dark-mode+ISSUE-002"],
             Status = OpenPullRequestStatus.ReadyForReview,
             GitHubPRNumber = 42,
             CreatedAt = now.AddDays(-5),
@@ -151,14 +204,15 @@ public class MockDataSeederService : IHostedService
         };
         await _dataStore.AddPullRequestAsync(pr2);
 
-        // PR 3: Approved
+        // PR 3: Approved — in-progress linked change scenario
         var pr3 = new PullRequest
         {
             Id = "pr-api-v2",
             ProjectId = "demo-project",
             Title = "API v2 endpoints",
             Description = "New versioned API endpoints with improved response format",
-            BranchName = "feature/api-v2",
+            BranchName = "feature/api-v2+ISSUE-006",
+            BeadsIssueId = BranchToFleeceId["feature/api-v2+ISSUE-006"],
             Status = OpenPullRequestStatus.Approved,
             GitHubPRNumber = 45,
             CreatedAt = now.AddDays(-7),
@@ -166,14 +220,15 @@ public class MockDataSeederService : IHostedService
         };
         await _dataStore.AddPullRequestAsync(pr3);
 
-        // PR 4: Has review comments
+        // PR 4: Has review comments — no-change branch scenario
         var pr4 = new PullRequest
         {
             Id = "pr-logging",
             ProjectId = "demo-project",
             Title = "Improve logging infrastructure",
             Description = "Add structured logging with correlation IDs",
-            BranchName = "feature/logging",
+            BranchName = "feature/logging+ISSUE-003",
+            BeadsIssueId = BranchToFleeceId["feature/logging+ISSUE-003"],
             Status = OpenPullRequestStatus.HasReviewComments,
             GitHubPRNumber = 38,
             CreatedAt = now.AddDays(-14),
@@ -181,14 +236,15 @@ public class MockDataSeederService : IHostedService
         };
         await _dataStore.AddPullRequestAsync(pr4);
 
-        // PR 5: In development (refactor work)
+        // PR 5: In development — default-case branch (no branch-specific deltas)
         var pr5 = new PullRequest
         {
             Id = "pr-refactor-db",
             ProjectId = "demo-project",
             Title = "Refactor database layer",
             Description = "Migrate to repository pattern",
-            BranchName = "refactor/database-layer",
+            BranchName = "refactor/database-layer+ISSUE-014",
+            BeadsIssueId = BranchToFleeceId["refactor/database-layer+ISSUE-014"],
             Status = OpenPullRequestStatus.InDevelopment,
             GitHubPRNumber = 41,
             CreatedAt = now.AddDays(-6),
