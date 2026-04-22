@@ -128,10 +128,24 @@ public static class MockServiceExtensions
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
-        // Model catalog — mock never reaches out to Anthropic so IAnthropicClient
-        // stays unregistered; MockModelCatalogService is self-contained.
+        // Model catalog — dev-mock keeps MockModelCatalogService (no network).
+        // Any mock profile with UseLiveClaudeSessions=true (dev-live, dev-windows,
+        // dev-container) uses the live ModelCatalogService so /api/models reflects
+        // the real Anthropic catalogue instead of the static fallback list.
         services.AddMemoryCache();
-        services.AddSingleton<IModelCatalogService, MockModelCatalogService>();
+        if (options.UseLiveClaudeSessions)
+        {
+            services.AddHttpClient(AnthropicModelSource.HttpClientName);
+            services.AddSingleton<IAnthropicModelSource, AnthropicModelSource>();
+            services.AddSingleton<IModelCatalogService>(sp => new ModelCatalogService(
+                sp.GetRequiredService<IAnthropicModelSource>(),
+                sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
+                sp.GetRequiredService<ILogger<ModelCatalogService>>()));
+        }
+        else
+        {
+            services.AddSingleton<IModelCatalogService, MockModelCatalogService>();
+        }
 
         // Always use the real session pipeline; IAgentExecutionService picks between the
         // Docker/SingleContainer/Mock executors based on AgentExecution:Mode.
