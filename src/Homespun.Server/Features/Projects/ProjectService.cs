@@ -114,7 +114,7 @@ public class ProjectService(
             await commandRunner.RunAsync("git", "config user.email \"homespun@localhost\"", localPath);
             await commandRunner.RunAsync("git", "config user.name \"Homespun\"", localPath);
 
-            // Create initial commit (required for beads and clones)
+            // Create initial commit (required for clones)
             var commitResult = await commandRunner.RunAsync("git", "commit --allow-empty -m \"Initial commit\"", localPath);
             if (!commitResult.Success)
             {
