@@ -5,7 +5,6 @@ using System.Text.Json.Serialization;
 using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
-using SessionCacheSummary = Homespun.Features.ClaudeCode.Data.SessionCacheSummary;
 
 namespace Homespun.Api.Tests.Features;
 
