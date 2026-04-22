@@ -42,9 +42,6 @@ appsettings.*.json
 # Install scripts (not needed in container)
 install/
 
-# Beads local files
-.beads/
-
 # Node modules (if any local tooling)
 node_modules/
 

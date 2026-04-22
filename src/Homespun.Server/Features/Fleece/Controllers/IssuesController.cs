@@ -36,6 +36,7 @@ public class IssuesController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IAgentStartBackgroundService agentStartBackgroundService,
     IAgentStartupTracker agentStartupTracker,
+    IModelCatalogService modelCatalog,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -87,9 +88,9 @@ public class IssuesController(
     /// Returns all unique email addresses found in issue assignments, plus the current user if configured.
     /// </summary>
     [HttpGet("projects/{projectId}/issues/assignees")]
-    [ProducesResponseType<List<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProjectAssigneesResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<string>>> GetProjectAssignees(string projectId)
+    public async Task<ActionResult<ProjectAssigneesResponse>> GetProjectAssignees(string projectId)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -114,7 +115,7 @@ public class IssuesController(
         }
 
         logger.LogDebug("Returning {Count} assignees for project {ProjectId}", assignees.Count, projectId);
-        return Ok(assignees);
+        return Ok(new ProjectAssigneesResponse { Assignees = assignees });
     }
 
     /// <summary>
@@ -550,8 +551,10 @@ public class IssuesController(
         var branchName = await branchResolverService.ResolveIssueBranchAsync(request.ProjectId, issueId)
             ?? BranchNameGenerator.GenerateBranchName(issue);
 
-        // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "sonnet";
+        // Determine model — catalog resolves nulls + short aliases into concrete ids.
+        var model = await modelCatalog.ResolveModelIdAsync(
+            request.Model ?? project.DefaultModel,
+            HttpContext.RequestAborted);
 
         // Queue background agent startup
         await agentStartBackgroundService.QueueAgentStartAsync(new AgentOrchestration.Services.AgentStartRequest

@@ -16,7 +16,7 @@ public class IssuePrStatusService(
     {
         // Find tracked PRs linked to this issue
         var linkedPr = dataStore.GetPullRequestsByProject(projectId)
-            .FirstOrDefault(pr => pr.BeadsIssueId == issueId && pr.GitHubPRNumber.HasValue);
+            .FirstOrDefault(pr => pr.FleeceIssueId == issueId && pr.GitHubPRNumber.HasValue);
 
         if (linkedPr == null)
         {

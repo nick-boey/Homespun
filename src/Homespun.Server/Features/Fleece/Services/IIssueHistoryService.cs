@@ -11,11 +11,6 @@ namespace Homespun.Features.Fleece.Services;
 public interface IIssueHistoryService
 {
     /// <summary>
-    /// Maximum number of history entries to keep. Oldest entries are pruned when exceeded.
-    /// </summary>
-    const int MaxHistoryEntries = 100;
-
-    /// <summary>
     /// Records a snapshot of the current issues state after a change.
     /// If the current position is not at the latest history entry, future entries are truncated first.
     /// </summary>

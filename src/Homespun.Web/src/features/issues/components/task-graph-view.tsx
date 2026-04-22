@@ -53,7 +53,8 @@ import {
   TaskGraphExpandedDetails,
 } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
-import { BranchOrphanList, MainOrphanList } from './orphan-changes'
+import { OrphanedChangesList } from './orphan-changes'
+import { aggregateOrphans } from '../services/orphan-aggregation'
 import { ROW_HEIGHT, LANE_WIDTH, getTypeColor } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
@@ -1085,21 +1086,6 @@ export const TaskGraphView = memo(
                   />
                 )}
 
-                {/* Branch-scoped orphan changes under the issue */}
-                {(() => {
-                  const state = taskGraph?.openSpecStates?.[line.issueId]
-                  const orphans = state?.orphans
-                  if (!orphans || orphans.length === 0) return null
-                  return (
-                    <BranchOrphanList
-                      projectId={projectId}
-                      branch={line.branchName}
-                      fleeceId={line.issueId}
-                      orphans={orphans}
-                    />
-                  )
-                })()}
-
                 {/* Insert inline editor BELOW if creating below this issue */}
                 {shouldInsertBelow && renderInlineEditor(line.lane)}
               </div>
@@ -1137,8 +1123,15 @@ export const TaskGraphView = memo(
           return null
         })}
 
-        {/* Main-branch orphan changes section */}
-        <MainOrphanList projectId={projectId} orphans={taskGraph?.mainOrphanChanges ?? []} />
+        {/* Deduped orphan changes across main + every branch. */}
+        {taskGraph && (
+          <OrphanedChangesList
+            projectId={projectId}
+            entries={aggregateOrphans(taskGraph)}
+            issues={issueRenderLines}
+            openSpecStates={taskGraph.openSpecStates ?? undefined}
+          />
+        )}
 
         {/* Search match count indicator (hidden, for accessibility) */}
         {searchQuery && (

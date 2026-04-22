@@ -86,7 +86,7 @@ public class IssuePrStatusServiceTests
             Title = "Test PR",
             BranchName = "issues/feature/test+issue-123",
             GitHubPRNumber = 42,
-            BeadsIssueId = "issue-123",
+            FleeceIssueId = "issue-123",
             Status = OpenPullRequestStatus.ReadyForReview
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -133,7 +133,7 @@ public class IssuePrStatusServiceTests
             Title = "Test PR",
             BranchName = "issues/feature/test+issue-123",
             GitHubPRNumber = 42,
-            BeadsIssueId = "issue-123",
+            FleeceIssueId = "issue-123",
             Status = OpenPullRequestStatus.ReadyForReview
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -179,7 +179,7 @@ public class IssuePrStatusServiceTests
             Title = "Failing PR",
             BranchName = "issues/feature/failing+issue-456",
             GitHubPRNumber = 99,
-            BeadsIssueId = "issue-456",
+            FleeceIssueId = "issue-456",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -232,7 +232,7 @@ public class IssuePrStatusServiceTests
             Title = "Pending PR",
             BranchName = "issues/feature/pending+issue-789",
             GitHubPRNumber = 55,
-            BeadsIssueId = "issue-789",
+            FleeceIssueId = "issue-789",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -285,7 +285,7 @@ public class IssuePrStatusServiceTests
             Title = "Approved PR",
             BranchName = "issues/feature/approved+issue-abc",
             GitHubPRNumber = 77,
-            BeadsIssueId = "issue-abc",
+            FleeceIssueId = "issue-abc",
             Status = OpenPullRequestStatus.Approved
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -334,7 +334,7 @@ public class IssuePrStatusServiceTests
             Title = "Changes Requested PR",
             BranchName = "issues/feature/changes+issue-def",
             GitHubPRNumber = 88,
-            BeadsIssueId = "issue-def",
+            FleeceIssueId = "issue-def",
             Status = OpenPullRequestStatus.HasReviewComments
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -381,7 +381,7 @@ public class IssuePrStatusServiceTests
             Title = "Failing PR",
             BranchName = "issues/feature/failing+issue-456",
             GitHubPRNumber = 99,
-            BeadsIssueId = "issue-456",
+            FleeceIssueId = "issue-456",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -434,7 +434,7 @@ public class IssuePrStatusServiceTests
             Title = "Approved PR",
             BranchName = "issues/feature/approved+issue-789",
             GitHubPRNumber = 77,
-            BeadsIssueId = "issue-789",
+            FleeceIssueId = "issue-789",
             Status = OpenPullRequestStatus.Approved
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -488,7 +488,7 @@ public class IssuePrStatusServiceTests
             Title = "Test PR",
             BranchName = "issues/feature/test+issue-123",
             GitHubPRNumber = 42,
-            BeadsIssueId = "issue-123",
+            FleeceIssueId = "issue-123",
             Status = OpenPullRequestStatus.ReadyForReview
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -512,7 +512,7 @@ public class IssuePrStatusServiceTests
             ProjectId = project.Id,
             Title = "Local PR",
             BranchName = "issues/feature/local+issue-123",
-            BeadsIssueId = "issue-123",
+            FleeceIssueId = "issue-123",
             Status = OpenPullRequestStatus.InDevelopment
             // No GitHubPRNumber
         };
@@ -537,7 +537,7 @@ public class IssuePrStatusServiceTests
             Title = "PR with conflicts",
             BranchName = "issues/feature/conflicts+issue-conflict",
             GitHubPRNumber = 101,
-            BeadsIssueId = "issue-conflict",
+            FleeceIssueId = "issue-conflict",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -591,7 +591,7 @@ public class IssuePrStatusServiceTests
             Title = "Clean PR",
             BranchName = "issues/feature/clean+issue-clean",
             GitHubPRNumber = 102,
-            BeadsIssueId = "issue-clean",
+            FleeceIssueId = "issue-clean",
             Status = OpenPullRequestStatus.ReadyForReview
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -645,7 +645,7 @@ public class IssuePrStatusServiceTests
             Title = "Unknown merge state PR",
             BranchName = "issues/feature/unknown+issue-unknown",
             GitHubPRNumber = 103,
-            BeadsIssueId = "issue-unknown",
+            FleeceIssueId = "issue-unknown",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -868,7 +868,7 @@ public class IssuePrStatusServiceTests
             Title = "PR with GitHub Actions",
             BranchName = "issues/feature/actions+issue-gha",
             GitHubPRNumber = 100,
-            BeadsIssueId = "issue-gha",
+            FleeceIssueId = "issue-gha",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -921,7 +921,7 @@ public class IssuePrStatusServiceTests
             Title = "PR with failing checks",
             BranchName = "issues/feature/failing+issue-fail",
             GitHubPRNumber = 101,
-            BeadsIssueId = "issue-fail",
+            FleeceIssueId = "issue-fail",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -974,7 +974,7 @@ public class IssuePrStatusServiceTests
             Title = "PR with running checks",
             BranchName = "issues/feature/running+issue-run",
             GitHubPRNumber = 102,
-            BeadsIssueId = "issue-run",
+            FleeceIssueId = "issue-run",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -1027,7 +1027,7 @@ public class IssuePrStatusServiceTests
             Title = "PR with no checks",
             BranchName = "issues/feature/nochecks+issue-none",
             GitHubPRNumber = 103,
-            BeadsIssueId = "issue-none",
+            FleeceIssueId = "issue-none",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);

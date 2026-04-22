@@ -103,6 +103,7 @@ public class ProjectService(
             var initResult = await commandRunner.RunAsync("git", "init", localPath);
             if (!initResult.Success)
             {
+                CleanupLocalPath(localPath);
                 return CreateProjectResult.Error($"Failed to initialize git: {initResult.Error}");
             }
 
@@ -113,10 +114,11 @@ public class ProjectService(
             await commandRunner.RunAsync("git", "config user.email \"homespun@localhost\"", localPath);
             await commandRunner.RunAsync("git", "config user.name \"Homespun\"", localPath);
 
-            // Create initial commit (required for beads and clones)
+            // Create initial commit (required for clones)
             var commitResult = await commandRunner.RunAsync("git", "commit --allow-empty -m \"Initial commit\"", localPath);
             if (!commitResult.Success)
             {
+                CleanupLocalPath(localPath);
                 return CreateProjectResult.Error($"Failed to create initial commit: {commitResult.Error}");
             }
 
@@ -137,21 +139,24 @@ public class ProjectService(
         }
         catch (Exception ex)
         {
-            // Clean up on failure
-            try
-            {
-                if (Directory.Exists(localPath))
-                {
-                    Directory.Delete(localPath, true);
-                }
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-            
+            CleanupLocalPath(localPath);
             logger.LogError(ex, "Failed to create local project {Name}", name);
             return CreateProjectResult.Error($"Failed to create project: {ex.Message}");
+        }
+    }
+
+    private static void CleanupLocalPath(string localPath)
+    {
+        try
+        {
+            if (Directory.Exists(localPath))
+            {
+                Directory.Delete(localPath, true);
+            }
+        }
+        catch
+        {
+            // Ignore cleanup errors
         }
     }
 

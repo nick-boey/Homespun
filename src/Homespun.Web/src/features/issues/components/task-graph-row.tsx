@@ -7,43 +7,15 @@ import { cn } from '@/lib/utils'
 import { BranchPresence, IssueType, IssueStatus, ExecutionMode } from '@/api'
 import type { IssueOpenSpecState } from '@/api/generated/types.gen'
 import {
-  ISSUE_STATUS_LABELS,
-  ISSUE_STATUS_COMPACT_LABELS,
-  ISSUE_TYPE_LABELS,
-} from '@/lib/issue-constants'
-import { OpenSpecIndicators } from './openspec-indicators'
-import { PhaseRollupBadges } from './phase-rollup'
-import {
   TaskGraphNodeSvg,
   TaskGraphPrSvg,
   TaskGraphSeparatorSvg,
   TaskGraphLoadMoreSvg,
   ROW_HEIGHT,
-  getTypeColor,
 } from './task-graph-svg'
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../services'
-import { TaskGraphMarkerType } from '../services'
 import { IssueRowActions } from './issue-row-actions'
-import { PrStatusIndicator } from './pr-status-indicator'
-import { ExecutionModeToggle } from './execution-mode-toggle'
-import { useLinkedPrStatus } from '../hooks/use-linked-pr-status'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Badge } from '@/components/ui/badge'
-
-/**
- * Extracts the username portion from an email address.
- * Returns the part before the '@' symbol, or the full string if no '@' is present.
- */
-function getDisplayName(email: string | null | undefined): string | null {
-  if (!email) return null
-  const atIndex = email.indexOf('@')
-  return atIndex > 0 ? email.substring(0, atIndex) : email
-}
+import { IssueRowContent } from './issue-row-content'
 
 interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   line: TaskGraphIssueRenderLine
@@ -107,30 +79,8 @@ export const TaskGraphIssueRow = memo(
     },
     ref
   ) {
-    const typeColor = getTypeColor(line.issueType)
     const hasSearchMatch =
       searchQuery && line.title.toLowerCase().includes(searchQuery.toLowerCase())
-
-    // Fetch PR status if this issue has a linked PR
-    const { data: prStatus } = useLinkedPrStatus(
-      projectId,
-      line.linkedPr ? line.issueId : undefined,
-      true // Only fetch when component is visible
-    )
-
-    // Status color based on marker
-    const getStatusColor = () => {
-      switch (line.marker) {
-        case TaskGraphMarkerType.Complete:
-          return 'bg-green-500/20 text-green-700 dark:text-green-400'
-        case TaskGraphMarkerType.Closed:
-          return 'bg-gray-500/20 text-gray-700 dark:text-gray-400'
-        case TaskGraphMarkerType.Actionable:
-          return 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-        default:
-          return 'bg-muted text-muted-foreground'
-      }
-    }
 
     return (
       <div
@@ -162,157 +112,31 @@ export const TaskGraphIssueRow = memo(
         />
 
         {/* Issue content */}
-        <div className="flex flex-1 items-center gap-2 pr-2">
-          {/* Type badge with dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="w-14 shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80"
-                style={{
-                  backgroundColor: `${typeColor}20`,
-                  color: typeColor,
-                }}
-                onClick={(e) => e.stopPropagation()}
-                title="Click to change type"
-              >
-                {ISSUE_TYPE_LABELS[line.issueType as IssueType] ?? 'Task'}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              {Object.entries(ISSUE_TYPE_LABELS).map(([value, label]) => (
-                <DropdownMenuItem
-                  key={value}
-                  onClick={() => onTypeChange?.(line.issueId, value as IssueType)}
-                  className={cn('text-xs', value === line.issueType && 'bg-accent')}
-                >
-                  <span
-                    className="mr-2 inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: getTypeColor(value as IssueType) }}
-                  />
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Status badge with dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'w-14 shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80',
-                  getStatusColor()
-                )}
-                onClick={(e) => e.stopPropagation()}
-                title="Click to change status"
-              >
-                {ISSUE_STATUS_COMPACT_LABELS[line.status as IssueStatus] ?? 'Open'}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              {Object.entries(ISSUE_STATUS_LABELS).map(([value, label]) => (
-                <DropdownMenuItem
-                  key={value}
-                  onClick={() => onStatusChange?.(line.issueId, value as IssueStatus)}
-                  className={cn('text-xs', value === line.status && 'bg-accent')}
-                >
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* OpenSpec indicators */}
-          {openSpecState ? <OpenSpecIndicators state={openSpecState} /> : null}
-
-          {/* Phase roll-up badges for linked OpenSpec change */}
-          {openSpecState?.phases && openSpecState.phases.length > 0 ? (
-            <PhaseRollupBadges
-              changeName={openSpecState.changeName}
-              phases={openSpecState.phases}
-            />
-          ) : null}
-
-          {/* Execution mode toggle */}
-          <ExecutionModeToggle
-            executionMode={line.executionMode}
-            onToggle={() =>
-              onExecutionModeChange?.(
-                line.issueId,
-                line.executionMode === ExecutionMode.SERIES
-                  ? ExecutionMode.PARALLEL
-                  : ExecutionMode.SERIES
-              )
-            }
-          />
-
-          {/* Multi-parent badge */}
-          {line.multiParentTotal != null && line.multiParentIndex != null && (
-            <button
-              type="button"
-              className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-700 transition-colors hover:bg-orange-500/30 dark:text-orange-400"
-              onClick={(e) => {
-                e.stopPropagation()
-                if (line.multiParentIndex !== 0) {
-                  onSelectFirstInstance?.(line.issueId)
-                }
-              }}
-              title={`Instance ${line.multiParentIndex + 1} of ${line.multiParentTotal}. Click to go to the first instance.`}
-              data-testid="multi-parent-badge"
-            >
-              ({line.multiParentIndex + 1}/{line.multiParentTotal})
-            </button>
-          )}
-
-          {/* Title - no truncation to allow full horizontal scroll */}
-          <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>
-
-          {/* Assignee badge */}
-          {line.assignedTo && (
-            <Badge variant="outline" className="shrink-0 text-[10px]">
-              {getDisplayName(line.assignedTo)}
-            </Badge>
-          )}
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Linked PR indicator */}
-          {line.linkedPr && (
-            <div className="flex items-center gap-1.5">
-              <a
-                href={line.linkedPr.url ?? '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                #{line.linkedPr.number}
-              </a>
-              {prStatus && (
-                <PrStatusIndicator
-                  checksPassing={prStatus.checksPassing ?? null}
-                  hasConflicts={prStatus.hasConflicts ?? false}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Hover actions */}
-          {showActions && (
-            <IssueRowActions
-              issueId={line.issueId}
-              isExpanded={isExpanded}
-              activeSessionId={line.agentStatus?.isActive ? line.agentStatus.sessionId : null}
-              onEdit={onEdit}
-              onRunAgent={onRunAgent}
-              onOpenSession={onOpenSession}
-              onExpand={onToggleExpand}
-            />
-          )}
-        </div>
+        <IssueRowContent
+          line={line}
+          projectId={projectId}
+          openSpecState={openSpecState}
+          searchQuery={searchQuery}
+          editable
+          showPrStatus
+          onTypeChange={onTypeChange}
+          onStatusChange={onStatusChange}
+          onExecutionModeChange={onExecutionModeChange}
+          onSelectFirstInstance={onSelectFirstInstance}
+          trailing={
+            showActions ? (
+              <IssueRowActions
+                issueId={line.issueId}
+                isExpanded={isExpanded}
+                activeSessionId={line.agentStatus?.isActive ? line.agentStatus.sessionId : null}
+                onEdit={onEdit}
+                onRunAgent={onRunAgent}
+                onOpenSession={onOpenSession}
+                onExpand={onToggleExpand}
+              />
+            ) : null
+          }
+        />
       </div>
     )
   })

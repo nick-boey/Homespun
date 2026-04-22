@@ -32,7 +32,7 @@ export function useProjectAssignees(projectId: string): UseProjectAssigneesResul
         throw new Error(response.error.detail ?? 'Failed to fetch assignees')
       }
 
-      return response.data ?? []
+      return response.data?.assignees ?? []
     },
     enabled: !!projectId,
   })

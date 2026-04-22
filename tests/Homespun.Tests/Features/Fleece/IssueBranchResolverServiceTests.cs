@@ -62,7 +62,7 @@ public class IssueBranchResolverServiceTests
             ProjectId = ProjectId,
             Title = "Existing PR",
             BranchName = expectedBranch,
-            BeadsIssueId = IssueId
+            FleeceIssueId = IssueId
         };
 
         _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
@@ -135,7 +135,7 @@ public class IssueBranchResolverServiceTests
             ProjectId = ProjectId,
             Title = "PR",
             BranchName = prBranch,
-            BeadsIssueId = IssueId
+            FleeceIssueId = IssueId
         };
 
         _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
@@ -220,7 +220,7 @@ public class IssueBranchResolverServiceTests
             ProjectId = ProjectId,
             Title = "Unrelated PR",
             BranchName = "feature/other-work+xyz789",
-            BeadsIssueId = "xyz789" // Different issue ID
+            FleeceIssueId = "xyz789" // Different issue ID
         };
 
         _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
@@ -272,7 +272,7 @@ public class IssueBranchResolverServiceTests
             ProjectId = ProjectId,
             Title = "PR without branch",
             BranchName = null, // No branch name
-            BeadsIssueId = IssueId
+            FleeceIssueId = IssueId
         };
 
         _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
@@ -363,7 +363,7 @@ public class IssueBranchResolverServiceTests
             ProjectId = ProjectId,
             Title = "PR",
             BranchName = prBranch,
-            BeadsIssueId = IssueId
+            FleeceIssueId = IssueId
         };
         _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
             .Returns(new List<PullRequest> { linkedPr });

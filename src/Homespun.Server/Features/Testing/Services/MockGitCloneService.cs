@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Homespun.Features.PullRequests;
 using Homespun.Shared.Models.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,13 +16,16 @@ public class MockGitCloneService : IGitCloneService
     private readonly ConcurrentDictionary<string, List<BranchInfo>> _branchesByRepo = new();
     private readonly ILogger<MockGitCloneService> _logger;
     private readonly LiveClaudeTestOptions? _liveTestOptions;
+    private readonly OpenSpecMockSeeder? _openSpecSeeder;
 
     public MockGitCloneService(
         ILogger<MockGitCloneService> logger,
-        IOptions<LiveClaudeTestOptions>? liveTestOptions = null)
+        IOptions<LiveClaudeTestOptions>? liveTestOptions = null,
+        OpenSpecMockSeeder? openSpecSeeder = null)
     {
         _logger = logger;
         _liveTestOptions = liveTestOptions?.Value;
+        _openSpecSeeder = openSpecSeeder;
     }
 
     /// <summary>
@@ -29,7 +33,7 @@ public class MockGitCloneService : IGitCloneService
     /// </summary>
     public string? TestWorkingDirectory => _liveTestOptions?.TestWorkingDirectory;
 
-    public Task<string?> CreateCloneAsync(
+    public async Task<string?> CreateCloneAsync(
         string repoPath,
         string branchName,
         bool createBranch = false,
@@ -37,10 +41,17 @@ public class MockGitCloneService : IGitCloneService
     {
         _logger.LogDebug("[Mock] CreateClone {BranchName} in {RepoPath} from base {BaseBranch}", branchName, repoPath, baseBranch ?? "HEAD");
 
+        var isLiveMode = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory);
+
         // If live Claude testing is enabled, use the real test directory
-        var clonePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
-            ? _liveTestOptions.TestWorkingDirectory
+        var clonePath = isLiveMode
+            ? _liveTestOptions!.TestWorkingDirectory
             : $"{repoPath}-clones/{branchName.Replace("/", "-")}";
+
+        if (!isLiveMode)
+        {
+            await MaterializeCloneAsync(repoPath, clonePath, branchName);
+        }
 
         var clones = _clonesByRepo.GetOrAdd(repoPath, _ => []);
         lock (clones)
@@ -72,7 +83,45 @@ public class MockGitCloneService : IGitCloneService
             }
         }
 
-        return Task.FromResult<string?>(clonePath);
+        return clonePath;
+    }
+
+    /// <summary>
+    /// Creates the clone directory on disk, copies the parent project's <c>openspec/</c>
+    /// and <c>.fleece/</c> subtrees into it, then asks the OpenSpec seeder to apply any
+    /// branch-specific deltas. Gated on <c>LiveClaudeTestOptions.TestWorkingDirectory</c>
+    /// being empty — the live-Claude profiles share a single workspace and must not
+    /// get per-branch directories.
+    /// </summary>
+    private async Task MaterializeCloneAsync(string repoPath, string clonePath, string branchName)
+    {
+        Directory.CreateDirectory(clonePath);
+        CopyDirectory(Path.Combine(repoPath, "openspec"), Path.Combine(clonePath, "openspec"));
+        CopyDirectory(Path.Combine(repoPath, ".fleece"), Path.Combine(clonePath, ".fleece"));
+
+        if (_openSpecSeeder is not null)
+        {
+            var fleeceId = BranchNameParser.ExtractIssueId(branchName);
+            await _openSpecSeeder.SeedBranchAsync(clonePath, branchName, fleeceId);
+        }
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        if (!Directory.Exists(sourceDir))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+        }
+        foreach (var subdir in Directory.GetDirectories(sourceDir))
+        {
+            CopyDirectory(subdir, Path.Combine(destDir, Path.GetFileName(subdir)));
+        }
     }
 
     public Task<bool> RemoveCloneAsync(string repoPath, string clonePath)
@@ -346,13 +395,21 @@ public class MockGitCloneService : IGitCloneService
         return Task.FromResult(false);
     }
 
-    public Task<string?> CreateCloneFromRemoteBranchAsync(string repoPath, string remoteBranch)
+    public async Task<string?> CreateCloneFromRemoteBranchAsync(string repoPath, string remoteBranch)
     {
         _logger.LogDebug("[Mock] CreateCloneFromRemoteBranch {RemoteBranch} in {RepoPath}",
             remoteBranch, repoPath);
 
-        // Create the clone without checking out in main
-        var clonePath = $"{repoPath}-clones/{remoteBranch.Replace("/", "-")}";
+        var isLiveMode = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory);
+
+        var clonePath = isLiveMode
+            ? _liveTestOptions!.TestWorkingDirectory
+            : $"{repoPath}-clones/{remoteBranch.Replace("/", "-")}";
+
+        if (!isLiveMode)
+        {
+            await MaterializeCloneAsync(repoPath, clonePath, remoteBranch);
+        }
 
         var clones = _clonesByRepo.GetOrAdd(repoPath, _ => []);
         lock (clones)
@@ -385,7 +442,7 @@ public class MockGitCloneService : IGitCloneService
             }
         }
 
-        return Task.FromResult<string?>(clonePath);
+        return clonePath;
     }
 
     public Task<bool> RepairCloneAsync(string repoPath, string folderPath, string branchName)

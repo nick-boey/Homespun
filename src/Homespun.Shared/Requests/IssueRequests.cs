@@ -129,6 +129,18 @@ public class ResolvedBranchResponse
 }
 
 /// <summary>
+/// Response model for the project assignees lookup.
+/// </summary>
+public class ProjectAssigneesResponse
+{
+    /// <summary>
+    /// Unique assignee email addresses for the project, sorted with the current
+    /// user first (if configured) and the rest alphabetically.
+    /// </summary>
+    public List<string> Assignees { get; set; } = [];
+}
+
+/// <summary>
 /// Request model for setting an issue's parent.
 /// </summary>
 public class SetParentRequest
@@ -248,27 +260,6 @@ public class RunAgentRequest
     /// initial message. Each entry becomes an <c>arg-name: value</c> line.
     /// </summary>
     public Dictionary<string, string>? SkillArgs { get; set; }
-}
-
-/// <summary>
-/// Response model for running an agent on an issue.
-/// </summary>
-public class RunAgentResponse
-{
-    /// <summary>
-    /// The created session ID.
-    /// </summary>
-    public required string SessionId { get; set; }
-
-    /// <summary>
-    /// The branch name used for the session.
-    /// </summary>
-    public required string BranchName { get; set; }
-
-    /// <summary>
-    /// The clone path where the agent is working.
-    /// </summary>
-    public required string ClonePath { get; set; }
 }
 
 /// <summary>

@@ -29,10 +29,10 @@ public class PullRequest
     public string? ActiveSessionId { get; set; }
 
     /// <summary>
-    /// The beads issue ID that this PR implements, if applicable.
-    /// Used for traceability between beads issues and GitHub PRs.
+    /// The Fleece issue ID that this PR implements, if applicable.
+    /// Used for traceability between Fleece issues and GitHub PRs.
     /// </summary>
-    public string? BeadsIssueId { get; set; }
+    public string? FleeceIssueId { get; set; }
 
     // Navigation properties excluded from JSON serialization - populated at runtime if needed
     [JsonIgnore]

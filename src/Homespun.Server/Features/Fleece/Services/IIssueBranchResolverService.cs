@@ -7,7 +7,7 @@ public interface IIssueBranchResolverService
 {
     /// <summary>
     /// Resolves the branch name for an issue by checking:
-    /// 1. Linked PRs that have the issue ID set in BeadsIssueId
+    /// 1. Linked PRs that have the issue ID set in FleeceIssueId
     /// 2. Existing clones whose branch name contains the issue ID
     /// </summary>
     /// <param name="projectId">The project ID</param>

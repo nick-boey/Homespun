@@ -7,7 +7,7 @@ namespace Homespun.Features.GitHub;
 
 /// <summary>
 /// Service for linking Fleece issues to pull requests.
-/// Handles the link from PR.BeadsIssueId to the issue.
+/// Handles the link from PR.FleeceIssueId to the issue.
 /// Uses IProjectFleeceService for direct file access.
 /// </summary>
 public class IssuePrLinkingService(
@@ -17,7 +17,7 @@ public class IssuePrLinkingService(
     : IIssuePrLinkingService
 {
     /// <summary>
-    /// Links a pull request to a Fleece issue by setting the BeadsIssueId (legacy name).
+    /// Links a pull request to a Fleece issue by setting the FleeceIssueId.
     /// Note: Fleece.Core doesn't support a LinkedPR property on issues, so only the PR side is updated.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
@@ -46,14 +46,14 @@ public class IssuePrLinkingService(
         }
 
         // Check if already linked to avoid duplicate operations
-        if (!string.IsNullOrEmpty(pullRequest.BeadsIssueId))
+        if (!string.IsNullOrEmpty(pullRequest.FleeceIssueId))
         {
-            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
+            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.FleeceIssueId);
             return true;
         }
 
         // Update the pull request with the issue ID
-        pullRequest.BeadsIssueId = issueId;
+        pullRequest.FleeceIssueId = issueId;
         pullRequest.UpdatedAt = DateTime.UtcNow;
         await dataStore.UpdatePullRequestAsync(pullRequest);
 
@@ -79,10 +79,10 @@ public class IssuePrLinkingService(
         }
 
         // If already linked, return the existing issue ID
-        if (!string.IsNullOrEmpty(pullRequest.BeadsIssueId))
+        if (!string.IsNullOrEmpty(pullRequest.FleeceIssueId))
         {
-            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
-            return pullRequest.BeadsIssueId;
+            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.FleeceIssueId);
+            return pullRequest.FleeceIssueId;
         }
 
         // Can't link without a PR number (needed for the LinkedPR)
@@ -129,7 +129,7 @@ public class IssuePrLinkingService(
             return false;
         }
 
-        if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
+        if (string.IsNullOrEmpty(pullRequest.FleeceIssueId))
         {
             logger.LogDebug("PR {PullRequestId} has no linked issue to close", pullRequestId);
             return false;
@@ -138,16 +138,16 @@ public class IssuePrLinkingService(
         // Close the issue by setting status to Closed
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
-            pullRequest.BeadsIssueId,
+            pullRequest.FleeceIssueId,
             status: IssueStatus.Closed);
 
         if (updated != null)
         {
-            logger.LogInformation("Closed issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+            logger.LogInformation("Closed issue {IssueId} linked to PR {PullRequestId}", pullRequest.FleeceIssueId, pullRequestId);
             return true;
         }
 
-        logger.LogWarning("Failed to close issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+        logger.LogWarning("Failed to close issue {IssueId} linked to PR {PullRequestId}", pullRequest.FleeceIssueId, pullRequestId);
         return false;
     }
 

@@ -69,7 +69,7 @@ public class PRStatusResolver(
                         PullRequestStatus.Merged,
                         mergedAt: prInfo.MergedAt,
                         closedAt: null,
-                        issueId: removedPr.BeadsIssueId);
+                        issueId: removedPr.FleeceIssueId);
 
                     // If not in open list, add directly to closed list
                     if (!moved)
@@ -78,14 +78,14 @@ public class PRStatusResolver(
                             projectId,
                             project.LocalPath,
                             prInfo,
-                            removedPr.BeadsIssueId);
+                            removedPr.FleeceIssueId);
                     }
 
                     // Update linked Fleece issue to Complete
-                    if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
+                    if (!string.IsNullOrEmpty(removedPr.FleeceIssueId))
                     {
                         await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
-                            projectId, removedPr.BeadsIssueId, PullRequestStatus.Merged, removedPr.GitHubPrNumber.Value);
+                            projectId, removedPr.FleeceIssueId, PullRequestStatus.Merged, removedPr.GitHubPrNumber.Value);
                     }
 
                     logger.LogInformation(
@@ -102,7 +102,7 @@ public class PRStatusResolver(
                         PullRequestStatus.Closed,
                         mergedAt: null,
                         closedAt: prInfo.ClosedAt,
-                        issueId: removedPr.BeadsIssueId);
+                        issueId: removedPr.FleeceIssueId);
 
                     // If not in open list, add directly to closed list
                     if (!moved)
@@ -111,14 +111,14 @@ public class PRStatusResolver(
                             projectId,
                             project.LocalPath,
                             prInfo,
-                            removedPr.BeadsIssueId);
+                            removedPr.FleeceIssueId);
                     }
 
                     // Update linked Fleece issue to Closed
-                    if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
+                    if (!string.IsNullOrEmpty(removedPr.FleeceIssueId))
                     {
                         await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
-                            projectId, removedPr.BeadsIssueId, PullRequestStatus.Closed, removedPr.GitHubPrNumber.Value);
+                            projectId, removedPr.FleeceIssueId, PullRequestStatus.Closed, removedPr.GitHubPrNumber.Value);
                     }
 
                     logger.LogInformation(

@@ -15,6 +15,18 @@ namespace Homespun.Features.Fleece.Controllers;
 /// <summary>
 /// API endpoints for the Issues Agent workflow.
 /// The Issues Agent is a specialized session type for modifying Fleece issues.
+///
+/// <para>
+/// <b>Route shape</b>: this controller is intentionally <i>session-scoped</i>
+/// (<c>/api/issues-agent/{sessionId}/...</c>) rather than project-scoped
+/// (<c>/api/projects/{projectId}/issues/...</c>) like the rest of the Fleece
+/// feature. The Issues Agent acts on a specific agent session's working clone,
+/// not the project's main working directory, so the session id is the natural
+/// identifier — every other path would require the caller to already know which
+/// session is associated with the project + agent-branch. The session entity
+/// carries its own <c>ProjectId</c>, which the controller looks up on each
+/// request to validate project membership.
+/// </para>
 /// </summary>
 [ApiController]
 [Route("api/issues-agent")]
@@ -29,6 +41,7 @@ public class IssuesAgentController(
     IDataStore dataStore,
     IGitCloneService cloneService,
     IClaudeSessionService sessionService,
+    IModelCatalogService modelCatalog,
     IGraphService graphService,
     IHubContext<NotificationHub> notificationHub,
     ILogger<IssuesAgentController> logger) : ControllerBase
@@ -107,8 +120,11 @@ public class IssuesAgentController(
         // Session mode: use explicit mode from request, default to Build
         var sessionMode = request.Mode ?? SessionMode.Build;
 
-        // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "opus";
+        // Determine model — resolve through the catalog so short aliases
+        // ("opus", "sonnet") and nulls map to the newest concrete id.
+        var model = await modelCatalog.ResolveModelIdAsync(
+            request.Model ?? project.DefaultModel,
+            HttpContext.RequestAborted);
 
         // Use SelectedIssueId as entityId when available, otherwise fall back to branch name
         var entityId = !string.IsNullOrWhiteSpace(request.SelectedIssueId)

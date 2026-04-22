@@ -3,9 +3,12 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { BranchOrphanList, MainOrphanList } from './orphan-changes'
-import { ChangeSnapshot, Issues } from '@/api'
+import { OrphanedChangesList } from './orphan-changes'
+import { ChangeSnapshot, Issues, ExecutionMode, IssueStatus, IssueType } from '@/api'
 import type { IssueResponse } from '@/api/generated/types.gen'
+import type { OrphanEntry } from '../services/orphan-aggregation'
+import type { TaskGraphIssueRenderLine } from '../services'
+import { TaskGraphMarkerType } from '../services'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -15,6 +18,10 @@ vi.mock('@/api', async (importOriginal) => {
     Issues: { postApiIssues: vi.fn() },
   }
 })
+
+vi.mock('../hooks/use-linked-pr-status', () => ({
+  useLinkedPrStatus: () => ({ data: null }),
+}))
 
 const mockLink = vi.mocked(ChangeSnapshot.postApiOpenspecChangesLink)
 const mockCreate = vi.mocked(Issues.postApiIssues)
@@ -37,127 +44,268 @@ function wrapper() {
   }
 }
 
-describe('BranchOrphanList', () => {
+function makeIssue(id: string, title: string): TaskGraphIssueRenderLine {
+  return {
+    type: 'issue',
+    issueId: id,
+    title,
+    description: null,
+    branchName: null,
+    lane: 0,
+    marker: TaskGraphMarkerType.Actionable,
+    parentLane: null,
+    isFirstChild: false,
+    isSeriesChild: false,
+    drawTopLine: false,
+    drawBottomLine: false,
+    seriesConnectorFromLane: null,
+    issueType: IssueType.TASK,
+    status: IssueStatus.OPEN,
+    hasDescription: false,
+    linkedPr: null,
+    agentStatus: null,
+    assignedTo: null,
+    drawLane0Connector: false,
+    isLastLane0Connector: false,
+    drawLane0PassThrough: false,
+    lane0Color: null,
+    hasHiddenParent: false,
+    hiddenParentIsSeriesMode: false,
+    executionMode: ExecutionMode.SERIES,
+    parentIssues: null,
+    multiParentIndex: null,
+    multiParentTotal: null,
+    isLastChild: false,
+    hasParallelChildren: false,
+    parentIssueId: null,
+    parentLaneReservations: [],
+  }
+}
+
+const issues: TaskGraphIssueRenderLine[] = [
+  makeIssue('i1', 'Issue One'),
+  makeIssue('i2', 'Issue Two'),
+  makeIssue('i3', 'Issue Three'),
+]
+
+describe('OrphanedChangesList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockLink.mockResolvedValue(okResponse(undefined))
-    mockCreate.mockResolvedValue(
-      okResponse<IssueResponse>({ id: 'new-issue-1', title: 'OpenSpec: foo' } as IssueResponse)
-    )
+    mockCreate.mockResolvedValue(okResponse<IssueResponse>({ id: 'new-issue-1' } as IssueResponse))
   })
 
-  it('renders nothing when orphans empty', () => {
+  it('renders nothing when entries empty', () => {
     const { container } = render(
-      <BranchOrphanList projectId="p1" branch="b" fleeceId="f" orphans={[]} />,
+      <OrphanedChangesList projectId="p1" entries={[]} issues={issues} />,
       { wrapper: wrapper() }
     )
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders one entry per orphan with actions', () => {
-    render(
-      <BranchOrphanList
-        projectId="p1"
-        branch="feat/x+f"
-        fleeceId="f"
-        orphans={[{ name: 'foo', createdOnBranch: true }]}
-      />,
-      { wrapper: wrapper() }
-    )
-    const row = screen.getByTestId('branch-orphan')
-    expect(row).toHaveAttribute('data-change-name', 'foo')
-    expect(within(row).getByTestId('orphan-link-to-issue')).toBeInTheDocument()
-    expect(within(row).getByTestId('orphan-create-sub-issue')).toBeInTheDocument()
+  it('T012.1 renders one row per deduped change name', () => {
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha-change',
+        occurrences: [{ branch: null, changeName: 'alpha-change' }],
+        containingIssueIds: [],
+      },
+      {
+        name: 'beta-change',
+        occurrences: [
+          { branch: null, changeName: 'beta-change' },
+          { branch: 'feat/x+i1', changeName: 'beta-change' },
+        ],
+        containingIssueIds: ['i1'],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
+
+    expect(screen.getByTestId('orphaned-changes-section')).toBeInTheDocument()
+    const rows = screen.getAllByTestId('orphaned-change-row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveAttribute('data-change-name', 'alpha-change')
+    expect(rows[1]).toHaveAttribute('data-change-name', 'beta-change')
   })
 
-  it('link-to-issue posts sidecar with branch fleece-id', async () => {
+  it('T012.2a single-occurrence main shows "main" label', () => {
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha',
+        occurrences: [{ branch: null, changeName: 'alpha' }],
+        containingIssueIds: [],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
+    const row = screen.getByTestId('orphaned-change-row')
+    expect(within(row).getByText('main')).toBeInTheDocument()
+  })
+
+  it('T012.2b single-occurrence branch shows branch name', () => {
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha',
+        occurrences: [{ branch: 'feat/x+i1', changeName: 'alpha' }],
+        containingIssueIds: ['i1'],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
+    const row = screen.getByTestId('orphaned-change-row')
+    expect(within(row).getByText('feat/x+i1')).toBeInTheDocument()
+  })
+
+  it('T012.2c multi-occurrence shows "on N branches" with tooltip listing all', async () => {
     const user = userEvent.setup()
-    render(
-      <BranchOrphanList
-        projectId="p1"
-        branch="feat/x+f"
-        fleeceId="f"
-        orphans={[{ name: 'foo', createdOnBranch: true }]}
-      />,
-      { wrapper: wrapper() }
-    )
+    const entries: OrphanEntry[] = [
+      {
+        name: 'beta',
+        occurrences: [
+          { branch: null, changeName: 'beta' },
+          { branch: 'feat/x+i1', changeName: 'beta' },
+          { branch: 'feat/y+i2', changeName: 'beta' },
+        ],
+        containingIssueIds: ['i1', 'i2'],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
+    const row = screen.getByTestId('orphaned-change-row')
+    const label = within(row).getByTestId('orphaned-change-occurrence-label')
+    expect(label).toHaveTextContent('on 3 branches')
+
+    await user.hover(label)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent('main')
+    expect(tooltip).toHaveTextContent('feat/x+i1')
+    expect(tooltip).toHaveTextContent('feat/y+i2')
+  })
+
+  it('T012.3 link-to-issue opens picker pre-populated with containingIssueIds', async () => {
+    const user = userEvent.setup()
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha',
+        occurrences: [{ branch: 'feat/x+i1', changeName: 'alpha' }],
+        containingIssueIds: ['i1'],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
 
     await user.click(screen.getByTestId('orphan-link-to-issue'))
 
-    await waitFor(() => {
-      expect(mockLink).toHaveBeenCalledWith({
-        body: {
-          projectId: 'p1',
-          branch: 'feat/x+f',
-          changeName: 'foo',
-          fleeceId: 'f',
-        },
-      })
-    })
+    const pinned = await screen.findByTestId('orphan-picker-pinned')
+    expect(within(pinned).getByText('Issue One')).toBeInTheDocument()
   })
 
-  it('create-sub-issue creates child + links to new issue id', async () => {
+  it('T012.3b selecting an issue in picker fans out one POST per occurrence with selected fleeceId', async () => {
     const user = userEvent.setup()
-    render(
-      <BranchOrphanList
-        projectId="p1"
-        branch="feat/x+f"
-        fleeceId="f"
-        orphans={[{ name: 'foo', createdOnBranch: true }]}
-      />,
-      { wrapper: wrapper() }
-    )
+    const entries: OrphanEntry[] = [
+      {
+        name: 'beta',
+        occurrences: [
+          { branch: null, changeName: 'beta' },
+          { branch: 'feat/x+i1', changeName: 'beta' },
+        ],
+        containingIssueIds: ['i1'],
+      },
+    ]
 
-    await user.click(screen.getByTestId('orphan-create-sub-issue'))
-
-    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
-    const createCall = mockCreate.mock.calls[0]?.[0]
-    expect(createCall?.body).toMatchObject({
-      projectId: 'p1',
-      title: 'OpenSpec: foo',
-      parentIssueId: 'f',
-    })
-    await waitFor(() =>
-      expect(mockLink).toHaveBeenCalledWith({
-        body: expect.objectContaining({ fleeceId: 'new-issue-1', changeName: 'foo' }),
-      })
-    )
-  })
-})
-
-describe('MainOrphanList', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockLink.mockResolvedValue(okResponse(undefined))
-    mockCreate.mockResolvedValue(
-      okResponse<IssueResponse>({ id: 'issue-42', title: 'OpenSpec: bar' } as IssueResponse)
-    )
-  })
-
-  it('renders nothing when orphans empty', () => {
-    const { container } = render(<MainOrphanList projectId="p1" orphans={[]} />, {
-      wrapper: wrapper(),
-    })
-    expect(container).toBeEmptyDOMElement()
-  })
-
-  it('renders Orphaned Changes header + create-issue action', async () => {
-    const user = userEvent.setup()
-    render(<MainOrphanList projectId="p1" orphans={[{ name: 'bar', createdOnBranch: false }]} />, {
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
       wrapper: wrapper(),
     })
 
-    expect(screen.getByTestId('main-orphans-section')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /orphaned changes/i })).toBeInTheDocument()
+    await user.click(screen.getByTestId('orphan-link-to-issue'))
+    await user.click(await screen.findByTestId('orphan-picker-row-i2'))
+
+    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(2))
+    const bodies = mockLink.mock.calls.map((c) => c[0]?.body)
+    expect(bodies).toEqual(
+      expect.arrayContaining([
+        { projectId: 'p1', branch: null, changeName: 'beta', fleeceId: 'i2' },
+        { projectId: 'p1', branch: 'feat/x+i1', changeName: 'beta', fleeceId: 'i2' },
+      ])
+    )
+  })
+
+  it('T012.4a split-button primary creates issue then links all occurrences', async () => {
+    const user = userEvent.setup()
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha',
+        occurrences: [
+          { branch: null, changeName: 'alpha' },
+          { branch: 'feat/x+i1', changeName: 'alpha' },
+        ],
+        containingIssueIds: ['i1'],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
 
     await user.click(screen.getByTestId('orphan-create-issue'))
 
     await waitFor(() => expect(mockCreate).toHaveBeenCalled())
-    const createCall = mockCreate.mock.calls[0]?.[0]
-    expect(createCall?.body).toMatchObject({ projectId: 'p1', title: 'OpenSpec: bar' })
+    expect(mockCreate.mock.calls[0]?.[0]?.body).toMatchObject({
+      projectId: 'p1',
+      title: 'OpenSpec: alpha',
+    })
+    expect(mockCreate.mock.calls[0]?.[0]?.body?.parentIssueId).toBeUndefined()
+
+    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(2))
+    const bodies = mockLink.mock.calls.map((c) => c[0]?.body)
+    expect(bodies).toEqual(
+      expect.arrayContaining([
+        { projectId: 'p1', branch: null, changeName: 'alpha', fleeceId: 'new-issue-1' },
+        { projectId: 'p1', branch: 'feat/x+i1', changeName: 'alpha', fleeceId: 'new-issue-1' },
+      ])
+    )
+  })
+
+  it('T012.4b split-button dropdown opens picker in choose-parent mode; selected parent passed to createIssue', async () => {
+    const user = userEvent.setup()
+    const entries: OrphanEntry[] = [
+      {
+        name: 'alpha',
+        occurrences: [{ branch: null, changeName: 'alpha' }],
+        containingIssueIds: [],
+      },
+    ]
+
+    render(<OrphanedChangesList projectId="p1" entries={entries} issues={issues} />, {
+      wrapper: wrapper(),
+    })
+
+    await user.click(screen.getByTestId('orphan-create-issue-menu'))
+    await user.click(await screen.findByTestId('orphan-create-sub-issue-menuitem'))
+
+    // Picker opens with 'choose parent' mode.
+    await user.click(await screen.findByTestId('orphan-picker-row-i2'))
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
+    expect(mockCreate.mock.calls[0]?.[0]?.body).toMatchObject({
+      projectId: 'p1',
+      title: 'OpenSpec: alpha',
+      parentIssueId: 'i2',
+    })
     await waitFor(() =>
       expect(mockLink).toHaveBeenCalledWith({
-        body: { projectId: 'p1', branch: null, changeName: 'bar', fleeceId: 'issue-42' },
+        body: { projectId: 'p1', branch: null, changeName: 'alpha', fleeceId: 'new-issue-1' },
       })
     )
   })

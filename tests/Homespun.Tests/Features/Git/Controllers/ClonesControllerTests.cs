@@ -24,6 +24,7 @@ public class ClonesControllerTests
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
+    private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<ILogger<ClonesController>> _loggerMock = null!;
 
     private static readonly Project TestProject = new()
@@ -42,12 +43,17 @@ public class ClonesControllerTests
         _projectServiceMock = new Mock<IProjectService>();
         _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
+        _modelCatalogMock = new Mock<IModelCatalogService>();
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
         _loggerMock = new Mock<ILogger<ClonesController>>();
         _controller = new ClonesController(
             _cloneServiceMock.Object,
             _projectServiceMock.Object,
             _fleeceIssuesSyncServiceMock.Object,
             _sessionServiceMock.Object,
+            _modelCatalogMock.Object,
             _loggerMock.Object);
 
         // Set up HTTP context for controller
@@ -663,6 +669,53 @@ public class ClonesControllerTests
         // Verify trimmed name was used
         _cloneServiceMock.Verify(
             x => x.GetClonePathForBranchAsync(TestProject.LocalPath, trimmedBranchName),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task CreateBranchSession_resolves_project_default_model_through_catalog()
+    {
+        var branchName = "feature/resolve";
+        var clonePath = "/path/to/clone";
+
+        _modelCatalogMock
+            .Setup(m => m.ResolveModelIdAsync("sonnet", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("claude-sonnet-4-6-20250601");
+
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(true, null, 0, false, 0));
+        _cloneServiceMock.Setup(x => x.GetClonePathForBranchAsync(TestProject.LocalPath, branchName)).ReturnsAsync(clonePath);
+        _cloneServiceMock.Setup(x => x.PullLatestAsync(clonePath)).ReturnsAsync(true);
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                branchName, TestProject.Id, clonePath, SessionMode.Plan,
+                "claude-sonnet-4-6-20250601", null, default))
+            .ReturnsAsync(new ClaudeSession
+            {
+                Id = "session-resolved",
+                EntityId = branchName,
+                ProjectId = TestProject.Id,
+                WorkingDirectory = clonePath,
+                Model = "claude-sonnet-4-6-20250601",
+                Mode = SessionMode.Plan,
+            });
+
+        var result = await _controller.CreateBranchSession(new CreateBranchSessionRequest
+        {
+            ProjectId = TestProject.Id,
+            BranchName = branchName,
+        });
+
+        Assert.That(result.Result, Is.TypeOf<CreatedResult>());
+        _modelCatalogMock.Verify(
+            m => m.ResolveModelIdAsync("sonnet", It.IsAny<CancellationToken>()),
+            Times.Once);
+        _sessionServiceMock.Verify(
+            x => x.StartSessionAsync(
+                branchName, TestProject.Id, clonePath, SessionMode.Plan,
+                "claude-sonnet-4-6-20250601", null, default),
             Times.Once);
     }
 

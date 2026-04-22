@@ -4,7 +4,7 @@ import { useSessionSettingsStore } from '@/stores/session-settings-store'
 import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { ClaudeSession } from '@/types/signalr'
 
-// NOTE: `sessionEventLog`-driven hop logging was retired with the
+// NOTE: the custom client-side hop-log batcher was retired with the
 // custom-telemetry stack. `traceInvoke` now produces a client span for every
 // `joinSession` invocation and the server-side TraceparentHubFilter attaches
 // the `homespun.session.id` tag — so the same "did the join succeed?"

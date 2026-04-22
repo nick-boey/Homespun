@@ -138,6 +138,13 @@ export const ChangeType = {
 
 export type ChangeType = typeof ChangeType[keyof typeof ChangeType];
 
+export type ClaudeModelInfo = {
+    id: string | null;
+    displayName: string | null;
+    createdAt: string;
+    isDefault?: boolean;
+};
+
 export type ClaudeSession = {
     id: string | null;
     entityId: string | null;
@@ -747,6 +754,10 @@ export type Project = {
     updatedAt?: string;
 };
 
+export type ProjectAssigneesResponse = {
+    assignees?: Array<string> | null;
+};
+
 export type PullRequest = {
     id?: string | null;
     projectId: string | null;
@@ -760,7 +771,7 @@ export type PullRequest = {
     createdAt?: string;
     updatedAt?: string;
     activeSessionId?: string | null;
-    beadsIssueId?: string | null;
+    fleeceIssueId?: string | null;
 };
 
 export type PullRequestInfo = {
@@ -858,7 +869,7 @@ export type RemoveParentRequest = {
 
 export type RemovedPrInfo = {
     pullRequestId: string | null;
-    beadsIssueId?: string | null;
+    fleeceIssueId?: string | null;
     gitHubPrNumber?: number | null;
 };
 
@@ -1883,7 +1894,7 @@ export type GetApiProjectsByProjectIdIssuesAssigneesResponses = {
     /**
      * OK
      */
-    200: Array<string>;
+    200: ProjectAssigneesResponse;
 };
 
 export type GetApiProjectsByProjectIdIssuesAssigneesResponse = GetApiProjectsByProjectIdIssuesAssigneesResponses[keyof GetApiProjectsByProjectIdIssuesAssigneesResponses];
@@ -2474,6 +2485,22 @@ export type PostApiIssuesAgentBySessionIdRefreshDiffResponses = {
 
 export type PostApiIssuesAgentBySessionIdRefreshDiffResponse = PostApiIssuesAgentBySessionIdRefreshDiffResponses[keyof PostApiIssuesAgentBySessionIdRefreshDiffResponses];
 
+export type GetApiModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/models';
+};
+
+export type GetApiModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<ClaudeModelInfo>;
+};
+
+export type GetApiModelsResponse = GetApiModelsResponses[keyof GetApiModelsResponses];
+
 export type GetApiNotificationsData = {
     body?: never;
     path?: never;
@@ -2577,6 +2604,34 @@ export type PostApiOrchestrationGenerateBranchIdResponses = {
 };
 
 export type PostApiOrchestrationGenerateBranchIdResponse = PostApiOrchestrationGenerateBranchIdResponses[keyof PostApiOrchestrationGenerateBranchIdResponses];
+
+export type PostApiOtlpV1LogsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/otlp/v1/logs';
+};
+
+export type PostApiOtlpV1LogsResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type PostApiOtlpV1TracesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/otlp/v1/traces';
+};
+
+export type PostApiOtlpV1TracesResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
 
 export type GetApiPlansData = {
     body?: never;

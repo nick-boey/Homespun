@@ -48,6 +48,9 @@ public static class MockServiceExtensions
         // Register the FleeceIssueSeeder for seeding issues to JSONL files
         services.AddSingleton<FleeceIssueSeeder>();
 
+        // Register the OpenSpecMockSeeder for seeding openspec/ content and per-branch deltas
+        services.AddSingleton<OpenSpecMockSeeder>();
+
         // Register real JsonDataStore with temp file path
         services.AddSingleton<IDataStore>(sp =>
         {
@@ -63,6 +66,7 @@ public static class MockServiceExtensions
         services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
 
         // Issue history service (for undo/redo - uses real file-based implementation)
+        services.AddOptions<FleeceHistoryOptions>();
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
 
         // Register real FleeceService (reads/writes to temp .fleece directories)
@@ -127,6 +131,25 @@ public static class MockServiceExtensions
         // Claude Code services - use the real session store (already in-memory)
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
         services.AddSingleton<IToolResultParser, ToolResultParser>();
+
+        // Model catalog — dev-mock keeps MockModelCatalogService (no network).
+        // Any mock profile with UseLiveClaudeSessions=true (dev-live, dev-windows,
+        // dev-container) uses the live ModelCatalogService so /api/models reflects
+        // the real Anthropic catalogue instead of the static fallback list.
+        services.AddMemoryCache();
+        if (options.UseLiveClaudeSessions)
+        {
+            services.AddHttpClient(AnthropicModelSource.HttpClientName);
+            services.AddSingleton<IAnthropicModelSource, AnthropicModelSource>();
+            services.AddSingleton<IModelCatalogService>(sp => new ModelCatalogService(
+                sp.GetRequiredService<IAnthropicModelSource>(),
+                sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
+                sp.GetRequiredService<ILogger<ModelCatalogService>>()));
+        }
+        else
+        {
+            services.AddSingleton<IModelCatalogService, MockModelCatalogService>();
+        }
 
         // Always use the real session pipeline; IAgentExecutionService picks between the
         // Docker/SingleContainer/Mock executors based on AgentExecution:Mode.

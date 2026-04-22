@@ -30,20 +30,18 @@ describe('Toaster', () => {
 })
 
 describe('Toaster CSS Variables', () => {
-  it('uses hsl() wrapper for CSS color variables', () => {
-    // This test verifies the CSS variable format is correct for dark mode
-    // The actual component uses inline styles with hsl() wrapped variables
+  it('references theme tokens via var() without an hsl() wrapper', () => {
     const styles = {
-      '--normal-bg': 'hsl(var(--popover))',
-      '--normal-text': 'hsl(var(--popover-foreground))',
-      '--normal-border': 'hsl(var(--border))',
+      '--normal-bg': 'var(--popover)',
+      '--normal-text': 'var(--popover-foreground)',
+      '--normal-border': 'var(--border)',
       '--border-radius': 'var(--radius)',
     }
 
-    expect(styles['--normal-bg']).toMatch(/^hsl\(var\(--/)
-    expect(styles['--normal-text']).toMatch(/^hsl\(var\(--/)
-    expect(styles['--normal-border']).toMatch(/^hsl\(var\(--/)
-    // Border radius doesn't need hsl wrapper
-    expect(styles['--border-radius']).not.toMatch(/^hsl\(/)
+    expect(styles['--normal-bg']).toMatch(/^var\(--/)
+    expect(styles['--normal-text']).toMatch(/^var\(--/)
+    expect(styles['--normal-border']).toMatch(/^var\(--/)
+    expect(styles['--normal-bg']).not.toMatch(/^hsl\(/)
+    expect(styles['--border-radius']).toMatch(/^var\(--radius/)
   })
 })

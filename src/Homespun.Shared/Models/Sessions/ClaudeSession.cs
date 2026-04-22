@@ -11,7 +11,7 @@ public class ClaudeSession
     public required string Id { get; init; }
 
     /// <summary>
-    /// The entity ID this session is associated with (e.g., BeadsIssue ID, PR ID).
+    /// The entity ID this session is associated with (e.g., Fleece issue ID, PR ID).
     /// </summary>
     public required string EntityId { get; init; }
 

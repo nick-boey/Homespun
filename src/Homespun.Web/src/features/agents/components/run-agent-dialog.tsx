@@ -21,8 +21,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader } from '@/components/ui/loader'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useRunAgent } from '../hooks'
+import { useAvailableModels, useRunAgent } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
+import { normalizeStoredModel } from '../lib/normalize-stored-model'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
 import { OpenSpecTabContent } from './openspec-tab'
@@ -31,19 +32,8 @@ import { SkillPicker } from '@/features/skills'
 import { useProjectSkills } from '@/features/skills/hooks/use-project-skills'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 import type { CreateIssuesAgentSessionResult } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
+import type { ClaudeModelInfo } from '@/api/generated/types.gen'
 import { SessionMode, SkillCategory } from '@/api'
-
-const TASK_MODELS = [
-  { value: 'opus', label: 'Opus' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'haiku', label: 'Haiku' },
-] as const
-
-const ISSUES_MODELS = [
-  { value: 'opus', label: 'Opus' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'haiku', label: 'Haiku' },
-] as const
 
 // localStorage keys
 const TASK_MODEL_STORAGE_KEY = 'agent-launcher-model'
@@ -189,10 +179,20 @@ function TaskAgentTabContent({
 
   const { project } = useProject(projectId)
   const { data: skillsData } = useProjectSkills(projectId)
+  const { models: availableModels, defaultModel, isLoading: modelsLoading } = useAvailableModels()
 
-  const [selectedModel, setSelectedModel] = useState<string>(
-    () => localStorage.getItem(TASK_MODEL_STORAGE_KEY) ?? TASK_MODELS[0].value
-  )
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
+
+  // Adjusted during render (vs. in an effect) to avoid cascading renders.
+  if (selectedModel === null && availableModels.length > 0) {
+    const normalized = normalizeStoredModel(
+      localStorage.getItem(TASK_MODEL_STORAGE_KEY),
+      availableModels,
+      defaultModel
+    )
+    if (normalized) setSelectedModel(normalized)
+  }
+
   const [selectedSkillName, setSelectedSkillName] = useState<string | null>(
     () => localStorage.getItem(TASK_SKILL_STORAGE_KEY) || null
   )
@@ -218,7 +218,9 @@ function TaskAgentTabContent({
 
   // Persist selections
   useEffect(() => {
-    localStorage.setItem(TASK_MODEL_STORAGE_KEY, selectedModel)
+    if (selectedModel) {
+      localStorage.setItem(TASK_MODEL_STORAGE_KEY, selectedModel)
+    }
   }, [selectedModel])
 
   useEffect(() => {
@@ -253,6 +255,7 @@ function TaskAgentTabContent({
   }
 
   const handleStart = useCallback(async () => {
+    if (!selectedModel) return
     setConflictSessionId(null)
 
     try {
@@ -303,6 +306,7 @@ function TaskAgentTabContent({
   }, [conflictSessionId, navigate, onOpenChange])
 
   const isStarting = runAgent.isPending
+  const isBusy = isStarting || modelsLoading || !selectedModel
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-4">
@@ -350,23 +354,18 @@ function TaskAgentTabContent({
       <div className="flex flex-wrap items-center gap-2">
         <ModeSelector value={selectedMode} onValueChange={setSelectedMode} disabled={isStarting} />
 
-        <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isStarting}>
-          <SelectTrigger className="w-24" aria-label="Select model">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TASK_MODELS.map((model) => (
-              <SelectItem key={model.value} value={model.value}>
-                {model.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSelect
+          value={selectedModel}
+          onValueChange={setSelectedModel}
+          models={availableModels}
+          disabled={isStarting || modelsLoading}
+          className="w-44"
+        />
 
         <Button
           size="sm"
           onClick={handleStart}
-          disabled={isStarting}
+          disabled={isBusy}
           className="w-full gap-1.5 sm:w-auto"
         >
           {runAgent.isPending ? (
@@ -452,10 +451,18 @@ function IssuesAgentTabContent({
 }: IssuesAgentTabContentProps) {
   const navigate = useNavigate()
   const createSession = useCreateIssuesAgentSession()
+  const { models: availableModels, defaultModel, isLoading: modelsLoading } = useAvailableModels()
 
-  const [selectedModel, setSelectedModel] = useState<string>(
-    () => localStorage.getItem(ISSUES_MODEL_STORAGE_KEY) ?? ISSUES_MODELS[0].value
-  )
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
+
+  if (selectedModel === null && availableModels.length > 0) {
+    const normalized = normalizeStoredModel(
+      localStorage.getItem(ISSUES_MODEL_STORAGE_KEY),
+      availableModels,
+      defaultModel
+    )
+    if (normalized) setSelectedModel(normalized)
+  }
 
   const [selectedMode, setSelectedMode] = useState<SessionMode>(() => {
     const stored = localStorage.getItem(ISSUES_MODE_STORAGE_KEY)
@@ -465,7 +472,9 @@ function IssuesAgentTabContent({
   const [userInstructions, setUserInstructions] = useState('')
 
   useEffect(() => {
-    localStorage.setItem(ISSUES_MODEL_STORAGE_KEY, selectedModel)
+    if (selectedModel) {
+      localStorage.setItem(ISSUES_MODEL_STORAGE_KEY, selectedModel)
+    }
   }, [selectedModel])
 
   useEffect(() => {
@@ -473,6 +482,7 @@ function IssuesAgentTabContent({
   }, [selectedMode])
 
   const handleStart = useCallback(async () => {
+    if (!selectedModel) return
     try {
       const result = await createSession.mutateAsync({
         projectId,
@@ -514,27 +524,18 @@ function IssuesAgentTabContent({
           disabled={createSession.isPending}
         />
 
-        <Select
+        <ModelSelect
           value={selectedModel}
           onValueChange={setSelectedModel}
-          disabled={createSession.isPending}
-        >
-          <SelectTrigger className="w-32" aria-label="Select model">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ISSUES_MODELS.map((model) => (
-              <SelectItem key={model.value} value={model.value}>
-                {model.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          models={availableModels}
+          disabled={createSession.isPending || modelsLoading}
+          className="w-44"
+        />
 
         <Button
           size="sm"
           onClick={handleStart}
-          disabled={createSession.isPending}
+          disabled={createSession.isPending || modelsLoading || !selectedModel}
           className="w-full gap-1.5 sm:w-auto"
         >
           {createSession.isPending ? (
@@ -586,6 +587,33 @@ function ModeSelector({ value, onValueChange, disabled }: ModeSelectorProps) {
       <SelectContent>
         <SelectItem value={SessionMode.PLAN}>Plan</SelectItem>
         <SelectItem value={SessionMode.BUILD}>Build</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+}
+
+interface ModelSelectProps {
+  value: string | null
+  onValueChange: (value: string) => void
+  models: readonly ClaudeModelInfo[]
+  disabled: boolean
+  className?: string
+}
+
+function ModelSelect({ value, onValueChange, models, disabled, className }: ModelSelectProps) {
+  return (
+    <Select value={value ?? ''} onValueChange={onValueChange} disabled={disabled || !value}>
+      <SelectTrigger className={className} aria-label="Select model">
+        <SelectValue placeholder="Loading…" />
+      </SelectTrigger>
+      <SelectContent>
+        {models.map((model) =>
+          model.id ? (
+            <SelectItem key={model.id} value={model.id}>
+              {model.displayName ?? model.id}
+            </SelectItem>
+          ) : null
+        )}
       </SelectContent>
     </Select>
   )

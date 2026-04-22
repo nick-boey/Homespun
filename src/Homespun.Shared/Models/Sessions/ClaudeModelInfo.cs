@@ -6,58 +6,52 @@ namespace Homespun.Shared.Models.Sessions;
 public class ClaudeModelInfo
 {
     /// <summary>
-    /// The model ID (e.g., "sonnet", "opus", "haiku").
+    /// The full model id returned by the Anthropic API (e.g., "claude-opus-4-7-20251101").
     /// </summary>
     public required string Id { get; init; }
 
     /// <summary>
     /// Display name for the model.
     /// </summary>
-    public required string Name { get; init; }
+    public required string DisplayName { get; init; }
 
     /// <summary>
-    /// Full ID for the model (same as Id for simple names like "sonnet").
+    /// When the model was published.
     /// </summary>
-    public string FullId => Id;
+    public required DateTimeOffset CreatedAt { get; init; }
 
     /// <summary>
-    /// Whether this model supports extended thinking.
+    /// Whether this model is the current default selection. Exactly one entry
+    /// in a catalog response should carry <c>IsDefault = true</c>; the value is
+    /// computed by the server via the preference-ordered newest-in-tier rule.
     /// </summary>
-    public bool SupportsThinking { get; init; }
+    public bool IsDefault { get; init; }
 
     /// <summary>
-    /// Whether this model supports tool use.
+    /// Fallback catalog used when the Anthropic API is unavailable and in mock mode.
+    /// One entry per short-alias tier; the ids are the tier aliases themselves
+    /// (<c>opus</c>/<c>sonnet</c>/<c>haiku</c>) which the Claude Agent SDK accepts
+    /// directly, avoiding drift against a hardcoded dated snapshot.
     /// </summary>
-    public bool SupportsToolUse { get; init; } = true;
-
-    /// <summary>
-    /// Whether this model supports vision/images.
-    /// </summary>
-    public bool SupportsVision { get; init; } = true;
-
-    /// <summary>
-    /// Pre-defined list of available Claude models.
-    /// Uses simple names that resolve to the latest version.
-    /// </summary>
-    public static readonly IReadOnlyList<ClaudeModelInfo> AvailableModels =
+    public static readonly IReadOnlyList<ClaudeModelInfo> FallbackModels =
     [
         new ClaudeModelInfo
         {
             Id = "opus",
-            Name = "Claude Opus",
-            SupportsThinking = true
+            DisplayName = "Opus",
+            CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         },
         new ClaudeModelInfo
         {
             Id = "sonnet",
-            Name = "Claude Sonnet",
-            SupportsThinking = true
+            DisplayName = "Sonnet",
+            CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         },
         new ClaudeModelInfo
         {
             Id = "haiku",
-            Name = "Claude Haiku",
-            SupportsThinking = false
+            DisplayName = "Haiku",
+            CreatedAt = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
         }
     ];
 }

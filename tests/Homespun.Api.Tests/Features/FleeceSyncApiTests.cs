@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Projects;
-using SessionCacheSummary = Homespun.Features.ClaudeCode.Data.SessionCacheSummary;
 
 namespace Homespun.Api.Tests.Features;
 
