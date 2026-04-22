@@ -2,8 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Homespun.Features.Projects.Controllers;
 using Homespun.Shared.Models.Projects;
+using Homespun.Shared.Requests;
 
 namespace Homespun.Api.Tests.Features;
 

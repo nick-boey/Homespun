@@ -23,6 +23,7 @@ import { FleeceIssueSync, PullRequests } from '@/api'
 import { taskGraphQueryKey } from '@/features/issues/hooks/use-task-graph'
 import { openPullRequestsQueryKey } from '@/features/pull-requests/hooks/use-open-pull-requests'
 import { mergedPullRequestsQueryKey } from '@/features/pull-requests/hooks/use-merged-pull-requests'
+import { usePullAndSync } from '../hooks/use-fleece-sync'
 
 interface PullSyncButtonProps {
   projectId: string
@@ -33,6 +34,8 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [conflictFiles, setConflictFiles] = useState<string[] | null>(null)
 
+  const { pullAll, syncAll, isPulling, isSyncing } = usePullAndSync()
+
   const invalidateQueries = () => {
     queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
     queryClient.invalidateQueries({ queryKey: openPullRequestsQueryKey(projectId) })
@@ -40,51 +43,31 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
   }
 
   const pullMutation = useMutation({
-    mutationFn: async () => {
-      const [fleeceResponse, prResponse] = await Promise.all([
-        FleeceIssueSync.postApiFleeceSyncByProjectIdPull({
-          path: { projectId },
-        }),
-        PullRequests.postApiProjectsByProjectIdSync({
-          path: { projectId },
-        }),
-      ])
-
-      if (fleeceResponse.error || !fleeceResponse.data) {
-        throw new Error(fleeceResponse.error?.detail ?? 'Failed to pull fleece issues')
-      }
-
-      return {
-        fleece: fleeceResponse.data,
-        prs: prResponse.data,
-      }
-    },
+    mutationFn: () => pullAll(projectId),
     onSuccess: (data) => {
-      invalidateQueries()
-
       // Check for soft failure with non-fleece conflicts
-      if (!data.fleece.success && data.fleece.hasNonFleeceChanges) {
-        setConflictFiles(data.fleece.nonFleeceChangedFiles ?? [])
+      if (!data.fleecePull.success && data.fleecePull.hasNonFleeceChanges) {
+        setConflictFiles(data.fleecePull.nonFleeceChangedFiles ?? [])
         return
       }
 
       const messages: string[] = []
 
-      if (data.fleece.wasBehindRemote) {
-        messages.push(`Pulled ${data.fleece.commitsPulled ?? 0} commit(s)`)
-        if (data.fleece.issuesMerged && data.fleece.issuesMerged > 0) {
-          messages.push(`Merged ${data.fleece.issuesMerged} issue(s)`)
+      if (data.fleecePull.wasBehindRemote) {
+        messages.push(`Pulled ${data.fleecePull.commitsPulled ?? 0} commit(s)`)
+        if (data.fleecePull.issuesMerged && data.fleecePull.issuesMerged > 0) {
+          messages.push(`Merged ${data.fleecePull.issuesMerged} issue(s)`)
         }
       } else {
         messages.push('Already up to date')
       }
 
-      if (data.prs) {
-        if (data.prs.imported && data.prs.imported > 0) {
-          messages.push(`Imported ${data.prs.imported} PR(s)`)
+      if (data.prSync) {
+        if (data.prSync.imported && data.prSync.imported > 0) {
+          messages.push(`Imported ${data.prSync.imported} PR(s)`)
         }
-        if (data.prs.updated && data.prs.updated > 0) {
-          messages.push(`Updated ${data.prs.updated} PR(s)`)
+        if (data.prSync.updated && data.prSync.updated > 0) {
+          messages.push(`Updated ${data.prSync.updated} PR(s)`)
         }
       }
 
@@ -143,46 +126,26 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
   })
 
   const syncMutation = useMutation({
-    mutationFn: async () => {
-      const [fleeceResponse, prResponse] = await Promise.all([
-        FleeceIssueSync.postApiFleeceSyncByProjectIdSync({
-          path: { projectId },
-        }),
-        PullRequests.postApiProjectsByProjectIdSync({
-          path: { projectId },
-        }),
-      ])
-
-      if (fleeceResponse.error || !fleeceResponse.data) {
-        throw new Error(fleeceResponse.error?.detail ?? 'Failed to sync fleece issues')
-      }
-
-      return {
-        fleece: fleeceResponse.data,
-        prs: prResponse.data,
-      }
-    },
+    mutationFn: () => syncAll(projectId),
     onSuccess: (data) => {
-      invalidateQueries()
-
       const messages: string[] = []
 
-      if (data.fleece.filesCommitted && data.fleece.filesCommitted > 0) {
-        messages.push(`Committed ${data.fleece.filesCommitted} file(s)`)
+      if (data.fleeceSync.filesCommitted && data.fleeceSync.filesCommitted > 0) {
+        messages.push(`Committed ${data.fleeceSync.filesCommitted} file(s)`)
       }
 
-      if (data.fleece.pushSucceeded) {
+      if (data.fleeceSync.pushSucceeded) {
         messages.push('Pushed to remote')
-      } else if (data.fleece.filesCommitted === 0) {
+      } else if (data.fleeceSync.filesCommitted === 0) {
         messages.push('No changes to push')
       }
 
-      if (data.prs) {
-        if (data.prs.imported && data.prs.imported > 0) {
-          messages.push(`Imported ${data.prs.imported} PR(s)`)
+      if (data.prSync) {
+        if (data.prSync.imported && data.prSync.imported > 0) {
+          messages.push(`Imported ${data.prSync.imported} PR(s)`)
         }
-        if (data.prs.updated && data.prs.updated > 0) {
-          messages.push(`Updated ${data.prs.updated} PR(s)`)
+        if (data.prSync.updated && data.prSync.updated > 0) {
+          messages.push(`Updated ${data.prSync.updated} PR(s)`)
         }
       }
 
@@ -197,8 +160,7 @@ export function PullSyncButton({ projectId }: PullSyncButtonProps) {
     },
   })
 
-  const isLoading =
-    pullMutation.isPending || syncMutation.isPending || discardAndPullMutation.isPending
+  const isLoading = isPulling || isSyncing || discardAndPullMutation.isPending
 
   const handlePull = () => {
     pullMutation.mutate()

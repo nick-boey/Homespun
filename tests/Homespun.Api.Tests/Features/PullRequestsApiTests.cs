@@ -2,11 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Homespun.Features.Projects.Controllers;
 using Homespun.Features.PullRequests.Controllers;
 using Homespun.Shared.Models.GitHub;
 using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Models.PullRequests;
+
+using CreateProjectRequest = Homespun.Shared.Requests.CreateProjectRequest;
 
 namespace Homespun.Api.Tests.Features;
 

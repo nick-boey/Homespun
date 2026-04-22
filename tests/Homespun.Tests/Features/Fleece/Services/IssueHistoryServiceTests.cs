@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Homespun.Tests.Features.Fleece.Services;
@@ -23,7 +24,9 @@ public class IssueHistoryServiceTests
         Directory.CreateDirectory(_projectPath);
 
         _mockLogger = new Mock<ILogger<IssueHistoryService>>();
-        _service = new IssueHistoryService(_mockLogger.Object);
+        _service = new IssueHistoryService(
+            _mockLogger.Object,
+            Options.Create(new FleeceHistoryOptions()));
     }
 
     [TearDown]
@@ -283,5 +286,42 @@ public class IssueHistoryServiceTests
         Assert.That(state.TotalEntries, Is.EqualTo(2));
         Assert.That(snapshotFiles, Has.Length.EqualTo(2));
         Assert.That(metaFiles, Has.Length.EqualTo(2));
+    }
+
+    [Test]
+    public async Task RecordSnapshotAsync_PrunesEntriesBeyondConfiguredMax()
+    {
+        // Arrange - build a service with a tight bound so we can observe pruning without 100 writes.
+        var boundedService = new IssueHistoryService(
+            _mockLogger.Object,
+            Options.Create(new FleeceHistoryOptions { MaxHistoryEntries = 3 }));
+
+        // Act - record 5 snapshots into the 3-entry ring buffer.
+        for (var i = 0; i < 5; i++)
+        {
+            var issues = new List<Issue>
+            {
+                new()
+                {
+                    Id = $"test-{i}",
+                    Title = $"Issue {i}",
+                    Type = IssueType.Task,
+                    Status = IssueStatus.Open,
+                    LastUpdate = DateTimeOffset.UtcNow,
+                }
+            };
+            await boundedService.RecordSnapshotAsync(_projectPath, issues, "Create", $"test-{i}", $"Created {i}");
+            // Timestamps are used as the filename key; ensure each snapshot gets a distinct one.
+            await Task.Delay(10);
+        }
+
+        var state = await boundedService.GetStateAsync(_projectPath);
+
+        // Assert - only the newest 3 entries remain on disk and in state.
+        var historyPath = Path.Combine(_tempDir, ".history");
+        var snapshotFiles = Directory.GetFiles(historyPath, "*.jsonl");
+
+        Assert.That(state.TotalEntries, Is.EqualTo(3));
+        Assert.That(snapshotFiles, Has.Length.EqualTo(3));
     }
 }

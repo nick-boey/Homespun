@@ -1,7 +1,8 @@
 /**
- * Loads the inventory-log-record JSON Schema from the spec directory and
- * exports an Ajv-backed validator. The validator throws on any invalid record
- * so schema drift surfaces directly in test assertions (INV-5 / FR-008).
+ * Loads the inventory-log-record JSON Schema co-located with the worker's
+ * session-inventory service and exports an Ajv-backed validator. The validator
+ * throws on any invalid record so schema drift surfaces directly in test
+ * assertions (INV-5 / FR-008).
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,7 @@ import addFormatsImport from "ajv-formats";
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(
   here,
-  "../../../openspec/changes/worker-skills-logging/contracts/inventory-log-record.schema.json",
+  "../../../src/Homespun.Worker/src/services/session-inventory.schema.json",
 );
 
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));

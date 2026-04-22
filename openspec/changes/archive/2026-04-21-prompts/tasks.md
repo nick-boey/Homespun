@@ -5,9 +5,9 @@ description: "Retrospective task list for the migrated Prompts feature"
 # Tasks: Prompts
 
 **Input**: Design documents from `/specs/prompts/`
-**Status**: Migrated — all in-scope tasks reflect work that is already complete. Gaps are left **unchecked** and tracked in `follow-up-issues.md`.
+**Status**: **SUPERSEDED — archived as obsolete.** Migrated on 2026-04-15 as as-built documentation of the DB-backed prompt catalogue. Feature removed in commit `82daaf17` (2026-04-17, PR #779) and replaced by skills-catalogue. The 13 unchecked items below are no longer gaps — they targeted code that no longer exists. Follow-up issue `fleece:uST4Ic` closed as obsolete.
 
-> **Migration semantics.** `[x]` marks observed as-built work. Unchecked items are real, remediable gaps — do not delete them. Task groups mirror the user-story structure of `spec.md` so the backlog remains coherent with the SDD workflow going forward.
+> **Migration semantics.** `[x]` marks observed as-built work (all observations are now historical — the code has since been deleted). Unchecked items *were* remediable gaps at the time of migration; after the 2026-04-17 removal they became non-issues. Left in place as a historical snapshot of the as-migrated state.
 
 ## Path Conventions (Homespun)
 
@@ -41,7 +41,7 @@ description: "Retrospective task list for the migrated Prompts feature"
 - [x] T006 [P] Enums `SessionMode`, `SessionType`, `PromptCategory` in `src/Homespun.Shared/Models/Sessions/`.
 - [x] T007 `AgentPrompt*` CRUD methods on `IDataStore` + `JsonDataStore` (in `Features/PullRequests/Data/`): `AddAgentPromptAsync`, `UpdateAgentPromptAsync`, `RemoveAgentPromptAsync`, `GetAgentPrompt`, `GetAgentPromptsByProject`.
 - [x] T008 Seed catalogue `default-prompts.json` at `Features/ClaudeCode/Resources/` with 13 prompts (10 Standard + 3 IssueAgent).
-- [ ] T009 **GP-2**: Move request DTOs (`CreateAgentPromptRequest`, `UpdateAgentPromptRequest`, `CreateOverrideRequest`) from the controller file to `src/Homespun.Shared/Requests/AgentPromptRequests.cs` — see FI-2.
+- [ ] T009 **GP-2**: Move request DTOs (`CreateAgentPromptRequest`, `UpdateAgentPromptRequest`, `CreateOverrideRequest`) from the controller file to `src/Homespun.Shared/Requests/AgentPromptRequests.cs` **DEFERRED → fleece:uST4Ic**
 
 ---
 
@@ -77,9 +77,9 @@ description: "Retrospective task list for the migrated Prompts feature"
 
 - [x] T026 [P] `prompts-list.test.tsx`, `prompt-card.test.tsx`, `issue-agent-prompts-section.test.tsx`, `prompts-empty-state.test.tsx`.
 - [x] T027 [P] `use-global-prompts.test.tsx`, `use-project-prompts.test.tsx`, `use-merged-project-prompts.test.tsx`, `use-issue-agent-project-prompts.test.tsx`.
-- [ ] T028 **GP-1**: server-side unit tests for `AgentPromptService.GetAvailableForProjectAsync` covering override merge, `Name` dedupe, `SessionType` filtering, `IsOverride` flag — see FI-1.
-- [ ] T029 **GP-1**: API tests for the four list endpoints via `HomespunWebApplicationFactory` — see FI-1.
-- [ ] T030 **GP-7**: route-level component tests for `routes/prompts.tsx` and `routes/projects.$projectId.prompts.tsx` — see FI-7.
+- [ ] T028 **GP-1**: server-side unit tests for `AgentPromptService.GetAvailableForProjectAsync` covering override merge, `Name` dedupe, `SessionType` filtering, `IsOverride` flag **DEFERRED → fleece:uST4Ic**
+- [ ] T029 **GP-1**: API tests for the four list endpoints via `HomespunWebApplicationFactory` **DEFERRED → fleece:uST4Ic**
+- [ ] T030 **GP-7**: route-level component tests for `routes/prompts.tsx` and `routes/projects.$projectId.prompts.tsx` **DEFERRED → fleece:uST4Ic**
 
 ### Checkpoint
 
@@ -99,7 +99,7 @@ description: "Retrospective task list for the migrated Prompts feature"
 - [x] T035 `AgentPromptService.CreateAsync` — validation, dedupe on `(Name, ProjectId)`, persist via `IDataStore.AddAgentPromptAsync`.
 - [x] T036 `AgentPromptService.UpdateAsync` — mutate `InitialMessage`, `Mode`, `UpdatedAt`.
 - [x] T037 `AgentPromptService.DeleteAsync` — remove via `IDataStore.RemoveAgentPromptAsync`; returns false if missing.
-- [ ] T038 **GP-3**: `UpdateAsync` currently ignores `Category` — persist it (or reject updates that change it, with `400`) — see FI-3.
+- [ ] T038 **GP-3**: `UpdateAsync` currently ignores `Category` — persist it (or reject updates that change it, with `400`) **DEFERRED → fleece:uST4Ic**
 
 ### Web
 
@@ -112,7 +112,7 @@ description: "Retrospective task list for the migrated Prompts feature"
 
 - [x] T043 [P] `prompt-form.test.tsx`.
 - [x] T044 [P] `use-create-prompt.test.tsx`, `use-update-prompt.test.tsx`, `use-delete-prompt.test.tsx`.
-- [ ] T045 **GP-1**: server-side service + controller tests for CreateAsync / UpdateAsync / DeleteAsync paths (happy + 404 + 409 + category-silent-drop) — see FI-1.
+- [ ] T045 **GP-1**: server-side service + controller tests for CreateAsync / UpdateAsync / DeleteAsync paths (happy + 404 + 409 + category-silent-drop) **DEFERRED → fleece:uST4Ic**
 
 ### Checkpoint
 
@@ -139,8 +139,8 @@ description: "Retrospective task list for the migrated Prompts feature"
 ### Tests
 
 - [x] T053 [P] `use-create-override.test.tsx`.
-- [ ] T054 **GP-7**: `use-remove-override.test.tsx` — currently absent; see FI-7.
-- [ ] T055 **GP-1**: server-side tests for `CreateOverrideAsync` covering missing-global, duplicate-override, inheritance of Mode/Category/SessionType — see FI-1.
+- [ ] T054 **GP-7**: `use-remove-override.test.tsx` — currently absent; see FI-7. **DEFERRED → fleece:uST4Ic**
+- [ ] T055 **GP-1**: server-side tests for `CreateOverrideAsync` covering missing-global, duplicate-override, inheritance of Mode/Category/SessionType **DEFERRED → fleece:uST4Ic**
 
 ### Checkpoint
 
@@ -191,7 +191,7 @@ description: "Retrospective task list for the migrated Prompts feature"
 ### Tests
 
 - [x] T072 [P] `use-restore-default-prompts.test.tsx`, `use-delete-all-project-prompts.test.tsx`.
-- [ ] T073 **GP-1**: server tests for `EnsureDefaultsAsync` (idempotent) vs `RestoreDefaultsAsync` (destructive) vs `DeleteAllProjectPromptsAsync` (project-isolated) — see FI-1.
+- [ ] T073 **GP-1**: server tests for `EnsureDefaultsAsync` (idempotent) vs `RestoreDefaultsAsync` (destructive) vs `DeleteAllProjectPromptsAsync` (project-isolated) **DEFERRED → fleece:uST4Ic**
 
 ### Checkpoint
 
@@ -205,7 +205,7 @@ description: "Retrospective task list for the migrated Prompts feature"
 
 - [x] T075 `AgentPromptService.RenderTemplate(string? template, PromptContext context)` — two-pass regex: `{{#if x}}…{{/if}}` removal, then `{{x}}` simple substitution; case-insensitive placeholder lookup.
 - [x] T076 Consumers: `AgentStartBackgroundService.StartAgentAsync` (in `agent-dispatch` slice) calls `RenderTemplate` with the issue-derived `PromptContext`.
-- [ ] T077 **GP-1**: server-side tests for `RenderTemplate` covering each placeholder, conditional removal, nested template scenarios, empty-string vs null — see FI-1.
+- [ ] T077 **GP-1**: server-side tests for `RenderTemplate` covering each placeholder, conditional removal, nested template scenarios, empty-string vs null **DEFERRED → fleece:uST4Ic**
 
 ---
 
@@ -213,9 +213,9 @@ description: "Retrospective task list for the migrated Prompts feature"
 
 - [x] T078 OpenAPI surface: all 13 endpoints appear in `src/Homespun.Web/src/api/generated/`.
 - [x] T079 Generated-client consumers: 13 hooks under `features/prompts/hooks/` call the typed OpenAPI client, not hand-written fetches.
-- [ ] T080 **GP-4**: Document the "no sanitisation on `InitialMessage`" decision (reviewed — Claude does not render it as HTML) in code comment + `follow-up-issues.md` (informational only) — FI-4.
-- [ ] T081 **GP-5**: SignalR hub events on prompt catalogue mutations so cross-tab edits invalidate queries — FI-5.
-- [ ] T082 **GP-6**: Soft-delete / audit trail for destructive ops (`delete`, `delete-all`, `restore-defaults`) — FI-6.
+- [ ] T080 **GP-4**: Document the "no sanitisation on `InitialMessage`" decision (reviewed — Claude does not render it as HTML) in code comment + `follow-up-issues.md` (informational only) **DEFERRED → fleece:uST4Ic**
+- [ ] T081 **GP-5**: SignalR hub events on prompt catalogue mutations so cross-tab edits invalidate queries **DEFERRED → fleece:uST4Ic**
+- [ ] T082 **GP-6**: Soft-delete / audit trail for destructive ops (`delete`, `delete-all`, `restore-defaults`) **DEFERRED → fleece:uST4Ic**
 
 ---
 

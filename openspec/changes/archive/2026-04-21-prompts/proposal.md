@@ -1,3 +1,5 @@
+> **SUPERSEDED — do not implement.** This migrated change documented the DB-backed `AgentPrompt` catalogue as-built on 2026-04-15. The entire feature was removed in commit `82daaf17` (2026-04-17, PR #779) and replaced by the skills-catalogue capability (see `openspec/specs/skills-catalogue/` and the archived change `2026-04-16-skills-catalogue`). Follow-up issue `fleece:uST4Ic` is closed as obsolete. Archived with `--skip-specs` so no `prompt-catalogue` capability is introduced into main specs.
+
 ## Why
 
 Prompts is the catalogue of agent prompt templates — global defaults plus per-project overrides plus user-authored project prompts — and the rendering primitive that turns a template + issue context into the initial message sent to a Claude Code session. Every downstream flow (dispatch, issue-agent sessions, workflow runs) depends on a prompt being discoverable and renderable.

@@ -40,8 +40,7 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T007 Service interface `src/Homespun.Server/Features/Projects/IProjectService.cs` — `GetAllAsync`, `GetByIdAsync`, `CreateLocalAsync`, `CreateAsync(ownerRepo)`, `UpdateAsync`, `DeleteAsync`.
 - [x] T008 Swashbuckle annotations on `ProjectsController` so OpenAPI emits `Project`, `CreateProjectRequest`, `UpdateProjectRequest` correctly.
 - [x] T009 Generated OpenAPI client refreshed under `src/Homespun.Web/src/api/generated/` covering `/api/projects*` endpoints.
-- [ ] T010 Delete the duplicate `CreateProjectRequest` / `UpdateProjectRequest` classes at the bottom of `ProjectsController.cs` (authoritative copies live in `Homespun.Shared/Requests`). **GAP → fleece:wPpKCH (FI-6)**
-
+- [x] T010 Delete the duplicate `CreateProjectRequest` / `UpdateProjectRequest` classes at the bottom of `ProjectsController.cs` (authoritative copies live in `Homespun.Shared/Requests`).
 **Checkpoint**: Foundation landed — per-story work flows from here.
 
 ---
@@ -57,9 +56,8 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T013 [P] [US1] `tests/Homespun.Api.Tests/Features/ProjectsApiTests.cs::GetById_ReturnsProject_WhenExists` + `GetById_ReturnsNotFound_WhenDoesNotExist`.
 - [x] T014 [P] [US1] Web component tests `features/projects/components/{projects-list,project-card,project-card-skeleton,projects-empty-state}.test.tsx`.
 - [x] T015 [P] [US1] Web hook tests `features/projects/hooks/{use-projects,use-project}.test.ts`.
-- [ ] T016 [US1] Add ordering test — two projects with distinct `UpdatedAt` assert `UpdatedAt desc` at the service and/or API layer. **GAP → fleece:5JYd5t (FI-8)**
-- [ ] T017 [US1] Playwright e2e in `src/Homespun.Web/e2e/projects/list-and-select.spec.ts` — seed a project, load `/`, click a card, land on `/projects/{id}/issues`. **GAP → fleece:nqPkp8 (FI-1)**
-
+- [x] T016 [US1] Add ordering test — two projects with distinct `UpdatedAt` assert `UpdatedAt desc` at the service and/or API layer.
+- [x] T017 [US1] Playwright e2e in `src/Homespun.Web/e2e/projects/list-and-select.spec.ts` — seed a project, load `/`, click a card, land on `/projects/{id}/issues`.
 ### Implementation
 
 - [x] T018 [P] [US1] `ProjectService.GetAllAsync` (sorts `UpdatedAt desc`).
@@ -69,8 +67,7 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T022 [P] [US1] Web `<ProjectsList>` composing `<ProjectCard>` / `<ProjectCardSkeleton>` / `<ProjectsEmptyState>` / `<ErrorFallback>`.
 - [x] T023 [P] [US1] Web `<ProjectCard>` — relative-time formatter, GitHub-vs-local badge, trash-icon confirm dialog.
 - [x] T024 [US1] Route wiring: `routes/index.tsx` renders `<ProjectsList>`; `routes/projects.index.tsx` redirects to `/`; `routes/projects.$projectId.tsx` (layout shell with 8-tab nav); `routes/projects.$projectId.index.tsx` redirects to `/issues`.
-- [ ] T025 [US1] Router test asserting `/projects/{id}/` redirects to `/projects/{id}/issues`. **GAP → fleece:QXdnMZ (FI-9)**
-
+- [x] T025 [US1] Router test asserting `/projects/{id}/` redirects to `/projects/{id}/issues`.
 **Checkpoint**: US1 shippable independently — in production since before migration.
 
 ---
@@ -89,9 +86,8 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T031 [P] [US2] `ProjectServiceTests.CreateAsync_Success_AddsProjectToDataStore`.
 - [x] T032 [P] [US2] `ProjectServiceTests.CreateAsync_WithNonMainDefaultBranch_UsesCorrectBranch`.
 - [x] T033 [P] [US2] `features/projects/hooks/use-create-project.test.ts` + route test `routes/projects.new.test.tsx`.
-- [ ] T034 [US2] Playwright e2e `src/Homespun.Web/e2e/projects/create-from-github.spec.ts`. **GAP → fleece:nqPkp8 (FI-1)**
-- [ ] T035 [US2] Add a test asserting GitHub repos with names containing `.` (e.g. `foo.js`) still create a valid `Project` — locks in symmetric sanitisation. **GAP → fleece:F4hpfr (FI-7)**
-
+- [x] T034 [US2] Playwright e2e `src/Homespun.Web/e2e/projects/create-from-github.spec.ts`.
+- [x] T035 [US2] Add a test asserting GitHub repos with names containing `.` (e.g. `foo.js`) still create a valid `Project` — locks in symmetric sanitisation.
 ### Implementation
 
 - [x] T036 [P] [US2] `ProjectService.CreateAsync(ownerRepo)` — parse, GitHub lookup, `git clone`, already-cloned handling, data-store add.
@@ -112,9 +108,8 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T042 [P] [US3] `ProjectsApiTests.Create_WithInvalidName_ReturnsBadRequest`.
 - [x] T043 [P] [US3] `ProjectsApiTests.Create_WithNoOwnerRepoOrName_ReturnsBadRequest`.
 - [x] T044 [P] [US3] Inline validation branch covered in the same `routes/projects.new.test.tsx` tests as US2.
-- [ ] T045 [US3] Add explicit unit test for `CreateLocalAsync` covering (a) directory-already-exists, (b) cleanup-after-git-init-fails, (c) empty/whitespace `defaultBranch` defaults to `main`. **GAP → fleece:F4hpfr (FI-7)**
-- [ ] T046 [US3] Playwright e2e `src/Homespun.Web/e2e/projects/create-local.spec.ts`. **GAP → fleece:nqPkp8 (FI-1)**
-
+- [x] T045 [US3] Add explicit unit test for `CreateLocalAsync` covering (a) directory-already-exists, (b) cleanup-after-git-init-fails, (c) empty/whitespace `defaultBranch` defaults to `main`.
+- [x] T046 [US3] Playwright e2e `src/Homespun.Web/e2e/projects/create-local.spec.ts`.
 ### Implementation
 
 - [x] T047 [P] [US3] `ProjectService.CreateLocalAsync` — name validation, path build, `git init` / `branch -M` / repo-local `user.email`+`user.name` / empty initial commit, try/catch cleanup.
@@ -133,10 +128,9 @@ description: "Retrospective task list for the migrated Projects feature"
 - [x] T051 [P] [US4] `ProjectsApiTests.Delete_ReturnsNoContent_WhenExists` + `Delete_ReturnsNotFound_WhenDoesNotExist` + `Delete_ProjectIsGone_AfterDeletion`.
 - [x] T052 [P] [US4] Component test `features/projects/components/project-card.test.tsx` (confirm dialog + `onDelete` callback wiring).
 - [x] T053 [P] [US4] Hook test `features/projects/hooks/use-projects.test.ts` (delete mutation + telemetry + cache invalidation).
-- [ ] T054 [US4] Add an explicit test locking in "delete leaves `LocalPath` on disk" behaviour (spec §A-2, FR-009) — either a service-layer test with a mocked filesystem or an integration test asserting the directory survives. **GAP → fleece:MEAD2E (FI-2)**
-- [ ] T055 [US4] Wire up the dead "Delete Project" item in `projects.$projectId.tsx`'s dropdown (AlertDialog + `useDeleteProject` + `navigate({ to: '/' })`) and cover with a route test. **GAP → fleece:Y5k5Cr (FI-4)**
-- [ ] T056 [US4] Playwright e2e `src/Homespun.Web/e2e/projects/delete-project.spec.ts`. **GAP → fleece:nqPkp8 (FI-1)**
-
+- [x] T054 [US4] Add an explicit test locking in "delete leaves `LocalPath` on disk" behaviour (spec §A-2, FR-009) — either a service-layer test with a mocked filesystem or an integration test asserting the directory survives.
+- [x] T055 [US4] Wire up the dead "Delete Project" item in `projects.$projectId.tsx`'s dropdown (AlertDialog + `useDeleteProject` + `navigate({ to: '/' })`) and cover with a route test.
+- [x] T056 [US4] Playwright e2e `src/Homespun.Web/e2e/projects/delete-project.spec.ts`.
 ### Implementation
 
 - [x] T057 [P] [US4] `ProjectService.DeleteAsync` — data-store remove, returns `false` for unknown id. **Filesystem intentionally not touched.**
@@ -154,8 +148,7 @@ description: "Retrospective task list for the migrated Projects feature"
 
 - [x] T061 [P] [US5] `ProjectServiceTests.UpdateAsync_ValidProject_UpdatesDefaultModel` + `UpdateAsync_NonExistentProject_ReturnsNull`.
 - [x] T062 [P] [US5] `ProjectsApiTests.Update_ReturnsUpdatedProject_WhenExists` + `Update_ReturnsNotFound_WhenDoesNotExist`.
-- [ ] T063 [US5] Add a test asserting `UpdatedAt` is bumped on update and that `DefaultModel = null` clears the previous value. **GAP → fleece:uvAnqB (FI-5)**
-
+- [x] T063 [US5] Add a test asserting `UpdatedAt` is bumped on update and that `DefaultModel = null` clears the previous value.
 ### Implementation
 
 - [x] T064 [P] [US5] `ProjectService.UpdateAsync(id, defaultModel)` — sets `DefaultModel`, stamps `UpdatedAt`, persists.
@@ -171,8 +164,7 @@ description: "Retrospective task list for the migrated Projects feature"
 
 - [x] T066 [P] [polish] `features/projects/components/pull-sync-button.tsx` + `.test.tsx` — inline mutation pipelines for pull, discard-and-pull, sync; toast feedback; conflict alert dialog.
 - [x] T067 [P] [polish] `features/projects/hooks/use-fleece-sync.ts` — `useFleecePull`, `useFleeceSync`, `usePullAndSync` (+ tests) — **exported but currently unused**.
-- [ ] T068 [polish] Decide the home for sync UI: (a) refactor `<PullSyncButton>` to consume `use-fleece-sync` hooks then keep slice-local, or (b) move both to a `features/sync` (or `features/pull-requests`) slice and re-export. **GAP → fleece:Ia7rXU (FI-3) / fleece:uvAnqB (FI-5)**
-
+- [x] T068 [polish] Decide the home for sync UI: (a) refactor `<PullSyncButton>` to consume `use-fleece-sync` hooks then keep slice-local, or (b) move both to a `features/sync` (or `features/pull-requests`) slice and re-export. **Decision: (a)** — `<PullSyncButton>` now delegates pull/sync to `usePullAndSync.pullAll` / `syncAll`. The conflict-retry flow (`discardAndPullMutation`) stays inline since it is UI-specific (conflict dialog).
 ---
 
 ## Dependencies & Execution Order

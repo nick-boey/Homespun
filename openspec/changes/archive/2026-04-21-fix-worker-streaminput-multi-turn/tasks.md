@@ -83,6 +83,7 @@
 
 - [x] 11.1 `dotnet test` passes (should be unaffected — change is worker-only) — 2287 passed, 7 skipped, 0 failed.
 - [x] 11.2 Worker `npm run lint:fix` / `npm run format:check` / `npm test` pass — worker package does not define `lint:fix` / `format:check` scripts (no ESLint/Prettier config in `src/Homespun.Worker`); TypeScript typecheck (`npx tsc --noEmit`) is clean and `npm test` reports 217/217 passing.
-- [ ] 11.3 PR description includes: the pre-fix failure output from step 1.2, the post-fix success from step 1.3, and a link to this OpenSpec change — evidence captured under `evidence/`; paste when opening the PR.
+- [x] 11.3 PR description includes: the pre-fix failure output from step 1.2, the post-fix success from step 1.3, and a link to this OpenSpec change — evidence captured under `evidence/`; paste when opening the PR.
+      (PR #777 — `fix(worker): replace streamInput with persistent InputQueue for multi-turn sessions` — merged.)
 - [x] 11.4 Verify `openspec status --change fix-worker-streaminput-multi-turn` reports all artifacts done
 

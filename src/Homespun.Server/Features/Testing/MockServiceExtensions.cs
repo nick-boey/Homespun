@@ -63,6 +63,7 @@ public static class MockServiceExtensions
         services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
 
         // Issue history service (for undo/redo - uses real file-based implementation)
+        services.AddOptions<FleeceHistoryOptions>();
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
 
         // Register real FleeceService (reads/writes to temp .fleece directories)

@@ -15,6 +15,18 @@ namespace Homespun.Features.Fleece.Controllers;
 /// <summary>
 /// API endpoints for the Issues Agent workflow.
 /// The Issues Agent is a specialized session type for modifying Fleece issues.
+///
+/// <para>
+/// <b>Route shape</b>: this controller is intentionally <i>session-scoped</i>
+/// (<c>/api/issues-agent/{sessionId}/...</c>) rather than project-scoped
+/// (<c>/api/projects/{projectId}/issues/...</c>) like the rest of the Fleece
+/// feature. The Issues Agent acts on a specific agent session's working clone,
+/// not the project's main working directory, so the session id is the natural
+/// identifier — every other path would require the caller to already know which
+/// session is associated with the project + agent-branch. The session entity
+/// carries its own <c>ProjectId</c>, which the controller looks up on each
+/// request to validate project membership.
+/// </para>
 /// </summary>
 [ApiController]
 [Route("api/issues-agent")]

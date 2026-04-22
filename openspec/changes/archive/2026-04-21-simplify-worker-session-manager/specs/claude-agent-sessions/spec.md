@@ -31,10 +31,3 @@ A worker session SHALL back its entire lifetime with a single `query()` invocati
 - **WHEN** `setModel` is invoked on a session that has produced a prior `result`
 - **THEN** the new model SHALL take effect on the next turn without restarting the query
 
-## REMOVED Requirements
-
-### Requirement: Worker-provided message history replay
-
-**Reason**: Duplicated by the server-side `MessageCacheStore`, which is the durable source of truth. The worker's in-memory ring buffer does not survive worker restarts and provides no unique value.
-
-**Migration**: Consumers of `GET /sessions/:id/messages` on the worker SHALL move to the server's message cache endpoints (backed by `MessageCacheStore`). Any C# server code calling the worker's `/messages` endpoint is removed as part of this change.
