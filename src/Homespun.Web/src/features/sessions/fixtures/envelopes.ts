@@ -237,6 +237,31 @@ export const proposePlanRejected: SessionEventEnvelope[] = [
   }),
 ]
 
+export const unknownToolCall: SessionEventEnvelope[] = [
+  env(1, 'e1', { type: 'RUN_STARTED', threadId: SESSION_ID, runId: 'r1', timestamp: 0 }),
+  env(2, 'e2', {
+    type: 'TOOL_CALL_START',
+    toolCallId: 'tc-search',
+    toolCallName: 'ToolSearch',
+    timestamp: 1,
+  }),
+  env(3, 'e3', {
+    type: 'TOOL_CALL_ARGS',
+    toolCallId: 'tc-search',
+    delta: JSON.stringify({ query: 'select:Read', max_results: 1 }),
+    timestamp: 2,
+  }),
+  env(4, 'e4', { type: 'TOOL_CALL_END', toolCallId: 'tc-search', timestamp: 3 }),
+  env(5, 'e5', {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: 'tc-search',
+    content: '[{"type":"tool_reference","tool_name":"Read"}]',
+    role: 'tool',
+    timestamp: 4,
+  }),
+  env(6, 'e6', { type: 'RUN_FINISHED', threadId: SESSION_ID, runId: 'r1', timestamp: 5 }),
+]
+
 export const runError: SessionEventEnvelope[] = [
   env(1, 'e1', { type: 'RUN_STARTED', threadId: SESSION_ID, runId: 'r1', timestamp: 0 }),
   env(2, 'e2', {
@@ -293,6 +318,7 @@ export const envelopeFixtures = {
   proposePlanPending,
   proposePlanApproved,
   proposePlanRejected,
+  unknownToolCall,
   runError,
   streamingInterrupted,
 } as const

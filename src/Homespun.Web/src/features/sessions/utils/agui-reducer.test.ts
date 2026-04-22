@@ -240,3 +240,48 @@ describe('applyEnvelope — replay interleave (task 8.3)', () => {
     expect(interleaved).toEqual(sequential)
   })
 })
+
+describe('applyEnvelope — empty CUSTOM drops', () => {
+  it('drops empty user.message events so tool-answer receipts do not render as empty pills', () => {
+    const final = replay([
+      env(1, 'e1', {
+        type: 'CUSTOM',
+        name: AGUICustomEventName.UserMessage,
+        value: { text: '' },
+        timestamp: 0,
+      }),
+      env(2, 'e2', {
+        type: 'CUSTOM',
+        name: AGUICustomEventName.UserMessage,
+        value: { text: '   \n\t' },
+        timestamp: 1,
+      }),
+    ])
+    expect(final.messages).toEqual([])
+  })
+
+  it('keeps non-empty user.message events', () => {
+    const final = replay([
+      env(1, 'e1', {
+        type: 'CUSTOM',
+        name: AGUICustomEventName.UserMessage,
+        value: { text: 'hello' },
+        timestamp: 0,
+      }),
+    ])
+    expect(final.messages).toHaveLength(1)
+    expect(final.messages[0].role).toBe('user')
+  })
+
+  it('drops empty thinking events', () => {
+    const final = replay([
+      env(1, 'e1', {
+        type: 'CUSTOM',
+        name: AGUICustomEventName.Thinking,
+        value: { text: '' },
+        timestamp: 0,
+      }),
+    ])
+    expect(final.messages).toEqual([])
+  })
+})

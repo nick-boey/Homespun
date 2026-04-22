@@ -28,12 +28,31 @@ import type { ControlEvent } from "./session-manager.js";
 import { randomUUID } from "node:crypto";
 
 /**
- * Translation context containing task and context IDs
+ * Translation context containing task and context IDs.
+ *
+ * `suppressedToolUseIds` accumulates SDK `tool_use` ids that were dropped at
+ * the translator boundary — currently the two interactive tools whose
+ * semantics are fully re-expressed downstream as A2A `input-required`
+ * status updates (`AskUserQuestion`, `ExitPlanMode`). Keeping the ids lets
+ * us also drop their paired `tool_result` blocks so the AG-UI stream never
+ * sees an orphaned tool-result for a tool call that was never emitted.
  */
 export interface TranslationContext {
   taskId: string;
   contextId: string;
+  suppressedToolUseIds?: Set<string>;
 }
+
+/**
+ * SDK-native tool names whose semantics are re-expressed by the worker as
+ * A2A `input-required` status updates. Their raw `tool_use` / `tool_result`
+ * content blocks are dropped at the translator boundary so the AG-UI stream
+ * carries only one canonical envelope per interactive turn.
+ */
+const SUPPRESSED_SDK_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "AskUserQuestion",
+  "ExitPlanMode",
+]);
 
 /**
  * Creates the initial A2A Task event when a session starts.
@@ -65,7 +84,10 @@ export function translateSdkMessage(
 
   switch (msg.type) {
     case "assistant": {
-      const parts = translateContentBlocks((msg as any).message?.content ?? []);
+      const parts = translateContentBlocks(
+        (msg as any).message?.content ?? [],
+        ctx,
+      );
       return createMessage(
         messageId,
         "agent",
@@ -80,7 +102,10 @@ export function translateSdkMessage(
     }
 
     case "user": {
-      const parts = translateContentBlocks((msg as any).message?.content ?? []);
+      const parts = translateContentBlocks(
+        (msg as any).message?.content ?? [],
+        ctx,
+      );
       return createMessage(
         messageId,
         "user",
@@ -167,44 +192,71 @@ export function translateSdkMessage(
 
 /**
  * Translates SDK content blocks to A2A Parts.
+ *
+ * `tool_use` / `tool_result` blocks for SDK-native interactive tools
+ * (`AskUserQuestion`, `ExitPlanMode`) are dropped here — the downstream
+ * `StatusUpdate{input-required}` carries the same payload and is translated
+ * server-side to a canonical `ask_user_question` / `propose_plan` tool call.
+ * Letting the raw blocks through would produce duplicate AG-UI envelopes.
  */
-function translateContentBlocks(content: unknown[]): Part[] {
+function translateContentBlocks(
+  content: unknown[],
+  ctx: TranslationContext,
+): Part[] {
   if (!Array.isArray(content)) return [];
 
-  return content.map((block: any): Part => {
+  const suppressed = (ctx.suppressedToolUseIds ??= new Set<string>());
+
+  return content.flatMap((block: any): Part[] => {
     switch (block.type) {
       case "text":
-        return createTextPart(block.text ?? "");
+        return [createTextPart(block.text ?? "")];
 
       case "thinking":
-        return createDataPart(
-          { thinking: block.thinking },
-          { kind: "thinking", isThinking: true },
-        );
+        return [
+          createDataPart(
+            { thinking: block.thinking },
+            { kind: "thinking", isThinking: true },
+          ),
+        ];
 
       case "tool_use":
-        return createDataPart(
-          {
-            toolName: block.name,
-            toolUseId: block.id,
-            input: block.input,
-          },
-          { kind: "tool_use" },
-        );
+        if (typeof block.name === "string" && SUPPRESSED_SDK_TOOL_NAMES.has(block.name)) {
+          if (typeof block.id === "string") suppressed.add(block.id);
+          return [];
+        }
+        return [
+          createDataPart(
+            {
+              toolName: block.name,
+              toolUseId: block.id,
+              input: block.input,
+            },
+            { kind: "tool_use" },
+          ),
+        ];
 
       case "tool_result":
-        return createDataPart(
-          {
-            toolUseId: block.tool_use_id,
-            content: block.content,
-            isError: block.is_error,
-          },
-          { kind: "tool_result" },
-        );
+        if (
+          typeof block.tool_use_id === "string" &&
+          suppressed.has(block.tool_use_id)
+        ) {
+          return [];
+        }
+        return [
+          createDataPart(
+            {
+              toolUseId: block.tool_use_id,
+              content: block.content,
+              isError: block.is_error,
+            },
+            { kind: "tool_result" },
+          ),
+        ];
 
       default:
         // Unknown block type - preserve as data
-        return createDataPart(block, { kind: "unknown_block" });
+        return [createDataPart(block, { kind: "unknown_block" })];
     }
   });
 }

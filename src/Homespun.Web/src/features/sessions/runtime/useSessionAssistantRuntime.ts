@@ -40,5 +40,13 @@ export function useSessionAssistantRuntime(
           await cancel()
         }
       : undefined,
+    // Interactive tool renderers (ask_user_question, propose_plan) call
+    // `addResult` from their Toolkit `render` when the user commits. The
+    // external-store runtime otherwise throws "Runtime does not support tool
+    // results". The renderers own the hub dispatch (AnswerQuestion /
+    // ApprovePlan); the server-side synthesised `TOOL_CALL_RESULT` envelope
+    // is what drives the reducer into receipt mode, so this callback just
+    // needs to accept the call without throwing.
+    onAddToolResult: () => {},
   })
 }

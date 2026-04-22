@@ -103,6 +103,16 @@ export const ProposePlanRejected: Story = {
   },
 }
 
+export const UnknownToolCall: Story = {
+  args: { envelopes: envelopeFixtures.unknownToolCall },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Tools without a Toolkit entry must still surface *something* the user can
+    // see — the fallback shows the tool name in a collapsed card.
+    expect(await canvas.findByText(/ToolSearch/)).toBeInTheDocument()
+  },
+}
+
 export const RunError: Story = {
   args: { envelopes: envelopeFixtures.runError },
 }

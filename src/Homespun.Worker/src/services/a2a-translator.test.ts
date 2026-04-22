@@ -148,6 +148,126 @@ describe("A2A Translator", () => {
       expect(a2aMsg).toBeNull();
     });
 
+    it("drops tool_use for SDK-native interactive tools (AskUserQuestion)", () => {
+      const sdkMsg: SDKMessage = {
+        type: "assistant",
+        session_id: "session-1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-auq-1",
+              name: "AskUserQuestion",
+              input: { questions: [] },
+            },
+          ],
+        },
+      } as any;
+
+      const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+      expect(a2aMsg).not.toBeNull();
+      expect(a2aMsg!.parts).toHaveLength(0);
+      expect(ctx.suppressedToolUseIds?.has("tool-auq-1")).toBe(true);
+    });
+
+    it("drops tool_use for ExitPlanMode", () => {
+      const sdkMsg: SDKMessage = {
+        type: "assistant",
+        session_id: "session-1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-epm-1",
+              name: "ExitPlanMode",
+              input: { plan: "# Plan" },
+            },
+          ],
+        },
+      } as any;
+
+      const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+      expect(a2aMsg!.parts).toHaveLength(0);
+      expect(ctx.suppressedToolUseIds?.has("tool-epm-1")).toBe(true);
+    });
+
+    it("drops tool_result paired with a suppressed tool_use", () => {
+      ctx.suppressedToolUseIds = new Set(["tool-auq-1"]);
+
+      const sdkMsg: SDKMessage = {
+        type: "user",
+        session_id: "session-1",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-auq-1",
+              content: "answer payload",
+              is_error: false,
+            },
+          ],
+        },
+      } as any;
+
+      const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+      expect(a2aMsg).not.toBeNull();
+      expect(a2aMsg!.parts).toHaveLength(0);
+    });
+
+    it("keeps tool_use for ordinary SDK tools (Bash)", () => {
+      const sdkMsg: SDKMessage = {
+        type: "assistant",
+        session_id: "session-1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-bash-1",
+              name: "Bash",
+              input: { command: "ls" },
+            },
+          ],
+        },
+      } as any;
+
+      const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+      expect(a2aMsg!.parts).toHaveLength(1);
+      expect(a2aMsg!.parts[0].kind).toBe("data");
+      expect((a2aMsg!.parts[0] as any).data.toolName).toBe("Bash");
+      expect(ctx.suppressedToolUseIds?.has("tool-bash-1")).toBeFalsy();
+    });
+
+    it("keeps tool_result for ordinary SDK tools", () => {
+      const sdkMsg: SDKMessage = {
+        type: "user",
+        session_id: "session-1",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-bash-1",
+              content: "/tmp/x.txt",
+              is_error: false,
+            },
+          ],
+        },
+      } as any;
+
+      const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+      expect(a2aMsg!.parts).toHaveLength(1);
+      expect(a2aMsg!.parts[0].kind).toBe("data");
+    });
+
     it("translates system message to A2A message with system data", () => {
       const sdkMsg: SDKMessage = {
         type: "system",

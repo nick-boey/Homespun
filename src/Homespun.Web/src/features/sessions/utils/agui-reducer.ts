@@ -361,6 +361,10 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
 
     case AGUICustomEventName.Thinking: {
       const thinking = event.value as AGUIThinkingData
+      // Worker emits an empty `thinking` block as a placeholder between SDK
+      // messages. It carries no user-visible signal — materialising it as a
+      // message would render a blank bubble.
+      if (!thinking.text || !thinking.text.trim()) return state
       const parentId = thinking.parentMessageId
       if (!parentId) {
         // Orphan thinking — park into a new message so it's visible.
@@ -423,6 +427,12 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
 
     case AGUICustomEventName.UserMessage: {
       const userMsg = event.value as AGUIUserMessageData
+      // The server emits `user.message` for any user-role A2A message that
+      // doesn't carry a tool_result — including the synthetic "resume"
+      // messages sent by the worker after an interactive tool commits. Those
+      // carry no text. Drop them so answer/approval receipts don't produce
+      // empty pill-shaped bubbles in the thread.
+      if (!userMsg.text || !userMsg.text.trim()) return state
       return {
         ...state,
         messages: [
