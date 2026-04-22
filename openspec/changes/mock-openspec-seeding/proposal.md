@@ -7,7 +7,7 @@ The `openspec-integration` spec defines ten distinct scenarios — orphan change
 - Add `OpenSpecMockSeeder` service that writes realistic `openspec/` trees (changes, sidecars, archive entries, `tasks.md` with phase headings) into the seeded mock project.
 - Extend `MockGitCloneService.CreateCloneAsync` to materialize clone directories on disk (currently in-memory only) so the real `BranchStateResolverService` and `ChangeScannerService` can scan them.
 - Seed per-branch clone trees with branch-specific OpenSpec content covering: in-progress change, ready-to-archive, archived, orphan-on-main, multi-orphan-on-branch, inherited change, branch-with-no-change.
-- Wire `BeadsIssueId` onto the existing seeded PRs so `IssueBranchResolverService` resolves issues to the correct seeded branch clones.
+- Wire `FleeceIssueId` onto the existing seeded PRs so `IssueBranchResolverService` resolves issues to the correct seeded branch clones.
 - No-op the on-disk materialization when `LiveClaudeTestOptions.TestWorkingDirectory` is set, since live-Claude mode routes every clone to a single shared workspace.
 
 ## Capabilities
@@ -26,7 +26,7 @@ The `openspec-integration` spec defines ten distinct scenarios — orphan change
 - **Modified code:**
   - `src/Homespun.Server/Features/Testing/MockDataSeederService.cs` — wire new seeder into `StartAsync` between issues seeding and git init
   - `src/Homespun.Server/Features/Testing/Services/MockGitCloneService.cs` — `Directory.CreateDirectory(clonePath)` plus minimal scaffolding write in `CreateCloneAsync` and `CreateCloneFromRemoteBranchAsync`; gated on absence of `LiveClaudeTestOptions.TestWorkingDirectory`
-  - `src/Homespun.Server/Features/Testing/MockDataSeederService.cs::SeedPullRequestsAsync` — set `BeadsIssueId` on demo PRs so branch resolution finds them
+  - `src/Homespun.Server/Features/Testing/MockDataSeederService.cs::SeedPullRequestsAsync` — set `FleeceIssueId` on demo PRs so branch resolution finds them
   - `src/Homespun.Server/Features/Testing/MockServiceExtensions.cs` — DI registration for `OpenSpecMockSeeder`
 - **No production code paths touched** outside the mock services.
 - **No API or wire-format changes.** Backend `BranchStateResolverService`, `ChangeScannerService`, `TasksParser`, `IssueGraphOpenSpecEnricher` are unchanged — they already work, they just had no mock data to scan.

@@ -46,11 +46,11 @@ In mock mode:
 
 **Why:** The live-Claude profiles (`dev-live`, `dev-windows`, `dev-container`) execute real Claude agent sessions against a single working directory. Seeding per-branch OpenSpec content into different paths in that mode would either silently overwrite each other or pollute the live workspace. The existing routing-to-shared-dir behaviour is correct for live mode; we just don't apply the new on-disk side effects there.
 
-### `BeadsIssueId` on seeded PRs
+### `FleeceIssueId` on seeded PRs
 
-**Decision:** `MockDataSeederService.SeedPullRequestsAsync` sets `BeadsIssueId` on each demo PR, mapping each PR to one of the seeded issues.
+**Decision:** `MockDataSeederService.SeedPullRequestsAsync` sets `FleeceIssueId` on each demo PR, mapping each PR to one of the seeded issues.
 
-**Why:** `IssueBranchResolverService.ResolveIssueBranchAsync` finds an issue's branch by looking up `IDataStore.GetPullRequestsByProject(projectId)` and matching `pr.BeadsIssueId == issueId`. Without this, the resolver returns null for every issue and the per-branch enrichment path never fires. This is a one-line-per-PR fix and unblocks half the spec scenarios.
+**Why:** `IssueBranchResolverService.ResolveIssueBranchAsync` finds an issue's branch by looking up `IDataStore.GetPullRequestsByProject(projectId)` and matching `pr.FleeceIssueId == issueId`. Without this, the resolver returns null for every issue and the per-branch enrichment path never fires. This is a one-line-per-PR fix and unblocks half the spec scenarios.
 
 ### Scenario coverage matrix lives in code, not config
 

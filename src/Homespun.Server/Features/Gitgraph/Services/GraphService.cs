@@ -164,7 +164,7 @@ public class GraphService(
             {
                 PullRequestId = trackedByNumber.TryGetValue(prNumber, out var tp) ? tp.Id : prNumber.ToString(),
                 GitHubPrNumber = prNumber,
-                BeadsIssueId = trackedByNumber.TryGetValue(prNumber, out var tp2) ? tp2.BeadsIssueId : null
+                FleeceIssueId = trackedByNumber.TryGetValue(prNumber, out var tp2) ? tp2.FleeceIssueId : null
             }).ToList();
 
             logger.LogInformation(
@@ -211,7 +211,7 @@ public class GraphService(
         var result = new Dictionary<string, PullRequestStatus>(StringComparer.OrdinalIgnoreCase);
 
         var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
-            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+            .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId) && pr.GitHubPRNumber.HasValue)
             .ToList();
 
         if (trackedPrs.Count == 0)
@@ -221,12 +221,12 @@ public class GraphService(
 
         foreach (var trackedPr in trackedPrs)
         {
-            if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+            if (trackedPr.FleeceIssueId != null && trackedPr.GitHubPRNumber.HasValue)
             {
                 if (openPrNumbers.Contains(trackedPr.GitHubPRNumber.Value))
                 {
                     // PR is open - use InProgress status to indicate it's active
-                    result[trackedPr.BeadsIssueId] = PullRequestStatus.InProgress;
+                    result[trackedPr.FleeceIssueId] = PullRequestStatus.InProgress;
                 }
                 // If not in open PRs, the status will be resolved by PRStatusResolver
             }
@@ -453,7 +453,7 @@ public class GraphService(
         {
             // Get tracked PRs linked to issues
             var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
-                .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+                .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId) && pr.GitHubPRNumber.HasValue)
                 .ToList();
 
             if (trackedPrs.Count == 0)
@@ -465,11 +465,11 @@ public class GraphService(
 
             foreach (var trackedPr in trackedPrs)
             {
-                if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+                if (trackedPr.FleeceIssueId != null && trackedPr.GitHubPRNumber.HasValue)
                 {
                     if (prStatusByNumber.TryGetValue(trackedPr.GitHubPRNumber.Value, out var status))
                     {
-                        result[trackedPr.BeadsIssueId] = status;
+                        result[trackedPr.FleeceIssueId] = status;
                     }
                 }
             }
@@ -516,8 +516,8 @@ public class GraphService(
     {
         var prs = dataStore.GetPullRequestsByProject(projectId);
         return prs
-            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId))
-            .Select(pr => pr.BeadsIssueId!)
+            .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId))
+            .Select(pr => pr.FleeceIssueId!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -530,8 +530,8 @@ public class GraphService(
     {
         var prs = dataStore.GetPullRequestsByProject(projectId);
         return prs
-            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId))
-            .Select(pr => pr.BeadsIssueId!);
+            .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId))
+            .Select(pr => pr.FleeceIssueId!);
     }
 
     /// <summary>
@@ -704,14 +704,14 @@ public class GraphService(
 
             // Get linked PRs
             var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
-                .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+                .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId) && pr.GitHubPRNumber.HasValue)
                 .ToList();
 
             foreach (var trackedPr in trackedPrs)
             {
-                if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+                if (trackedPr.FleeceIssueId != null && trackedPr.GitHubPRNumber.HasValue)
                 {
-                    response.LinkedPrs[trackedPr.BeadsIssueId] = new TaskGraphLinkedPr
+                    response.LinkedPrs[trackedPr.FleeceIssueId] = new TaskGraphLinkedPr
                     {
                         Number = trackedPr.GitHubPRNumber.Value,
                         Url = $"https://github.com/{project.GitHubOwner}/{project.GitHubRepo}/pull/{trackedPr.GitHubPRNumber.Value}",
@@ -725,8 +725,8 @@ public class GraphService(
             // to `ListClonesAsync` / `GetPullRequestsByProject` per visible node.
             var clones = await cloneService.ListClonesAsync(project.LocalPath);
             var prBranches = dataStore.GetPullRequestsByProject(projectId)
-                .Where(p => !string.IsNullOrEmpty(p.BeadsIssueId) && !string.IsNullOrEmpty(p.BranchName))
-                .GroupBy(p => p.BeadsIssueId!, StringComparer.Ordinal)
+                .Where(p => !string.IsNullOrEmpty(p.FleeceIssueId) && !string.IsNullOrEmpty(p.BranchName))
+                .GroupBy(p => p.FleeceIssueId!, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First().BranchName!, StringComparer.Ordinal);
             var branchContext = new BranchResolutionContext(clones, prBranches);
 

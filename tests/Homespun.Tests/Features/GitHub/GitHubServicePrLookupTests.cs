@@ -58,7 +58,7 @@ public class GitHubServicePrLookupTests
         string projectId,
         string? branchName = "feature/test",
         int? prNumber = null,
-        string? beadsIssueId = null)
+        string? fleeceIssueId = null)
     {
         var pullRequest = new PullRequest
         {
@@ -67,7 +67,7 @@ public class GitHubServicePrLookupTests
             Description = "Test Description",
             BranchName = branchName,
             GitHubPRNumber = prNumber,
-            BeadsIssueId = beadsIssueId,
+            FleeceIssueId = fleeceIssueId,
             Status = OpenPullRequestStatus.InDevelopment
         };
 
@@ -81,7 +81,7 @@ public class GitHubServicePrLookupTests
         // Arrange
         var project = await CreateTestProject();
         var issueId = "issue-123";
-        var pr = await CreateTestPullRequest(project.Id, beadsIssueId: issueId);
+        var pr = await CreateTestPullRequest(project.Id, fleeceIssueId: issueId);
 
         // Act
         var result = await _service.GetPullRequestForIssueAsync(project.Id, issueId);
@@ -89,7 +89,7 @@ public class GitHubServicePrLookupTests
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Id, Is.EqualTo(pr.Id));
-        Assert.That(result.BeadsIssueId, Is.EqualTo(issueId));
+        Assert.That(result.FleeceIssueId, Is.EqualTo(issueId));
     }
 
     [Test]
@@ -97,7 +97,7 @@ public class GitHubServicePrLookupTests
     {
         // Arrange
         var project = await CreateTestProject();
-        await CreateTestPullRequest(project.Id, beadsIssueId: "other-issue");
+        await CreateTestPullRequest(project.Id, fleeceIssueId: "other-issue");
 
         // Act
         var result = await _service.GetPullRequestForIssueAsync(project.Id, "non-existent-issue");
@@ -113,9 +113,9 @@ public class GitHubServicePrLookupTests
         var project = await CreateTestProject();
         var issueId = "target-issue";
 
-        await CreateTestPullRequest(project.Id, branchName: "feature/one", beadsIssueId: "issue-1");
-        var targetPr = await CreateTestPullRequest(project.Id, branchName: "feature/two", beadsIssueId: issueId);
-        await CreateTestPullRequest(project.Id, branchName: "feature/three", beadsIssueId: "issue-3");
+        await CreateTestPullRequest(project.Id, branchName: "feature/one", fleeceIssueId: "issue-1");
+        var targetPr = await CreateTestPullRequest(project.Id, branchName: "feature/two", fleeceIssueId: issueId);
+        await CreateTestPullRequest(project.Id, branchName: "feature/three", fleeceIssueId: "issue-3");
 
         // Act
         var result = await _service.GetPullRequestForIssueAsync(project.Id, issueId);
@@ -144,10 +144,10 @@ public class GitHubServicePrLookupTests
         var issueId = "shared-issue";
 
         // Create PR in project1 with the issue
-        var pr1 = await CreateTestPullRequest(project1.Id, branchName: "feature/proj1", beadsIssueId: issueId);
+        var pr1 = await CreateTestPullRequest(project1.Id, branchName: "feature/proj1", fleeceIssueId: issueId);
 
         // Create PR in project2 with different issue
-        await CreateTestPullRequest(project2.Id, branchName: "feature/proj2", beadsIssueId: "other-issue");
+        await CreateTestPullRequest(project2.Id, branchName: "feature/proj2", fleeceIssueId: "other-issue");
 
         // Act
         var result = await _service.GetPullRequestForIssueAsync(project1.Id, issueId);

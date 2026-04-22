@@ -12,8 +12,8 @@ public class SyncResult
 
     /// <summary>
     /// PRs that were removed from local tracking (merged/closed on GitHub).
-    /// Contains (PullRequestId, BeadsIssueId, GitHubPrNumber) for each removed PR.
-    /// Used to close linked beads issues.
+    /// Contains (PullRequestId, FleeceIssueId, GitHubPrNumber) for each removed PR.
+    /// Used to close linked Fleece issues.
     /// </summary>
     public List<RemovedPrInfo> RemovedPrs { get; set; } = [];
 }
@@ -24,6 +24,6 @@ public class SyncResult
 public class RemovedPrInfo
 {
     public required string PullRequestId { get; set; }
-    public string? BeadsIssueId { get; set; }
+    public string? FleeceIssueId { get; set; }
     public int? GitHubPrNumber { get; set; }
 }

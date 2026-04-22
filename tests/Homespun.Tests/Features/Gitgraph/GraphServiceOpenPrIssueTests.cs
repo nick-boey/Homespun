@@ -315,14 +315,14 @@ public class GraphServiceOpenPrIssueTests
         };
     }
 
-    private async Task<PullRequest> CreateTrackedPullRequest(string projectId, string beadsIssueId, int prNumber)
+    private async Task<PullRequest> CreateTrackedPullRequest(string projectId, string fleeceIssueId, int prNumber)
     {
         var pr = new PullRequest
         {
             ProjectId = projectId,
-            Title = $"PR #{prNumber} for {beadsIssueId}",
-            BranchName = $"feature/{beadsIssueId}",
-            BeadsIssueId = beadsIssueId,
+            Title = $"PR #{prNumber} for {fleeceIssueId}",
+            BranchName = $"feature/{fleeceIssueId}",
+            FleeceIssueId = fleeceIssueId,
             GitHubPRNumber = prNumber,
             Status = OpenPullRequestStatus.InDevelopment
         };

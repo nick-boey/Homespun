@@ -771,7 +771,7 @@ export type PullRequest = {
     createdAt?: string;
     updatedAt?: string;
     activeSessionId?: string | null;
-    beadsIssueId?: string | null;
+    fleeceIssueId?: string | null;
 };
 
 export type PullRequestInfo = {
@@ -869,7 +869,7 @@ export type RemoveParentRequest = {
 
 export type RemovedPrInfo = {
     pullRequestId: string | null;
-    beadsIssueId?: string | null;
+    fleeceIssueId?: string | null;
     gitHubPrNumber?: number | null;
 };
 

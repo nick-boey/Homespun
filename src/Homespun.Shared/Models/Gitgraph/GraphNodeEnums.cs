@@ -14,7 +14,7 @@ public enum GraphNodeType
     /// <summary>An open PR (branches off main).</summary>
     OpenPullRequest,
 
-    /// <summary>A beads issue with dependencies.</summary>
+    /// <summary>A Fleece issue with dependencies.</summary>
     Issue,
 
     /// <summary>An orphan issue with no dependencies.</summary>

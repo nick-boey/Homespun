@@ -29,9 +29,9 @@
 - [x] 4.4 For the PR branch mapped to ISSUE-003, write no `openspec/` directory at all (branch-with-no-change indicator path)
 - [x] 4.5 Add a unit test that runs the full seeder against a temp directory and asserts each scenario surfaces correctly through `BranchStateResolverService.GetOrScanAsync` and `IssueGraphOpenSpecEnricher.ResolveForIssueAsync`
 
-## 5. Wire `BeadsIssueId` onto seeded PRs
+## 5. Wire `FleeceIssueId` onto seeded PRs
 
-- [x] 5.1 Update `MockDataSeederService.SeedPullRequestsAsync` to set `BeadsIssueId` on each of the five demo PRs using the static mapping from 1.3
+- [x] 5.1 Update `MockDataSeederService.SeedPullRequestsAsync` to set `FleeceIssueId` on each of the five demo PRs using the static mapping from 1.3
 - [x] 5.2 Add an integration test (under `Homespun.Api.Tests`) that boots the mock app, requests `/api/graph/{projectId}/taskgraph/data`, and asserts that issues with linked changes have `OpenSpecStates[id].BranchState == WithChange` and non-empty `Phases` arrays
 
 ## 6. Hook the seeder into startup

@@ -197,11 +197,11 @@ public class GraphServiceLinkedIssueFilterTests
     }
 
     [Test]
-    public async Task BuildGraphAsync_PRWithNullBeadsIssueId_DoesNotFilterAnyIssue()
+    public async Task BuildGraphAsync_PRWithNullFleeceIssueId_DoesNotFilterAnyIssue()
     {
         // Arrange - Create PR without linked issue and an issue
         var issue = CreateIssue("hsp-123");
-        await CreatePullRequest(_testProject.Id, beadsIssueId: null);
+        await CreatePullRequest(_testProject.Id, fleeceIssueId: null);
 
         _mockFleeceService.Setup(s => s.ListIssuesAsync(_testProject.LocalPath, null, null, null, default))
             .ReturnsAsync(new List<Issue> { issue });
@@ -215,11 +215,11 @@ public class GraphServiceLinkedIssueFilterTests
     }
 
     [Test]
-    public async Task BuildGraphAsync_PRWithEmptyBeadsIssueId_DoesNotFilterAnyIssue()
+    public async Task BuildGraphAsync_PRWithEmptyFleeceIssueId_DoesNotFilterAnyIssue()
     {
         // Arrange - Create PR with empty linked issue ID and an issue
         var issue = CreateIssue("hsp-123");
-        await CreatePullRequest(_testProject.Id, beadsIssueId: "");
+        await CreatePullRequest(_testProject.Id, fleeceIssueId: "");
 
         _mockFleeceService.Setup(s => s.ListIssuesAsync(_testProject.LocalPath, null, null, null, default))
             .ReturnsAsync(new List<Issue> { issue });
@@ -305,28 +305,28 @@ public class GraphServiceLinkedIssueFilterTests
         };
     }
 
-    private async Task<PullRequest> CreatePullRequestWithLinkedIssue(string projectId, string beadsIssueId)
+    private async Task<PullRequest> CreatePullRequestWithLinkedIssue(string projectId, string fleeceIssueId)
     {
         var pr = new PullRequest
         {
             ProjectId = projectId,
-            Title = $"PR linked to {beadsIssueId}",
-            BranchName = $"issues/feature/test+{beadsIssueId}",
-            BeadsIssueId = beadsIssueId,
+            Title = $"PR linked to {fleeceIssueId}",
+            BranchName = $"issues/feature/test+{fleeceIssueId}",
+            FleeceIssueId = fleeceIssueId,
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(pr);
         return pr;
     }
 
-    private async Task<PullRequest> CreatePullRequest(string projectId, string? beadsIssueId)
+    private async Task<PullRequest> CreatePullRequest(string projectId, string? fleeceIssueId)
     {
         var pr = new PullRequest
         {
             ProjectId = projectId,
             Title = "Test PR",
             BranchName = "feature/test",
-            BeadsIssueId = beadsIssueId,
+            FleeceIssueId = fleeceIssueId,
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(pr);

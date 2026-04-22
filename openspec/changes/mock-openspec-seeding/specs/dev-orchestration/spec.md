@@ -37,5 +37,5 @@ Every dev profile that seeds mock data SHALL also seed a representative set of O
 #### Scenario: Seeded PRs link to seeded issues for branch resolution
 
 - **WHEN** `MockDataSeederService.SeedPullRequestsAsync` runs
-- **THEN** each seeded PR with a `BranchName` SHALL also have its `BeadsIssueId` set to the id of a seeded issue
+- **THEN** each seeded PR with a `BranchName` SHALL also have its `FleeceIssueId` set to the id of a seeded issue
 - **AND** `IssueBranchResolverService.ResolveIssueBranchAsync` SHALL return the PR's branch name for that issue without needing a live GitHub call

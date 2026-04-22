@@ -21,7 +21,7 @@ public class MockDataSeederService : IHostedService
     /// <summary>
     /// Single source of truth mapping each seeded PR's <see cref="PullRequest.BranchName"/>
     /// (including the <c>+{issueId}</c> suffix required by <see cref="BranchNameParser"/>)
-    /// to the Fleece issue id that owns the branch. Drives both <see cref="PullRequest.BeadsIssueId"/>
+    /// to the Fleece issue id that owns the branch. Drives both <see cref="PullRequest.FleeceIssueId"/>
     /// assignment in <see cref="SeedPullRequestsAsync"/> and the per-branch scenario selection
     /// in <see cref="OpenSpecMockSeeder.SeedBranchAsync"/>.
     /// </summary>
@@ -181,7 +181,7 @@ public class MockDataSeederService : IHostedService
             Title = "Add user authentication",
             Description = "Implement JWT-based authentication for the API",
             BranchName = "feature/user-auth+ISSUE-001",
-            BeadsIssueId = BranchToFleeceId["feature/user-auth+ISSUE-001"],
+            FleeceIssueId = BranchToFleeceId["feature/user-auth+ISSUE-001"],
             Status = OpenPullRequestStatus.InDevelopment,
             CreatedAt = now.AddDays(-3),
             UpdatedAt = now.AddHours(-2)
@@ -196,7 +196,7 @@ public class MockDataSeederService : IHostedService
             Title = "Implement dark mode",
             Description = "Add dark mode support with theme switching",
             BranchName = "feature/dark-mode+ISSUE-002",
-            BeadsIssueId = BranchToFleeceId["feature/dark-mode+ISSUE-002"],
+            FleeceIssueId = BranchToFleeceId["feature/dark-mode+ISSUE-002"],
             Status = OpenPullRequestStatus.ReadyForReview,
             GitHubPRNumber = 42,
             CreatedAt = now.AddDays(-5),
@@ -212,7 +212,7 @@ public class MockDataSeederService : IHostedService
             Title = "API v2 endpoints",
             Description = "New versioned API endpoints with improved response format",
             BranchName = "feature/api-v2+ISSUE-006",
-            BeadsIssueId = BranchToFleeceId["feature/api-v2+ISSUE-006"],
+            FleeceIssueId = BranchToFleeceId["feature/api-v2+ISSUE-006"],
             Status = OpenPullRequestStatus.Approved,
             GitHubPRNumber = 45,
             CreatedAt = now.AddDays(-7),
@@ -228,7 +228,7 @@ public class MockDataSeederService : IHostedService
             Title = "Improve logging infrastructure",
             Description = "Add structured logging with correlation IDs",
             BranchName = "feature/logging+ISSUE-003",
-            BeadsIssueId = BranchToFleeceId["feature/logging+ISSUE-003"],
+            FleeceIssueId = BranchToFleeceId["feature/logging+ISSUE-003"],
             Status = OpenPullRequestStatus.HasReviewComments,
             GitHubPRNumber = 38,
             CreatedAt = now.AddDays(-14),
@@ -244,7 +244,7 @@ public class MockDataSeederService : IHostedService
             Title = "Refactor database layer",
             Description = "Migrate to repository pattern",
             BranchName = "refactor/database-layer+ISSUE-014",
-            BeadsIssueId = BranchToFleeceId["refactor/database-layer+ISSUE-014"],
+            FleeceIssueId = BranchToFleeceId["refactor/database-layer+ISSUE-014"],
             Status = OpenPullRequestStatus.InDevelopment,
             GitHubPRNumber = 41,
             CreatedAt = now.AddDays(-6),
