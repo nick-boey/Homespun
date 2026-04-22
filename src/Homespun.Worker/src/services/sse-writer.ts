@@ -25,7 +25,7 @@ import {
   extractA2ACorrelation,
   extractMessagePreview,
   gateContentPreview,
-  type SessionEventLogFields,
+  type A2AEmitSpanFields,
 } from "../utils/otel-logger.js";
 
 // Resolve the tracer on every call rather than caching at module load. The
@@ -131,7 +131,7 @@ export function emitAndFormatSSE(
 }
 
 function mapFieldsToAttributes(
-  fields: SessionEventLogFields,
+  fields: A2AEmitSpanFields,
 ): Record<string, string | number> {
   const attrs: Record<string, string | number> = {
     "homespun.session.id": fields.SessionId,

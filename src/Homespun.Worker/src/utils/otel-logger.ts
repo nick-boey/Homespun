@@ -5,9 +5,9 @@
  * attach `exception.*` attributes and, when inside a span, call
  * `span.recordException(err)` so Seq surfaces them on the trace timeline.
  *
- * The hop-based `sessionEventLog` helper has been retired — every previous
- * call site now starts a `homespun.a2a.emit` PRODUCER span via the worker
- * tracer. The correlation-extraction helpers (`extractA2ACorrelation`,
+ * The hop-based session-event helper has been retired — every previous call
+ * site now starts a `homespun.a2a.emit` PRODUCER span via the worker tracer.
+ * The correlation-extraction helpers (`extractA2ACorrelation`,
  * `extractMessagePreview`) remain so span callers can reuse the same
  * attribute shape, and `gateContentPreview` replaces the pair of
  * `getContentPreviewChars()` + `truncatePreview()` helpers that used to gate
@@ -122,7 +122,7 @@ export function sdkDebug(direction: 'tx' | 'rx', msg: unknown): void {
 // Span-attribute helpers for the `homespun.a2a.emit` span call sites.
 // ---------------------------------------------------------------------------
 
-export interface SessionEventLogFields {
+export interface A2AEmitSpanFields {
   SessionId: string;
   TaskId?: string;
   MessageId?: string;
@@ -163,9 +163,9 @@ export function gateContentPreview(
 export function extractA2ACorrelation(
   kind: string,
   data: unknown,
-): SessionEventLogFields {
+): A2AEmitSpanFields {
   const sessionId = extractString(data, ['contextId']) ?? '';
-  const fields: SessionEventLogFields = {
+  const fields: A2AEmitSpanFields = {
     SessionId: sessionId,
     A2AKind: kind,
   };
