@@ -88,8 +88,8 @@ public class IssueGraphOpenSpecEnricher(
         }
 
         var prBranches = dataStore.GetPullRequestsByProject(projectId)
-            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && !string.IsNullOrEmpty(pr.BranchName))
-            .GroupBy(pr => pr.BeadsIssueId!, StringComparer.Ordinal)
+            .Where(pr => !string.IsNullOrEmpty(pr.FleeceIssueId) && !string.IsNullOrEmpty(pr.BranchName))
+            .GroupBy(pr => pr.FleeceIssueId!, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First().BranchName!, StringComparer.Ordinal);
 
         var clones = await cloneService.ListClonesAsync(project.LocalPath);

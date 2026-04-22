@@ -63,7 +63,7 @@ public class IssuePrLinkingServiceTests
     #region LinkPullRequestToIssueAsync Tests
 
     [Test]
-    public async Task LinkPullRequestToIssueAsync_WithValidInputs_SetsBeadsIssueId()
+    public async Task LinkPullRequestToIssueAsync_WithValidInputs_SetsFleeceIssueId()
     {
         // Arrange
         var project = await CreateTestProject();
@@ -76,7 +76,7 @@ public class IssuePrLinkingServiceTests
         Assert.That(result, Is.True);
 
         var updatedPr = _dataStore.GetPullRequest(pr.Id);
-        Assert.That(updatedPr!.BeadsIssueId, Is.EqualTo("hsp-123"));
+        Assert.That(updatedPr!.FleeceIssueId, Is.EqualTo("hsp-123"));
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class IssuePrLinkingServiceTests
         // Arrange
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-        pr.BeadsIssueId = "hsp-123"; // Already linked
+        pr.FleeceIssueId = "hsp-123"; // Already linked
         await _dataStore.UpdatePullRequestAsync(pr);
 
         // Act
@@ -136,7 +136,7 @@ public class IssuePrLinkingServiceTests
         Assert.That(result, Is.EqualTo("hsp-123"));
 
         var updatedPr = _dataStore.GetPullRequest(pr.Id);
-        Assert.That(updatedPr!.BeadsIssueId, Is.EqualTo("hsp-123"));
+        Assert.That(updatedPr!.FleeceIssueId, Is.EqualTo("hsp-123"));
     }
 
     [Test]
@@ -153,7 +153,7 @@ public class IssuePrLinkingServiceTests
         Assert.That(result, Is.Null);
 
         var updatedPr = _dataStore.GetPullRequest(pr.Id);
-        Assert.That(updatedPr!.BeadsIssueId, Is.Null);
+        Assert.That(updatedPr!.FleeceIssueId, Is.Null);
     }
 
     [Test]
@@ -162,7 +162,7 @@ public class IssuePrLinkingServiceTests
         // Arrange
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-        pr.BeadsIssueId = "hsp-123";
+        pr.FleeceIssueId = "hsp-123";
         await _dataStore.UpdatePullRequestAsync(pr);
 
         // Act
@@ -211,7 +211,7 @@ public class IssuePrLinkingServiceTests
         // Arrange
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-        pr.BeadsIssueId = "hsp-123";
+        pr.FleeceIssueId = "hsp-123";
         await _dataStore.UpdatePullRequestAsync(pr);
 
         _mockFleeceService

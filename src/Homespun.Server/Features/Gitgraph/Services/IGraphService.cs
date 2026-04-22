@@ -4,7 +4,7 @@ using Homespun.Shared.Models.Fleece;
 namespace Homespun.Features.Gitgraph.Services;
 
 /// <summary>
-/// Service for building graph data from BeadsIssues and PullRequests.
+/// Service for building graph data from Fleece issues and PullRequests.
 /// </summary>
 public interface IGraphService
 {

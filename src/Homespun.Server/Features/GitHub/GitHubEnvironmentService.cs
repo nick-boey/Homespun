@@ -89,7 +89,7 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
             _logger.LogWarning("No GitHub token configured - environment will not include authentication");
         }
 
-        // Git identity for commits (required for bd sync and other git operations)
+        // Git identity for commits (required for git operations)
         var gitName = GetGitAuthorName();
         var gitEmail = GetGitAuthorEmail();
 

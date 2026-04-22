@@ -3,23 +3,23 @@ using Homespun.Shared.Models.PullRequests;
 namespace Homespun.Features.GitHub;
 
 /// <summary>
-/// Service for linking beads issues to pull requests.
+/// Service for linking Fleece issues to pull requests.
 /// </summary>
 public interface IIssuePrLinkingService
 {
     /// <summary>
-    /// Links a pull request to a beads issue by setting the BeadsIssueId
+    /// Links a pull request to a Fleece issue by setting the FleeceIssueId
     /// and adding the hsp:pr-{prNumber} label to the issue.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
     /// <param name="pullRequestId">The pull request ID.</param>
-    /// <param name="issueId">The beads issue ID to link.</param>
+    /// <param name="issueId">The Fleece issue ID to link.</param>
     /// <param name="prNumber">The GitHub PR number for the label.</param>
     /// <returns>True if linking succeeded, false otherwise.</returns>
     Task<bool> LinkPullRequestToIssueAsync(string projectId, string pullRequestId, string issueId, int prNumber);
 
     /// <summary>
-    /// Attempts to link a pull request to a beads issue by extracting the issue ID
+    /// Attempts to link a pull request to a Fleece issue by extracting the issue ID
     /// from the branch name.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
@@ -28,7 +28,7 @@ public interface IIssuePrLinkingService
     Task<string?> TryLinkByBranchNameAsync(string projectId, string pullRequestId);
 
     /// <summary>
-    /// Closes the beads issue linked to a pull request.
+    /// Closes the Fleece issue linked to a pull request.
     /// Used when a PR is merged or closed.
     /// </summary>
     /// <param name="projectId">The project ID.</param>

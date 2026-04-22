@@ -107,7 +107,7 @@ public class PRStatusResolverTests
         var mergedAt = DateTime.UtcNow;
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-1" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -143,7 +143,7 @@ public class PRStatusResolverTests
         var closedAt = DateTime.UtcNow;
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-1" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -295,13 +295,13 @@ public class PRStatusResolverTests
     }
 
     [Test]
-    public async Task ResolveClosedPRStatusesAsync_WithBeadsIssueId_PassesIssueIdToCache()
+    public async Task ResolveClosedPRStatusesAsync_WithFleeceIssueId_PassesIssueIdToCache()
     {
         // Arrange
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "abc123" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "abc123" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -330,13 +330,13 @@ public class PRStatusResolverTests
     }
 
     [Test]
-    public async Task ResolveClosedPRStatusesAsync_WithoutBeadsIssueId_PassesNullIssueIdToCache()
+    public async Task ResolveClosedPRStatusesAsync_WithoutFleeceIssueId_PassesNullIssueIdToCache()
     {
         // Arrange
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = null }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = null }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -375,7 +375,7 @@ public class PRStatusResolverTests
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-123" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-123" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -407,7 +407,7 @@ public class PRStatusResolverTests
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-123" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-123" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -439,7 +439,7 @@ public class PRStatusResolverTests
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = null }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = null }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -468,7 +468,7 @@ public class PRStatusResolverTests
         var project = await CreateTestProject();
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -530,7 +530,7 @@ public class PRStatusResolverTests
         var mergedAt = DateTime.UtcNow;
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-1" }
         };
 
         var prInfo = new PullRequestInfo
@@ -576,7 +576,7 @@ public class PRStatusResolverTests
         var mergedAt = DateTime.UtcNow;
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-1" }
         };
 
         _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
@@ -620,7 +620,7 @@ public class PRStatusResolverTests
         var closedAt = DateTime.UtcNow;
         var removedPrs = new List<RemovedPrInfo>
         {
-            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, FleeceIssueId = "issue-1" }
         };
 
         var prInfo = new PullRequestInfo

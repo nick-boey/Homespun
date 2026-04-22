@@ -204,11 +204,11 @@ public class GitHubService(
             pullRequest.UpdatedAt = DateTime.UtcNow;
             await dataStore.UpdatePullRequestAsync(pullRequest);
 
-            // Try to link to beads issue by branch name
+            // Try to link to Fleece issue by branch name
             var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequestId);
             if (!string.IsNullOrEmpty(linkedIssueId))
             {
-                logger.LogInformation("Linked PR #{PrNumber} to beads issue {IssueId}", pr.Number, linkedIssueId);
+                logger.LogInformation("Linked PR #{PrNumber} to Fleece issue {IssueId}", pr.Number, linkedIssueId);
             }
 
             return MapToPullRequestInfo(pr);
@@ -284,7 +284,7 @@ public class GitHubService(
                 result.RemovedPrs.Add(new RemovedPrInfo
                 {
                     PullRequestId = pr.Id,
-                    BeadsIssueId = pr.BeadsIssueId,
+                    FleeceIssueId = pr.FleeceIssueId,
                     GitHubPrNumber = pr.GitHubPRNumber
                 });
                 
@@ -326,8 +326,8 @@ public class GitHubService(
 
                     await dataStore.UpdatePullRequestAsync(pullRequest);
 
-                    // Try to link to beads issue if not already linked (backfill)
-                    if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
+                    // Try to link to Fleece issue if not already linked (backfill)
+                    if (string.IsNullOrEmpty(pullRequest.FleeceIssueId))
                     {
                         var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
 
@@ -342,7 +342,7 @@ public class GitHubService(
                     {
                         // Update issue status to Review for already-linked open PRs
                         await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
-                            projectId, pullRequest.BeadsIssueId, PullRequestStatus.ReadyForReview, pr.Number);
+                            projectId, pullRequest.FleeceIssueId, PullRequestStatus.ReadyForReview, pr.Number);
                     }
 
                     result.Updated++;
@@ -376,7 +376,7 @@ public class GitHubService(
 
                     await dataStore.AddPullRequestAsync(pullRequest);
 
-                    // Try to link to beads issue by branch name
+                    // Try to link to Fleece issue by branch name
                     var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
 
                     // Update issue status to Review for linked open PRs
@@ -503,7 +503,7 @@ public class GitHubService(
     public Task<PullRequest?> GetPullRequestForIssueAsync(string projectId, string issueId)
     {
         var prs = dataStore.GetPullRequestsByProject(projectId);
-        return Task.FromResult(prs.FirstOrDefault(pr => pr.BeadsIssueId == issueId));
+        return Task.FromResult(prs.FirstOrDefault(pr => pr.FleeceIssueId == issueId));
     }
 
     private void ConfigureClient()

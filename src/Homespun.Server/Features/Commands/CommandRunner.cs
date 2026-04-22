@@ -14,18 +14,14 @@ public class CommandRunner(
 
         var stopwatch = Stopwatch.StartNew();
 
-        // Add --no-daemon flag for beads commands to bypass daemon socket communication.
-        // TODO: Make --no-daemon configurable via BeadsService options
-        var effectiveArguments = AddBeadsFlags(command, arguments);
-
         logger.LogTrace(
             "Executing command: {Command} {Arguments} in {WorkingDirectory}",
-            command, effectiveArguments, workingDirectory);
+            command, arguments, workingDirectory);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = command,
-            Arguments = effectiveArguments,
+            Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -124,20 +120,5 @@ public class CommandRunner(
             return trimmed;
 
         return trimmed[..maxLength] + "... [truncated]";
-    }
-
-    /// <summary>
-    /// Adds flags to beads (bd) commands.
-    /// Currently adds --no-daemon to bypass socket communication with the host daemon.
-    /// </summary>
-    private static string AddBeadsFlags(string command, string arguments)
-    {
-        if (!command.Equals("bd", StringComparison.OrdinalIgnoreCase))
-            return arguments;
-
-        // Prepend --no-daemon to bypass daemon socket communication
-        return string.IsNullOrEmpty(arguments)
-            ? "--no-daemon"
-            : $"--no-daemon {arguments}";
     }
 }

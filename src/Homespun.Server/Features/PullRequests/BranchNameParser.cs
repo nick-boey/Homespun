@@ -3,20 +3,20 @@ using System.Text.RegularExpressions;
 namespace Homespun.Features.PullRequests;
 
 /// <summary>
-/// Utility class for parsing branch names to extract beads issue IDs
+/// Utility class for parsing branch names to extract Fleece issue IDs
 /// and managing PR labels.
 /// </summary>
 public static partial class BranchNameParser
 {
     /// <summary>
-    /// Label prefix used to link beads issues to GitHub PRs.
+    /// Label prefix used to link Fleece issues to GitHub PRs.
     /// Format: hsp:pr-{prNumber}
     /// </summary>
     public const string PrLabelPrefix = "hsp:pr-";
 
     /// <summary>
-    /// Extracts the beads issue ID from a branch name.
-    /// Branch format: {type}/{branch-id}+{beads-id}
+    /// Extracts the Fleece issue ID from a branch name.
+    /// Branch format: {type}/{branch-id}+{fleece-id}
     /// Example: "feature/link-issues+hsp-kca" -> "hsp-kca"
     /// </summary>
     /// <param name="branchName">The branch name to parse.</param>

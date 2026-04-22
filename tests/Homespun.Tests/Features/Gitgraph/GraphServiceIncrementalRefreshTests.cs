@@ -178,7 +178,7 @@ public class GraphServiceIncrementalRefreshTests
             Title = "Will Be Closed",
             BranchName = "feature/close-me",
             GitHubPRNumber = 2,
-            BeadsIssueId = "issue-1",
+            FleeceIssueId = "issue-1",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
@@ -203,7 +203,7 @@ public class GraphServiceIncrementalRefreshTests
             It.Is<List<RemovedPrInfo>>(list =>
                 list.Count == 1 &&
                 list[0].GitHubPrNumber == 2 &&
-                list[0].BeadsIssueId == "issue-1")),
+                list[0].FleeceIssueId == "issue-1")),
             Times.Once);
     }
 
@@ -303,7 +303,7 @@ public class GraphServiceIncrementalRefreshTests
             Title = "Feature PR",
             BranchName = "feature/test",
             GitHubPRNumber = 1,
-            BeadsIssueId = "issue-1",
+            FleeceIssueId = "issue-1",
             Status = OpenPullRequestStatus.InDevelopment
         };
         await _dataStore.AddPullRequestAsync(trackedPr);
