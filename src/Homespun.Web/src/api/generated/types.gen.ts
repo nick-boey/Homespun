@@ -138,6 +138,13 @@ export const ChangeType = {
 
 export type ChangeType = typeof ChangeType[keyof typeof ChangeType];
 
+export type ClaudeModelInfo = {
+    id: string | null;
+    displayName: string | null;
+    createdAt: string;
+    isDefault?: boolean;
+};
+
 export type ClaudeSession = {
     id: string | null;
     entityId: string | null;
@@ -2477,6 +2484,22 @@ export type PostApiIssuesAgentBySessionIdRefreshDiffResponses = {
 };
 
 export type PostApiIssuesAgentBySessionIdRefreshDiffResponse = PostApiIssuesAgentBySessionIdRefreshDiffResponses[keyof PostApiIssuesAgentBySessionIdRefreshDiffResponses];
+
+export type GetApiModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/models';
+};
+
+export type GetApiModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<ClaudeModelInfo>;
+};
+
+export type GetApiModelsResponse = GetApiModelsResponses[keyof GetApiModelsResponses];
 
 export type GetApiNotificationsData = {
     body?: never;
