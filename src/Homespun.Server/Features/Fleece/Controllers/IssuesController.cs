@@ -217,7 +217,7 @@ public class IssuesController(
         }
 
         // Broadcast issue creation to connected clients
-        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Created, issue.Id);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Created, issue.Id);
 
         // Trigger background branch ID generation if title is provided and no working branch ID
         if (!string.IsNullOrWhiteSpace(request.Title) && string.IsNullOrWhiteSpace(request.WorkingBranchId))
@@ -278,8 +278,17 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
-        // Broadcast issue update to connected clients
-        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+        // Route structure-preserving field edits through the in-place patch path; any
+        // topology-affecting field in the same request forces a full invalidation.
+        var patch = TryBuildFieldPatch(request, assignedTo);
+        if (patch is not null)
+        {
+            await notificationHub.BroadcastIssueFieldsPatched(HttpContext.RequestServices, request.ProjectId, issueId, patch);
+        }
+        else
+        {
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
+        }
 
         // Check if title changed and working branch ID is empty
         if (!string.IsNullOrWhiteSpace(request.Title) &&
@@ -290,6 +299,29 @@ public class IssuesController(
         }
 
         return Ok(issue.ToResponse());
+    }
+
+    /// <summary>
+    /// Returns an <see cref="IssueFieldPatch"/> when every field set on <paramref name="request"/>
+    /// is structure-preserving (<see cref="PatchableFieldAttribute"/>); returns null when any
+    /// topology-affecting field is set so the caller falls through to
+    /// <see cref="NotificationHubExtensions.BroadcastIssueTopologyChanged"/>.
+    /// </summary>
+    private static IssueFieldPatch? TryBuildFieldPatch(UpdateIssueRequest request, string? assignedTo)
+    {
+        if (request.Status.HasValue || request.Type.HasValue || request.WorkingBranchId is not null)
+        {
+            return null;
+        }
+
+        return new IssueFieldPatch
+        {
+            Title = request.Title,
+            Description = request.Description,
+            Priority = request.Priority,
+            ExecutionMode = request.ExecutionMode,
+            AssignedTo = assignedTo,
+        };
     }
 
     /// <summary>
@@ -313,7 +345,7 @@ public class IssuesController(
         }
 
         // Broadcast issue deletion to connected clients
-        await notificationHub.BroadcastIssuesChanged(projectId, IssueChangeType.Deleted, issueId);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Deleted, issueId);
 
         return NoContent();
     }
@@ -350,7 +382,7 @@ public class IssuesController(
                 request.AddToExisting);
 
             // Broadcast issue update to connected clients
-            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, childId);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, childId);
 
             return Ok(issue.ToResponse());
         }
@@ -385,7 +417,7 @@ public class IssuesController(
             childId,
             request.ParentIssueId);
 
-        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, childId);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, childId);
 
         return Ok(issue.ToResponse());
     }
@@ -414,7 +446,7 @@ public class IssuesController(
             project.LocalPath,
             issueId);
 
-        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
 
         return Ok(issue.ToResponse());
     }
@@ -449,7 +481,7 @@ public class IssuesController(
                 request.Direction);
 
             // Broadcast issue update to connected clients
-            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
 
             return Ok(issue.ToResponse());
         }
@@ -588,7 +620,7 @@ public class IssuesController(
         if (!request.DryRun && result.Success)
         {
             // Broadcast issue changes to connected clients
-            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, null);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, null);
         }
 
         return Ok(result);
@@ -621,7 +653,7 @@ public class IssuesController(
         if (result.Success)
         {
             // Broadcast issue changes to connected clients
-            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, null);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, null);
         }
 
         return Ok(result);
@@ -677,7 +709,7 @@ public class IssuesController(
         await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
 
         // Broadcast issues changed to connected clients
-        await notificationHub.BroadcastIssuesChanged(projectId, IssueChangeType.Updated, null);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
 
         var state = await historyService.GetStateAsync(project.LocalPath);
         return Ok(new IssueHistoryOperationResponse
@@ -715,7 +747,7 @@ public class IssuesController(
         await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
 
         // Broadcast issues changed to connected clients
-        await notificationHub.BroadcastIssuesChanged(projectId, IssueChangeType.Updated, null);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
 
         var state = await historyService.GetStateAsync(project.LocalPath);
         return Ok(new IssueHistoryOperationResponse

@@ -17,6 +17,14 @@ public interface INotificationHubClient
     Task IssuesChanged(string projectId, IssueChangeType changeType, string issueId);
 
     /// <summary>
+    /// Notifies clients of a structure-preserving field patch on a single issue.
+    /// The client applies <paramref name="patch"/> in place via
+    /// <c>queryClient.setQueryData</c>; no HTTP refetch is required.
+    /// Gated by <c>TaskGraphSnapshot:PatchPush:Enabled</c> on the server.
+    /// </summary>
+    Task IssueFieldsPatched(string projectId, string issueId, IssueFieldPatch patch);
+
+    /// <summary>
     /// Notifies clients when a branch ID has been successfully generated for an issue.
     /// </summary>
     /// <param name="issueId">The ID of the issue.</param>

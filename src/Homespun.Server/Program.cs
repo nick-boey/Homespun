@@ -374,6 +374,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 // behaves identically. Gated on `TaskGraphSnapshot:Enabled` (default true).
 builder.Services.Configure<TaskGraphSnapshotOptions>(
     builder.Configuration.GetSection(TaskGraphSnapshotOptions.SectionName));
+builder.Services.Configure<TaskGraphPatchPushOptions>(
+    builder.Configuration.GetSection(TaskGraphPatchPushOptions.SectionName));
 var taskGraphSnapshotOptions = new TaskGraphSnapshotOptions();
 builder.Configuration.GetSection(TaskGraphSnapshotOptions.SectionName).Bind(taskGraphSnapshotOptions);
 if (taskGraphSnapshotOptions.Enabled)

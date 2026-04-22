@@ -17,9 +17,10 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { IssueType, IssueStatus, ExecutionMode } from '@/api'
+import { IssueType, IssueStatus, ExecutionMode, type TaskGraphResponse } from '@/api'
 import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
+import { applyPatch } from '../lib/apply-patch'
 import { ErrorFallback } from '@/components/error-boundary'
 import { IssueRowSkeleton } from './issue-row-skeleton'
 import { IssuesEmptyState } from './issues-empty-state'
@@ -256,6 +257,15 @@ export const TaskGraphView = memo(
               queryKey: taskGraphQueryKey(projectId),
             })
           }
+        },
+        onIssueFieldsPatched: (changedProjectId, issueId, patch) => {
+          if (changedProjectId !== projectId) return
+          // Apply the patch in place — no refetch. Server guarantees the
+          // snapshot was patched before this event fired, so a racing
+          // refetch from any other source would also return fresh data.
+          queryClient.setQueryData<TaskGraphResponse>(taskGraphQueryKey(projectId), (old) =>
+            applyPatch(old, issueId, patch)
+          )
         },
       })
 

@@ -1,7 +1,9 @@
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.Fleece.Controllers;
 
@@ -11,7 +13,8 @@ namespace Homespun.Features.Fleece.Controllers;
 public class FleeceIssueSyncController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IProjectFleeceService fleeceService,
-    IProjectService projectService) : ControllerBase
+    IProjectService projectService,
+    IHubContext<NotificationHub> notificationHub) : ControllerBase
 {
     [HttpGet("{projectId}/branch-status")]
     [ProducesResponseType<BranchStatusResult>(StatusCodes.Status200OK)]
@@ -52,6 +55,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
         }
 
         return Ok(result);
@@ -77,6 +81,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
         }
 
         return Ok(result);
@@ -103,6 +108,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
+            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
         }
 
         return Ok(result);

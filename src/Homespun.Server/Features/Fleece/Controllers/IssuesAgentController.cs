@@ -315,7 +315,7 @@ public class IssuesAgentController(
         await sessionService.StopSessionAsync(sessionId, HttpContext.RequestAborted);
 
         // Broadcast issue changes to connected clients
-        await notificationHub.BroadcastIssuesChanged(session.ProjectId, IssueChangeType.Updated, null);
+        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, session.ProjectId, IssueChangeType.Updated, null);
 
         logger.LogInformation("Accepted {Count} changes from Issues Agent session {SessionId}",
             result.Changes.Count, sessionId);

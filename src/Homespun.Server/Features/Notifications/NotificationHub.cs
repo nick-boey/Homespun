@@ -1,5 +1,8 @@
+using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Shared.Models.Fleece;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Notifications;
 
@@ -76,20 +79,73 @@ public static class NotificationHubExtensions
     }
 
     /// <summary>
-    /// Broadcasts when issues are changed (created, updated, deleted) in a project.
+    /// Broadcasts a topology-class issue change: invalidates the per-project
+    /// task-graph snapshot, kicks the refresher fire-and-forget, then broadcasts
+    /// <c>IssuesChanged</c>.
+    /// <para>
+    /// Invalidation precedes broadcast so the client's post-broadcast refetch
+    /// cannot race a stale snapshot. The refresher kick is fire-and-forget so
+    /// the HTTP response is not delayed by the ~3s rebuild.
+    /// </para>
+    /// <para>
+    /// Snapshot store and refresher are resolved from <paramref name="services"/>
+    /// and are tolerated as missing (e.g. when <c>TaskGraphSnapshot:Enabled=false</c>).
+    /// </para>
     /// </summary>
-    public static async Task BroadcastIssuesChanged(
+    public static async Task BroadcastIssueTopologyChanged(
         this IHubContext<NotificationHub> hubContext,
+        IServiceProvider services,
         string projectId,
         IssueChangeType changeType,
-        string issueId)
+        string? issueId)
     {
-        // Send to all clients
-        await hubContext.Clients.All.SendAsync("IssuesChanged", projectId, changeType, issueId);
+        var snapshotStore = services.GetService<IProjectTaskGraphSnapshotStore>();
+        var refresher = services.GetService<ITaskGraphSnapshotRefresher>();
 
-        // Also send to project-specific group
+        snapshotStore?.InvalidateProject(projectId);
+        if (refresher is not null)
+        {
+            _ = Task.Run(() => refresher.RefreshOnceAsync(CancellationToken.None));
+        }
+
+        await hubContext.Clients.All.SendAsync("IssuesChanged", projectId, changeType, issueId);
         await hubContext.Clients.Group($"project-{projectId}")
             .SendAsync("IssuesChanged", projectId, changeType, issueId);
+    }
+
+    /// <summary>
+    /// Broadcasts a structure-preserving field patch. Applies the patch in place
+    /// via <c>IProjectTaskGraphSnapshotStore.PatchIssueFields</c> (no rebuild),
+    /// then emits either <c>IssueFieldsPatched</c> (when
+    /// <c>TaskGraphSnapshot:PatchPush:Enabled</c> is <c>true</c>, default) or
+    /// <c>IssuesChanged</c> (fallback — clients invalidate + refetch). Snapshot
+    /// patching happens in both cases.
+    /// </summary>
+    public static async Task BroadcastIssueFieldsPatched(
+        this IHubContext<NotificationHub> hubContext,
+        IServiceProvider services,
+        string projectId,
+        string issueId,
+        IssueFieldPatch patch)
+    {
+        var snapshotStore = services.GetService<IProjectTaskGraphSnapshotStore>();
+        snapshotStore?.PatchIssueFields(projectId, issueId, patch);
+
+        var patchPushOptions = services.GetService<IOptionsMonitor<TaskGraphPatchPushOptions>>();
+        var patchPushEnabled = patchPushOptions?.CurrentValue.Enabled ?? true;
+
+        if (patchPushEnabled)
+        {
+            await hubContext.Clients.All.SendAsync("IssueFieldsPatched", projectId, issueId, patch);
+            await hubContext.Clients.Group($"project-{projectId}")
+                .SendAsync("IssueFieldsPatched", projectId, issueId, patch);
+        }
+        else
+        {
+            await hubContext.Clients.All.SendAsync("IssuesChanged", projectId, IssueChangeType.Updated, issueId);
+            await hubContext.Clients.Group($"project-{projectId}")
+                .SendAsync("IssuesChanged", projectId, IssueChangeType.Updated, issueId);
+        }
     }
 
     /// <summary>

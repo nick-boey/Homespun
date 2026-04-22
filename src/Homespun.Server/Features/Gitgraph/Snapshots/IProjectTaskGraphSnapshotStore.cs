@@ -37,6 +37,15 @@ public interface IProjectTaskGraphSnapshotStore
     /// Removes entries whose <c>LastAccessedAt</c> is older than <paramref name="idleCutoff"/>.
     /// </summary>
     int EvictIdle(DateTimeOffset idleCutoff);
+
+    /// <summary>
+    /// Applies a structure-preserving field patch to every entry belonging to
+    /// <paramref name="projectId"/>. Non-null properties on <paramref name="patch"/>
+    /// overlay the matching node's <c>Issue</c>; nulls mean unchanged.
+    /// No-op when no entry contains a matching node — never recreates an entry.
+    /// Bumps <c>LastBuiltAt</c> on each mutated entry.
+    /// </summary>
+    void PatchIssueFields(string projectId, string issueId, IssueFieldPatch patch);
 }
 
 /// <summary>
