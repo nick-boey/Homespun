@@ -1,6 +1,5 @@
 'use client'
 
-import { TextShimmer } from '@/components/ui/text-shimmer'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 
@@ -10,6 +9,10 @@ type ThinkingBarProps = {
   onStop?: () => void
   stopLabel?: string
   onClick?: () => void
+}
+
+function Shimmer({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <span className={cn('text-foreground/70 animate-pulse', className)}>{children}</span>
 }
 
 export function ThinkingBar({
@@ -27,11 +30,11 @@ export function ThinkingBar({
           onClick={onClick}
           className="flex items-center gap-1 text-sm transition-opacity hover:opacity-80"
         >
-          <TextShimmer className="font-medium">{text}</TextShimmer>
+          <Shimmer className="font-medium">{text}</Shimmer>
           <ChevronRight className="text-muted-foreground size-4" />
         </button>
       ) : (
-        <TextShimmer className="cursor-default font-medium">{text}</TextShimmer>
+        <Shimmer className="cursor-default font-medium">{text}</Shimmer>
       )}
       {onStop ? (
         <button

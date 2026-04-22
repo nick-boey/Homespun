@@ -13,11 +13,7 @@ import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { toApiSessionMode, normalizeSessionMode } from '@/lib/utils/session-mode'
 import {
   useSession,
-  MessageList,
   ChatInput,
-  usePlanApproval,
-  useApprovePlan,
-  PlanApprovalPanel,
   useEntityInfo,
   useStopSession,
   useSessionSettings,
@@ -28,7 +24,7 @@ import {
 } from '@/features/sessions'
 import { useSessionEvents } from '@/features/sessions/hooks/use-session-events'
 import { useClearContext } from '@/features/sessions/hooks/use-clear-context'
-import { useAnswerQuestion } from '@/features/questions'
+import { ChatSurface } from '@/features/sessions/components/assistant-chat/ChatSurface'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import {
   ArrowLeft,
@@ -42,7 +38,6 @@ import {
   History,
   Plus,
 } from 'lucide-react'
-import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { useMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { Sessions, SessionType } from '@/api'
@@ -90,7 +85,6 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
-  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [showStopDialog, setShowStopDialog] = useState(false)
   const [infoPanelOpen, setInfoPanelOpen] = useState(false)
   const [viewingHistoricalSessionId, setViewingHistoricalSessionId] = useState<string | null>(null)
@@ -121,24 +115,10 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   // Clear context and start new session
   const { clearContext, isPending: isClearingContext } = useClearContext()
 
-  // Handle question answering
-  const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
-    sessionId,
-    onSuccess: () => {
-      // Start processing indicator when answer is submitted successfully
-      setIsProcessingAnswer(true)
-    },
-  })
-
-  // Plan approval state and actions (must be called before early returns)
-  const { hasPendingPlan, planContent, planFilePath } = usePlanApproval(sessionId, session)
-  const {
-    approveClearContext,
-    approveKeepContext,
-    reject,
-    isLoading: isApprovingPlan,
-    error: approvalError,
-  } = useApprovePlan(sessionId)
+  // Interactive tool calls (ask_user_question, propose_plan) render inline via the
+  // Toolkit's frontend tools in `features/sessions/runtime/toolkit.tsx`. The legacy
+  // `usePlanApproval` / `useApprovePlan` / `useAnswerQuestion` wiring + footerSlot
+  // panels were retired with the questions-plans-as-tools change.
 
   // Determine if the session is processing (not accepting input)
   const isProcessing =
@@ -153,18 +133,9 @@ function SessionChat({ sessionId }: { sessionId: string }) {
     async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
       if (!isConnected || !isJoined) return
 
-      // Check if there's a pending plan - intercept and reject with feedback
-      if (hasPendingPlan) {
-        try {
-          await reject(message)
-          toast.info('Plan rejected with your feedback')
-        } catch {
-          toast.error('Failed to reject plan')
-        }
-        return
-      }
-
-      // Normal message sending flow
+      // Normal message sending flow — plan approval and question answering are now
+      // handled inline by the propose_plan / ask_user_question Toolkit renderers via
+      // addResult, not by intercepting the composer.
       setIsSending(true)
 
       try {
@@ -185,7 +156,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         setIsSending(false)
       }
     },
-    [isConnected, isJoined, sessionId, hasPendingPlan, reject]
+    [isConnected, isJoined, sessionId]
   )
 
   // Handle stop session
@@ -241,23 +212,12 @@ function SessionChat({ sessionId }: { sessionId: string }) {
     clearContext(sessionId)
   }, [clearContext, sessionId])
 
-  // Auto-scroll to bottom when new messages arrive or when pending question appears
+  // Auto-scroll to bottom when new messages arrive.
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
-  }, [messages, session?.pendingQuestion])
-
-  // Clear processing answer state when session status changes or question is cleared
-  useEffect(() => {
-    if (session?.status !== 'waitingForQuestionAnswer' && isProcessingAnswer) {
-      setIsProcessingAnswer(false)
-    }
-    // Also clear if no pending question
-    if (!session?.pendingQuestion && isProcessingAnswer) {
-      setIsProcessingAnswer(false)
-    }
-  }, [session?.status, session?.pendingQuestion, isProcessingAnswer])
+  }, [messages])
 
   useBreadcrumbSetter(
     [
@@ -363,41 +323,19 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         </div>
       )}
       {/* Messages area - flex-1 takes remaining space */}
-      <div className="relative mt-4 min-h-0 flex-1">
-        <div
-          ref={scrollContainerRef}
-          className="border-border absolute inset-0 overflow-y-auto rounded-lg border"
-        >
-          {isViewingHistorical ? (
-            <MessageList messages={messages} isLoading={isReplayingHistory} />
-          ) : (
-            <>
-              <MessageList
-                messages={messages}
-                isLoading={isLoading || isReplayingHistory}
-                pendingQuestion={!isProcessingAnswer ? session?.pendingQuestion : undefined}
-                onAnswerQuestion={answerQuestion}
-                isSubmittingAnswer={isSubmittingAnswer}
-                isProcessingAnswer={isProcessingAnswer}
-              />
-              {/* Plan approval panel displayed inline after messages */}
-              {hasPendingPlan && planContent && (
-                <div className="p-4">
-                  <PlanApprovalPanel
-                    planContent={planContent}
-                    planFilePath={planFilePath}
-                    onApproveClearContext={approveClearContext}
-                    onApproveKeepContext={approveKeepContext}
-                    onReject={reject}
-                    isLoading={isApprovingPlan}
-                    error={approvalError}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        <ScrollToBottom scrollRef={scrollContainerRef} />
+      <div
+        ref={scrollContainerRef}
+        className="border-border relative mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border"
+      >
+        <ChatSurface
+          state={aguiState}
+          sessionId={viewedSessionId}
+          sendMessage={async (text) => {
+            await handleSend(text, mode, model)
+          }}
+          isLoading={isLoading || isReplayingHistory}
+          className="flex min-h-0 flex-1 flex-col"
+        />
       </div>
       {/* Chat input - sticky at bottom with safe area inset for mobile keyboards */}
       {!isViewingHistorical && (
@@ -418,9 +356,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
                   ? 'Joining session...'
                   : isProcessing
                     ? 'Processing...'
-                    : hasPendingPlan
-                      ? 'Type feedback to modify the plan...'
-                      : 'Type a message...'
+                    : 'Type a message...'
             }
           />
         </div>

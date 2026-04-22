@@ -52,15 +52,6 @@ public interface IAGUIEventService
     /// </summary>
     RunErrorEvent CreateRunError(string message, string? code = null);
 
-    /// <summary>
-    /// Creates a custom QuestionPending event.
-    /// </summary>
-    CustomEvent CreateQuestionPending(PendingQuestion question);
-
-    /// <summary>
-    /// Creates a custom PlanPending event.
-    /// </summary>
-    CustomEvent CreatePlanPending(string planContent, string? planFilePath);
 }
 
 /// <summary>
@@ -108,24 +99,10 @@ public class AGUIEventService : IAGUIEventService
                 break;
 
             case TaskState.InputRequired:
-                // Input-required needs context to determine if it's a question or plan
-                var inputType = statusUpdate.Metadata.GetMetadataString("inputType");
-
-                if (inputType == A2AInputType.PlanApproval)
-                {
-                    var planContent = ExtractPlanContent(statusUpdate);
-                    var planFilePath = statusUpdate.Metadata.GetMetadataString("planFilePath");
-                    yield return CreatePlanPending(planContent, planFilePath);
-                }
-                else
-                {
-                    // Default to question (inputType == "question" or unspecified)
-                    var question = ExtractQuestion(statusUpdate);
-                    if (question != null)
-                    {
-                        yield return CreateQuestionPending(question);
-                    }
-                }
+                // Input-required translation lives on the canonical path in
+                // A2AToAGUITranslator.BuildInputRequired, which emits TOOL_CALL_* events and
+                // registers the toolCallId with IPendingToolCallRegistry. This legacy
+                // IAGUIEventService surface is kept for the non-input-required states only.
                 break;
 
             case TaskState.Canceled:
@@ -239,18 +216,6 @@ public class AGUIEventService : IAGUIEventService
     public RunErrorEvent CreateRunError(string message, string? code = null)
     {
         return AGUIEventFactory.CreateRunError(message, code);
-    }
-
-    /// <inheritdoc />
-    public CustomEvent CreateQuestionPending(PendingQuestion question)
-    {
-        return AGUIEventFactory.CreateQuestionPending(question);
-    }
-
-    /// <inheritdoc />
-    public CustomEvent CreatePlanPending(string planContent, string? planFilePath)
-    {
-        return AGUIEventFactory.CreatePlanPending(planContent, planFilePath);
     }
 
     /// <summary>

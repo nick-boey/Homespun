@@ -18,6 +18,8 @@ public class ToolInteractionService : IToolInteractionService
     private readonly IAGUIEventService _agUIEventService;
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly ISessionStateManager _stateManager;
+    private readonly IPendingToolCallRegistry _pendingToolCalls;
+    private readonly IToolCallResultAppender _toolCallResultAppender;
     private readonly Lazy<IMessageProcessingService> _messageProcessing;
     private readonly Lazy<ISessionLifecycleService> _lifecycle;
 
@@ -28,6 +30,8 @@ public class ToolInteractionService : IToolInteractionService
         IAGUIEventService agUIEventService,
         IAgentExecutionService agentExecutionService,
         ISessionStateManager stateManager,
+        IPendingToolCallRegistry pendingToolCalls,
+        IToolCallResultAppender toolCallResultAppender,
         Lazy<IMessageProcessingService> messageProcessing,
         Lazy<ISessionLifecycleService> lifecycle)
     {
@@ -37,6 +41,8 @@ public class ToolInteractionService : IToolInteractionService
         _agUIEventService = agUIEventService;
         _agentExecutionService = agentExecutionService;
         _stateManager = stateManager;
+        _pendingToolCalls = pendingToolCalls;
+        _toolCallResultAppender = toolCallResultAppender;
         _messageProcessing = messageProcessing;
         _lifecycle = lifecycle;
     }
@@ -82,8 +88,8 @@ public class ToolInteractionService : IToolInteractionService
             session.PendingQuestion = pendingQuestion;
             session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
 
-            var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
-            await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+            // The ask_user_question tool call is emitted on the canonical A2A path via
+            // A2AToAGUITranslator.BuildInputRequired — do not re-broadcast it here.
             await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
@@ -136,8 +142,8 @@ public class ToolInteractionService : IToolInteractionService
             session.PendingQuestion = pendingQuestion;
             session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
 
-            var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
-            await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+            // The ask_user_question tool call is emitted on the canonical A2A path via
+            // A2AToAGUITranslator.BuildInputRequired — do not re-broadcast it here.
             await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions (from worker)",
@@ -208,9 +214,8 @@ public class ToolInteractionService : IToolInteractionService
             if (!string.IsNullOrEmpty(planContent))
             {
                 session.PlanContent = planContent;
-
-                var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, session.PlanFilePath);
-                await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
+                // The propose_plan tool call is emitted on the canonical A2A path via
+                // A2AToAGUITranslator.BuildInputRequired — do not re-broadcast it here.
             }
             else
             {
@@ -296,8 +301,8 @@ public class ToolInteractionService : IToolInteractionService
             session.PlanFilePath = foundPath;
             session.PlanContent = planContent;
 
-            var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, foundPath);
-            await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
+            // The propose_plan tool call is emitted on the canonical A2A path via
+            // A2AToAGUITranslator.BuildInputRequired — do not re-broadcast it here.
 
             session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
             session.HasPendingPlanApproval = true;
@@ -342,6 +347,7 @@ public class ToolInteractionService : IToolInteractionService
             if (resolved)
             {
                 _logger.LogInformation("AnswerQuestionAsync: Worker resolved question for session {SessionId}", sessionId);
+                await AppendInteractiveToolResultAsync(session, answers, cancellationToken);
                 return;
             }
         }
@@ -451,6 +457,8 @@ public class ToolInteractionService : IToolInteractionService
                     if (resolved)
                     {
                         _logger.LogInformation("ApprovePlanAsync: Worker approved plan (keep context) for session {SessionId}", sessionId);
+                        await AppendInteractiveToolResultAsync(session,
+                            new { approved = true, keepContext = true, feedback = (string?)null }, cancellationToken);
                         return;
                     }
                 }
@@ -470,6 +478,8 @@ public class ToolInteractionService : IToolInteractionService
                     if (resolved)
                     {
                         _logger.LogInformation("ApprovePlanAsync: Worker notified (clear context) for session {SessionId}", sessionId);
+                        await AppendInteractiveToolResultAsync(session,
+                            new { approved = true, keepContext = false, feedback = (string?)null }, cancellationToken);
                     }
                 }
 
@@ -496,6 +506,8 @@ public class ToolInteractionService : IToolInteractionService
                 if (resolved)
                 {
                     _logger.LogInformation("ApprovePlanAsync: Worker rejected plan for session {SessionId}", sessionId);
+                    await AppendInteractiveToolResultAsync(session,
+                        new { approved = false, keepContext = false, feedback }, cancellationToken);
                     return;
                 }
             }
@@ -554,6 +566,37 @@ public class ToolInteractionService : IToolInteractionService
     }
 
     // --- Private helpers ---
+
+    /// <summary>
+    /// After the worker confirms an ask_user_question answer or a propose_plan approval, the
+    /// matching interactive tool call must transition from requires-action to complete by
+    /// emitting a TOOL_CALL_RESULT on the session's event stream. The toolCallId was assigned
+    /// by <see cref="A2AToAGUITranslator.BuildInputRequired"/> and cached in
+    /// <see cref="IPendingToolCallRegistry"/>; we dequeue it here and feed a synthetic
+    /// tool_result A2A user message through <see cref="IToolCallResultAppender"/> so live +
+    /// replay see the identical completion.
+    /// </summary>
+    private async Task AppendInteractiveToolResultAsync(
+        ClaudeSession session,
+        object resultPayload,
+        CancellationToken cancellationToken)
+    {
+        var toolCallId = _pendingToolCalls.Dequeue(session.Id);
+        if (toolCallId is null)
+        {
+            _logger.LogWarning(
+                "AppendInteractiveToolResultAsync: no pending toolCallId registered for session {SessionId} — client probably double-submitted or the server was restarted between start and result",
+                session.Id);
+            return;
+        }
+
+        await _toolCallResultAppender.AppendAsync(
+            session.ProjectId,
+            session.Id,
+            toolCallId,
+            resultPayload,
+            cancellationToken);
+    }
 
     private static List<UserQuestion> ParseQuestions(JsonElement questionsElement)
     {

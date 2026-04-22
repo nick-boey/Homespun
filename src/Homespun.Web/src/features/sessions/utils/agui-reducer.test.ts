@@ -108,11 +108,14 @@ describe('applyEnvelope — canned sequence (task 8.1)', () => {
     })
   })
 
-  it('captures pending question via the question.pending Custom event', () => {
+  it('routes stale question.pending Custom events to unknownEvents without mutating state', () => {
+    // question.pending is retired as of the questions-plans-as-tools change. A stale
+    // server (pre-deploy) might still emit it; the reducer must ignore it gracefully so
+    // the rest of the state stream continues to fold correctly.
     const final = replay([
       env(1, 'e1', {
         type: 'CUSTOM',
-        name: AGUICustomEventName.QuestionPending,
+        name: 'question.pending',
         value: {
           id: 'q1',
           toolUseId: 'tu1',
@@ -121,11 +124,16 @@ describe('applyEnvelope — canned sequence (task 8.1)', () => {
         timestamp: 0,
       }),
     ])
-    expect(final.pendingQuestion).toEqual({
-      id: 'q1',
-      toolUseId: 'tu1',
-      questions: [{ question: 'pick one', options: [] }],
+
+    expect(final.messages).toHaveLength(0)
+    expect(final.unknownEvents).toHaveLength(1)
+    expect(final.unknownEvents[0].event).toMatchObject({
+      type: 'CUSTOM',
+      name: 'question.pending',
     })
+    // Sanity: no pendingQuestion / pendingPlan fields exist on the reducer state anymore.
+    expect(final).not.toHaveProperty('pendingQuestion')
+    expect(final).not.toHaveProperty('pendingPlan')
   })
 
   it('captures system.init into state.systemInit', () => {

@@ -160,12 +160,9 @@ export const AGUICustomEventName = {
   HookResponse: 'hook.response',
   /** Session init/system message from the worker. Payload: `AGUISystemInitData`. */
   SystemInit: 'system.init',
-  /** Claude is asking a question. Payload: `PendingQuestion`. */
-  QuestionPending: 'question.pending',
-  /** Claude is presenting a plan for approval. Payload: `AGUIPlanPendingData`. */
-  PlanPending: 'plan.pending',
-  /** Session resumed from paused/input-required state. Payload: `{}`. */
-  StatusResumed: 'status.resumed',
+  // question.pending / plan.pending / status.resumed are retired. Interactive
+  // tool calls (ask_user_question, propose_plan) now flow through canonical
+  // TOOL_CALL_* events — see features/sessions/runtime/toolkit.tsx.
   /** Workflow-level (issue-agent, rebase, etc.) completion. Payload: `AGUIWorkflowCompleteData`. */
   WorkflowComplete: 'workflow.complete',
   /** Server echo of a user-submitted message for multi-tab support. Payload: `AGUIUserMessageData`. */
@@ -208,7 +205,11 @@ export interface AGUISystemInitData {
   permissionMode?: string
 }
 
-export interface AGUIPlanPendingData {
+/**
+ * Args-JSON payload for the `propose_plan` tool call — carried inside
+ * `ToolCallArgsEvent.delta` for `TOOL_CALL_START { toolCallName: "propose_plan" }`.
+ */
+export interface ProposePlanToolArgs {
   planContent: string
   planFilePath?: string
 }

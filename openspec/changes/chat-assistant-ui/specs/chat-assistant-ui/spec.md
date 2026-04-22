@@ -39,18 +39,23 @@ The web client SHALL provide a pure `convertAGUIMessage` function that maps `AGU
 - **THEN** the two results SHALL be deep-equal
 - **AND** the function SHALL not read from React context, global state, or time-varying sources
 
-### Requirement: Tool-call rendering uses per-tool `makeAssistantToolUI` registrations
+### Requirement: Tool-call rendering is wired through the Tool UI `Toolkit` API
 
-The web client SHALL register one `makeAssistantToolUI` entry per known built-in tool name (Bash, Read, Grep, Write), each rendering the tool-specific result presentation. Unknown tool names SHALL fall through to `ToolFallback`.
+The web client SHALL register one `Toolkit` entry per known built-in tool name (Bash, Read, Grep, Write), each declared `type: "backend"` with a `render({ result })` callback producing the tool-specific presentation. The toolkit SHALL be supplied to `useAui({ tools: Tools({ toolkit }) })` and the resulting `aui` SHALL be attached to `AssistantRuntimeProvider`. Unknown tool names SHALL render a generic fallback presentation.
 
-#### Scenario: Known tool renders its registered UI
-- **WHEN** a message contains a tool-call part with a registered `toolName`
-- **THEN** the DOM SHALL render the per-tool JSX
-- **AND** the generic fallback SHALL NOT be used
+#### Scenario: Known tool renders its Toolkit `render` output
+- **WHEN** a message contains a tool-call part with a `toolName` present in the Toolkit
+- **THEN** the DOM SHALL render the output of that Toolkit entry's `render` callback
+- **AND** the unknown-tool fallback SHALL NOT be used
 
 #### Scenario: Unknown tool renders the fallback
-- **WHEN** a message contains a tool-call part with an unregistered `toolName`
-- **THEN** the DOM SHALL render the `ToolFallback` presentation
+- **WHEN** a message contains a tool-call part with a `toolName` not present in the Toolkit
+- **THEN** the DOM SHALL render a generic unknown-tool fallback
+
+#### Scenario: Runtime and Toolkit compose under one provider
+- **WHEN** the session page mounts
+- **THEN** a single `AssistantRuntimeProvider` SHALL receive both `runtime` (from `useExternalStoreRuntime`) and `aui` (from `useAui({ tools: Tools({ toolkit }) })`)
+- **AND** a tool-call content part SHALL route to the Toolkit `render` callback without requiring the `useChatRuntime` path
 
 ### Requirement: Plan approval and pending-question surfaces render outside the message stream
 

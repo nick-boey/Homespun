@@ -21,6 +21,13 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// </summary>
 public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 {
+    private readonly IPendingToolCallRegistry _pendingToolCalls;
+
+    public A2AToAGUITranslator(IPendingToolCallRegistry pendingToolCalls)
+    {
+        _pendingToolCalls = pendingToolCalls;
+    }
+
     /// <inheritdoc />
     public IEnumerable<AGUIBaseEvent> Translate(ParsedA2AEvent a2a, TranslationContext ctx)
     {
@@ -244,12 +251,17 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 
     // ---------------- StatusUpdate ----------------
 
-    private static IEnumerable<AGUIBaseEvent> TranslateStatusUpdate(
+    private IEnumerable<AGUIBaseEvent> TranslateStatusUpdate(
         TaskStatusUpdateEvent statusUpdate, TranslationContext ctx)
     {
-        // status.message may carry a control-event hint (workflow_complete, status_resumed, ...)
-        // embedded via its metadata.sdkMessageType — check those before the state switch so we
-        // can distinguish a "workflow_complete" completed-status from an ordinary run completion.
+        // status.message may carry a control-event hint (workflow_complete, ...) embedded via
+        // its metadata.sdkMessageType — check those before the state switch so we can
+        // distinguish a "workflow_complete" completed-status from an ordinary run completion.
+        //
+        // status.resumed is deliberately NOT translated: pending tool-call state is modelled as
+        // conversation content (TOOL_CALL_START/ARGS/END without a RESULT) rather than ghost
+        // state on the session, so there is nothing for "resumed" to clear. Worker-emitted
+        // status_resumed events are dropped by the translator and never reach the client.
         var statusMsgSdkType = statusUpdate.Status.Message?.Metadata.GetMetadataString("sdkMessageType");
         var controlType = statusUpdate.Metadata.GetMetadataString("controlType");
 
@@ -261,9 +273,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 
         if (controlType == "status_resumed" || statusMsgSdkType == "status_resumed")
         {
-            yield return AGUIEventFactory.CreateCustomEvent(
-                AGUICustomEventName.StatusResumed,
-                new { });
+            // Retired signal — see above. No emission.
             yield break;
         }
 
@@ -274,7 +284,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
                 yield break;
 
             case TaskState.InputRequired:
-                foreach (var evt in BuildInputRequired(statusUpdate))
+                foreach (var evt in BuildInputRequired(statusUpdate, ctx))
                 {
                     yield return evt;
                 }
@@ -352,33 +362,69 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
             });
     }
 
-    private static IEnumerable<AGUIBaseEvent> BuildInputRequired(TaskStatusUpdateEvent statusUpdate)
+    /// <summary>
+    /// Canonical tool names for the two interactive tool calls. Stable on the wire and in the
+    /// event log — don't rename without a wire-protocol migration.
+    /// </summary>
+    public const string AskUserQuestionToolName = "ask_user_question";
+    public const string ProposePlanToolName = "propose_plan";
+
+    /// <summary>
+    /// Translates an A2A <c>StatusUpdate{state: InputRequired}</c> into a
+    /// <c>TOOL_CALL_START / TOOL_CALL_ARGS / TOOL_CALL_END</c> sequence with a canonical tool
+    /// name (<see cref="AskUserQuestionToolName"/> or <see cref="ProposePlanToolName"/>) and
+    /// the original payload carried as the tool-call args JSON. The generated
+    /// <c>toolCallId</c> is registered with <see cref="IPendingToolCallRegistry"/> so the
+    /// hub's answer / approval handler can later append a matching
+    /// <c>TOOL_CALL_RESULT</c>.
+    /// </summary>
+    private IEnumerable<AGUIBaseEvent> BuildInputRequired(
+        TaskStatusUpdateEvent statusUpdate, TranslationContext ctx)
     {
         var inputType = statusUpdate.Metadata.GetMetadataString("inputType");
 
+        string toolName;
+        object argsObject;
+
         if (inputType == A2AInputType.PlanApproval)
         {
+            toolName = ProposePlanToolName;
             var planContent = ExtractPlanContent(statusUpdate);
             var planFilePath = statusUpdate.Metadata.GetMetadataString("planFilePath");
-            yield return AGUIEventFactory.CreatePlanPending(planContent, planFilePath);
+            // planFilePath is preserved for server-side fallback (ToolInteractionService re-reads
+            // it if the worker doesn't carry fresh plan content on resume) and so the Tool UI
+            // plan component can surface the source filename to the user.
+            argsObject = new
+            {
+                planContent,
+                planFilePath,
+            };
         }
         else
         {
             // Default to question (inputType == "question" or absent).
+            toolName = AskUserQuestionToolName;
             var question = ExtractPendingQuestion(statusUpdate);
-            if (question is not null)
-            {
-                yield return AGUIEventFactory.CreateQuestionPending(question);
-            }
-            else
+            if (question is null)
             {
                 yield return RawCustom(new
                 {
                     kind = "input-required-without-payload",
                     inputType,
                 });
+                yield break;
             }
+            argsObject = question;
         }
+
+        var toolCallId = Guid.NewGuid().ToString();
+        _pendingToolCalls.Register(ctx.SessionId, toolCallId);
+
+        var argsJson = JsonSerializer.Serialize(argsObject, JsonOpts);
+
+        yield return AGUIEventFactory.CreateToolCallStart(toolCallId, toolName);
+        yield return AGUIEventFactory.CreateToolCallArgs(toolCallId, argsJson);
+        yield return AGUIEventFactory.CreateToolCallEnd(toolCallId);
     }
 
     // ---------------- ArtifactUpdate ----------------

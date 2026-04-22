@@ -76,23 +76,10 @@ public static class AGUICustomEventName
     /// </summary>
     public const string SystemInit = "system.init";
 
-    /// <summary>
-    /// Claude is asking the user a question (SDK input-required, inputType=question).
-    /// Payload: <c>PendingQuestion</c>.
-    /// </summary>
-    public const string QuestionPending = "question.pending";
-
-    /// <summary>
-    /// Claude is presenting a plan for approval (SDK input-required, inputType=plan-approval).
-    /// Payload: <c>AGUIPlanPendingData</c>.
-    /// </summary>
-    public const string PlanPending = "plan.pending";
-
-    /// <summary>
-    /// Marks that the session has resumed from a paused/input-required state.
-    /// Payload: <c>{}</c>.
-    /// </summary>
-    public const string StatusResumed = "status.resumed";
+    // question.pending / plan.pending / status.resumed are retired. Interactive
+    // tool calls (ask_user_question, propose_plan) now flow through the canonical
+    // TOOL_CALL_START / TOOL_CALL_ARGS / TOOL_CALL_END / TOOL_CALL_RESULT events —
+    // see A2AToAGUITranslator.BuildInputRequired and IToolCallResultAppender.
 
     /// <summary>
     /// A higher-level workflow (issue-agent modification, rebase, etc.) completed.
@@ -587,47 +574,6 @@ public static class AGUIEventFactory
         };
     }
 
-    /// <summary>
-    /// Creates a QuestionPending custom event.
-    /// </summary>
-    public static CustomEvent CreateQuestionPending(PendingQuestion question)
-    {
-        return CreateCustomEvent(AGUICustomEventName.QuestionPending, question);
-    }
-
-    /// <summary>
-    /// Creates a PlanPending custom event.
-    /// </summary>
-    public static CustomEvent CreatePlanPending(string planContent, string? planFilePath)
-    {
-        return CreateCustomEvent(AGUICustomEventName.PlanPending, new AGUIPlanPendingData
-        {
-            PlanContent = planContent,
-            PlanFilePath = planFilePath
-        });
-    }
-}
-
-#endregion
-
-#region Custom Event Data Types
-
-/// <summary>
-/// Plan pending event data for AG-UI custom events.
-/// </summary>
-public record AGUIPlanPendingData
-{
-    /// <summary>
-    /// The plan content in markdown format.
-    /// </summary>
-    [JsonPropertyName("planContent")]
-    public required string PlanContent { get; init; }
-
-    /// <summary>
-    /// The path to the plan file, if available.
-    /// </summary>
-    [JsonPropertyName("planFilePath")]
-    public string? PlanFilePath { get; init; }
 }
 
 #endregion

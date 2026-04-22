@@ -18,7 +18,6 @@
 
 import type {
   AGUIEvent,
-  AGUIPlanPendingData,
   AGUIThinkingData,
   AGUIUserMessageData,
   SessionEventEnvelope,
@@ -103,10 +102,6 @@ export interface AGUISessionState {
   lastSeenSeq: number
   /** All messages, in order. */
   messages: AGUIMessage[]
-  /** Pending question-to-user (if any). Cleared on the next user-text or status transition. */
-  pendingQuestion: unknown | null
-  /** Pending plan-for-approval (if any). */
-  pendingPlan: AGUIPlanPendingData | null
   /** Reverse index: toolCallId → ordinal of the message that owns the block. */
   toolCallIndex: Record<string, string>
   /** `system.init` payload, if observed. Handy for model/tools badges in the UI. */
@@ -132,8 +127,6 @@ export interface AGUISessionState {
 export const initialAGUISessionState: AGUISessionState = {
   lastSeenSeq: 0,
   messages: [],
-  pendingQuestion: null,
-  pendingPlan: null,
   toolCallIndex: {},
   systemInit: null,
   hookEvents: [],
@@ -422,17 +415,6 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
           { kind: 'response', data: event.value as AGUIHookResponse },
         ],
       }
-
-    case AGUICustomEventName.QuestionPending:
-      return { ...state, pendingQuestion: event.value }
-
-    case AGUICustomEventName.PlanPending:
-      return { ...state, pendingPlan: event.value as AGUIPlanPendingData }
-
-    case AGUICustomEventName.StatusResumed:
-      // Resuming clears any transient input-required state; run status itself is
-      // driven by RunStarted/Finished events.
-      return { ...state, pendingQuestion: null, pendingPlan: null }
 
     case AGUICustomEventName.ContextCleared:
       // Treated as a full reset — the backend starts a fresh event log, so any envelopes

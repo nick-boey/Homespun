@@ -299,6 +299,14 @@ else
     // envelope broadcast. Single point where the append-before-broadcast invariant lives.
     builder.Services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
 
+    // Pending-tool-call registry + result appender — bridge between the translator's
+    // input-required → TOOL_CALL_* emission and the hub's AnswerQuestion / ApprovePlan
+    // handlers. The translator registers the toolCallId; the hub dequeues it and feeds a
+    // synthetic tool_result message back through the ingestor so live + replay see the
+    // completed tool call identically.
+    builder.Services.AddSingleton<IPendingToolCallRegistry, PendingToolCallRegistry>();
+    builder.Services.AddSingleton<IToolCallResultAppender, ToolCallResultAppender>();
+
     // Replay-endpoint default mode (Incremental vs Full) + any future session-event options.
     builder.Services.Configure<SessionEventsOptions>(
         builder.Configuration.GetSection(SessionEventsOptions.SectionName));

@@ -42,7 +42,7 @@ public class RefreshFidelityTests
         Directory.CreateDirectory(_baseDir);
 
         _store = new A2AEventStore(_baseDir, NullLogger<A2AEventStore>.Instance);
-        _translator = new A2AToAGUITranslator();
+        _translator = new A2AToAGUITranslator(new PendingToolCallRegistry());
 
         _groupClient = new Mock<IClientProxy>();
         _liveEnvelopes = new List<SessionEventEnvelope>();
