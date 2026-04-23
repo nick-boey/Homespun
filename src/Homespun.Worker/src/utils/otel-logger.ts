@@ -82,15 +82,15 @@ export function isSdkDebugEnabled(): boolean {
 }
 
 /**
- * Whether full-body debug logging is enabled. Returns true when either the
- * umbrella `HOMESPUN_DEBUG_FULL_MESSAGES` or the legacy SDK-only
- * `DEBUG_AGENT_SDK` env var is `"true"`. Read lazily on each call.
+ * Whether full-body debug logging is enabled. Gated strictly on the umbrella
+ * `HOMESPUN_DEBUG_FULL_MESSAGES` — NOT on the legacy `DEBUG_AGENT_SDK`, which
+ * controls `sdkDebug` (SDK-boundary logs) only and is hardcoded to "true" on
+ * sibling worker containers by the server's DockerAgentExecutionService for
+ * dev ergonomics. Coupling `a2aEmitDebug` to that legacy flag would make the
+ * umbrella's off-state un-observable in dev-live. Read lazily on each call.
  */
 export function isFullMessagesDebugEnabled(): boolean {
-  return (
-    process.env.HOMESPUN_DEBUG_FULL_MESSAGES === 'true' ||
-    process.env.DEBUG_AGENT_SDK === 'true'
-  );
+  return process.env.HOMESPUN_DEBUG_FULL_MESSAGES === 'true';
 }
 
 /**

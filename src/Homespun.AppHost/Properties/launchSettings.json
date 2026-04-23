@@ -65,8 +65,8 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:17178;http://localhost:15178",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Production",
-        "DOTNET_ENVIRONMENT": "Production",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
         "HOMESPUN_DEV_HOSTING_MODE": "container",

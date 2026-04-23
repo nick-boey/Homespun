@@ -25,10 +25,18 @@ describe('a2aEmitDebug (full-body A2A emit-boundary log)', () => {
     vi.restoreAllMocks();
   });
 
-  it('is a no-op when neither umbrella flag nor DEBUG_AGENT_SDK is set', () => {
+  it('is a no-op when HOMESPUN_DEBUG_FULL_MESSAGES is unset', () => {
     const { emit } = installLoggerSpy();
     vi.stubEnv('HOMESPUN_DEBUG_FULL_MESSAGES', '');
     vi.stubEnv('DEBUG_AGENT_SDK', '');
+    a2aEmitDebug('session-1', 'message', { foo: 'bar' }, 1);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op even when DEBUG_AGENT_SDK=true if umbrella unset (a2a.emit is strictly umbrella-gated)', () => {
+    const { emit } = installLoggerSpy();
+    vi.stubEnv('HOMESPUN_DEBUG_FULL_MESSAGES', '');
+    vi.stubEnv('DEBUG_AGENT_SDK', 'true');
     a2aEmitDebug('session-1', 'message', { foo: 'bar' }, 1);
     expect(emit).not.toHaveBeenCalled();
   });
@@ -50,11 +58,12 @@ describe('a2aEmitDebug (full-body A2A emit-boundary log)', () => {
     expect(call.attributes?.['homespun.seq']).toBe(42);
   });
 
-  it('emits under DEBUG_AGENT_SDK=true (back-compat)', () => {
+  it('does NOT emit under DEBUG_AGENT_SDK=true alone — a2a.emit is strictly umbrella-gated', () => {
     const { emit } = installLoggerSpy();
+    vi.stubEnv('HOMESPUN_DEBUG_FULL_MESSAGES', '');
     vi.stubEnv('DEBUG_AGENT_SDK', 'true');
     a2aEmitDebug('session-1', 'task', { id: 't-1' });
-    expect(emit).toHaveBeenCalledOnce();
+    expect(emit).not.toHaveBeenCalled();
   });
 
   it('omits seq attribute when seq is undefined', () => {
@@ -87,10 +96,10 @@ describe('isFullMessagesDebugEnabled', () => {
     expect(isFullMessagesDebugEnabled()).toBe(true);
   });
 
-  it('returns true when DEBUG_AGENT_SDK=true (back-compat)', () => {
+  it('returns false when DEBUG_AGENT_SDK=true but umbrella unset (umbrella-only gate)', () => {
     vi.stubEnv('HOMESPUN_DEBUG_FULL_MESSAGES', '');
     vi.stubEnv('DEBUG_AGENT_SDK', 'true');
-    expect(isFullMessagesDebugEnabled()).toBe(true);
+    expect(isFullMessagesDebugEnabled()).toBe(false);
   });
 
   it('returns false when both are unset or non-"true"', () => {

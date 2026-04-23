@@ -78,7 +78,8 @@ The umbrella does not *override* values that are explicitly set, so existing wor
 
 ### Decision: `prod` profile bind-mounts `~/.homespun-container/data` and runs server as root
 
-**Choice:** New `prod` launch profile in `Properties/launchSettings.json` sets `HOMESPUN_DEV_HOSTING_MODE=container`, `ASPNETCORE_ENVIRONMENT=Production`, and a new `HOMESPUN_PROFILE_KIND=prod` discriminator. The AppHost branches on `HOMESPUN_PROFILE_KIND=prod` inside the `isContainerHosting` block to:
+**Choice:** New `prod` launch profile in `Properties/launchSettings.json` sets `HOMESPUN_DEV_HOSTING_MODE=container` and a new `HOMESPUN_PROFILE_KIND=prod` discriminator. The AppHost process itself runs in `Development` (so user-secrets load and `github-token` / `claude-oauth-token` Aspire parameters resolve). The AppHost branches on `HOMESPUN_PROFILE_KIND=prod` inside the `isContainerHosting` block to:
+- Set `ASPNETCORE_ENVIRONMENT=Production` on the **server container** via `WithEnvironment` (not on the AppHost process itself).
 - Skip `HOMESPUN_MOCK_MODE`, `MockMode__*` env vars.
 - Add `WithBindMount(prodDataPath, "/data")` and `WithEnvironment("HOMESPUN_DATA_PATH", "/data/.homespun/homespun-data.json")`.
 - Continue running the server container as `--user 0:0` (matches dev-container; required for the docker.sock DooD path).
