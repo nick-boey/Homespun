@@ -53,13 +53,46 @@ We evaluated three integration strategies and picked one.
 
 **Consequence:** The two panels keep their existing logic almost verbatim. Only their position in the JSX tree changes.
 
-### D3: `makeAssistantToolUI` per tool, not a monolithic renderer
+### D3: Tool UI `Toolkit` API, not `makeAssistantToolUI`
 
-**Decision:** One `makeAssistantToolUI({ toolName: "Bash" })` registration per known tool, in `features/sessions/runtime/tool-ui/`. `ToolFallback` for unknowns. The JSX each renders is ported 1:1 from the current `tool-results/*-tool-result.tsx` files.
+**Decision:** Use Assistant UI's `Toolkit` API — a single `toolkit` object exporting one `{ type, description?, parameters?, render }` entry per tool, passed through `Tools({ toolkit })` into `useAui(...)` and rendered by AUI's tool-call layer. Do NOT adopt the `makeAssistantToolUI` component-registration pattern.
 
-**Rationale:** Matches Assistant UI's idiomatic tool-UI pattern (per-tool registration, matched by `toolName`). Parallels the existing file structure. Encourages per-tool iteration without touching a central dispatcher.
+**Rationale:** Spike B (`spike-findings.md`) confirmed that `Toolkit` and `makeAssistantToolUI` end up writing to the **same** `aui.tools().setToolUI` store — they are two surfaces over one mechanism, not two distinct generations. So the decision is about ergonomics + ecosystem fit, not compatibility:
 
-**Consequence:** `tool-result-renderer.tsx`'s manual switch/case goes away. Adding a tool renderer is a new file + a single registration, not a dispatcher edit.
+1. **The `tool-ui` skill and shadcn registry components are written against `Toolkit`.** Every Tool UI component's example uses the `Toolkit` entry shape. Using `makeAssistantToolUI` would mean translating examples at every step.
+2. **`Toolkit` carries `type` + `parameters` for frontend tools.** Backend tools (our Bash/Read/Grep/Write — all worker-implemented) only need `render`. But the `questions-plans-as-tools` follow-up adds **frontend** tools (`ask_user_question`, `propose_plan`) where the user commits results via `addResult` — those need `parameters` (zod schema) for model-context registration. `makeAssistantToolUI` has no analogue for this.
+3. **Single hop.** Using `Toolkit` here means zero rewriting when `questions-plans-as-tools` lands.
+
+**Consequence:** `features/sessions/runtime/toolkit.tsx` exports a `Toolkit` object. Spike B confirmed the runtime-agnostic render lookup (`MessageParts.js:98 — s.tools.tools[props.toolName] ?? Fallback`), so `useExternalStoreRuntime` composes with `Toolkit` without any special wiring. AUI ships a built-in Fallback at that lookup site — we don't need to register a fallback manually unless we want a Homespun-branded one. Phase 4 task set simplifies accordingly.
+
+### D7: Adopt Tool UI registry display components selectively
+
+**Decision:** When a Tool UI registry component materially improves on our hand-rolled UI component, install it via `npx shadcn@latest add @tool-ui/<id>` and use it. When our component is already fit for purpose, keep ours. Decide per-component, not wholesale.
+
+**Concretely:**
+
+| Area | Today | Plan | Why |
+|---|---|---|---|
+| Code display in Bash/Read/Grep/Write | `components/ui/code-block.tsx` (thin prompt-kit wrapper) | Install `@tool-ui/code-block` | Registry component has richer copy/collapse/line-number affordances and is actively maintained. |
+| Shell-style output for Bash stdout | Same `code-block.tsx` | Consider `@tool-ui/terminal` for Bash only | Terminal styling reads as "command output" better. If we keep `code-block` for Bash too, no harm done — defer to implementation. |
+| Markdown for assistant text | `components/ui/markdown.tsx` (prompt-kit wrapper) | Decide at task 2.x | AUI's default text-part renderer may or may not want GFM + syntax-highlighted fenced blocks. If the default is weaker, keep our `markdown.tsx` and pass it into AUI's `MessagePrimitive.Parts`; if it's equivalent or stronger, delete ours. |
+| Thinking / reasoning | `components/ui/thinking-bar.tsx` + `text-shimmer.tsx` | Use AUI's reasoning part + (optionally) `ChainOfThought` primitive | AUI-native. Thinking-bar's collapse behaviour should be replicable inside a custom renderer wrapper. |
+| Scroll-to-bottom, loader, message shell | `components/ui/{scroll-to-bottom, loader, message}.tsx` | Delete; rely on AUI `Thread` + `Message` primitives | No value left in keeping ours. |
+
+**Rationale:** The `web-ui-foundations` INVENTORY classified all of these as "chat-owned", meaning they were expected to be deleted alongside this change. But there are two very different deletion rationales — "replaced by AUI primitive" and "replaced by Tool UI registry component" — and conflating them loses the richer option. This decision names both explicitly.
+
+**Consequence:** Phase 1 grows a small dependency-install sub-step: `npx shadcn@latest add @tool-ui/code-block @tool-ui/terminal`. The delete list in Phase 5 shrinks for code-block; grows nothing. Net line count still down because the registry components live under `src/components/tool-ui/` (shadcn convention) rather than extending `components/ui/`.
+
+### D8: `@assistant-ui/react-ag-ui` re-verification — DONE at design time (spike-findings.md)
+
+**Status:** Completed as part of the `chat-assistant-ui` design pass, not deferred to Phase 1. See `spike-findings.md`.
+
+**Result:** D1 stands, **reinforced by two independent findings**:
+
+1. **Run-lifecycle mismatch (Spike A).** `useAgUiRuntime`'s event dispatch is driven by `agent.runAgent(input, subscriber)` — one request per run, with a per-run aggregator. Homespun's autonomous-worker sessions do not have per-user-message run boundaries. Pageloads mid-run have no `runAgent` to anchor against. `MESSAGES_SNAPSHOT` handling exists but lives inside the run lifecycle.
+2. **No mid-stream input (Spike C).** The runtime's aggregator has no `streamInput`-equivalent. The Claude SDK supports `streamInput` natively; our worker already uses streaming input mode via a persistent `InputQueue`. Only a single client-side `isProcessing` check gates mid-stream sends today. Adopting `useAgUiRuntime` would re-block that feature at the runtime level — the follow-up change `composer-accepts-mid-stream` would be in direct tension with the swap.
+
+**Consequence:** `chat-assistant-ui` proceeds on `useExternalStoreRuntime` + reducer. The previously-proposed `ag-ui-runtime-swap` change has been dropped entirely. The spike memo is the written-down record of the analysis; starting over from a fresh proposal is the right move if upstream ever addresses both constraints.
 
 ### D4: Sessions page still owns the SignalR hook and the reducer
 

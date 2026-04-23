@@ -27,6 +27,7 @@
     "generate:api:fetch": "curl -sf -o swagger.json ${SWAGGER_URL:-http://localhost:5000/swagger/v1/swagger.json} && openapi-ts && rm swagger.json"
   },
   "dependencies": {
+    "@assistant-ui/react": "0.12.25",
     "@hookform/resolvers": "^5.2.2",
     "@microsoft/signalr": "^10.0.0",
     "@opentelemetry/api": "^1.9.1",
@@ -48,6 +49,8 @@
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-router": "^1.163.3",
+    "ansi-to-react": "^6.2.6",
+    "assistant-stream": "0.3.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -62,7 +65,7 @@
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "shiki": "^4.0.1",
+    "shiki": "^4.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6",

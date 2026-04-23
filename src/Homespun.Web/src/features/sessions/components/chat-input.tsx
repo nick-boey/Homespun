@@ -7,13 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputActions,
-  PromptInputAction,
-  usePromptInput,
-} from '@/components/ui/prompt-input'
+import { cn } from '@/lib/utils'
 import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
 import {
@@ -54,26 +48,23 @@ export function ChatInput({
   placeholder = 'Type a message...',
 }: ChatInputProps) {
   const [value, setValue] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleSubmit = useCallback(() => {
-    const trimmedValue = value.trim()
-    if (!trimmedValue || disabled) return
-
-    onSend(trimmedValue, sessionMode, sessionModel)
-    setValue('')
-  }, [value, disabled, onSend, sessionMode, sessionModel])
+  const handleSubmit = useCallback(
+    (event?: React.FormEvent) => {
+      event?.preventDefault()
+      const trimmed = value.trim()
+      if (!trimmed || disabled) return
+      onSend(trimmed, sessionMode, sessionModel)
+      setValue('')
+    },
+    [value, disabled, onSend, sessionMode, sessionModel]
+  )
 
   const toggleSessionMode = useCallback(() => {
-    const newMode = sessionMode === 'build' ? 'plan' : 'build'
-    onModeChange(newMode)
+    const nextMode: SessionMode = sessionMode === 'build' ? 'plan' : 'build'
+    onModeChange(nextMode)
   }, [sessionMode, onModeChange])
-
-  const handleModelChange = useCallback(
-    (newModel: ModelSelection) => {
-      onModelChange(newModel)
-    },
-    [onModelChange]
-  )
 
   const handleTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -86,19 +77,14 @@ export function ChatInput({
   )
 
   return (
-    <PromptInput
-      value={value}
-      onValueChange={setValue}
+    <form
       onSubmit={handleSubmit}
-      disabled={disabled}
-      isLoading={isLoading}
-      className="w-full"
+      className="bg-background border-input focus-within:border-ring focus-within:ring-ring/50 flex w-full flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]"
     >
-      {/* Controls above textarea */}
-      <PromptInputActions className="justify-between px-2 pt-1">
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          {/* Session Mode Toggle */}
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={toggleSessionMode}
@@ -119,10 +105,10 @@ export function ChatInput({
             )}
           </Button>
 
-          {/* Model Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 className="gap-1"
@@ -134,81 +120,72 @@ export function ChatInput({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handleModelChange('opus')}>Opus</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleModelChange('sonnet')}>
-                Sonnet
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleModelChange('haiku')}>Haiku</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onModelChange('opus')}>Opus</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onModelChange('sonnet')}>Sonnet</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onModelChange('haiku')}>Haiku</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </PromptInputActions>
+      </div>
 
-      {/* Textarea with search popup */}
-      <ChatInputTextareaWithSearch
+      <ComposerTextareaWithSearch
         projectId={projectId}
         value={value}
         setValue={setValue}
         placeholder={placeholder}
+        disabled={disabled}
         onKeyDown={handleTextareaKeyDown}
+        textareaRef={textareaRef}
       />
 
-      {/* Send button below textarea */}
-      <PromptInputActions className="justify-end px-2 pb-2">
-        <PromptInputAction tooltip="Send message (Enter)">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handleSubmit}
-            disabled={disabled || !value.trim()}
-            aria-label="Send message"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </PromptInputAction>
-      </PromptInputActions>
-    </PromptInput>
+      <div className="flex items-center justify-end px-1 pb-1">
+        <Button
+          type="submit"
+          size="icon"
+          variant="ghost"
+          disabled={disabled || !value.trim()}
+          aria-label="Send message"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+    </form>
   )
 }
 
-/**
- * Internal component that wraps the textarea with mention search.
- * Uses the PromptInput context to access the textarea ref.
- */
-function ChatInputTextareaWithSearch({
-  projectId,
-  value,
-  setValue,
-  placeholder,
-  onKeyDown,
-}: {
+interface ComposerTextareaWithSearchProps {
   projectId: string
   value: string
   setValue: (value: string) => void
   placeholder: string
+  disabled: boolean
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
-}) {
-  const { textareaRef } = usePromptInput()
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+}
+
+function ComposerTextareaWithSearch({
+  projectId,
+  value,
+  setValue,
+  placeholder,
+  disabled,
+  onKeyDown,
+  textareaRef,
+}: ComposerTextareaWithSearchProps) {
   const [cursorPosition, setCursorPosition] = useState(0)
   const [isSearchHidden, setIsSearchHidden] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Fetch data for search
   const { files, isLoading: isLoadingFiles } = useProjectFiles(projectId)
   const { prs, isLoading: isLoadingPrs } = useSearchablePrs(projectId)
 
-  // Detect trigger
   const triggerState = useMentionTrigger(value, cursorPosition)
-
-  // Show popup when trigger is active
   const isSearchOpen = triggerState.active && !isSearchHidden
 
-  // Reset hidden state when trigger position changes
-  // This is a valid pattern for resetting state based on derived values
   const prevTriggerPos = useRef(-1)
   useEffect(() => {
     if (triggerState.triggerPosition !== prevTriggerPos.current && triggerState.active) {
@@ -217,20 +194,16 @@ function ChatInputTextareaWithSearch({
     prevTriggerPos.current = triggerState.triggerPosition
   }, [triggerState.triggerPosition, triggerState.active])
 
-  // Track cursor position
   const handleCursorChange = useCallback(() => {
     if (textareaRef.current) {
       setCursorPosition(textareaRef.current.selectionStart ?? 0)
     }
   }, [textareaRef])
 
-  // Also update cursor position when value changes (for programmatic updates like fill())
-  // Set cursor to end of value when it changes externally
   useEffect(() => {
     setCursorPosition(value.length)
   }, [value])
 
-  // Handle selection from popup
   const handleSelect = useCallback(
     (selection: MentionSelection) => {
       if (!triggerState.active) return
@@ -239,10 +212,8 @@ function ChatInputTextareaWithSearch({
       const beforeTrigger = value.slice(0, triggerPosition)
       const afterQuery = value.slice(triggerPosition + 1 + query.length)
 
-      // Format the insertion based on type
       let insertion: string
       if (selection.type === '@') {
-        // Use quotes only if the file path contains spaces
         const hasSpaces = selection.value.includes(' ')
         insertion = hasSpaces ? `@"${selection.value}"` : `@${selection.value}`
       } else {
@@ -260,36 +231,32 @@ function ChatInputTextareaWithSearch({
           setCursorPosition(newCursorPos)
         }
       })
-
       setIsSearchHidden(true)
     },
     [triggerState, value, setValue, textareaRef]
   )
 
-  // Close popup
   const handleCloseSearch = useCallback(() => {
     setIsSearchHidden(true)
   }, [])
 
-  // Handle keyboard events for search
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // If search is open, let the popup handle navigation keys
-      if (isSearchOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
-        // The popup handles these via document event listener
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          handleCloseSearch()
-          return
-        }
-      }
-
-      // If search is open and Enter is pressed, don't submit the form
-      if (isSearchOpen && e.key === 'Enter') {
-        // Let the popup handle Enter for selection
+      if (isSearchOpen && e.key === 'Escape') {
+        e.preventDefault()
+        handleCloseSearch()
         return
       }
-
+      if (isSearchOpen && e.key === 'Enter') {
+        return
+      }
+      // Enter without Shift submits; let the form handle it.
+      if (e.key === 'Enter' && !e.shiftKey && !isSearchOpen) {
+        e.preventDefault()
+        const form = e.currentTarget.form
+        form?.requestSubmit()
+        return
+      }
       onKeyDown(e)
     },
     [isSearchOpen, onKeyDown, handleCloseSearch]
@@ -297,12 +264,21 @@ function ChatInputTextareaWithSearch({
 
   return (
     <div ref={containerRef} className="relative">
-      <PromptInputTextarea
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
+        disabled={disabled}
         onKeyDown={handleKeyDown}
         onSelect={handleCursorChange}
         onClick={handleCursorChange}
         onKeyUp={handleCursorChange}
+        rows={1}
+        className={cn(
+          'placeholder:text-muted-foreground max-h-60 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none',
+          disabled && 'cursor-not-allowed opacity-60'
+        )}
       />
       {projectId && (
         <MentionSearchPopup

@@ -37,6 +37,25 @@ These come from the [AG-UI protocol spec](https://docs.ag-ui.com/concepts/events
 | `TOOL_CALL_ARGS`       | Whole JSON input at once (no delta JSON).                              |
 | `TOOL_CALL_END`        | Tool call finished (args complete; result may follow).                |
 | `TOOL_CALL_RESULT`     | Tool result observed. Correlated by `toolCallId`.                      |
+
+### Interactive tool calls
+
+Two canonical tool names are reserved for agent-initiated interaction requests
+(formerly the `question.pending` / `plan.pending` Custom events — retired):
+
+| `toolCallName`       | Source A2A event                                          | Args payload                                                         | Result payload                                                           |
+| -------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ask_user_question`  | `StatusUpdate` input-required, `inputType=question`       | `PendingQuestion` (questions array, options, `multiSelect`)          | `{ [questionText]: answer }` — answer is a string or string array        |
+| `propose_plan`       | `StatusUpdate` input-required, `inputType=plan-approval`  | `{ planContent: string, planFilePath?: string }`                     | `{ approved: boolean, keepContext: boolean, feedback?: string \| null }` |
+
+Wire shape: the server translator assigns a GUID `toolCallId` when the
+input-required A2A event arrives and emits `TOOL_CALL_START` +
+`TOOL_CALL_ARGS` (the args JSON) + `TOOL_CALL_END`. When the user submits via
+the client Toolkit renderer, the hub's `AnswerQuestion` / `ApprovePlan`
+handler dequeues the same `toolCallId` from `IPendingToolCallRegistry` and
+synthesises a `TOOL_CALL_RESULT` envelope carrying the result payload — so
+live and replay produce identical sequences and the completed tool call
+renders in receipt mode on reload.
 | `STATE_SNAPSHOT`       | Full state snapshot (reserved; not emitted today).                     |
 | `STATE_DELTA`          | Incremental state delta (reserved; not emitted today).                 |
 | `CUSTOM`               | Homespun-namespaced extension. See catalog below.                     |
@@ -61,9 +80,6 @@ All names are lowercase with dot separators and scoped to the Homespun namespace
 | `hook.started`      | `Message` with `kind=hook_started`                       | `{ hookId: string, hookName: string, hookEvent: string }`                    | A hook (SessionStart, PreToolUse, etc.) began executing.       |
 | `hook.response`     | `Message` with `kind=hook_response`                      | `{ hookId, hookName, output?, exitCode?, outcome }`                          | A hook finished. Includes exit code and any captured output.   |
 | `system.init`       | `Message` with `sdkMessageType=system`, `subtype=init`   | `{ model?: string, tools?: string[], permissionMode?: string }`              | Worker-emitted session init describing model / tools / mode.   |
-| `question.pending`  | `StatusUpdate` input-required, `inputType=question`      | `PendingQuestion`                                                            | Claude is asking the user a question; session paused.          |
-| `plan.pending`      | `StatusUpdate` input-required, `inputType=plan-approval` | `{ planContent: string, planFilePath?: string }`                             | Claude presented a plan for approval; session paused.          |
-| `status.resumed`    | `StatusUpdate` with `status_resumed`                     | `{}`                                                                          | Session resumed from a paused/input-required state.            |
 | `workflow.complete` | `StatusUpdate` with `workflow_complete`                  | `{ status: string, outputs?: unknown, artifacts?: unknown[] }`                | Higher-level workflow (issue-agent, rebase) finished.          |
 | `user.message`      | — (server-originated on hub `SendMessage`)                | `{ text: string }`                                                            | Server echo of a user-submitted message for multi-tab sync.    |
 | `raw`               | Unknown A2A variant (fallback)                            | `{ original: unknown }`                                                       | Translator could not recognize the A2A event; payload preserved. |

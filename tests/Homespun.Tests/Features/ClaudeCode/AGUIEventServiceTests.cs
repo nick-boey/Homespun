@@ -154,9 +154,11 @@ public class AGUIEventServiceTests
     }
 
     [Test]
-    public void TranslateStatusUpdate_InputRequired_Question_ReturnsQuestionPendingEvent()
+    public void TranslateStatusUpdate_InputRequired_Question_EmitsNothing()
     {
-        // Arrange
+        // InputRequired translation moved to A2AToAGUITranslator.BuildInputRequired; this
+        // legacy service no longer handles the case. The canonical translator emits
+        // TOOL_CALL_START / ARGS / END for ask_user_question.
         var questionsJson = """
         [
             {
@@ -178,57 +180,29 @@ public class AGUIEventServiceTests
         };
 
         var statusUpdate = CreateStatusUpdate(TaskState.InputRequired, metadata: metadata);
-        var sessionId = "session-123";
-        var runId = "run-456";
 
-        // Act
-        var events = _service.TranslateStatusUpdate(statusUpdate, sessionId, runId).ToList();
+        var events = _service.TranslateStatusUpdate(statusUpdate, "session-123", "run-456").ToList();
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        Assert.That(events[0], Is.InstanceOf<CustomEvent>());
-        var customEvent = (CustomEvent)events[0];
-        Assert.Multiple(() =>
-        {
-            Assert.That(customEvent.Name, Is.EqualTo(AGUICustomEventName.QuestionPending));
-            Assert.That(customEvent.Type, Is.EqualTo("CUSTOM"));
-        });
+        Assert.That(events, Is.Empty);
     }
 
     [Test]
-    public void TranslateStatusUpdate_InputRequired_PlanApproval_ReturnsPlanPendingEvent()
+    public void TranslateStatusUpdate_InputRequired_PlanApproval_EmitsNothing()
     {
-        // Arrange
+        // See TranslateStatusUpdate_InputRequired_Question_EmitsNothing — plan approval is
+        // handled on the canonical translator path as propose_plan tool calls.
         var metadata = new Dictionary<string, JsonElement>
         {
             ["inputType"] = JsonSerializer.Deserialize<JsonElement>("\"plan-approval\""),
-            ["plan"] = JsonSerializer.Deserialize<JsonElement>("\"## Implementation Plan\\n\\n1. Step one\\n2. Step two\""),
+            ["plan"] = JsonSerializer.Deserialize<JsonElement>("\"## Implementation Plan\\n\\n1. Step one\""),
             ["planFilePath"] = JsonSerializer.Deserialize<JsonElement>("\"/path/to/plan.md\"")
         };
 
         var statusUpdate = CreateStatusUpdate(TaskState.InputRequired, metadata: metadata);
-        var sessionId = "session-123";
-        var runId = "run-456";
 
-        // Act
-        var events = _service.TranslateStatusUpdate(statusUpdate, sessionId, runId).ToList();
+        var events = _service.TranslateStatusUpdate(statusUpdate, "session-123", "run-456").ToList();
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        Assert.That(events[0], Is.InstanceOf<CustomEvent>());
-        var customEvent = (CustomEvent)events[0];
-        Assert.Multiple(() =>
-        {
-            Assert.That(customEvent.Name, Is.EqualTo(AGUICustomEventName.PlanPending));
-            Assert.That(customEvent.Value, Is.InstanceOf<AGUIPlanPendingData>());
-        });
-
-        var planData = (AGUIPlanPendingData)customEvent.Value;
-        Assert.Multiple(() =>
-        {
-            Assert.That(planData.PlanContent, Does.Contain("Implementation Plan"));
-            Assert.That(planData.PlanFilePath, Is.EqualTo("/path/to/plan.md"));
-        });
+        Assert.That(events, Is.Empty);
     }
 
     [Test]
@@ -530,66 +504,8 @@ public class AGUIEventServiceTests
         });
     }
 
-    [Test]
-    public void CreateQuestionPending_ReturnsCustomEventWithData()
-    {
-        // Arrange
-        var question = new PendingQuestion
-        {
-            Id = "q-123",
-            ToolUseId = "tool-123",
-            Questions = new List<UserQuestion>
-            {
-                new()
-                {
-                    Question = "What framework?",
-                    Header = "Framework",
-                    Options = new List<QuestionOption>
-                    {
-                        new() { Label = "React", Description = "React framework" }
-                    },
-                    MultiSelect = false
-                }
-            }
-        };
-
-        // Act
-        var evt = _service.CreateQuestionPending(question);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.Name, Is.EqualTo(AGUICustomEventName.QuestionPending));
-            Assert.That(evt.Value, Is.EqualTo(question));
-            Assert.That(evt.Type, Is.EqualTo("CUSTOM"));
-        });
-    }
-
-    [Test]
-    public void CreatePlanPending_ReturnsCustomEventWithData()
-    {
-        // Arrange
-        var planContent = "## My Plan\n\n1. Step one\n2. Step two";
-        var planFilePath = "/path/to/plan.md";
-
-        // Act
-        var evt = _service.CreatePlanPending(planContent, planFilePath);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.Name, Is.EqualTo(AGUICustomEventName.PlanPending));
-            Assert.That(evt.Type, Is.EqualTo("CUSTOM"));
-        });
-
-        var planData = evt.Value as AGUIPlanPendingData;
-        Assert.That(planData, Is.Not.Null);
-        Assert.Multiple(() =>
-        {
-            Assert.That(planData!.PlanContent, Is.EqualTo(planContent));
-            Assert.That(planData.PlanFilePath, Is.EqualTo(planFilePath));
-        });
-    }
+    // CreateQuestionPending / CreatePlanPending have been retired. Interactive tool
+    // calls flow through A2AToAGUITranslator.BuildInputRequired as TOOL_CALL_* events.
 
     #endregion
 

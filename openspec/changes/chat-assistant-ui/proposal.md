@@ -26,15 +26,18 @@ We evaluated and rejected two alternatives:
 - **Delete custom chat components that the primitives replace.**
   - `features/sessions/components/message-list.tsx`, `tool-execution-group.tsx`, `tool-execution-row.tsx`, `tool-results/*`.
   - `features/sessions/utils/agui-to-display-items.ts` (partitioning/grouping now lives in AUI's Thread primitive).
-  - `components/ui/prompt-input.tsx`, `message.tsx`, `scroll-to-bottom.tsx`, `thinking-bar.tsx`, `text-shimmer.tsx`, `loader.tsx`, `markdown.tsx`, `code-block.tsx` — replaced by AUI equivalents.
+  - `components/ui/prompt-input.tsx`, `message.tsx`, `scroll-to-bottom.tsx`, `thinking-bar.tsx`, `text-shimmer.tsx`, `loader.tsx` — replaced by AUI equivalents.
+  - **Replace, don't just delete, `code-block.tsx` and `markdown.tsx`.** Tool UI's registry ships richer `@tool-ui/code-block` and we'll take it; for `markdown.tsx` decide based on AUI's default text part rendering (verify at task 2.x and record the call in design.md).
   - Corresponding tests go with them.
 
 - **Rebuild `chat-input.tsx` on `ComposerPrimitive`.**
   - Preserve the mode dropdown (Plan/Build), model dropdown (Opus/Sonnet/Haiku), and `@`-mention search popup integration. These are session controls that wrap the Composer, not replacements for it.
 
-- **Reimagine tool-result rendering via `makeAssistantToolUI`.**
-  - One `makeAssistantToolUI({ toolName: "Bash" | "Read" | "Grep" | "Write" })` registration per tool, carrying forward the same JSX each currently emits.
-  - Generic fallback via `ToolFallback` for unrecognised tools.
+- **Reimagine tool-result rendering via the Tool UI `Toolkit` API.**
+  - Use the newer `Toolkit` object + `Tools({ toolkit })` + `useAui(...)` pattern (the pattern the `tool-ui` skill and shadcn-registry components are wired for). Do NOT adopt the older `makeAssistantToolUI` component-per-tool pattern — this change is a single hop to the idiomatic API, not a two-hop through the legacy one.
+  - One Toolkit entry per known backend tool (`Bash`, `Read`, `Grep`, `Write`), `type: "backend"`, `render({ result })` carrying forward the same JSX each currently emits.
+  - `ToolFallback` (or a thin equivalent) for unregistered tool names.
+  - **Adopt Tool UI registry display components where they beat ours.** Install `@tool-ui/code-block` and `@tool-ui/terminal` for Bash/Read/Grep/Write renderers (richer than our current `code-block.tsx`). Install `@tool-ui/data-table` only if a tool's result shape calls for it. Keep our `markdown.tsx` if AUI's default rendering isn't what we want for assistant text — decide per-component, not wholesale.
 
 - **Move `PlanApprovalPanel` and `QuestionPanel` out of the message stream.**
   - They are session-level modal surfaces. They read `pendingPlan` / `pendingQuestion` from the reducer and render as siblings to `<ThreadPrimitive.Root>`, not as items inside it.
@@ -91,6 +94,20 @@ Behavior kept identical:
 - Observability unchanged: the existing session-event SignalR spans + OTLP traces describe the contract that this change does not touch.
 
 ## Follow-ups (explicitly out of scope)
+
+Two follow-up changes have dedicated proposals:
+
+- **`questions-plans-as-tools`** — demote the `question.pending` / `plan.pending` `CustomEvent` shape to AG-UI `TOOL_CALL_*` events on the server translator, adopt Tool UI's `question-flow` / `plan` / `approval-card` components, and drop the `pendingPlan` / `pendingQuestion` reducer fields. Rationale: these are tool-shaped interactions that we modeled as modal state only because the old UI had nowhere cleaner to render them. See `openspec/changes/questions-plans-as-tools/`.
+- **`composer-accepts-mid-stream`** — remove the client-side `isProcessing` gate that blocks the composer while the agent is running. The Claude Agent SDK supports streaming input (`AsyncIterable<SDKUserMessage>` + `streamInput()`), and our worker already pushes to a persistent `InputQueue` that Accepts follow-up messages mid-run. Only the UI disables typing today. See `openspec/changes/composer-accepts-mid-stream/`.
+
+Considered and explicitly not proposed:
+
+- **Swapping to `useAgUiRuntime` from `@assistant-ui/react-ag-ui`.** A spike during this proposal's design pass (`spike-findings.md`) found two independent blockers:
+  1. **Run-lifecycle mismatch.** `useAgUiRuntime` dispatches events inside an `agent.runAgent(input, subscriber)` lifecycle; Homespun's worker runs autonomously and has no per-user-message run boundary. A mid-run page reload has no `runAgent` to anchor.
+  2. **No mid-stream input.** The runtime's aggregator is per-run; it has no `streamInput`-equivalent. Adopting it would actively re-block the feature `composer-accepts-mid-stream` is adding.
+  The `useExternalStoreRuntime` + reducer path is not transitional — it's the right shape for Homespun's autonomous-worker + mid-stream-input product model.
+
+Out of scope for this change and not yet proposed:
 
 - Cherry-picking AI Elements `Plan` / `Reasoning` presentational components to replace the plan-approval and thinking surfaces if the AUI defaults are not a good fit.
 - ThreadList / multi-thread UI. Sessions are currently one-thread-per-session; if we ever want to show historical sessions as a sidebar list, the AUI `ThreadListPrimitive` is the natural fit — but that's a product decision, not this change.

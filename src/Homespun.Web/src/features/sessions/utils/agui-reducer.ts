@@ -18,7 +18,6 @@
 
 import type {
   AGUIEvent,
-  AGUIPlanPendingData,
   AGUIThinkingData,
   AGUIUserMessageData,
   SessionEventEnvelope,
@@ -103,10 +102,6 @@ export interface AGUISessionState {
   lastSeenSeq: number
   /** All messages, in order. */
   messages: AGUIMessage[]
-  /** Pending question-to-user (if any). Cleared on the next user-text or status transition. */
-  pendingQuestion: unknown | null
-  /** Pending plan-for-approval (if any). */
-  pendingPlan: AGUIPlanPendingData | null
   /** Reverse index: toolCallId → ordinal of the message that owns the block. */
   toolCallIndex: Record<string, string>
   /** `system.init` payload, if observed. Handy for model/tools badges in the UI. */
@@ -132,8 +127,6 @@ export interface AGUISessionState {
 export const initialAGUISessionState: AGUISessionState = {
   lastSeenSeq: 0,
   messages: [],
-  pendingQuestion: null,
-  pendingPlan: null,
   toolCallIndex: {},
   systemInit: null,
   hookEvents: [],
@@ -368,6 +361,10 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
 
     case AGUICustomEventName.Thinking: {
       const thinking = event.value as AGUIThinkingData
+      // Worker emits an empty `thinking` block as a placeholder between SDK
+      // messages. It carries no user-visible signal — materialising it as a
+      // message would render a blank bubble.
+      if (!thinking.text || !thinking.text.trim()) return state
       const parentId = thinking.parentMessageId
       if (!parentId) {
         // Orphan thinking — park into a new message so it's visible.
@@ -423,17 +420,6 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
         ],
       }
 
-    case AGUICustomEventName.QuestionPending:
-      return { ...state, pendingQuestion: event.value }
-
-    case AGUICustomEventName.PlanPending:
-      return { ...state, pendingPlan: event.value as AGUIPlanPendingData }
-
-    case AGUICustomEventName.StatusResumed:
-      // Resuming clears any transient input-required state; run status itself is
-      // driven by RunStarted/Finished events.
-      return { ...state, pendingQuestion: null, pendingPlan: null }
-
     case AGUICustomEventName.ContextCleared:
       // Treated as a full reset — the backend starts a fresh event log, so any envelopes
       // arriving after this belong to a new session from the client's perspective.
@@ -441,6 +427,12 @@ function applyCustom(state: AGUISessionState, event: CustomEvent): AGUISessionSt
 
     case AGUICustomEventName.UserMessage: {
       const userMsg = event.value as AGUIUserMessageData
+      // The server emits `user.message` for any user-role A2A message that
+      // doesn't carry a tool_result — including the synthetic "resume"
+      // messages sent by the worker after an interactive tool commits. Those
+      // carry no text. Drop them so answer/approval receipts don't produce
+      // empty pill-shaped bubbles in the thread.
+      if (!userMsg.text || !userMsg.text.trim()) return state
       return {
         ...state,
         messages: [

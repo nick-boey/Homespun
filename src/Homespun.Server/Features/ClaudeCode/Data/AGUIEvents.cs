@@ -19,4 +19,3 @@ global using StateSnapshotEvent = Homespun.Shared.Models.Sessions.StateSnapshotE
 global using StateDeltaEvent = Homespun.Shared.Models.Sessions.StateDeltaEvent;
 global using CustomEvent = Homespun.Shared.Models.Sessions.CustomEvent;
 global using AGUIEventFactory = Homespun.Shared.Models.Sessions.AGUIEventFactory;
-global using AGUIPlanPendingData = Homespun.Shared.Models.Sessions.AGUIPlanPendingData;

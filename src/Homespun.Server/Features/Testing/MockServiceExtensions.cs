@@ -177,8 +177,10 @@ public static class MockServiceExtensions
             var logger = sp.GetRequiredService<ILogger<A2AEventStore>>();
             return new A2AEventStore(tempFolder.SessionsPath, logger);
         });
+        services.AddSingleton<IPendingToolCallRegistry, PendingToolCallRegistry>();
         services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
         services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
+        services.AddSingleton<IToolCallResultAppender, ToolCallResultAppender>();
         services.Configure<Homespun.Features.ClaudeCode.Settings.SessionEventsOptions>(_ => { });
 
         // Pull request workflow service (needed by GraphService)

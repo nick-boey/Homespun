@@ -10,6 +10,14 @@ export interface ConnectionOptions {
   hubUrl: string
   /** Maximum reconnection attempts before giving up (0 = unlimited) */
   maxReconnectAttempts?: number
+  /**
+   * Maximum initial-connect attempts before giving up (0 = unlimited).
+   * `withAutomaticReconnect` only engages after a successful first connect,
+   * so this retry loop is what keeps the client alive when the server is
+   * not yet reachable at page load (dev-live cold start, server bounce
+   * before the tab reloads, etc.).
+   */
+  maxInitialAttempts?: number
   /** Base delay for exponential backoff in milliseconds */
   baseReconnectDelay?: number
   /** Maximum delay between reconnection attempts in milliseconds */
@@ -24,9 +32,13 @@ const DEFAULT_OPTIONS: Required<
   Omit<ConnectionOptions, 'hubUrl' | 'onStatusChange' | 'onReconnected'>
 > = {
   maxReconnectAttempts: 0, // Unlimited
+  maxInitialAttempts: 0, // Unlimited
   baseReconnectDelay: 1000, // 1 second
   maxReconnectDelay: 30000, // 30 seconds
 }
+
+type ConnectionOpts = ConnectionOptions & typeof DEFAULT_OPTIONS
+const CONNECTION_OPTS = new WeakMap<signalR.HubConnection, ConnectionOpts>()
 
 /**
  * Creates an exponential backoff retry policy for SignalR.
@@ -67,6 +79,8 @@ export function createHubConnection(options: ConnectionOptions): signalR.HubConn
     .configureLogging(signalR.LogLevel.Warning)
     .build()
 
+  CONNECTION_OPTS.set(connection, opts)
+
   // Set up connection state change handlers
   connection.onreconnecting((error) => {
     opts.onStatusChange?.('reconnecting', error?.message)
@@ -84,9 +98,39 @@ export function createHubConnection(options: ConnectionOptions): signalR.HubConn
   return connection
 }
 
+const CONNECT_RETRY_JITTER = 0.3
+// Exposed so tests can stub it out — test code replaces sleep with
+// `(_ms) => Promise.resolve()` to avoid real delays.
+let sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export const _internal = {
+  setSleepForTesting(fn: (ms: number) => Promise<void>) {
+    sleep = fn
+  },
+  setOptsForTesting(connection: signalR.HubConnection, overrides: Partial<ConnectionOpts>) {
+    const merged: ConnectionOpts = {
+      ...(DEFAULT_OPTIONS as ConnectionOpts),
+      ...(CONNECTION_OPTS.get(connection) ?? {}),
+      ...overrides,
+    }
+    CONNECTION_OPTS.set(connection, merged)
+  },
+}
+
+function computeInitialRetryDelay(attempt: number, base: number, cap: number): number {
+  const exponential = base * Math.pow(2, attempt)
+  const jitter = Math.random() * CONNECT_RETRY_JITTER * exponential
+  return Math.min(exponential + jitter, cap)
+}
+
 /**
- * Starts a SignalR connection with error handling.
- * Returns true if connection was successful, false otherwise.
+ * Starts a SignalR connection with exponential-backoff retry on initial
+ * failure. `withAutomaticReconnect` only engages after a successful first
+ * connect, so this loop is what keeps the client alive when the server is
+ * not yet reachable at page load. Between attempts the status is reported
+ * as `reconnecting` so the UI reconnect banner reflects accurate state.
+ *
+ * Returns `true` on success, `false` if `maxInitialAttempts` is exhausted.
  */
 export async function startConnection(
   connection: signalR.HubConnection,
@@ -111,16 +155,35 @@ export async function startConnection(
     })
   }
 
-  onStatusChange?.('connecting')
+  const opts = CONNECTION_OPTS.get(connection) ?? (DEFAULT_OPTIONS as ConnectionOpts)
+  const maxAttempts = opts.maxInitialAttempts
 
-  try {
-    await connection.start()
-    onStatusChange?.('connected')
-    return true
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
-    onStatusChange?.('disconnected', errorMessage)
-    return false
+  let attempt = 0
+
+  while (true) {
+    onStatusChange?.('connecting')
+    try {
+      await connection.start()
+      onStatusChange?.('connected')
+      return true
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
+      attempt += 1
+      if (maxAttempts > 0 && attempt >= maxAttempts) {
+        onStatusChange?.('disconnected', errorMessage)
+        return false
+      }
+      // Signal that the client is still trying. `reconnecting` matches the
+      // status used by `withAutomaticReconnect` after a drop, so the UI
+      // banner logic doesn't need to special-case initial-connect.
+      onStatusChange?.('reconnecting', errorMessage)
+      const delay = computeInitialRetryDelay(
+        attempt - 1,
+        opts.baseReconnectDelay,
+        opts.maxReconnectDelay
+      )
+      await sleep(delay)
+    }
   }
 }
 

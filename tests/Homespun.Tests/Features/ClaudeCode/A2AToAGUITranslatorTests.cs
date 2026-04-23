@@ -16,6 +16,7 @@ public class A2AToAGUITranslatorTests
 {
     private A2AToAGUITranslator _translator = null!;
     private TranslationContext _ctx = null!;
+    private PendingToolCallRegistry _pendingToolCalls = null!;
 
     private const string SessionId = "session-1";
     private const string RunId = "run-xyz";
@@ -23,7 +24,8 @@ public class A2AToAGUITranslatorTests
     [SetUp]
     public void SetUp()
     {
-        _translator = new A2AToAGUITranslator();
+        _pendingToolCalls = new PendingToolCallRegistry();
+        _translator = new A2AToAGUITranslator(_pendingToolCalls);
         _ctx = new TranslationContext(SessionId, RunId);
     }
 
@@ -362,7 +364,7 @@ public class A2AToAGUITranslatorTests
     // ---------------- StatusUpdate input-required question ----------------
 
     [Test]
-    public void Translate_StatusUpdateInputRequiredQuestion_EmitsCustomQuestionPending()
+    public void Translate_StatusUpdateInputRequiredQuestion_EmitsAskUserQuestionToolCall()
     {
         var parsed = ParseStatusUpdate("""
         {
@@ -403,16 +405,68 @@ public class A2AToAGUITranslatorTests
 
         var events = _translator.Translate(parsed, _ctx).ToList();
 
-        Assert.That(events, Has.Count.EqualTo(1));
-        var custom = AssertCustom(events[0], AGUICustomEventName.QuestionPending);
-        Assert.That(custom.Value, Is.TypeOf<PendingQuestion>(),
-            "question.pending payload must be a PendingQuestion record for easy client consumption");
+        Assert.That(events, Has.Count.EqualTo(3));
+        Assert.That(events[0], Is.TypeOf<ToolCallStartEvent>());
+        Assert.That(events[1], Is.TypeOf<ToolCallArgsEvent>());
+        Assert.That(events[2], Is.TypeOf<ToolCallEndEvent>());
+
+        var start = (ToolCallStartEvent)events[0];
+        var args = (ToolCallArgsEvent)events[1];
+        var end = (ToolCallEndEvent)events[2];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(start.ToolCallName, Is.EqualTo(A2AToAGUITranslator.AskUserQuestionToolName));
+            Assert.That(start.ToolCallId, Is.Not.Null.And.Not.Empty);
+            Assert.That(args.ToolCallId, Is.EqualTo(start.ToolCallId));
+            Assert.That(end.ToolCallId, Is.EqualTo(start.ToolCallId));
+            Assert.That(args.Delta, Does.Contain("Continue?"));
+            Assert.That(args.Delta, Does.Contain("multiSelect"));
+        });
+
+        // The translator must register the toolCallId so the hub can later synthesise
+        // a matching TOOL_CALL_RESULT when the user answers.
+        Assert.That(_pendingToolCalls.Dequeue(SessionId), Is.EqualTo(start.ToolCallId));
+    }
+
+    [Test]
+    public void Translate_StatusUpdateInputRequired_DoesNotEmitAnyCustomEvent()
+    {
+        var parsed = ParseStatusUpdate("""
+        {
+          "kind": "status-update",
+          "taskId": "task-1",
+          "contextId": "ctx-1",
+          "status": {
+            "state": "input-required",
+            "message": {
+              "kind": "message",
+              "messageId": "status-msg",
+              "role": "agent",
+              "parts": [
+                {
+                  "kind": "data",
+                  "data": { "questions": [{ "question": "Ok?", "header": "", "options": [], "multiSelect": false }] },
+                  "metadata": { "kind": "questions" }
+                }
+              ]
+            }
+          },
+          "final": false,
+          "metadata": { "inputType": "question" }
+        }
+        """);
+
+        var events = _translator.Translate(parsed, _ctx).ToList();
+
+        Assert.That(events, Has.None.InstanceOf<CustomEvent>(),
+            "input-required must translate to TOOL_CALL_* envelopes only — never a Custom event");
     }
 
     // ---------------- StatusUpdate input-required plan ----------------
 
     [Test]
-    public void Translate_StatusUpdateInputRequiredPlan_EmitsCustomPlanPending()
+    public void Translate_StatusUpdateInputRequiredPlan_EmitsProposePlanToolCall()
     {
         var parsed = ParseStatusUpdate("""
         {
@@ -435,23 +489,37 @@ public class A2AToAGUITranslatorTests
             }
           },
           "final": false,
-          "metadata": { "inputType": "plan-approval" }
+          "metadata": { "inputType": "plan-approval", "planFilePath": ".claude/plan.md" }
         }
         """);
 
         var events = _translator.Translate(parsed, _ctx).ToList();
 
-        Assert.That(events, Has.Count.EqualTo(1));
-        var custom = AssertCustom(events[0], AGUICustomEventName.PlanPending);
-        Assert.That(custom.Value, Is.TypeOf<AGUIPlanPendingData>());
-        var planData = (AGUIPlanPendingData)custom.Value;
-        Assert.That(planData.PlanContent, Does.Contain("Do thing"));
+        Assert.That(events, Has.Count.EqualTo(3));
+        Assert.That(events[0], Is.TypeOf<ToolCallStartEvent>());
+        Assert.That(events[1], Is.TypeOf<ToolCallArgsEvent>());
+        Assert.That(events[2], Is.TypeOf<ToolCallEndEvent>());
+
+        var start = (ToolCallStartEvent)events[0];
+        var args = (ToolCallArgsEvent)events[1];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(start.ToolCallName, Is.EqualTo(A2AToAGUITranslator.ProposePlanToolName));
+            Assert.That(args.ToolCallId, Is.EqualTo(start.ToolCallId));
+            Assert.That(args.Delta, Does.Contain("Do thing"));
+            Assert.That(args.Delta, Does.Contain("planFilePath"),
+                "propose_plan args must preserve planFilePath so the client Tool UI plan can surface the source filename and the server fallback can still re-read the file on resume");
+            Assert.That(args.Delta, Does.Contain(".claude/plan.md"));
+        });
+
+        Assert.That(_pendingToolCalls.Dequeue(SessionId), Is.EqualTo(start.ToolCallId));
     }
 
-    // ---------------- StatusUpdate status_resumed ----------------
+    // ---------------- StatusUpdate status_resumed (retired) ----------------
 
     [Test]
-    public void Translate_StatusUpdateStatusResumed_EmitsCustomStatusResumed()
+    public void Translate_StatusUpdateStatusResumed_EmitsNothing()
     {
         var parsed = ParseStatusUpdate("""
         {
@@ -466,8 +534,8 @@ public class A2AToAGUITranslatorTests
 
         var events = _translator.Translate(parsed, _ctx).ToList();
 
-        Assert.That(events, Has.Count.EqualTo(1));
-        AssertCustom(events[0], AGUICustomEventName.StatusResumed);
+        Assert.That(events, Is.Empty,
+            "status_resumed is retired — the translator drops it; there is no pending ghost state to clear");
     }
 
     // ---------------- StatusUpdate workflow_complete ----------------
