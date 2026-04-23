@@ -1,7 +1,10 @@
 using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
+using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -22,16 +25,23 @@ namespace Homespun.Features.ClaudeCode.Services;
 public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 {
     private readonly IPendingToolCallRegistry _pendingToolCalls;
+    private readonly ILogger<A2AToAGUITranslator>? _logger;
+    private readonly IOptionsMonitor<SessionDebugLoggingOptions>? _debugOptions;
 
-    public A2AToAGUITranslator(IPendingToolCallRegistry pendingToolCalls)
+    public A2AToAGUITranslator(
+        IPendingToolCallRegistry pendingToolCalls,
+        ILogger<A2AToAGUITranslator>? logger = null,
+        IOptionsMonitor<SessionDebugLoggingOptions>? debugOptions = null)
     {
         _pendingToolCalls = pendingToolCalls;
+        _logger = logger;
+        _debugOptions = debugOptions;
     }
 
     /// <inheritdoc />
     public IEnumerable<AGUIBaseEvent> Translate(ParsedA2AEvent a2a, TranslationContext ctx)
     {
-        return a2a switch
+        var events = a2a switch
         {
             ParsedAgentTask parsed => TranslateTask(parsed.Task, ctx),
             ParsedAgentMessage parsed => TranslateMessage(parsed.Message, ctx),
@@ -39,6 +49,26 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
             ParsedTaskArtifactUpdateEvent parsed => TranslateArtifactUpdate(parsed.ArtifactUpdate),
             _ => YieldRaw(a2a),
         };
+
+        if (_debugOptions?.CurrentValue.FullMessages != true || _logger is null)
+        {
+            return events;
+        }
+
+        return LogAndYield(events, ctx);
+    }
+
+    private IEnumerable<AGUIBaseEvent> LogAndYield(IEnumerable<AGUIBaseEvent> events, TranslationContext ctx)
+    {
+        foreach (var evt in events)
+        {
+            _logger!.LogInformation(
+                "agui.translate type={Type} sessionId={SessionId} body={Body}",
+                evt.Type,
+                ctx.SessionId,
+                JsonSerializer.Serialize(evt));
+            yield return evt;
+        }
     }
 
     // ---------------- Task ----------------

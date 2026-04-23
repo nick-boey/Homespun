@@ -31,6 +31,7 @@ import {
   type AGUISessionState,
 } from '@/features/sessions/utils/agui-reducer'
 import { withExtractedContext } from '@/lib/signalr/trace'
+import { logEnvelopeRx } from '@/instrumentation'
 
 const SESSION_EVENTS_TRACER = 'homespun.web.session-events'
 
@@ -167,6 +168,10 @@ export function useSessionEvents(sessionId: string | undefined | null): UseSessi
       // The hub addresses the group by sessionId, but double-check so a leaked subscription
       // on a different sessionId never pollutes state.
       if (deliveredSessionId !== sessionId) return
+      // Full-body debug log (tree-shaken when VITE_HOMESPUN_DEBUG_FULL_MESSAGES is unset).
+      if (import.meta.env.VITE_HOMESPUN_DEBUG_FULL_MESSAGES === 'true') {
+        logEnvelopeRx(envelope)
+      }
       // Run the rx hop under the server's traceparent too so its span joins
       // the same trace as the reducer-apply span inside `applyOne`.
       withExtractedContext(envelope, () => {

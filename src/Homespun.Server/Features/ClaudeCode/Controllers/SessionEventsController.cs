@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
+using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -18,7 +19,9 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 public sealed class SessionEventsController(
     IA2AEventStore eventStore,
     IA2AToAGUITranslator translator,
-    IOptions<SessionEventsOptions> options) : ControllerBase
+    IOptions<SessionEventsOptions> options,
+    IOptionsMonitor<SessionDebugLoggingOptions> debugOptions,
+    ILogger<SessionEventsController> logger) : ControllerBase
 {
     /// <summary>
     /// Get AG-UI envelopes for a session.
@@ -53,6 +56,14 @@ public sealed class SessionEventsController(
 
         var envelopes = new List<SessionEventEnvelope>();
         var ctx = new TranslationContext(sessionId, RunId: sessionId);
+        var fullMessages = debugOptions.CurrentValue.FullMessages;
+
+        // Scope stamps every log entry emitted under the replay path (including
+        // translator-emitted agui.translate entries) with homespun.replay=true so
+        // Seq users can filter duplicates out with `homespun.replay is null`.
+        using var replayScope = fullMessages
+            ? logger.BeginScope(new Dictionary<string, object> { ["homespun.replay"] = true })
+            : null;
 
         foreach (var record in records)
         {
@@ -72,12 +83,33 @@ public sealed class SessionEventsController(
 
             foreach (var agui in translator.Translate(parsed, ctx))
             {
-                envelopes.Add(new SessionEventEnvelope(
+                var envelope = new SessionEventEnvelope(
                     Seq: record.Seq,
                     SessionId: record.SessionId,
                     EventId: record.EventId,
-                    Event: agui));
+                    Event: agui);
+                envelopes.Add(envelope);
+
+                if (fullMessages)
+                {
+                    logger.LogInformation(
+                        "agui.replay seq={Seq} sessionId={SessionId} type={Type} body={Body}",
+                        envelope.Seq,
+                        envelope.SessionId,
+                        agui.Type,
+                        JsonSerializer.Serialize(envelope));
+                }
             }
+        }
+
+        if (fullMessages)
+        {
+            logger.LogInformation(
+                "agui.replay.batch sessionId={SessionId} mode={Mode} since={Since} count={Count}",
+                sessionId,
+                resolvedMode,
+                effectiveSince,
+                envelopes.Count);
         }
 
         return Ok(envelopes);

@@ -110,3 +110,44 @@ export const logger = logs.getLogger('homespun.web')
 // without importing `@opentelemetry/api` directly in dozens of places.
 export { context, trace, propagation }
 export { tracerProvider, loggerProvider }
+
+// ---------------------------------------------------------------------------
+// Full-body envelope-receive debug logging.
+//
+// Gated on the build-time `VITE_HOMESPUN_DEBUG_FULL_MESSAGES` flag so the
+// helper body is tree-shaken out of production bundles. Call sites still
+// guard with `if (import.meta.env.VITE_HOMESPUN_DEBUG_FULL_MESSAGES === 'true')`
+// so the invocation itself is dropped by the bundler when the flag is unset.
+// ---------------------------------------------------------------------------
+
+export const IS_FULL_MESSAGES_DEBUG = import.meta.env.VITE_HOMESPUN_DEBUG_FULL_MESSAGES === 'true'
+
+export function logEnvelopeRx(envelope: unknown): void {
+  if (!IS_FULL_MESSAGES_DEBUG) return
+
+  let body: string
+  try {
+    body = JSON.stringify(envelope)
+  } catch {
+    body = String(envelope)
+  }
+
+  const e = envelope as {
+    seq?: number
+    sessionId?: string
+    traceparent?: string
+    event?: { type?: string }
+  } | null
+
+  logger.emit({
+    severityText: 'Information',
+    body: `homespun.envelope.rx seq=${e?.seq ?? ''} sessionId=${e?.sessionId ?? ''} type=${e?.event?.type ?? ''} body=${body}`,
+    attributes: {
+      'homespun.session.id': e?.sessionId ?? '',
+      'homespun.seq': e?.seq ?? -1,
+      'homespun.agui.type': e?.event?.type ?? '',
+      'homespun.body': body,
+      ...(e?.traceparent ? { 'homespun.traceparent': e.traceparent } : {}),
+    },
+  })
+}

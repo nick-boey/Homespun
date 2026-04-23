@@ -13,9 +13,11 @@ public sealed class SessionEventContentOptions
 
     /// <summary>
     /// Maximum characters to include in the <c>homespun.content.preview</c>
-    /// span attribute. Zero suppresses the attribute entirely. Default 0 in
-    /// Production, 80 in Development (seeded via
-    /// <c>appsettings.Development.json</c>).
+    /// span attribute. Zero suppresses the attribute entirely. A value of
+    /// <c>-1</c> is a "no truncation" sentinel: the full preview text flows
+    /// through unchanged (set by <c>HOMESPUN_DEBUG_FULL_MESSAGES=true</c> via
+    /// the AppHost fan-out). Default 0 in Production, 80 in Development
+    /// (seeded via <c>appsettings.Development.json</c>).
     /// </summary>
     public int ContentPreviewChars { get; set; } = 0;
 

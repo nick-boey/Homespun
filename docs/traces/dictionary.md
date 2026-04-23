@@ -392,6 +392,35 @@ stream. Represents the worker → server handoff.
 
 ---
 
+## Log records (full-body debug path)
+
+Log-record catalog for the `HOMESPUN_DEBUG_FULL_MESSAGES=true` full-body
+debug path. These are OTel **log events**, not spans — the drift check
+ignores this section (it scans for `StartActivity` / tracer names, not
+logger calls). Added here so future maintainers have the same
+single-source-of-truth guarantee for log names as spans.
+
+All entries are gated on `SessionDebugLoggingOptions.FullMessages` on
+the server, `isFullMessagesDebugEnabled()` on the worker, and the
+build-time `import.meta.env.VITE_HOMESPUN_DEBUG_FULL_MESSAGES === 'true'`
+flag on the web client.
+
+| Record                    | Tier   | Emitter                                                                                                                       | Template                                                            | Replay-tagged? |
+|---------------------------|--------|-------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------|----------------|
+| `a2a.emit`                | worker | `src/Homespun.Worker/src/services/sse-writer.ts` (`emitAndFormatSSE` → `a2aEmitDebug`)                                        | `a2a.emit kind={Kind} seq={Seq} body={Body}`                        | n/a            |
+| `a2a.rx`                  | server | `src/Homespun.Server/Features/ClaudeCode/Services/SessionEventIngestor.cs`                                                    | `a2a.rx kind={Kind} seq={Seq} body={Body}`                          | live only      |
+| `agui.translate`          | server | `src/Homespun.Server/Features/ClaudeCode/Services/A2AToAGUITranslator.cs`                                                     | `agui.translate type={Type} sessionId={SessionId} body={Body}`      | live + replay  |
+| `agui.tx`                 | server | `src/Homespun.Server/Features/ClaudeCode/Services/SessionEventIngestor.cs` (broadcast site)                                   | `agui.tx seq={Seq} sessionId={SessionId} traceparent={Traceparent} body={Body}` | live only      |
+| `agui.replay`             | server | `src/Homespun.Server/Features/ClaudeCode/Controllers/SessionEventsController.cs` (per-event)                                  | `agui.replay seq={Seq} sessionId={SessionId} type={Type} body={Body}` | replay only    |
+| `agui.replay.batch`       | server | `src/Homespun.Server/Features/ClaudeCode/Controllers/SessionEventsController.cs` (per-batch summary)                          | `agui.replay.batch sessionId={SessionId} mode={Mode} since={Since} count={Count}` | replay only    |
+| `homespun.envelope.rx`    | web    | `src/Homespun.Web/src/instrumentation.ts` (`logEnvelopeRx`, called from `features/sessions/hooks/use-session-events.ts`)      | `homespun.envelope.rx seq={seq} sessionId={sessionId} type={type} body={body}` | n/a            |
+
+Replay-path entries carry a `homespun.replay=true` attribute (pushed via
+an `ILogger.BeginScope` in `SessionEventsController`) so Seq queries can
+filter them out with `homespun.replay is null`.
+
+---
+
 ## Planned / reserved
 
 Entries here document ActivitySources / logger names that are registered

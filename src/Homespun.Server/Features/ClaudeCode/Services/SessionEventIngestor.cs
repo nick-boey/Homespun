@@ -6,6 +6,7 @@ using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -45,6 +46,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
     private readonly ILogger<SessionEventIngestor> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly IContentPreviewGate _previewGate;
+    private readonly IOptionsMonitor<SessionDebugLoggingOptions> _debugOptions;
 
     public SessionEventIngestor(
         IA2AEventStore store,
@@ -52,6 +54,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         IHubContext<ClaudeCodeHub> hub,
         ILogger<SessionEventIngestor> logger,
         IServiceProvider serviceProvider,
+        IOptionsMonitor<SessionDebugLoggingOptions> debugOptions,
         IContentPreviewGate? previewGate = null)
     {
         _store = store;
@@ -59,6 +62,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         _hub = hub;
         _logger = logger;
         _serviceProvider = serviceProvider;
+        _debugOptions = debugOptions;
         _previewGate = previewGate ?? new NoopContentPreviewGate();
     }
 
@@ -83,6 +87,15 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         ingestSpan?.SetTag("homespun.seq", record.Seq);
         ingestSpan?.SetTag("homespun.event.id", record.EventId);
         ingestSpan?.AddEvent(new ActivityEvent(SessionEventSpanEvents.IngestAppend));
+
+        if (_debugOptions.CurrentValue.FullMessages)
+        {
+            _logger.LogInformation(
+                "a2a.rx kind={Kind} seq={Seq} body={Body}",
+                eventKind,
+                record.Seq,
+                payload.GetRawText());
+        }
 
         // Step 2: translate. The translator is deliberately tolerant of unknown shapes and
         // never throws; a null parsed result is itself a "we could not parse this" signal and
@@ -140,6 +153,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
         // Step 3: broadcast. One envelope per translated AG-UI event, all sharing the parent
         // A2A event's seq and eventId so live and replay produce identical envelope streams.
+        var fullMessages = _debugOptions.CurrentValue.FullMessages;
         try
         {
             foreach (var agui in aguiEvents)
@@ -154,6 +168,17 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
                     EventId: record.EventId,
                     Event: agui,
                     Traceparent: FormatCurrentTraceparent());
+
+                if (fullMessages)
+                {
+                    _logger.LogInformation(
+                        "agui.tx seq={Seq} sessionId={SessionId} traceparent={Traceparent} body={Body}",
+                        envelope.Seq,
+                        envelope.SessionId,
+                        envelope.Traceparent,
+                        JsonSerializer.Serialize(envelope));
+                }
+
                 await _hub.BroadcastSessionEvent(sessionId, envelope);
             }
 

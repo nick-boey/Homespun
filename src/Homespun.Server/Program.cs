@@ -72,6 +72,14 @@ builder.Services.Configure<SessionEventContentOptions>(options =>
 });
 builder.Services.AddSingleton<IContentPreviewGate, ContentPreviewGate>();
 
+// SessionDebugLogging — HOMESPUN_DEBUG_FULL_MESSAGES umbrella flag. Opts the
+// session pipeline into full-body A2A / AG-UI / envelope log emission.
+builder.Services.Configure<SessionDebugLoggingOptions>(options =>
+{
+    var raw = Environment.GetEnvironmentVariable(SessionDebugLoggingOptions.EnvVarName);
+    options.FullMessages = string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase);
+});
+
 // OTLP receiver proxy (POST /api/otlp/v1/{logs,traces}): worker + client ship
 // OTLP to the server, which scrubs + fans out to Seq + the Aspire dashboard.
 // Registered at top level so mock-mode integration tests can exercise the
@@ -478,6 +486,11 @@ if (app.Environment.IsProduction() && sessionEventContentOptions.ContentPreviewC
     startupLogger.LogWarning(
         "SessionEventContent:ContentPreviewChars is set to {Chars} in Production. Event content previews will be attached to span attributes.",
         sessionEventContentOptions.ContentPreviewChars);
+}
+else if (sessionEventContentOptions.ContentPreviewChars == -1)
+{
+    startupLogger.LogInformation(
+        "SessionEventContent:ContentPreviewChars is -1. Full-body content previews enabled on span attributes and OTLP log records.");
 }
 
 // Configure the HTTP request pipeline

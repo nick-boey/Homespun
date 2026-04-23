@@ -404,3 +404,62 @@ docker exec homespun-worker curl -s http://localhost:8080/api/health
 2. Check nginx logs: `docker logs homespun-web`
 3. Verify the backend is reachable: `curl http://localhost:8080/health`
 4. Check the browser console for CORS or network errors
+
+## Debug a session end-to-end
+
+When an agent session misbehaves and the default spans / attributes aren't
+enough to localize the bug, opt the whole pipeline into full-body logging
+with a single env var. Every A2A, AG-UI, and envelope body is emitted as
+an OTel log event and lands in Seq alongside the existing spans.
+
+1. Set the umbrella flag on the AppHost process env and start `dev-live`:
+
+   ```bash
+   HOMESPUN_DEBUG_FULL_MESSAGES=true \
+     dotnet run --project src/Homespun.AppHost --launch-profile dev-live
+   ```
+
+   The AppHost fans the flag onto every tier it provisions:
+   - Worker: `HOMESPUN_DEBUG_FULL_MESSAGES=true`, `DEBUG_AGENT_SDK=true`,
+     `CONTENT_PREVIEW_CHARS=-1`.
+   - Server: `HOMESPUN_DEBUG_FULL_MESSAGES=true` and
+     `SessionEventContent__ContentPreviewChars=-1` (the "no truncation"
+     sentinel; see `docs/observability/otlp-proxy.md`).
+   - Web build: `VITE_HOMESPUN_DEBUG_FULL_MESSAGES=true` (baked in at
+     bundle time; tree-shaken away when unset).
+
+2. Trigger the problematic session. Every message body — outbound A2A,
+   inbound A2A on the server, translated AG-UI events, SignalR envelopes,
+   and client-side envelope receipts — becomes a log entry.
+
+3. Open Seq at `http://localhost:5341` and filter by message template:
+   - `service.name = 'homespun.worker'` + message contains `a2a.emit` —
+     full outbound bodies from the worker.
+   - `service.name = 'homespun.server'` + message contains `a2a.rx` —
+     inbound A2A on the server after persistence.
+   - `service.name = 'homespun.server'` + message contains `agui.translate`
+     — each translated AG-UI event.
+   - `service.name = 'homespun.server'` + message contains `agui.tx` —
+     outbound SignalR envelope bodies.
+   - `service.name = 'homespun.web'` + message contains
+     `homespun.envelope.rx` — browser-side receipts.
+
+   Every site uses a rendered Serilog-style template so the body renders
+   inline in Seq's log list (no per-row expansion needed). Join across
+   sites with the shared trace id.
+
+4. Replay vs live: entries emitted while handling
+   `GET /api/sessions/{id}/events` carry `homespun.replay=true`. To
+   focus on live traffic only, add `homespun.replay is null` to the
+   filter.
+
+5. Toggling the flag requires an AppHost restart — the value is read
+   once at process start.
+
+**Warning.** Full-body logging ships user prompts, file contents, tool
+outputs, and anything else passing through a session into Seq. The
+existing `OtlpScrubber` secret-substring redaction applies to span
+attributes only; it does not scan log record bodies. Use the flag for
+focused debugging, not as a steady-state setting, and treat the Seq
+instance it writes to as carrying the same sensitivity as the sessions
+you are debugging.

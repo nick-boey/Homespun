@@ -6,6 +6,7 @@ using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Homespun.Tests.Features.ClaudeCode;
@@ -52,12 +53,24 @@ public class SessionEventIngestorTests
             _translatorMock.Object,
             _hubMock.Object,
             _loggerMock.Object,
-            new NullServiceProvider());
+            new NullServiceProvider(),
+            BuildDebugOptions(fullMessages: false));
     }
 
     private sealed class NullServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
+    }
+
+    internal static IOptionsMonitor<SessionDebugLoggingOptions> BuildDebugOptions(bool fullMessages) =>
+        new StaticOptionsMonitor<SessionDebugLoggingOptions>(new SessionDebugLoggingOptions { FullMessages = fullMessages });
+
+    internal sealed class StaticOptionsMonitor<T> : IOptionsMonitor<T>
+    {
+        public StaticOptionsMonitor(T value) => CurrentValue = value;
+        public T CurrentValue { get; }
+        public T Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
     private static JsonElement Payload(string kind) =>
@@ -282,5 +295,80 @@ public class SessionEventIngestorTests
         var translate = spans.SingleOrDefault(s => s.OperationName == "homespun.agui.translate");
         Assert.That(translate, Is.Not.Null, "expected exactly one homespun.agui.translate child span");
         Assert.That(translate!.Parent?.OperationName, Is.EqualTo("homespun.session.ingest"));
+    }
+
+    // ---------------- Full-body debug logging ----------------
+
+    [Test]
+    public async Task IngestAsync_FullMessagesOn_EmitsA2aRxLogWithBody()
+    {
+        var ingestor = new SessionEventIngestor(
+            _storeMock.Object,
+            _translatorMock.Object,
+            _hubMock.Object,
+            _loggerMock.Object,
+            new NullServiceProvider(),
+            BuildDebugOptions(fullMessages: true));
+
+        _storeMock
+            .Setup(s => s.AppendAsync(ProjectId, SessionId, "task", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Record(9, "event-9", "task"));
+        _translatorMock
+            .Setup(t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()))
+            .Returns(new AGUIBaseEvent[] { AGUIEventFactory.CreateRunStarted(SessionId, "run-9") });
+        _groupClientMock
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var payload = JsonDocument.Parse("""{"id":"t-9","status":{"state":"submitted"}}""").RootElement;
+        await ingestor.IngestAsync(ProjectId, SessionId, "task", payload);
+
+        VerifyLogMessageContains(_loggerMock, LogLevel.Information, "a2a.rx kind=task seq=9");
+        VerifyLogMessageContains(_loggerMock, LogLevel.Information, "agui.tx seq=9");
+    }
+
+    [Test]
+    public async Task IngestAsync_FullMessagesOff_EmitsNoDebugLogs()
+    {
+        // _ingestor built in SetUp with fullMessages=false.
+        _storeMock
+            .Setup(s => s.AppendAsync(ProjectId, SessionId, "task", It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Record(1, "event-1", "task"));
+        _translatorMock
+            .Setup(t => t.Translate(It.IsAny<ParsedA2AEvent>(), It.IsAny<TranslationContext>()))
+            .Returns(new AGUIBaseEvent[] { AGUIEventFactory.CreateRunStarted(SessionId, "run-1") });
+        _groupClientMock
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var payload = JsonDocument.Parse("""{"id":"t-1","status":{"state":"submitted"}}""").RootElement;
+        await _ingestor.IngestAsync(ProjectId, SessionId, "task", payload);
+
+        VerifyLogMessageAbsent(_loggerMock, "a2a.rx");
+        VerifyLogMessageAbsent(_loggerMock, "agui.tx");
+    }
+
+    private static void VerifyLogMessageContains<T>(Mock<ILogger<T>> loggerMock, LogLevel level, string fragment)
+    {
+        loggerMock.Verify(l => l.Log(
+            level,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains(fragment)),
+            It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.AtLeastOnce,
+            $"expected log entry containing '{fragment}'");
+    }
+
+    private static void VerifyLogMessageAbsent<T>(Mock<ILogger<T>> loggerMock, string fragment)
+    {
+        loggerMock.Verify(l => l.Log(
+            It.IsAny<LogLevel>(),
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains(fragment)),
+            It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never,
+            $"expected no log entry containing '{fragment}'");
     }
 }

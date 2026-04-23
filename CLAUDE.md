@@ -141,12 +141,14 @@ Local dev runs through the Aspire AppHost. Pick a launch profile:
 | `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
 | `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — also usable on Apple Silicon now that the worker image is built locally instead of pulled from GHCR. |
 | `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
+| `prod` | Container topology against `~/.homespun-container/data` with `ASPNETCORE_ENVIRONMENT=Production` and no mock seeding. Seq still starts. Local debugging tool for prod-shaped runs; not a deployment gate (Komodo + `docker-compose.yml` remains the deploy path). |
 
 ```bash
 dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
 dotnet run --project src/Homespun.AppHost --launch-profile dev-live
 dotnet run --project src/Homespun.AppHost --launch-profile dev-windows
 dotnet run --project src/Homespun.AppHost --launch-profile dev-container
+dotnet run --project src/Homespun.AppHost --launch-profile prod
 ```
 
 Use `dotnet run` for these — `aspire run` does not accept `--launch-profile`
@@ -179,6 +181,17 @@ Every tier exports OTLP to two sinks in parallel via
 Seq UI is at `http://localhost:5341` in dev. In prod the `datalust/seq:2024.3`
 service in `docker-compose.yml` ingests via `http://seq:5341/ingest/otlp`;
 set `SEQ_API_KEY` in the Komodo env to gate ingestion.
+
+**Full-body debug logging.** Set `HOMESPUN_DEBUG_FULL_MESSAGES=true` on the
+AppHost process env to opt the entire stack (worker + server + web) into
+emitting full A2A, AG-UI, and envelope bodies as OTel log events. The flag
+is off by default in every launch profile. When set, the AppHost fans it
+out and implies `DEBUG_AGENT_SDK=true` + `CONTENT_PREVIEW_CHARS=-1` on the
+worker, `SessionEventContent__ContentPreviewChars=-1` on the server, and
+`VITE_HOMESPUN_DEBUG_FULL_MESSAGES=true` on the web build (tree-shaken
+when unset). Replay-path log entries carry `homespun.replay=true` so they
+can be filtered out in Seq via `homespun.replay is null`. The umbrella
+flag is read at process start; toggling requires a restart.
 
 **Verify connectivity:**
 ```bash

@@ -6,17 +6,54 @@ var builder = DistributedApplication.CreateBuilder(args);
 // HOMESPUN_AGENT_MODE           = unset | Docker | SingleContainer
 // MOCK_MODE_USE_LIVE_SESSIONS   = "true" to wire real Claude SDK via worker
 // HOMESPUN_DEV_HOSTING_MODE     = "host" (default) | "container"
+// HOMESPUN_DEBUG_FULL_MESSAGES  = "true" to fan full-body A2A/AG-UI/envelope
+//                                 logs into the worker, server, and web build.
+// HOMESPUN_PROFILE_KIND         = "prod" to run the container topology against
+//                                 the persistent data dir (`~/.homespun-container/data`)
+//                                 with ASPNETCORE_ENVIRONMENT=Production and no
+//                                 mock seeding. Only honoured when hosting=container.
 var agentMode = Environment.GetEnvironmentVariable("HOMESPUN_AGENT_MODE");
 var useLiveSessions =
     string.Equals(Environment.GetEnvironmentVariable("MOCK_MODE_USE_LIVE_SESSIONS"), "true", StringComparison.OrdinalIgnoreCase);
 var hostingMode =
     Environment.GetEnvironmentVariable("HOMESPUN_DEV_HOSTING_MODE") ?? "host";
 var isContainerHosting = string.Equals(hostingMode, "container", StringComparison.OrdinalIgnoreCase);
+var isProd = string.Equals(
+    Environment.GetEnvironmentVariable("HOMESPUN_PROFILE_KIND"),
+    "prod",
+    StringComparison.OrdinalIgnoreCase);
 
-// In dev-container the mode auto-selects by host OS when not set.
+// Umbrella debug flag. When true, propagate HOMESPUN_DEBUG_FULL_MESSAGES=true
+// (and derived DEBUG_AGENT_SDK / CONTENT_PREVIEW_CHARS / SessionEventContent__ContentPreviewChars /
+// VITE_HOMESPUN_DEBUG_FULL_MESSAGES) onto every tier that doesn't already set
+// the per-tier value explicitly.
+var debugFullMessages = string.Equals(
+    Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+var explicitDebugAgentSdk = Environment.GetEnvironmentVariable("DEBUG_AGENT_SDK");
+var explicitContentPreviewChars = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+var explicitSessionEventContentChars = Environment.GetEnvironmentVariable("SessionEventContent__ContentPreviewChars");
+
+// In dev-container and prod the agent mode auto-selects by host OS when not set.
 if (isContainerHosting && string.IsNullOrEmpty(agentMode))
 {
     agentMode = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "SingleContainer" : "Docker";
+}
+
+// Resolve the prod data bind-mount path if we're in prod mode. ~/.homespun-container/data
+// matches the documented prod path (docs/installation.md). Created empty on first run.
+string? prodDataPath = null;
+if (isProd && isContainerHosting)
+{
+    prodDataPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".homespun-container",
+        "data");
+    if (!Directory.Exists(prodDataPath))
+    {
+        Directory.CreateDirectory(prodDataPath);
+    }
 }
 
 var isSingleContainer = string.Equals(agentMode, "SingleContainer", StringComparison.OrdinalIgnoreCase);
@@ -81,11 +118,30 @@ else if (isDockerAgent)
         .WaitFor(seq);
 }
 
+// HOMESPUN_DEBUG_FULL_MESSAGES fan-out onto the worker container. SingleContainer
+// already sets DEBUG_AGENT_SDK=true explicitly; when the umbrella flag is on we
+// still add HOMESPUN_DEBUG_FULL_MESSAGES and CONTENT_PREVIEW_CHARS=-1 unless
+// either is set explicitly in the AppHost env.
+if (debugFullMessages && workerContainer is not null)
+{
+    workerContainer.WithEnvironment("HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+    if (string.IsNullOrEmpty(explicitDebugAgentSdk))
+    {
+        workerContainer.WithEnvironment("DEBUG_AGENT_SDK", "true");
+    }
+    if (string.IsNullOrEmpty(explicitContentPreviewChars))
+    {
+        workerContainer.WithEnvironment("CONTENT_PREVIEW_CHARS", "-1");
+    }
+}
+
 // ─── Server + web — two hosting paths ─────────────────────────────────────────
 if (isContainerHosting)
 {
     // dev-container: server + web built via Dockerfile for prod parity. Worker
     // is already wired above (SingleContainer → pre-run; Docker → build-only).
+    // prod: same topology but ASPNETCORE_ENVIRONMENT=Production, no mock env,
+    // and a bind-mount onto ~/.homespun-container/data for persistent state.
     var serverContainer = builder.AddDockerfile("server", "../../")
         .WithHttpEndpoint(targetPort: 8080, port: 5101, name: "http")
         // DooD mount — sibling worker spawns rely on the host docker socket.
@@ -98,9 +154,6 @@ if (isContainerHosting)
         // Dev-only concession; prod deploys via docker-compose+Komodo keep the
         // non-root USER directive.
         .WithContainerRuntimeArgs("--user", "0:0")
-        .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Mock")
-        .WithEnvironment("HOMESPUN_MOCK_MODE", "true")
-        .WithEnvironment("MockMode__UseLiveClaudeSessions", useLiveSessions ? "true" : "false")
         .WithEnvironment("GITHUB_TOKEN", githubToken)
         .WithEnvironment("CLAUDE_CODE_OAUTH_TOKEN", claudeOauthToken)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.server")
@@ -112,6 +165,25 @@ if (isContainerHosting)
             ReferenceExpression.Create($"{seq.GetEndpoint("http")}/ingest/otlp"))
         .WithReference(seq)
         .WaitFor(seq);
+
+    if (isProd)
+    {
+        // Production topology: no mock seeding, persistent data root, Production env.
+        serverContainer.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production");
+        serverContainer.WithEnvironment("HOMESPUN_DATA_PATH", "/data/.homespun/homespun-data.json");
+        if (prodDataPath is not null)
+        {
+            serverContainer.WithBindMount(prodDataPath, "/data");
+        }
+    }
+    else
+    {
+        serverContainer.WithEnvironment("ASPNETCORE_ENVIRONMENT", "Mock");
+        serverContainer.WithEnvironment("HOMESPUN_MOCK_MODE", "true");
+        serverContainer.WithEnvironment(
+            "MockMode__UseLiveClaudeSessions",
+            useLiveSessions ? "true" : "false");
+    }
 
     if (!string.IsNullOrEmpty(agentMode))
     {
@@ -140,11 +212,20 @@ if (isContainerHosting)
         serverContainer.WithEnvironment("AgentExecution__SingleContainer__WorkerUrl", workerEndpoint);
     }
 
+    if (debugFullMessages)
+    {
+        serverContainer.WithEnvironment("HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+        if (string.IsNullOrEmpty(explicitSessionEventContentChars))
+        {
+            serverContainer.WithEnvironment("SessionEventContent__ContentPreviewChars", "-1");
+        }
+    }
+
     // nginx.conf.template in Homespun.Web uses ${UPSTREAM_HOST}:${UPSTREAM_PORT}
     // via the nginx:alpine envsubst entrypoint. In docker-compose the default
     // is `homespun:8080`; for dev-container we point it at the Aspire server
     // resource's container-network hostname (`server`).
-    builder.AddDockerfile("web", "../Homespun.Web")
+    var webContainer = builder.AddDockerfile("web", "../Homespun.Web")
         .WithHttpEndpoint(targetPort: 80, name: "http")
         .WithEnvironment("UPSTREAM_HOST", "server")
         .WithEnvironment("UPSTREAM_PORT", "8080")
@@ -152,6 +233,11 @@ if (isContainerHosting)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.web")
         .WithReference(seq)
         .WaitFor(serverContainer);
+
+    if (debugFullMessages)
+    {
+        webContainer.WithEnvironment("VITE_HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+    }
 }
 else
 {
@@ -191,12 +277,21 @@ else
         server.WithEnvironment("AgentExecution__SingleContainer__WorkerUrl", workerEndpoint);
     }
 
+    if (debugFullMessages)
+    {
+        server.WithEnvironment("HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+        if (string.IsNullOrEmpty(explicitSessionEventContentChars))
+        {
+            server.WithEnvironment("SessionEventContent__ContentPreviewChars", "-1");
+        }
+    }
+
     // Pin Vite to 5173 so Playwright + bookmarked URLs stay stable.
     // AddViteApp auto-allocates a dynamic port and passes it to vite via
     // `npm run dev -- --port <N>`. Override the endpoint's allocated port
     // (callback-mode WithEndpoint mutates an existing endpoint in place)
     // and disable the Aspire dev proxy so the host port is direct.
-    builder.AddViteApp("web", "../Homespun.Web", "dev")
+    var viteApp = builder.AddViteApp("web", "../Homespun.Web", "dev")
         .WithEndpoint("http", e =>
         {
             e.Port = 5173;
@@ -205,6 +300,11 @@ else
         })
         .WithEnvironment("VITE_API_URL", server.GetEndpoint("http"))
         .WaitFor(server);
+
+    if (debugFullMessages)
+    {
+        viteApp.WithEnvironment("VITE_HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+    }
 }
 
 builder.Build().Run();

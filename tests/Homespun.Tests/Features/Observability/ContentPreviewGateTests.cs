@@ -45,8 +45,22 @@ public class ContentPreviewGateTests
     }
 
     [Test]
-    public void Truncate_NegativeChars_ReturnsNull()
+    public void Truncate_MinusOneSentinel_ReturnsOriginalUnchanged()
     {
-        Assert.That(ContentPreviewGate.Truncate("hello", -1), Is.Null);
+        // -1 is the "no truncation" sentinel wired by HOMESPUN_DEBUG_FULL_MESSAGES.
+        var longText = new string('a', 5000);
+        Assert.That(ContentPreviewGate.Truncate(longText, -1), Is.EqualTo(longText));
+    }
+
+    [Test]
+    public void Truncate_MinusOneSentinel_NullText_ReturnsNull()
+    {
+        Assert.That(ContentPreviewGate.Truncate(null, -1), Is.Null);
+    }
+
+    [Test]
+    public void Truncate_NegativeBelowMinusOne_ReturnsNull()
+    {
+        Assert.That(ContentPreviewGate.Truncate("hello", -2), Is.Null);
     }
 }
