@@ -182,6 +182,16 @@ Seq UI is at `http://localhost:5341` in dev. In prod the `datalust/seq:2024.3`
 service in `docker-compose.yml` ingests via `http://seq:5341/ingest/otlp`;
 set `SEQ_API_KEY` in the Komodo env to gate ingestion.
 
+**Container-mode profiles (`dev-container`, `prod`)** can't reach the Aspire
+dashboard's default gRPC OTLP endpoint — it serves the ASP.NET Core dev HTTPS
+cert which containers don't trust. The AppHost works around this by injecting
+the dashboard's HTTP/protobuf OTLP URL (`DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL`,
+rewritten `localhost` → `host.docker.internal`) onto every container resource,
+and by setting `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` +
+`ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` so the dashboard accepts unauthenticated
+HTTP OTLP locally. Host-mode profiles (`dev-live`, `dev-windows`, `dev-mock`)
+are unaffected — Aspire's default HTTPS-gRPC injection still works for them.
+
 **Full-body debug logging.** Set `HOMESPUN_DEBUG_FULL_MESSAGES=true` on the
 AppHost process env to opt the entire stack (worker + server + web) into
 emitting full A2A, AG-UI, and envelope bodies as OTel log events. The flag

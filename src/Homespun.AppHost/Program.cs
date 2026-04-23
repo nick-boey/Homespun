@@ -35,6 +35,55 @@ var explicitDebugAgentSdk = Environment.GetEnvironmentVariable("DEBUG_AGENT_SDK"
 var explicitContentPreviewChars = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
 var explicitSessionEventContentChars = Environment.GetEnvironmentVariable("SessionEventContent__ContentPreviewChars");
 
+// Aspire's auto-injection of OTEL_EXPORTER_OTLP_ENDPOINT into container resources
+// targets the host's localhost dashboard URL, which doesn't resolve from inside a
+// container on Docker Desktop. Compute a container-reachable URL here and inject
+// it onto every container resource so both ServiceDefaults' OTel exporters and
+// OtlpFanout's worker/client fan-out reach the Aspire dashboard. Host-mode
+// resources (AddProject, AddViteApp) keep Aspire's auto-injected URL untouched.
+//
+// We prefer the dashboard's HTTP OTLP endpoint (DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL)
+// over the gRPC one because containers don't trust the ASP.NET Core dev HTTPS cert
+// the gRPC endpoint serves — the TLS handshake would fail silently and drop every
+// span/log. The HTTP endpoint is plain http and works without cert trust. The
+// dashboard accepts unauthenticated OTLP when DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true.
+var (dashboardOtlpEndpoint, dashboardOtlpProtocol) = ResolveContainerReachableDashboardOtlp();
+var dashboardOtlpHeaders = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS");
+
+static (string? Url, string Protocol) ResolveContainerReachableDashboardOtlp()
+{
+    var http = Environment.GetEnvironmentVariable("DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL");
+    if (!string.IsNullOrWhiteSpace(http))
+    {
+        return (RewriteForContainer(http), "http/protobuf");
+    }
+    var grpc = Environment.GetEnvironmentVariable("DOTNET_DASHBOARD_OTLP_ENDPOINT_URL");
+    if (!string.IsNullOrWhiteSpace(grpc))
+    {
+        return (RewriteForContainer(grpc), "grpc");
+    }
+    return (null, "grpc");
+
+    static string RewriteForContainer(string url) => url
+        .Replace("localhost", "host.docker.internal", StringComparison.OrdinalIgnoreCase)
+        .Replace("127.0.0.1", "host.docker.internal", StringComparison.Ordinal);
+}
+
+void InjectDashboardOtlp<T>(IResourceBuilder<T> resource) where T : IResourceWithEnvironment
+{
+    if (dashboardOtlpEndpoint is null)
+    {
+        return;
+    }
+    resource
+        .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", dashboardOtlpEndpoint)
+        .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", dashboardOtlpProtocol);
+    if (!string.IsNullOrWhiteSpace(dashboardOtlpHeaders))
+    {
+        resource.WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", dashboardOtlpHeaders);
+    }
+}
+
 // In dev-container and prod the agent mode auto-selects by host OS when not set.
 if (isContainerHosting && string.IsNullOrEmpty(agentMode))
 {
@@ -103,6 +152,7 @@ if (isSingleContainer)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.worker")
         .WithReference(seq)
         .WaitFor(seq);
+    InjectDashboardOtlp(workerContainer);
     workerEndpoint = workerContainer.GetEndpoint("http");
 }
 else if (isDockerAgent)
@@ -116,6 +166,7 @@ else if (isDockerAgent)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.worker")
         .WithReference(seq)
         .WaitFor(seq);
+    InjectDashboardOtlp(workerContainer);
 }
 
 // HOMESPUN_DEBUG_FULL_MESSAGES fan-out onto the worker container. SingleContainer
@@ -165,6 +216,8 @@ if (isContainerHosting)
             ReferenceExpression.Create($"{seq.GetEndpoint("http")}/ingest/otlp"))
         .WithReference(seq)
         .WaitFor(seq);
+
+    InjectDashboardOtlp(serverContainer);
 
     if (isProd)
     {
@@ -233,6 +286,8 @@ if (isContainerHosting)
         .WithEnvironment("OTEL_SERVICE_NAME", "homespun.web")
         .WithReference(seq)
         .WaitFor(serverContainer);
+
+    InjectDashboardOtlp(webContainer);
 
     if (debugFullMessages)
     {
