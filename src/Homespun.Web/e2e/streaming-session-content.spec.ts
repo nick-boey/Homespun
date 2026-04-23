@@ -27,8 +27,10 @@ test.describe.serial('Streaming Session Content', () => {
     // Wait for messages to load
     await page.waitForSelector('[data-testid^="message-"]', { timeout: 15000 })
 
-    // Verify tool use blocks are rendered - the mock agent produces Read tool results for "read file"
-    await expect(page.getByText(/Read.*Completed/)).toBeVisible({ timeout: 5000 })
+    // Verify the Read tool renderer wired through the assistant-ui Toolkit fired —
+    // the mock agent emits a Read tool_use for `mock.txt` with content `mock file contents`.
+    await expect(page.getByText(/mock\.txt/).first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/mock file contents/).first()).toBeVisible({ timeout: 5000 })
   })
 
   test('messages persist across refreshes without duplicates', async ({ page }, testInfo) => {
