@@ -43,6 +43,9 @@ jobs:
         working-directory: src/Homespun.Worker
         run: npm ci
 
+      - name: Build base image
+        run: DOCKER_BUILDKIT=1 docker build -t homespun-base:local -f Dockerfile.base .
+
       - name: Build worker image
         run: docker build -t homespun-worker:local ./src/Homespun.Worker
 
