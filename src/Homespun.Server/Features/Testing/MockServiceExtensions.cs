@@ -276,6 +276,10 @@ public static class MockServiceExtensions
             Console.WriteLine("[AgentExecution] SingleContainer: Registering SingleContainerAgentExecutionService");
             services.Configure<SingleContainerAgentExecutionOptions>(
                 configuration.GetSection(SingleContainerAgentExecutionOptions.SectionName));
+            // SingleContainerAgentExecutionService depends on the IPerSessionEventStream
+            // singleton for its rewired /events consumption path (task 9 of the
+            // fix-post-result-events plan). The mock DI graph must register it too.
+            services.AddPerSessionEventStream();
             services.AddSingleton<IAgentExecutionService, SingleContainerAgentExecutionService>();
         }
         else
