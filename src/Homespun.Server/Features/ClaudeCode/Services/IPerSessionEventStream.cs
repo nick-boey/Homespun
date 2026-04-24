@@ -38,6 +38,16 @@ public interface IPerSessionEventStream
     /// Subscribes to SDK messages for a single turn. Returned enumerable
     /// completes after the next <see cref="SdkResultMessage"/> is yielded.
     /// Throws if no reader is running for <paramref name="homespunSessionId"/>.
+    ///
+    /// <para>
+    /// Any <see cref="SdkMessage"/>s dispatched by the reader before a
+    /// subscriber attaches are buffered (up to 256) and replayed into the
+    /// subscriber's channel on attach in FIFO order; older messages are
+    /// dropped on overflow with a Warning. This closes the subscribe-race
+    /// window where a <c>question_pending</c>, <c>plan_pending</c>, or
+    /// <see cref="SdkResultMessage"/> could arrive before the server has
+    /// called this method for the current turn.
+    /// </para>
     /// </summary>
     IAsyncEnumerable<SdkMessage> SubscribeTurnAsync(
         string homespunSessionId,

@@ -16,10 +16,15 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// <c>GET /api/sessions/{id}/events</c> endpoint, line-parses every frame, and drives
 /// <see cref="ISessionEventIngestor.IngestAsync"/> for every A2A-kind event. Parsed
 /// <see cref="SdkMessage"/> values (the four remaining control-plane variants) are
-/// fanned out to a single active per-turn subscriber through a bounded
-/// <see cref="Channel{T}"/>; when the current turn has no subscriber the messages are
-/// dropped on the floor — the A2A/envelope broadcast path has already delivered the
-/// content-bearing events to clients.
+/// fanned out to a single active per-turn subscriber through an unbounded
+/// <see cref="Channel{T}"/>. When no turn subscriber is currently attached, messages
+/// are stored in a bounded pre-subscribe FIFO (cap
+/// <see cref="Reader.PreSubscribeBufferCapacity"/>) and drained into the subscriber's
+/// channel on attach; on overflow the oldest entry is evicted and a Warning logged.
+/// This closes the subscribe-race window where a <c>canUseTool</c> hook or
+/// status-update completed could arrive before the server called
+/// <see cref="IPerSessionEventStream.SubscribeTurnAsync"/>. The A2A/ingestor path runs
+/// unconditionally, so content-bearing events are never at risk.
 /// </para>
 ///
 /// <para>
@@ -159,6 +164,14 @@ public sealed class PerSessionEventStream : IPerSessionEventStream, IAsyncDispos
     /// </summary>
     private sealed class Reader : IAsyncDisposable
     {
+        /// <summary>
+        /// Cap on messages held in the pre-subscribe FIFO. 256 comfortably covers a
+        /// typical burst of control-plane messages (system/question/plan/result) that
+        /// can race the subscribe window while preventing unbounded growth on idle
+        /// sessions where a subscriber never attaches.
+        /// </summary>
+        internal const int PreSubscribeBufferCapacity = 256;
+
         private readonly PerSessionEventStream _owner;
         private readonly string _homespunSessionId;
         private readonly string _workerUrl;
@@ -166,8 +179,10 @@ public sealed class PerSessionEventStream : IPerSessionEventStream, IAsyncDispos
         private readonly string? _projectId;
         private readonly CancellationTokenSource _cts = new();
         private readonly object _turnLock = new();
+        private readonly Queue<SdkMessage> _preSubscribeBuffer = new();
         private Channel<SdkMessage>? _turnChannel;
         private Task? _readTask;
+        private int _droppedPreSubscribeCount;
 
         public Reader(
             PerSessionEventStream owner,
@@ -211,6 +226,22 @@ public sealed class PerSessionEventStream : IPerSessionEventStream, IAsyncDispos
                     SingleWriter = true,
                     AllowSynchronousContinuations = false,
                 });
+
+                // Drain any messages the reader buffered before a subscriber attached.
+                // TryWrite is synchronous on unbounded channels and always succeeds, so
+                // this is safe to do under the lock. Preserving the FIFO order means the
+                // subscriber sees the same sequence the reader observed.
+                while (_preSubscribeBuffer.TryDequeue(out var buffered))
+                {
+                    if (!channel.Writer.TryWrite(buffered))
+                    {
+                        // Unreachable for unbounded channels, but defensive.
+                        _owner._logger.LogWarning(
+                            "PerSessionEventStream {SessionId} failed to drain buffered message into new turn channel",
+                            _homespunSessionId);
+                    }
+                }
+
                 _turnChannel = channel;
                 return channel;
             }
@@ -355,9 +386,25 @@ public sealed class PerSessionEventStream : IPerSessionEventStream, IAsyncDispos
             lock (_turnLock)
             {
                 channel = _turnChannel;
+                if (channel is null)
+                {
+                    // No subscriber yet — park the message in the pre-subscribe FIFO so
+                    // it is replayed when SubscribeTurnAsync attaches. Oldest-first
+                    // eviction on overflow: the A2A/ingestor path has already persisted
+                    // content-bearing events, so overflow only drops control-plane
+                    // signals. Warn loudly.
+                    if (_preSubscribeBuffer.Count >= PreSubscribeBufferCapacity)
+                    {
+                        _preSubscribeBuffer.Dequeue();
+                        _droppedPreSubscribeCount++;
+                        _owner._logger.LogWarning(
+                            "PerSessionEventStream {SessionId} pre-subscribe buffer overflow — dropped oldest control message (cumulative dropped: {DroppedCount})",
+                            _homespunSessionId, _droppedPreSubscribeCount);
+                    }
+                    _preSubscribeBuffer.Enqueue(sdkMessage);
+                    return;
+                }
             }
-
-            if (channel is null) return;
 
             try
             {

@@ -261,6 +261,208 @@ public class PerSessionEventStreamTests
     }
 
     /// <summary>
+    /// The reader dispatches messages whether or not a subscriber is attached. This test
+    /// proves the pre-subscribe buffer: seed the handler with a status-update completed
+    /// (→ <see cref="SdkResultMessage"/>) AND a <c>question_pending</c> frame
+    /// (→ <see cref="SdkQuestionPendingMessage"/>), let the reader drain them before any
+    /// subscriber attaches, THEN call <see cref="IPerSessionEventStream.SubscribeTurnAsync"/>
+    /// and assert both messages are replayed in order.
+    /// </summary>
+    [Test]
+    public async Task BeginTurn_DrainsPreSubscribeBuffer_IntoNewChannel()
+    {
+        var ingestor = new Mock<ISessionEventIngestor>();
+        ingestor
+            .Setup(i => i.IngestAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Build a body containing a question_pending frame FIRST, then a status-update
+        // completed (→ SdkResultMessage). FIFO order must be preserved by the drain.
+        var questionData = JsonSerializer.Serialize(new
+        {
+            questionId = "q1",
+            prompt = "may I?",
+        });
+        var statusUpdate = JsonSerializer.Serialize(new
+        {
+            kind = "status-update",
+            taskId = "t1",
+            contextId = HomespunSessionId,
+            status = new
+            {
+                state = "completed",
+                timestamp = "2026-04-24T00:00:00Z",
+            },
+            final = true,
+        });
+
+        var sb = new StringBuilder();
+        sb.Append("event: question_pending\n");
+        sb.Append("data: ").Append(questionData).Append('\n');
+        sb.Append('\n');
+        sb.Append("event: status-update\n");
+        sb.Append("data: ").Append(statusUpdate).Append('\n');
+        sb.Append('\n');
+
+        using var handler = new SseResponseHandler(sb.ToString());
+        using var httpClient = new HttpClient(handler);
+        var stream = new PerSessionEventStream(
+            ingestor.Object, httpClient, NullLogger<PerSessionEventStream>.Instance);
+
+        await stream.StartAsync(HomespunSessionId, WorkerBaseUrl, WorkerSessionId, ProjectId, CancellationToken.None);
+
+        // Wait until the reader has drained the body into the pre-subscribe buffer. The
+        // ingestor only sees A2A frames (status-update), so a single IngestAsync call is
+        // our signal that the reader has processed both frames (question_pending is
+        // dispatched in-order ahead of it, buffered synchronously under the lock).
+        await WaitForConditionAsync(() =>
+        {
+            try
+            {
+                ingestor.Verify(i => i.IngestAsync(
+                    ProjectId, HomespunSessionId, "status-update",
+                    It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()), Times.Once);
+                return true;
+            }
+            catch (MockException)
+            {
+                return false;
+            }
+        });
+
+        // Small yield so the reader has definitely enqueued the SdkResultMessage after
+        // the ingestor call (both happen inside the same DispatchAsync call for the
+        // status-update, but the SdkResultMessage push is after the ingestor await).
+        await Task.Delay(50);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in stream.SubscribeTurnAsync(HomespunSessionId, cts.Token))
+        {
+            messages.Add(msg);
+            if (msg is SdkResultMessage) break;
+        }
+
+        Assert.That(messages, Has.Count.EqualTo(2),
+            "buffer must replay both pre-subscribe messages into the new turn channel");
+        Assert.That(messages[0], Is.InstanceOf<SdkQuestionPendingMessage>(),
+            "FIFO order: question_pending was dispatched first");
+        Assert.That(messages[1], Is.InstanceOf<SdkResultMessage>(),
+            "FIFO order: status-update completed was dispatched second");
+
+        await stream.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Seeds the handler with more than <c>PreSubscribeBufferCapacity</c> control frames
+    /// (each <c>question_pending</c> → <see cref="SdkQuestionPendingMessage"/>). The
+    /// reader drains them into the buffer with no subscriber attached, which must
+    /// trigger oldest-first eviction and log a Warning on each overflow. On attach the
+    /// subscriber sees exactly <c>PreSubscribeBufferCapacity</c> messages.
+    /// </summary>
+    [Test]
+    public async Task DispatchAsync_OverflowsBuffer_LogsWarningAndDropsOldest()
+    {
+        const int seed = 258; // 2 over the 256 cap
+        const int expectedRetained = 256;
+
+        var ingestor = new Mock<ISessionEventIngestor>();
+        ingestor
+            .Setup(i => i.IngestAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var sb = new StringBuilder();
+        for (int i = 0; i < seed; i++)
+        {
+            var data = JsonSerializer.Serialize(new { questionId = $"q{i}", prompt = "p" });
+            sb.Append("event: question_pending\n");
+            sb.Append("data: ").Append(data).Append('\n');
+            sb.Append('\n');
+        }
+        // Terminator frame: use a status-update completed so the subscriber can
+        // deterministically break out after consuming the retained buffer tail.
+        var statusUpdate = JsonSerializer.Serialize(new
+        {
+            kind = "status-update",
+            taskId = "t1",
+            contextId = HomespunSessionId,
+            status = new { state = "completed", timestamp = "2026-04-24T00:00:00Z" },
+            final = true,
+        });
+        sb.Append("event: status-update\n");
+        sb.Append("data: ").Append(statusUpdate).Append('\n');
+        sb.Append('\n');
+
+        var logger = new Mock<ILogger<PerSessionEventStream>>();
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+
+        using var handler = new SseResponseHandler(sb.ToString());
+        using var httpClient = new HttpClient(handler);
+        var stream = new PerSessionEventStream(ingestor.Object, httpClient, logger.Object);
+
+        await stream.StartAsync(HomespunSessionId, WorkerBaseUrl, WorkerSessionId, ProjectId, CancellationToken.None);
+
+        // Wait until the terminating status-update has been processed by the ingestor —
+        // by then every preceding question_pending has also been dispatched (and thus
+        // buffered / evicted) because DispatchAsync is serial within the read loop.
+        await WaitForConditionAsync(() =>
+        {
+            try
+            {
+                ingestor.Verify(i => i.IngestAsync(
+                    ProjectId, HomespunSessionId, "status-update",
+                    It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()), Times.Once);
+                return true;
+            }
+            catch (MockException)
+            {
+                return false;
+            }
+        });
+
+        // Small yield to ensure the SdkResultMessage produced from the status-update has
+        // been enqueued into the pre-subscribe buffer (after the ingestor await).
+        await Task.Delay(50);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in stream.SubscribeTurnAsync(HomespunSessionId, cts.Token))
+        {
+            messages.Add(msg);
+            if (msg is SdkResultMessage) break;
+        }
+
+        // 258 question_pending + 1 result = 259 total dispatched, buffer cap 256.
+        // The oldest 3 (2 question_pending + oldest... actually: after enqueueing the
+        // 257th message the buffer evicts #0; after 258th evicts #1; after the result
+        // evicts #2). Net retained: messages [3..257] (255 question_pending) + result =
+        // 256 total.
+        Assert.That(messages, Has.Count.EqualTo(expectedRetained),
+            "buffer must retain exactly PreSubscribeBufferCapacity messages after overflow");
+        Assert.That(messages.OfType<SdkResultMessage>().Count(), Is.EqualTo(1),
+            "terminating SdkResultMessage must be retained (youngest)");
+        Assert.That(messages[^1], Is.InstanceOf<SdkResultMessage>(),
+            "SdkResultMessage must be the youngest message retained");
+
+        // Verify Warning was logged at least twice (once per overflow; 3 overflows here).
+        logger.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.AtLeast(2),
+            "pre-subscribe buffer overflow must log a Warning per evicted message");
+
+        await stream.DisposeAsync();
+    }
+
+    /// <summary>
     /// Regression guard for the DI lifetime bug: <see cref="PerSessionEventStream"/> holds
     /// a per-session reader dictionary, so a transient registration would orphan prior
     /// <c>StartAsync</c> calls whenever a second consumer resolves the service.
