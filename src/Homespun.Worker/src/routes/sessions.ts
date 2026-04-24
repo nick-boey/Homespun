@@ -191,6 +191,24 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true });
   });
 
+  // GET /sessions/:id/events - Long-lived SSE stream of session events.
+  // Stays open for the life of the session; emits every A2A event including
+  // task notifications that arrive after the SDK result message.
+  sessions.get('/:id/events', async (c) => {
+    const sessionId = c.req.param('id');
+    info(`GET /sessions/${sessionId}/events - long-lived SSE consumer opened`);
+
+    c.header('Content-Type', 'text/event-stream');
+    c.header('Cache-Control', 'no-cache');
+    c.header('Connection', 'keep-alive');
+
+    return stream(c, async (s) => {
+      for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
+        await s.write(chunk);
+      }
+    });
+  });
+
   // GET /sessions/:id - Get session info
   sessions.get('/:id', (c) => {
     const sessionId = c.req.param('id');

@@ -8,6 +8,11 @@ import { createSessionsRoute } from '#src/routes/sessions.js';
 import { discoverSessions } from '#src/services/session-discovery.js';
 import { createMockSessionManager } from '../helpers/mock-session-manager.js';
 import { parseSSEEvents } from '../helpers/sse-helpers.js';
+import {
+  createAssistantMessage,
+  createResultMessage,
+  createSystemMessage,
+} from '../helpers/test-fixtures.js';
 
 const mockDiscoverSessions = vi.mocked(discoverSessions);
 
@@ -448,5 +453,51 @@ describe('DELETE /sessions/:id', () => {
     const res = await app.request('/bad-id', { method: 'DELETE' });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /:id/events', () => {
+  it('emits every A2A event including task_notification arriving after result', async () => {
+    const { sm, app } = createApp();
+
+    // Seed: assistant text → result → task_notification (crosses the turn boundary).
+    const events = [
+      createAssistantMessage({ session_id: 's1' }),
+      createResultMessage({
+        session_id: 's1',
+        subtype: 'success',
+        is_error: false,
+      } as any),
+      createSystemMessage({ session_id: 's1', subtype: 'task_notification' } as any),
+    ];
+
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
+    sm.stream.mockReturnValue(
+      (async function* () {
+        for (const e of events) yield e;
+      })(),
+    );
+
+    const res = await app.request('/s1/events');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+
+    const text = await res.text();
+    const frames = parseSSEEvents(text);
+
+    const statusUpdates = frames.filter((f) => f.event === 'status-update');
+    const messages = frames.filter((f) => f.event === 'message');
+
+    // Result → completed translation should emit one status-update with
+    // state 'completed' and final: true.
+    const completed = statusUpdates.filter(
+      (f) =>
+        (f.data as any)?.status?.state === 'completed' &&
+        (f.data as any)?.final === true,
+    );
+    expect(completed).toHaveLength(1);
+    // At minimum: assistant text + task_notification (post-result) as message frames.
+    expect(messages.length).toBeGreaterThanOrEqual(2);
   });
 });
