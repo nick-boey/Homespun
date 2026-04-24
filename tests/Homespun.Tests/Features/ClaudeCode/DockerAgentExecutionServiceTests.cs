@@ -140,6 +140,67 @@ public class DockerAgentExecutionServiceTests
     }
 
     [Test]
+    public void Spawned_container_propagates_HOMESPUN_DEBUG_FULL_MESSAGES_when_set_on_server()
+    {
+        var prevUmbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+        var prevPreview = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+        try
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", null);
+
+            var svc = Build();
+            var args = svc.BuildContainerDockerArgs(
+                containerName: "homespun-issue-proj-issue",
+                workingDirectory: "/tmp/clone",
+                useRm: false,
+                claudePath: null,
+                issueId: "issue-1",
+                projectName: "demo",
+                projectId: "proj-1");
+
+            Assert.That(args, Does.Contain("-e HOMESPUN_DEBUG_FULL_MESSAGES=true"));
+            Assert.That(args, Does.Contain("-e CONTENT_PREVIEW_CHARS=-1"),
+                "umbrella ON should derive the no-truncation sentinel for the worker");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", prevUmbrella);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", prevPreview);
+        }
+    }
+
+    [Test]
+    public void Spawned_container_omits_debug_env_when_umbrella_unset()
+    {
+        var prevUmbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+        var prevPreview = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+        try
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", null);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", null);
+
+            var svc = Build();
+            var args = svc.BuildContainerDockerArgs(
+                containerName: "homespun-issue-proj-issue",
+                workingDirectory: "/tmp/clone",
+                useRm: false,
+                claudePath: null,
+                issueId: "issue-1",
+                projectName: "demo",
+                projectId: "proj-1");
+
+            Assert.That(args, Does.Not.Contain("HOMESPUN_DEBUG_FULL_MESSAGES"));
+            Assert.That(args, Does.Not.Contain("-e CONTENT_PREVIEW_CHARS"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", prevUmbrella);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", prevPreview);
+        }
+    }
+
+    [Test]
     public void ResolveWorkerUserFlag_prefers_explicit_option()
     {
         var svc = Build(new DockerAgentExecutionOptions

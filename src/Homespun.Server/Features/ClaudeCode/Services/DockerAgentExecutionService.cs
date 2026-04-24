@@ -1654,6 +1654,31 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append("-e DEBUG_LOGGING=true ");
         dockerArgs.Append("-e DEBUG_AGENT_SDK=true ");
 
+        // Propagate the HOMESPUN_DEBUG_FULL_MESSAGES umbrella flag (and its
+        // derived CONTENT_PREVIEW_CHARS sentinel) through to sibling workers.
+        // The AppHost fan-out only targets AppHost-declared containers — it
+        // never sees per-session sibling workers spawned here, so without
+        // this pass-through `isFullMessagesDebugEnabled()` would always
+        // read false on the worker and `a2aEmitDebug` would be a no-op.
+        var umbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+        var umbrellaOn = string.Equals(umbrella, "true", StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(umbrella))
+        {
+            dockerArgs.Append($"-e HOMESPUN_DEBUG_FULL_MESSAGES={umbrella} ");
+        }
+        var contentPreviewChars = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+        if (!string.IsNullOrEmpty(contentPreviewChars))
+        {
+            dockerArgs.Append($"-e CONTENT_PREVIEW_CHARS={contentPreviewChars} ");
+        }
+        else if (umbrellaOn)
+        {
+            // Derive the no-truncation sentinel when the umbrella is on and no
+            // explicit value is set (mirrors the AppHost fan-out for
+            // AppHost-declared workers).
+            dockerArgs.Append("-e CONTENT_PREVIEW_CHARS=-1 ");
+        }
+
         // OpenTelemetry wiring. The worker boots `@opentelemetry/sdk-node` in
         // `src/instrumentation.ts` and ships logs + traces to the server's
         // OTLP proxy at `${OTLP_PROXY_URL}/logs` and `${OTLP_PROXY_URL}/traces`.
