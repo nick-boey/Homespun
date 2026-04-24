@@ -27,10 +27,13 @@ var isProd = string.Equals(
 // (and derived DEBUG_AGENT_SDK / CONTENT_PREVIEW_CHARS / SessionEventContent__ContentPreviewChars /
 // VITE_HOMESPUN_DEBUG_FULL_MESSAGES) onto every tier that doesn't already set
 // the per-tier value explicitly.
-var debugFullMessages = string.Equals(
-    Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES"),
-    "true",
-    StringComparison.OrdinalIgnoreCase);
+//
+// Default: ON in every launch profile — inspecting full A2A / AG-UI / SDK
+// bodies is the baseline dev experience. Opt out explicitly with
+// HOMESPUN_DEBUG_FULL_MESSAGES=false on the AppHost process env.
+var explicitUmbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+var debugFullMessages = string.IsNullOrEmpty(explicitUmbrella)
+    || string.Equals(explicitUmbrella, "true", StringComparison.OrdinalIgnoreCase);
 var explicitDebugAgentSdk = Environment.GetEnvironmentVariable("DEBUG_AGENT_SDK");
 var explicitContentPreviewChars = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
 var explicitSessionEventContentChars = Environment.GetEnvironmentVariable("SessionEventContent__ContentPreviewChars");

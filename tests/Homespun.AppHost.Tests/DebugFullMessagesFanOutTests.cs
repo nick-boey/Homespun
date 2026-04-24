@@ -52,7 +52,7 @@ public class DebugFullMessagesFanOutTests
     }
 
     [Test]
-    public async Task DebugFullMessagesUnset_NoFanOutEnvVarsPresent()
+    public async Task DebugFullMessagesUnset_DefaultsToOn()
     {
         SetEnv(debugFullMessages: null);
         try
@@ -61,10 +61,30 @@ public class DebugFullMessagesFanOutTests
             var server = model.Resources.Single(r => r.Name == "server");
             var env = await ResolveEnvAsync(server);
 
+            Assert.That(env, Does.ContainKey("HOMESPUN_DEBUG_FULL_MESSAGES"),
+                "umbrella flag defaults to on in every launch profile");
+            Assert.That(env["HOMESPUN_DEBUG_FULL_MESSAGES"], Is.EqualTo("true"));
+            Assert.That(env, Does.ContainKey("SessionEventContent__ContentPreviewChars"),
+                "derived -1 sentinel must be set when umbrella flag is on");
+            Assert.That(env["SessionEventContent__ContentPreviewChars"], Is.EqualTo("-1"));
+        }
+        finally { ClearEnv(); }
+    }
+
+    [Test]
+    public async Task DebugFullMessagesFalse_NoFanOutEnvVarsPresent()
+    {
+        SetEnv(debugFullMessages: "false");
+        try
+        {
+            var model = await BuildModelAsync();
+            var server = model.Resources.Single(r => r.Name == "server");
+            var env = await ResolveEnvAsync(server);
+
             Assert.That(env.ContainsKey("HOMESPUN_DEBUG_FULL_MESSAGES"), Is.False,
-                "umbrella flag must not be set when AppHost env has it unset");
+                "umbrella flag must not be propagated when explicitly opted out");
             Assert.That(env.ContainsKey("SessionEventContent__ContentPreviewChars"), Is.False,
-                "derived -1 sentinel must not be set when umbrella flag is unset");
+                "derived -1 sentinel must not be set when umbrella flag is off");
         }
         finally { ClearEnv(); }
     }

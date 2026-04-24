@@ -192,12 +192,14 @@ and by setting `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` +
 HTTP OTLP locally. Host-mode profiles (`dev-live`, `dev-windows`, `dev-mock`)
 are unaffected — Aspire's default HTTPS-gRPC injection still works for them.
 
-**Full-body debug logging.** Set `HOMESPUN_DEBUG_FULL_MESSAGES=true` on the
-AppHost process env to opt the entire stack (worker + server + web) into
-emitting full A2A, AG-UI, and envelope bodies as OTel log events. The flag
-is off by default in every launch profile. When set, the AppHost fans it
-out and implies `DEBUG_AGENT_SDK=true` + `CONTENT_PREVIEW_CHARS=-1` on the
-worker, `SessionEventContent__ContentPreviewChars=-1` on the server, and
+**Full-body debug logging.** The `HOMESPUN_DEBUG_FULL_MESSAGES` umbrella
+flag opts the entire stack (worker + server + web) into emitting full A2A,
+AG-UI, and envelope bodies as OTel log events alongside the `[SDK rx]` /
+`[SDK tx]` SDK-boundary logs. Default: ON in every launch profile — opt
+out explicitly with `HOMESPUN_DEBUG_FULL_MESSAGES=false` on the AppHost
+process env. When on, the AppHost fans the flag out and implies
+`DEBUG_AGENT_SDK=true` + `CONTENT_PREVIEW_CHARS=-1` on the worker,
+`SessionEventContent__ContentPreviewChars=-1` on the server, and
 `VITE_HOMESPUN_DEBUG_FULL_MESSAGES=true` on the web build (tree-shaken
 when unset). Replay-path log entries carry `homespun.replay=true` so they
 can be filtered out in Seq via `homespun.replay is null`. The umbrella
