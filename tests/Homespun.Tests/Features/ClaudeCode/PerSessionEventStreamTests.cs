@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -257,5 +258,30 @@ public class PerSessionEventStreamTests
         Assert.DoesNotThrowAsync(async () => await stream.StopAsync("unknown"));
 
         await stream.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Regression guard for the DI lifetime bug: <see cref="PerSessionEventStream"/> holds
+    /// a per-session reader dictionary, so a transient registration would orphan prior
+    /// <c>StartAsync</c> calls whenever a second consumer resolves the service.
+    /// <see cref="PerSessionEventStreamServiceCollectionExtensions.AddPerSessionEventStream"/>
+    /// must register the service as a singleton — if anyone reverts this, the test fails.
+    /// </summary>
+    [Test]
+    public async Task AddPerSessionEventStream_RegistersServiceAsSingleton()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<ISessionEventIngestor>(Mock.Of<ISessionEventIngestor>());
+        services.AddPerSessionEventStream();
+
+        // PerSessionEventStream is IAsyncDisposable-only, so the provider must be
+        // disposed asynchronously — synchronous disposal throws at the
+        // ServiceProviderEngineScope level.
+        await using var sp = services.BuildServiceProvider();
+        var a = sp.GetRequiredService<IPerSessionEventStream>();
+        var b = sp.GetRequiredService<IPerSessionEventStream>();
+
+        Assert.That(a, Is.SameAs(b));
     }
 }
