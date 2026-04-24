@@ -49,6 +49,7 @@ asserts that the reverse also holds.
 | `homespun.web.session-events`           | client       | Tracer        | Envelope rx + reducer-apply spans                        |
 | `homespun.worker`                       | worker       | Logger        | Hono worker logger (spans deferred — see Planned)        |
 | `homespun.worker.http`                  | worker       | Tracer        | Hono inbound-request SERVER spans from `traceparentMiddleware` (parent comes from the caller's `traceparent` header) |
+| `homespun.worker.session`               | worker       | Tracer        | Per-SDK-message `homespun.sdk.rx` INTERNAL spans wrapping each iteration of `session-manager.runQueryForwarder` |
 
 ---
 
@@ -374,6 +375,29 @@ Discrete leave span. Emitted by
 ---
 
 ## Worker-originated traces
+
+### `homespun.sdk.rx`
+
+Short-lived INTERNAL span wrapping one iteration of the SDK `query()`
+forwarder in `session-manager.runQueryForwarder`. Each yielded SDK
+message starts and ends one of these spans under the
+`homespun.worker.session` tracer. The `sdkDebug("rx", msg)` log record
+emitted inside the span inherits its `span_id`, so the Aspire trace
+waterfall nests the log under a span whose time window actually covers
+it.
+
+Per-message (not per-session) because the Query iterator can stay open
+indefinitely for an idle session; a session-wide span would never end
+and `BatchSpanProcessor` would never export it, leaving the log records'
+`span_id` unresolved in Aspire.
+
+- **Originator:** worker
+- **Kind:** `INTERNAL`
+- **Parent:** the Hono request span at forwarder-start time (the
+  detached forwarder IIFE inherits the POST /api/sessions server span
+  context from `traceparentMiddleware`).
+- **Required attrs:** `homespun.session.id`,
+  `homespun.sdk.message.type`, `homespun.sdk.message.subtype`.
 
 ### `homespun.a2a.emit`
 

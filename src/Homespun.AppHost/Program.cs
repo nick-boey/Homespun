@@ -227,6 +227,11 @@ if (isContainerHosting)
         if (prodDataPath is not null)
         {
             serverContainer.WithBindMount(prodDataPath, "/data");
+            // DooD: sibling worker containers need bind sources in the host
+            // namespace. DockerAgentExecutionService rewrites /data → this path
+            // via TranslateToHostPath; without it docker run fails with
+            // "mounts denied: path … not shared from the host".
+            serverContainer.WithEnvironment("HSP_HOST_DATA_PATH", prodDataPath);
         }
     }
     else
@@ -253,12 +258,17 @@ if (isContainerHosting)
         serverContainer.WithEnvironment("AgentExecution__Docker__UseLoopbackPortMapping", "true");
         serverContainer.WithEnvironment("AgentExecution__Docker__LoopbackBindHost", "0.0.0.0");
         serverContainer.WithEnvironment("AgentExecution__Docker__WorkerHost", "host.docker.internal");
-        // Container-mode: sibling workers reach the server over the compose
-        // network using the service hostname `server`. The host-mode default
-        // (`host.docker.internal`) does not resolve between sibling containers.
+        // Aspire launch profiles (dev-container/prod) spawn sibling workers via
+        // DooD onto the default `bridge` network, not the DCP-managed network
+        // where the `server` hostname resolves. Reach the server on its pinned
+        // host-port endpoint (5101) via host.docker.internal — same transport
+        // the other worker→server envs above (WorkerHost, LoopbackBindHost)
+        // already use. Real prod compose (docker-compose.yml) overrides this
+        // via `AgentExecution__Docker__ServerOtlpProxyUrl` since its workers
+        // share the `homespun-net` bridge and can resolve `server` directly.
         serverContainer.WithEnvironment(
             "AgentExecution__Docker__ServerOtlpProxyUrl",
-            "http://server:8080/api/otlp/v1");
+            "http://host.docker.internal:5101/api/otlp/v1");
     }
     if (workerEndpoint is not null)
     {

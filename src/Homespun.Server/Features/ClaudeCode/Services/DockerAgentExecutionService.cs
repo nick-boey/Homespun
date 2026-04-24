@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Features.Observability;
@@ -35,6 +36,22 @@ public class DockerAgentExecutionOptions
     /// Used for path translation when spawning sibling containers.
     /// </summary>
     public string? HostDataPath { get; set; }
+
+    /// <summary>
+    /// Explicit uid:gid string to pass as the worker container's --user flag.
+    /// When null, defaults to the server process's own uid:gid on Linux (so
+    /// bind-mounted files line up), or no --user flag on macOS/Windows hosts.
+    /// </summary>
+    public string? WorkerUser { get; set; }
+
+    /// <summary>
+    /// Fallback uid:gid used for the worker when the server itself is running as
+    /// root (uid 0). Claude CLI refuses <c>--dangerously-skip-permissions</c> as
+    /// root, so forwarding the server's 0:0 would break every bypass-permissions
+    /// session. Instead, fall back to the worker image's default user. Must match
+    /// the worker Dockerfile's <c>USER</c> so file-perm interactions still work.
+    /// </summary>
+    public string WorkerUserRootFallback { get; set; } = "1655:1655";
 
     /// <summary>
     /// Base path for per-issue project workspaces (relative to DataVolumePath).
@@ -1597,7 +1614,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         // uses the compose service name instead.
         dockerArgs.Append("--add-host=host.docker.internal:host-gateway ");
 
-        var userFlag = ProcessUserInfo.GetDockerUserFlag();
+        var userFlag = ResolveWorkerUserFlag();
         if (!string.IsNullOrEmpty(userFlag))
         {
             dockerArgs.Append($"--user {userFlag} ");
@@ -1706,6 +1723,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         CancellationToken cancellationToken = default)
     {
         EnsureClaudeDirectoryExists(workingDirectory, claudePath);
+
+        // Align mount-source ownership with the uid the worker will run as.
+        // Necessary when the server itself runs as root (DooD concession on
+        // Docker Desktop): the worker falls back to a non-root uid, and
+        // without this chown it would not have write access to /workdir.
+        var userFlag = ResolveWorkerUserFlag();
+        await EnsureWorkdirOwnershipAsync(workingDirectory, userFlag, cancellationToken);
+        if (!string.IsNullOrEmpty(claudePath))
+        {
+            await EnsureWorkdirOwnershipAsync(claudePath, userFlag, cancellationToken);
+        }
+
         var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName, projectId);
 
         // Append project-specific secrets as environment variables
@@ -1824,6 +1853,94 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
+    internal string? ResolveWorkerUserFlag()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.WorkerUser))
+        {
+            return _options.WorkerUser;
+        }
+
+        var processFlag = ProcessUserInfo.GetDockerUserFlag();
+        if (processFlag == "0:0")
+        {
+            return _options.WorkerUserRootFallback;
+        }
+        return processFlag;
+    }
+
+    internal static (int Uid, int Gid)? ParseUserFlag(string? userFlag)
+    {
+        if (string.IsNullOrWhiteSpace(userFlag))
+        {
+            return null;
+        }
+        var parts = userFlag.Split(':', 2);
+        if (parts.Length != 2
+            || !int.TryParse(parts[0], out var uid)
+            || !int.TryParse(parts[1], out var gid))
+        {
+            return null;
+        }
+        return (uid, gid);
+    }
+
+    private async Task EnsureWorkdirOwnershipAsync(
+        string containerPath,
+        string? userFlag,
+        CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+        var parsed = ParseUserFlag(userFlag);
+        if (parsed is null)
+        {
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(containerPath) || !Directory.Exists(containerPath))
+        {
+            return;
+        }
+
+        var (uid, gid) = parsed.Value;
+        var start = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "chown",
+            Arguments = $"-R {uid}:{gid} \"{containerPath}\"",
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        try
+        {
+            using var proc = System.Diagnostics.Process.Start(start);
+            if (proc is null)
+            {
+                return;
+            }
+            var stderr = await proc.StandardError.ReadToEndAsync(cancellationToken);
+            await proc.WaitForExitAsync(cancellationToken);
+            if (proc.ExitCode != 0)
+            {
+                _logger.LogWarning(
+                    "chown -R {Uid}:{Gid} {Path} exited {ExitCode}: {Stderr}",
+                    uid, gid, containerPath, proc.ExitCode, stderr.Trim());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to chown {Path} to {Uid}:{Gid}", containerPath, uid, gid);
+        }
+    }
+
+    private static readonly Regex SecretEnvArgRegex = new(
+        """-e\s+(?<name>[A-Za-z_][A-Za-z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|CREDENTIALS)[A-Za-z0-9_]*)=(?:"[^"]*"|[^\s]+)""",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    internal static string RedactSecretsInDockerArgs(string dockerArgs) =>
+        SecretEnvArgRegex.Replace(dockerArgs, "-e ${name}=\"[REDACTED]\"");
+
     private async Task<(string containerId, string workerUrl)> RunDockerAndGetUrl(
         string containerName,
         string dockerArgs,
@@ -1831,7 +1948,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     {
         _logger.LogInformation(
             "Docker run for container {ContainerName}: docker {DockerArgs}",
-            containerName, dockerArgs);
+            containerName, RedactSecretsInDockerArgs(dockerArgs));
 
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
