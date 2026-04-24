@@ -141,11 +141,42 @@ describe('GET /sessions', () => {
 });
 
 describe('POST /sessions', () => {
-  it('returns SSE stream response', async () => {
+  it('returns JSON body with sessionId and conversationId', async () => {
+    const { sm, app } = createApp();
+    sm.create.mockResolvedValue({ id: 'new-session', conversationId: 'c1' });
+
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Hello',
+        model: 'sonnet',
+        mode: 'Plan',
+        systemPrompt: 'sys',
+        workingDirectory: '/tmp/wd',
+        resumeSessionId: 'prev-1',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ sessionId: 'new-session', conversationId: 'c1' });
+
+    expect(sm.create).toHaveBeenCalledTimes(1);
+    expect(sm.create).toHaveBeenCalledWith({
+      prompt: 'Hello',
+      model: 'sonnet',
+      mode: 'Plan',
+      systemPrompt: 'sys',
+      workingDirectory: '/tmp/wd',
+      resumeSessionId: 'prev-1',
+    });
+  });
+
+  it('returns conversationId: null when WorkerSession has none', async () => {
     const { sm, app } = createApp();
     sm.create.mockResolvedValue({ id: 'new-session' });
-    sm.get.mockReturnValue({ id: 'new-session', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
 
     const res = await app.request('/', {
       method: 'POST',
@@ -158,13 +189,12 @@ describe('POST /sessions', () => {
     });
 
     expect(res.status).toBe(200);
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    // A2A Protocol: session start emits 'task' event instead of 'session_started'
-    expect(events.some((e) => e.event === 'task')).toBe(true);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ sessionId: 'new-session', conversationId: null });
   });
 
-  it('returns STARTUP_ERROR event on create failure', async () => {
+  it('returns JSON 500 with STARTUP_ERROR code on create failure', async () => {
     const { sm, app } = createApp();
     sm.create.mockRejectedValue(new Error('SDK init failed'));
 
@@ -178,14 +208,10 @@ describe('POST /sessions', () => {
       }),
     });
 
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    const errorEvent = events.find((e) => e.event === 'error');
-    expect(errorEvent).toBeDefined();
-    expect(errorEvent!.data).toMatchObject({
-      code: 'STARTUP_ERROR',
-      message: 'SDK init failed',
-    });
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'SDK init failed', code: 'STARTUP_ERROR' });
   });
 });
 

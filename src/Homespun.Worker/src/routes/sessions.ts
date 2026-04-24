@@ -50,39 +50,25 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     });
   });
 
-  // POST /sessions - Start or resume a session (SSE stream)
+  // POST /sessions - Start or resume a session (JSON response)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();
     info(`POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        const ws = await sessionManager.create({
-          prompt: body.prompt,
-          model: body.model,
-          mode: body.mode,
-          systemPrompt: body.systemPrompt,
-          workingDirectory: body.workingDirectory,
-          resumeSessionId: body.resumeSessionId,
-        });
-
-        for await (const chunk of streamSessionEvents(sessionManager, ws.id)) {
-          await s.write(chunk);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId: 'unknown',
-          message,
-          code: 'STARTUP_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+    try {
+      const ws = await sessionManager.create({
+        prompt: body.prompt,
+        model: body.model,
+        mode: body.mode,
+        systemPrompt: body.systemPrompt,
+        workingDirectory: body.workingDirectory,
+        resumeSessionId: body.resumeSessionId,
+      });
+      return c.json({ sessionId: ws.id, conversationId: ws.conversationId ?? null });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message, code: 'STARTUP_ERROR' }, 500);
+    }
   });
 
   // POST /sessions/:id/message - Send a message to an existing session (SSE stream)
