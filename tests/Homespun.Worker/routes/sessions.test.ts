@@ -453,6 +453,62 @@ describe('DELETE /sessions/:id', () => {
   });
 });
 
+describe('POST /sessions/:id/clear-context', () => {
+  it('returns JSON body with oldSessionId and newSessionId', async () => {
+    const { sm, app } = createApp();
+    sm.clearContextAndCreate.mockResolvedValue({
+      newSession: { id: 'new-sess' },
+      oldSessionId: 'old-sess',
+    });
+
+    const res = await app.request('/old-sess/clear-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Restart',
+        model: 'sonnet',
+        mode: 'Build',
+        systemPrompt: 'sys',
+        workingDirectory: '/tmp/wd',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ oldSessionId: 'old-sess', newSessionId: 'new-sess' });
+
+    expect(sm.clearContextAndCreate).toHaveBeenCalledTimes(1);
+    expect(sm.clearContextAndCreate).toHaveBeenCalledWith('old-sess', {
+      prompt: 'Restart',
+      model: 'sonnet',
+      mode: 'Build',
+      systemPrompt: 'sys',
+      workingDirectory: '/tmp/wd',
+    });
+  });
+
+  it('returns JSON 500 with CLEAR_CONTEXT_ERROR code when clearContextAndCreate throws', async () => {
+    const { sm, app } = createApp();
+    sm.clearContextAndCreate.mockRejectedValue(new Error('clear boom'));
+
+    const res = await app.request('/old-sess/clear-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Restart',
+        model: 'sonnet',
+        mode: 'Build',
+      }),
+    });
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'clear boom', code: 'CLEAR_CONTEXT_ERROR' });
+  });
+});
+
 describe('GET /:id/events', () => {
   it('emits every A2A event including task_notification arriving after result', async () => {
     const { sm, app } = createApp();

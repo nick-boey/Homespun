@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import type { SessionManager } from '../services/session-manager.js';
-import { streamSessionEvents, formatSSE } from '../services/sse-writer.js';
+import { streamSessionEvents } from '../services/sse-writer.js';
 import { discoverSessions } from '../services/session-discovery.js';
 import type {
   StartSessionRequest,
@@ -214,49 +214,28 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true, message: 'Session stopped', sessionId });
   });
 
-  // POST /sessions/:id/clear-context - Clear context and start a new session (SSE stream)
+  // POST /sessions/:id/clear-context - Clear context and start a new session (JSON response)
   sessions.post('/:id/clear-context', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<ClearContextRequest>();
     info(`POST /sessions/${sessionId}/clear-context - mode=${body.mode}, model=${body.model}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        const { newSession, oldSessionId } = await sessionManager.clearContextAndCreate(
-          sessionId,
-          {
-            prompt: body.prompt,
-            model: body.model,
-            mode: body.mode,
-            systemPrompt: body.systemPrompt,
-            workingDirectory: body.workingDirectory,
-          }
-        );
-
-        // Send initial event with new session info
-        await s.write(formatSSE('context_cleared', {
-          oldSessionId,
-          newSessionId: newSession.id,
-        }));
-
-        // Stream the new session events
-        for await (const chunk of streamSessionEvents(sessionManager, newSession.id)) {
-          await s.write(chunk);
+    try {
+      const { newSession, oldSessionId } = await sessionManager.clearContextAndCreate(
+        sessionId,
+        {
+          prompt: body.prompt,
+          model: body.model,
+          mode: body.mode,
+          systemPrompt: body.systemPrompt,
+          workingDirectory: body.workingDirectory,
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId,
-          message,
-          code: 'CLEAR_CONTEXT_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+      );
+      return c.json({ oldSessionId, newSessionId: newSession.id });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message, code: 'CLEAR_CONTEXT_ERROR' }, 500);
+    }
   });
 
   return sessions;
