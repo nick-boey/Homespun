@@ -254,6 +254,10 @@ public static class MockServiceExtensions
                 if (!string.IsNullOrEmpty(hostPath))
                     opts.HostDataPath = hostPath;
             });
+            // DockerAgentExecutionService depends on the IPerSessionEventStream singleton
+            // for its rewired /events consumption path (task 8 of the
+            // fix-post-result-events plan). The mock DI graph must register it too.
+            services.AddPerSessionEventStream();
             services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
             services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
             services.AddHostedService(sp =>

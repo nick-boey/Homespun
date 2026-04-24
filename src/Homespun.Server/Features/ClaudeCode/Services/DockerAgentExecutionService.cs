@@ -199,22 +199,79 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageSubtype);
 
     private readonly ISessionEventIngestor _eventIngestor;
+    private readonly IPerSessionEventStream _perSession;
 
+    /// <summary>
+    /// Response parsed from the worker's <c>POST /api/sessions</c> and
+    /// <c>POST /api/sessions/:id/message</c> endpoints now that those endpoints
+    /// return JSON rather than an SSE stream (task 3 / task 4 of the
+    /// <c>fix-post-result-events</c> plan).
+    /// </summary>
+    private sealed record WorkerStartResponse(string SessionId, string? ConversationId);
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        ISessionEventIngestor eventIngestor)
+        ISessionEventIngestor eventIngestor,
+        IPerSessionEventStream perSession)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
         _eventIngestor = eventIngestor;
+        _perSession = perSession;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
         };
+    }
+
+    /// <summary>
+    /// Test-only constructor accepting a pre-built <see cref="HttpClient"/>. Allows unit
+    /// tests to intercept worker HTTP traffic via a custom
+    /// <see cref="HttpMessageHandler"/>. Not used in production DI.
+    /// </summary>
+    internal DockerAgentExecutionService(
+        IOptions<DockerAgentExecutionOptions> options,
+        ILogger<DockerAgentExecutionService> logger,
+        ISecretsService secretsService,
+        ISessionEventIngestor eventIngestor,
+        IPerSessionEventStream perSession,
+        HttpClient httpClient)
+    {
+        _options = options.Value;
+        _logger = logger;
+        _secretsService = secretsService;
+        _eventIngestor = eventIngestor;
+        _perSession = perSession;
+        _httpClient = httpClient;
+    }
+
+    /// <summary>
+    /// Test-only seam that seeds the internal session dictionary. Allows unit
+    /// tests to exercise <see cref="SendMessageAsync"/> / <see cref="StopSessionAsync"/>
+    /// without spinning up a Docker container.
+    /// </summary>
+    internal void RegisterSessionForTesting(
+        string homespunSessionId,
+        string? workerSessionId,
+        string workerUrl,
+        string? projectId = null,
+        string? issueId = null)
+    {
+        var session = new DockerSession(
+            SessionId: homespunSessionId,
+            ContainerId: "test-container",
+            ContainerName: "test-container-name",
+            WorkerUrl: workerUrl,
+            WorkingDirectory: "/workdir",
+            WorkerSessionId: workerSessionId,
+            Cts: new CancellationTokenSource(),
+            CreatedAt: DateTime.UtcNow,
+            IssueId: issueId,
+            ProjectId: projectId);
+        _sessions[homespunSessionId] = session;
     }
 
     /// <summary>
@@ -353,28 +410,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     ResumeSessionId = request.ResumeSessionId
                 };
 
-                await foreach (var msg in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, request.ProjectId, cts.Token))
-                {
-                    // Capture the worker session ID from session_started lifecycle event
-                    if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started" &&
-                        !string.IsNullOrEmpty(sysMsg.SessionId) && sysMsg.SessionId != sessionId)
-                    {
-                        session = session with { WorkerSessionId = sysMsg.SessionId };
-                        _sessions[sessionId] = session;
-                        _logger.LogInformation("Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
-                            sysMsg.SessionId, sessionId);
-                    }
-
-                    // Remap session IDs to our session ID
-                    var remapped = RemapSessionId(msg, sessionId);
-                    await channel.Writer.WriteAsync(remapped, cancellationToken);
-
-                    if (msg is SdkResultMessage resultMsg)
-                    {
-                        session.ConversationId = resultMsg.SessionId;
-                        _sessions[sessionId] = session;
-                    }
-                }
+                await RunSessionStartAndDrainTurnAsync(
+                    sessionId, workerUrl, session, startRequest, channel, request.ProjectId, cts);
                 channel.Writer.Complete();
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -451,9 +488,20 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var msg in SendSseRequestAsync(
-            $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message",
-            messageRequest, request.SessionId, session.ProjectId, linkedCts.Token))
+        // The worker's /message endpoint is JSON-only after task 4 — stream events
+        // ride the long-lived /events SSE consumed by PerSessionEventStream.
+        var messageUrl = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message";
+        var json = JsonSerializer.Serialize(messageRequest, CamelCaseJsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await _httpClient.PostAsync(messageUrl, content, linkedCts.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(linkedCts.Token);
+            throw new AgentConnectionLostException(
+                $"Worker returned {response.StatusCode} for POST {messageUrl}: {errorBody}", request.SessionId);
+        }
+
+        await foreach (var msg in _perSession.SubscribeTurnAsync(request.SessionId, linkedCts.Token))
         {
             var remapped = RemapSessionId(msg, request.SessionId);
             yield return remapped;
@@ -482,6 +530,19 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             session.Cts.Dispose();
 
             _sessionToIssue.TryRemove(sessionId, out _);
+
+            // Halt the long-lived PerSessionEventStream reader before tearing the
+            // session down so no post-stop events race an already-removed session
+            // dictionary entry. StopAsync is safe to call for unknown ids.
+            try
+            {
+                await _perSession.StopAsync(sessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "PerSessionEventStream.StopAsync failed for session {SessionId}; continuing teardown", sessionId);
+            }
 
             // Stop worker session via HTTP if exists
             if (!string.IsNullOrEmpty(session.WorkerSessionId))
@@ -2380,222 +2441,114 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
-    private async IAsyncEnumerable<SdkMessage> SendSseRequestAsync(
-        string url,
-        object requestBody,
+    /// <summary>
+    /// Drives the worker's <c>POST /api/sessions</c> JSON endpoint to create or resume a
+    /// session, starts the singleton <see cref="IPerSessionEventStream"/> reader against
+    /// the worker's long-lived <c>GET /api/sessions/:id/events</c> endpoint, and drains
+    /// the first turn's <see cref="SdkMessage"/>s onto the caller-provided channel.
+    ///
+    /// <para>
+    /// After task 3/4 of the <c>fix-post-result-events</c> plan the worker no longer
+    /// streams events as the response body of <c>POST /api/sessions</c>; it returns a
+    /// JSON handshake and every subsequent event (for any turn, including post-result
+    /// background events) flows through the long-lived SSE endpoint. The
+    /// <see cref="IPerSessionEventStream"/> singleton is the sole consumer of that stream,
+    /// so both <see cref="StartSessionAsync"/> and <see cref="SendMessageAsync"/> share
+    /// the same reader across the full worker-session lifetime.
+    /// </para>
+    /// </summary>
+    private async Task RunSessionStartAndDrainTurnAsync(
         string sessionId,
+        string workerUrl,
+        DockerSession session,
+        object startRequestBody,
+        System.Threading.Channels.Channel<SdkMessage> channel,
         string? projectId,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        CancellationTokenSource cts)
     {
-        var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
+        var startUrl = $"{workerUrl}/api/sessions";
+        var json = JsonSerializer.Serialize(startRequestBody, CamelCaseJsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = content
-        };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
+        using var response = await _httpClient.PostAsync(startUrl, content, cts.Token);
         if (!response.IsSuccessStatusCode)
         {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new AgentConnectionLostException($"Worker returned {response.StatusCode}: {errorBody}", sessionId);
+            var errorBody = await response.Content.ReadAsStringAsync(cts.Token);
+            throw new AgentConnectionLostException(
+                $"Worker returned {response.StatusCode} for POST {startUrl}: {errorBody}", sessionId);
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream);
-
-        string? currentEventType = null;
-        var dataBuffer = new StringBuilder();
-
-        while (!cancellationToken.IsCancellationRequested)
+        var responseBody = await response.Content.ReadAsStringAsync(cts.Token);
+        var startResponse = JsonSerializer.Deserialize<WorkerStartResponse>(
+            responseBody,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (startResponse is null || string.IsNullOrEmpty(startResponse.SessionId))
         {
-            // Read the next line, handling premature stream termination gracefully.
-            // HttpIOException(ResponseEnded) occurs when the worker's chunked HTTP response
-            // ends without proper termination (e.g., worker process crashed or SDK query failed).
-            string? line;
-            try
+            throw new AgentConnectionLostException(
+                $"Worker {startUrl} returned an empty / malformed start response: {responseBody}", sessionId);
+        }
+
+        session = session with { WorkerSessionId = startResponse.SessionId };
+        _sessions[sessionId] = session;
+        _logger.LogInformation(
+            "Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
+            startResponse.SessionId, sessionId);
+
+        await _perSession.StartAsync(sessionId, workerUrl, startResponse.SessionId, projectId, cts.Token);
+
+        await foreach (var msg in _perSession.SubscribeTurnAsync(sessionId, cts.Token))
+        {
+            var remapped = RemapSessionId(msg, sessionId);
+            await channel.Writer.WriteAsync(remapped, cts.Token);
+
+            if (msg is SdkResultMessage resultMsg)
             {
-                line = await reader.ReadLineAsync(cancellationToken);
-            }
-            catch (HttpIOException ex) when (ex.HttpRequestError == HttpRequestError.ResponseEnded)
-            {
-                _logger.LogWarning(ex,
-                    "SSE stream for session {SessionId} ended prematurely (worker connection lost)", sessionId);
-                throw new AgentConnectionLostException(
-                    "Worker connection lost: the agent container's response ended prematurely. " +
-                    "This usually means the Claude SDK query failed to start. Check container logs for details.",
-                    ex, sessionId);
-            }
-
-            if (line == null) break;
-
-            if (line.StartsWith("event: "))
-            {
-                currentEventType = line[7..];
-            }
-            else if (line.StartsWith("data: "))
-            {
-                dataBuffer.Append(line[6..]);
-            }
-            else if (string.IsNullOrEmpty(line))
-            {
-                if (!string.IsNullOrEmpty(currentEventType) && dataBuffer.Length > 0)
-                {
-                    var rawData = dataBuffer.ToString();
-
-                    // Tap the A2A-native path: persist + translate + broadcast a
-                    // SessionEventEnvelope before we do anything legacy-SDK with the event.
-                    // Append-before-legacy-broadcast preserves the refresh-fidelity invariant.
-                    await TryIngestA2AEventAsync(
-                        currentEventType, rawData, sessionId, projectId, cancellationToken);
-
-                    var msg = ParseSseEvent(currentEventType, rawData, sessionId);
-                    if (msg != null)
-                    {
-                        yield return msg;
-
-                        if (msg is SdkResultMessage)
-                        {
-                            yield break;
-                        }
-                    }
-                }
-
-                currentEventType = null;
-                dataBuffer.Clear();
+                session.ConversationId = resultMsg.SessionId;
+                _sessions[sessionId] = session;
             }
         }
     }
 
     /// <summary>
-    /// Non-destructive tap that forwards A2A-kind SSE events to the
-    /// <see cref="ISessionEventIngestor"/> (A2AEventStore append + translate + envelope
-    /// broadcast). Non-A2A events (<c>session_started</c>, <c>question_pending</c>,
-    /// <c>plan_pending</c>, <c>error</c>, raw SDK-shaped events emitted for backwards
-    /// compatibility) are skipped here — they reach the client via the legacy per-type
-    /// broadcast path until that path is retired in the dead-code-deletion phase.
-    ///
-    /// <para>
-    /// Failures are logged and swallowed so the ingestion side effect never tears down the
-    /// SSE consumer — the legacy SdkMessage yield must continue regardless.
-    /// </para>
+    /// Test-only wrapper that runs the post-container portion of
+    /// <see cref="StartSessionAsync"/> synchronously against a caller-supplied channel
+    /// and returns the drained messages. Lets unit tests exercise the HTTP + per-session
+    /// stream wiring without spinning up a Docker container.
     /// </summary>
-    private async Task TryIngestA2AEventAsync(
-        string eventKind,
-        string rawData,
+    internal async Task<List<SdkMessage>> RunStartSessionWorkerLoopForTestingAsync(
         string sessionId,
-        string? projectId,
+        string workerUrl,
+        AgentStartRequest request,
         CancellationToken cancellationToken)
     {
-        if (!A2AMessageParser.IsA2AEventKind(eventKind))
+        if (!_sessions.TryGetValue(sessionId, out var session))
         {
-            return;
+            throw new InvalidOperationException(
+                $"Test seed missing: call RegisterSessionForTesting for {sessionId} first.");
         }
 
-        try
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
+        var startRequest = new
         {
-            using var doc = JsonDocument.Parse(rawData);
-            // Clone so the JsonElement outlives the JsonDocument's `using` scope — the
-            // ingestor persists the element and the store may keep it alive beyond this
-            // method's stack frame when bursts are in flight.
-            var payload = doc.RootElement.Clone();
+            WorkingDirectory = "/workdir",
+            Mode = request.Mode.ToString(),
+            Model = request.Model,
+            Prompt = request.Prompt,
+            SystemPrompt = request.SystemPrompt,
+            ResumeSessionId = request.ResumeSessionId,
+        };
 
-            // projectId is best-effort; when not available (legacy non-issue sessions) we
-            // fall back to a stable "unknown" bucket so the event log still writes. The
-            // replay endpoint does not need projectId in its URL — it only uses sessionId.
-            var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
+        await RunSessionStartAndDrainTurnAsync(
+            sessionId, workerUrl, session, startRequest, channel, request.ProjectId, cts);
+        channel.Writer.Complete();
 
-            await _eventIngestor.IngestAsync(
-                effectiveProjectId, sessionId, eventKind, payload, cancellationToken);
-        }
-        catch (Exception ex)
+        var yielded = new List<SdkMessage>();
+        await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
         {
-            _logger.LogWarning(ex,
-                "SessionEventIngestor tap failed for session {SessionId} kind {EventKind}; legacy path continues",
-                sessionId, eventKind);
+            yielded.Add(msg);
         }
-    }
-
-    private SdkMessage? ParseSseEvent(string eventType, string data, string sessionId)
-    {
-        try
-        {
-            // A2A protocol events have 'task', 'message', or 'status-update' as event types
-            if (eventType == HomespunA2AEventKind.Task ||
-                eventType == HomespunA2AEventKind.Message ||
-                eventType == HomespunA2AEventKind.StatusUpdate ||
-                eventType == HomespunA2AEventKind.ArtifactUpdate)
-            {
-                var a2aEvent = A2AMessageParser.ParseSseEvent(eventType, data);
-                if (a2aEvent != null)
-                {
-                    var sdkMessage = A2AMessageParser.ConvertToSdkMessage(a2aEvent, sessionId);
-                    if (sdkMessage != null)
-                    {
-                        _logger.LogDebug("Parsed A2A event {EventType} -> {SdkMessageType}",
-                            eventType, sdkMessage.Type);
-                        return sdkMessage;
-                    }
-
-                    // A2A event parsed but no SDK message needed (e.g., 'working' status)
-                    _logger.LogDebug("A2A event {EventType} parsed but no SDK message conversion needed", eventType);
-                    return null;
-                }
-
-                _logger.LogWarning("Failed to parse A2A event {EventType}: {Data}", eventType, data);
-                return null;
-            }
-
-            // Legacy event types for backwards compatibility during migration
-            // "session_started" is a custom lifecycle event, not a raw SDK message
-            if (eventType == "session_started")
-            {
-                // Parse to extract the worker session ID
-                using var doc = JsonDocument.Parse(data);
-                var workerSessionId = doc.RootElement.TryGetProperty("sessionId", out var sid)
-                    ? sid.GetString() : null;
-
-                return new SdkSystemMessage(
-                    workerSessionId ?? sessionId,
-                    null,
-                    "session_started",
-                    null,
-                    null
-                );
-            }
-
-            // "question_pending" is a control event from canUseTool
-            if (eventType == "question_pending")
-            {
-                return new SdkQuestionPendingMessage(sessionId, data);
-            }
-
-            // "plan_pending" is a control event from canUseTool (ExitPlanMode paused)
-            if (eventType == "plan_pending")
-            {
-                return new SdkPlanPendingMessage(sessionId, data);
-            }
-
-            // "error" is a custom lifecycle event
-            if (eventType == "error")
-            {
-                _logger.LogWarning("Received error event from worker: {Data}", data);
-                return null;
-            }
-
-            // Unknown event type. A2A-native workers only emit A2A events plus the four
-            // legacy control events handled above; anything else is dropped.
-            _logger.LogDebug("Dropping unknown SSE event type: {EventType}", eventType);
-            return null;
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse SSE event {EventType}: {Data}", eventType, data);
-            return null;
-        }
+        return yielded;
     }
 
     /// <summary>
