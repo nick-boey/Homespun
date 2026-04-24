@@ -216,55 +216,28 @@ describe('POST /sessions', () => {
 });
 
 describe('POST /sessions/:id/message', () => {
-  it('calls send() and streams events', async () => {
+  it('returns JSON { ok: true } and calls send with (sessionId, message, model, mode)', async () => {
     const { sm, app } = createApp();
     sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
 
     const res = await app.request('/sess-1/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up' }),
+      body: JSON.stringify({ message: 'Follow up', model: 'sonnet', mode: 'Build' }),
     });
 
     expect(res.status).toBe(200);
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
+
+    expect(sm.send).toHaveBeenCalledTimes(1);
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', 'sonnet', 'Build');
   });
 
-  it('passes mode to send()', async () => {
+  it('returns JSON 500 with MESSAGE_ERROR code when send throws', async () => {
     const { sm, app } = createApp();
-    sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
-
-    await app.request('/sess-1/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up', mode: 'Build' }),
-    });
-
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, 'Build');
-  });
-
-  it('passes undefined mode when not provided', async () => {
-    const { sm, app } = createApp();
-    sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
-
-    await app.request('/sess-1/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up' }),
-    });
-
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
-  });
-
-  it('returns MESSAGE_ERROR event on send failure', async () => {
-    const { sm, app } = createApp();
-    sm.send.mockRejectedValue(new Error('Session lost'));
+    sm.send.mockRejectedValue(new Error('boom'));
 
     const res = await app.request('/sess-1/message', {
       method: 'POST',
@@ -272,12 +245,10 @@ describe('POST /sessions/:id/message', () => {
       body: JSON.stringify({ message: 'Follow up' }),
     });
 
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    const errorEvent = events.find((e) => e.event === 'error');
-    expect(errorEvent!.data).toMatchObject({
-      code: 'MESSAGE_ERROR',
-    });
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ ok: false, error: 'boom', code: 'MESSAGE_ERROR' });
   });
 });
 

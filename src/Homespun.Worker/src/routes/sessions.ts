@@ -71,33 +71,19 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     }
   });
 
-  // POST /sessions/:id/message - Send a message to an existing session (SSE stream)
+  // POST /sessions/:id/message - Send a message to an existing session (JSON response)
   sessions.post('/:id/message', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<SendMessageRequest>();
     info(`POST /sessions/${sessionId}/message - mode=${body.mode}, messageLength=${body.message?.length}, model=${body.model}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        await sessionManager.send(sessionId, body.message, body.model, body.mode);
-
-        for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
-          await s.write(chunk);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId,
-          message,
-          code: 'MESSAGE_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+    try {
+      await sessionManager.send(sessionId, body.message, body.model, body.mode);
+      return c.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: message, code: 'MESSAGE_ERROR' }, 500);
+    }
   });
 
   // POST /sessions/:id/answer - Answer a pending question (JSON response)
