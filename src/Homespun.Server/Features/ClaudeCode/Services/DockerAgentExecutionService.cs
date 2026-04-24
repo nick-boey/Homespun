@@ -198,7 +198,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageType,
         string? LastMessageSubtype);
 
-    private readonly ISessionEventIngestor _eventIngestor;
     private readonly IPerSessionEventStream _perSession;
 
     /// <summary>
@@ -213,13 +212,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        ISessionEventIngestor eventIngestor,
         IPerSessionEventStream perSession)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
-        _eventIngestor = eventIngestor;
         _perSession = perSession;
         _httpClient = new HttpClient
         {
@@ -236,14 +233,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        ISessionEventIngestor eventIngestor,
         IPerSessionEventStream perSession,
         HttpClient httpClient)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
-        _eventIngestor = eventIngestor;
         _perSession = perSession;
         _httpClient = httpClient;
     }
@@ -416,6 +411,21 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Best-effort: tear down the per-session reader so we don't leak it in
+                // _readers wired to a potentially dead worker URL. If the session id is
+                // later reused (issue-reuse mode), SubscribeTurnAsync would otherwise
+                // throw "already has an active turn subscription" or hold stale state.
+                try
+                {
+                    await _perSession.StopAsync(sessionId);
+                }
+                catch (Exception stopEx)
+                {
+                    _logger.LogWarning(stopEx,
+                        "Best-effort StopAsync failed for session {SessionId} during error handling",
+                        sessionId);
+                }
+
                 _logger.LogError(ex, "Error in Docker session {SessionId}", sessionId);
 
                 // Fetch container logs before stopping for diagnostics
@@ -488,8 +498,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        // The worker's /message endpoint is JSON-only after task 4 — stream events
-        // ride the long-lived /events SSE consumed by PerSessionEventStream.
+        // The worker's /message endpoint is JSON-only under the long-lived SSE design —
+        // stream events ride the long-lived /events SSE consumed by PerSessionEventStream.
         var messageUrl = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message";
         var json = JsonSerializer.Serialize(messageRequest, CamelCaseJsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");

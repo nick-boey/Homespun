@@ -32,7 +32,6 @@ public class DockerAgentExecutionServiceTests
             }),
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
-            new Mock<ISessionEventIngestor>().Object,
             perSession ?? new Mock<IPerSessionEventStream>().Object);
     }
 
@@ -48,7 +47,6 @@ public class DockerAgentExecutionServiceTests
             }),
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
-            new Mock<ISessionEventIngestor>().Object,
             perSession,
             httpClient);
     }
