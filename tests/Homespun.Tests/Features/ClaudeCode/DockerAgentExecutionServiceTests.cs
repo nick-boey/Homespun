@@ -138,4 +138,129 @@ public class DockerAgentExecutionServiceTests
             "(scheduledDelayMillis = 1000) flush before SIGKILL.");
         Assert.That(stopArgs, Does.EndWith("abc123"));
     }
+
+    [Test]
+    public void Spawned_container_propagates_HOMESPUN_DEBUG_FULL_MESSAGES_when_set_on_server()
+    {
+        var prevUmbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+        var prevPreview = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+        try
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", "true");
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", null);
+
+            var svc = Build();
+            var args = svc.BuildContainerDockerArgs(
+                containerName: "homespun-issue-proj-issue",
+                workingDirectory: "/tmp/clone",
+                useRm: false,
+                claudePath: null,
+                issueId: "issue-1",
+                projectName: "demo",
+                projectId: "proj-1");
+
+            Assert.That(args, Does.Contain("-e HOMESPUN_DEBUG_FULL_MESSAGES=true"));
+            Assert.That(args, Does.Contain("-e CONTENT_PREVIEW_CHARS=-1"),
+                "umbrella ON should derive the no-truncation sentinel for the worker");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", prevUmbrella);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", prevPreview);
+        }
+    }
+
+    [Test]
+    public void Spawned_container_omits_debug_env_when_umbrella_unset()
+    {
+        var prevUmbrella = Environment.GetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES");
+        var prevPreview = Environment.GetEnvironmentVariable("CONTENT_PREVIEW_CHARS");
+        try
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", null);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", null);
+
+            var svc = Build();
+            var args = svc.BuildContainerDockerArgs(
+                containerName: "homespun-issue-proj-issue",
+                workingDirectory: "/tmp/clone",
+                useRm: false,
+                claudePath: null,
+                issueId: "issue-1",
+                projectName: "demo",
+                projectId: "proj-1");
+
+            Assert.That(args, Does.Not.Contain("HOMESPUN_DEBUG_FULL_MESSAGES"));
+            Assert.That(args, Does.Not.Contain("-e CONTENT_PREVIEW_CHARS"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMESPUN_DEBUG_FULL_MESSAGES", prevUmbrella);
+            Environment.SetEnvironmentVariable("CONTENT_PREVIEW_CHARS", prevPreview);
+        }
+    }
+
+    [Test]
+    public void ResolveWorkerUserFlag_prefers_explicit_option()
+    {
+        var svc = Build(new DockerAgentExecutionOptions
+        {
+            ServerOtlpProxyUrl = "http://server:8080/api/otlp/v1",
+            WorkerUser = "1000:1000",
+        });
+
+        Assert.That(svc.ResolveWorkerUserFlag(), Is.EqualTo("1000:1000"));
+    }
+
+    [Test]
+    public void ParseUserFlag_accepts_valid_and_rejects_invalid()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(DockerAgentExecutionService.ParseUserFlag("1655:1655"), Is.EqualTo((1655, 1655)));
+            Assert.That(DockerAgentExecutionService.ParseUserFlag("0:0"), Is.EqualTo((0, 0)));
+            Assert.That(DockerAgentExecutionService.ParseUserFlag(null), Is.Null);
+            Assert.That(DockerAgentExecutionService.ParseUserFlag(""), Is.Null);
+            Assert.That(DockerAgentExecutionService.ParseUserFlag("homespun"), Is.Null);
+            Assert.That(DockerAgentExecutionService.ParseUserFlag("1655"), Is.Null);
+        });
+    }
+
+    [Test]
+    public void RedactSecretsInDockerArgs_masks_known_secret_env_vars()
+    {
+        var raw =
+            "run -d --name foo -e ISSUE_ID=3sqISO " +
+            "-e CLAUDE_CODE_OAUTH_TOKEN=\"sk-ant-oat01-abc\" " +
+            "-e GITHUB_TOKEN=\"ghp_xyz\" " +
+            "-e ANTHROPIC_API_KEY=abc " +
+            "-e MY_DB_PASSWORD=\"p@ss\" " +
+            "-e WEBHOOK_SECRET=\"shh\" " +
+            "--label homespun.managed=true worker:dev";
+
+        var redacted = DockerAgentExecutionService.RedactSecretsInDockerArgs(raw);
+
+        Assert.That(redacted, Does.Not.Contain("sk-ant-oat01-abc"));
+        Assert.That(redacted, Does.Not.Contain("ghp_xyz"));
+        Assert.That(redacted, Does.Not.Contain("p@ss"));
+        Assert.That(redacted, Does.Not.Contain("shh"));
+        Assert.That(redacted, Does.Contain("CLAUDE_CODE_OAUTH_TOKEN=\"[REDACTED]\""));
+        Assert.That(redacted, Does.Contain("GITHUB_TOKEN=\"[REDACTED]\""));
+        Assert.That(redacted, Does.Contain("ANTHROPIC_API_KEY=\"[REDACTED]\""));
+        Assert.That(redacted, Does.Contain("MY_DB_PASSWORD=\"[REDACTED]\""));
+        Assert.That(redacted, Does.Contain("WEBHOOK_SECRET=\"[REDACTED]\""));
+    }
+
+    [Test]
+    public void RedactSecretsInDockerArgs_leaves_non_secret_env_vars_intact()
+    {
+        var raw =
+            "run -d -e WORKING_DIRECTORY=/workdir -e DEBUG_LOGGING=true " +
+            "-e OTLP_PROXY_URL=http://server:8080/api/otlp/v1 " +
+            "-e ISSUE_ID=abc worker:dev";
+
+        var redacted = DockerAgentExecutionService.RedactSecretsInDockerArgs(raw);
+
+        Assert.That(redacted, Is.EqualTo(raw));
+    }
 }

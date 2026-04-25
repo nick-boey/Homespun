@@ -141,12 +141,14 @@ Local dev runs through the Aspire AppHost. Pick a launch profile:
 | `dev-live` | Same stack plus real Claude SDK sessions. Docker-mode agent execution spawns a sibling worker container per session via DooD. |
 | `dev-windows` | Same stack plus a single pre-running worker container. Agent execution routes every session to that worker (SingleContainer mode) — also usable on Apple Silicon now that the worker image is built locally instead of pulled from GHCR. |
 | `dev-container` | Prod-parity check: server/web/worker built from their Dockerfiles. Not a daily driver — inner loop is rebuild-per-change. |
+| `prod` | Container topology against `~/.homespun-container/data` with `ASPNETCORE_ENVIRONMENT=Production` and no mock seeding. Seq still starts. Local debugging tool for prod-shaped runs; not a deployment gate (Komodo + `docker-compose.yml` remains the deploy path). |
 
 ```bash
 dotnet run --project src/Homespun.AppHost --launch-profile dev-mock
 dotnet run --project src/Homespun.AppHost --launch-profile dev-live
 dotnet run --project src/Homespun.AppHost --launch-profile dev-windows
 dotnet run --project src/Homespun.AppHost --launch-profile dev-container
+dotnet run --project src/Homespun.AppHost --launch-profile prod
 ```
 
 Use `dotnet run` for these — `aspire run` does not accept `--launch-profile`
@@ -179,6 +181,29 @@ Every tier exports OTLP to two sinks in parallel via
 Seq UI is at `http://localhost:5341` in dev. In prod the `datalust/seq:2024.3`
 service in `docker-compose.yml` ingests via `http://seq:5341/ingest/otlp`;
 set `SEQ_API_KEY` in the Komodo env to gate ingestion.
+
+**Container-mode profiles (`dev-container`, `prod`)** can't reach the Aspire
+dashboard's default gRPC OTLP endpoint — it serves the ASP.NET Core dev HTTPS
+cert which containers don't trust. The AppHost works around this by injecting
+the dashboard's HTTP/protobuf OTLP URL (`DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL`,
+rewritten `localhost` → `host.docker.internal`) onto every container resource,
+and by setting `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` +
+`ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` so the dashboard accepts unauthenticated
+HTTP OTLP locally. Host-mode profiles (`dev-live`, `dev-windows`, `dev-mock`)
+are unaffected — Aspire's default HTTPS-gRPC injection still works for them.
+
+**Full-body debug logging.** The `HOMESPUN_DEBUG_FULL_MESSAGES` umbrella
+flag opts the entire stack (worker + server + web) into emitting full A2A,
+AG-UI, and envelope bodies as OTel log events alongside the `[SDK rx]` /
+`[SDK tx]` SDK-boundary logs. Default: ON in every launch profile — opt
+out explicitly with `HOMESPUN_DEBUG_FULL_MESSAGES=false` on the AppHost
+process env. When on, the AppHost fans the flag out and implies
+`DEBUG_AGENT_SDK=true` + `CONTENT_PREVIEW_CHARS=-1` on the worker,
+`SessionEventContent__ContentPreviewChars=-1` on the server, and
+`VITE_HOMESPUN_DEBUG_FULL_MESSAGES=true` on the web build (tree-shaken
+when unset). Replay-path log entries carry `homespun.replay=true` so they
+can be filtered out in Seq via `homespun.replay is null`. The umbrella
+flag is read at process start; toggling requires a restart.
 
 **Verify connectivity:**
 ```bash

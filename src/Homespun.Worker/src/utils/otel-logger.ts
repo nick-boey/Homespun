@@ -82,6 +82,51 @@ export function isSdkDebugEnabled(): boolean {
 }
 
 /**
+ * Whether full-body debug logging is enabled. Gated strictly on the umbrella
+ * `HOMESPUN_DEBUG_FULL_MESSAGES` — NOT on the legacy `DEBUG_AGENT_SDK`, which
+ * controls `sdkDebug` (SDK-boundary logs) only and is hardcoded to "true" on
+ * sibling worker containers by the server's DockerAgentExecutionService for
+ * dev ergonomics. Coupling `a2aEmitDebug` to that legacy flag would make the
+ * umbrella's off-state un-observable in dev-live. Read lazily on each call.
+ */
+export function isFullMessagesDebugEnabled(): boolean {
+  return process.env.HOMESPUN_DEBUG_FULL_MESSAGES === 'true';
+}
+
+/**
+ * Emit an A2A emit-boundary debug log with the full payload body, gated by
+ * `HOMESPUN_DEBUG_FULL_MESSAGES` (umbrella) or `DEBUG_AGENT_SDK` (back-compat).
+ * The message template is Serilog-shaped so Seq's list view renders the body
+ * inline: `"a2a.emit kind={Kind} seq={Seq} body={Body}"`.
+ */
+export function a2aEmitDebug(
+  sessionId: string,
+  kind: string,
+  data: unknown,
+  seq?: number,
+): void {
+  if (!isFullMessagesDebugEnabled()) return;
+  let body: string;
+  try {
+    body = JSON.stringify(data);
+  } catch {
+    body = String(data);
+  }
+
+  getLogger().emit({
+    severityNumber: SeverityNumber.INFO,
+    severityText: 'Information',
+    body: `a2a.emit kind=${kind} seq=${seq ?? ''} body=${body}`,
+    attributes: {
+      'homespun.session.id': sessionId,
+      'homespun.a2a.kind': kind,
+      ...(seq !== undefined ? { 'homespun.seq': seq } : {}),
+      'homespun.body': body,
+    },
+  });
+}
+
+/**
  * Emit an SDK-boundary debug event. Historically this wrote JSON to stdout
  * under `DEBUG_AGENT_SDK=true`; the OTel replacement attaches the payload as
  * a span event on the active span (when one exists) and additionally emits a
@@ -142,6 +187,8 @@ function getContentPreviewChars(): number {
     return process.env.NODE_ENV === 'production' ? 0 : 80;
   }
   const n = Number.parseInt(raw, 10);
+  // -1 is the "no truncation" sentinel wired by HOMESPUN_DEBUG_FULL_MESSAGES.
+  if (Number.isFinite(n) && n === -1) return -1;
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
@@ -149,13 +196,16 @@ function getContentPreviewChars(): number {
  * Returns <paramref name="text"/> truncated to the configured preview budget
  * followed by an ellipsis when longer. Returns <c>undefined</c> when the
  * budget is zero or the text is null/undefined so the caller can skip the
- * <c>homespun.content.preview</c> attribute entirely.
+ * <c>homespun.content.preview</c> attribute entirely. When the budget is
+ * <c>-1</c>, returns the text unchanged (no truncation).
  */
 export function gateContentPreview(
   text: string | null | undefined,
 ): string | undefined {
   const chars = getContentPreviewChars();
-  if (chars <= 0 || text === undefined || text === null) return undefined;
+  if (text === undefined || text === null) return undefined;
+  if (chars === -1) return text;
+  if (chars <= 0) return undefined;
   if (text.length <= chars) return text;
   return text.slice(0, chars) + '\u2026';
 }

@@ -2,7 +2,10 @@ using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
+using Microsoft.Extensions.Logging;
+using Moq;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -798,5 +801,62 @@ public class A2AToAGUITranslatorTests
             JsonValueKind.Null => null,
             _ => prop.GetRawText(),
         };
+    }
+
+    // ---------------- Full-body debug logging ----------------
+
+    [Test]
+    public void Translate_FullMessagesOn_EmitsAguiTranslateLogPerEvent()
+    {
+        var logger = new Mock<ILogger<A2AToAGUITranslator>>();
+        var debugOptions = SessionEventIngestorTests.BuildDebugOptions(fullMessages: true);
+        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger.Object, debugOptions);
+
+        var parsed = ParseTask("""
+        {
+          "kind": "task",
+          "id": "task-1",
+          "contextId": "ctx-1",
+          "status": { "state": "submitted" }
+        }
+        """);
+
+        var events = translator.Translate(parsed, _ctx).ToList();
+
+        Assert.That(events, Has.Count.EqualTo(1));
+        logger.Verify(l => l.Log(
+            LogLevel.Information,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.translate") && o.ToString()!.Contains("RUN_STARTED")),
+            It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Test]
+    public void Translate_FullMessagesOff_EmitsNoAguiTranslateLog()
+    {
+        var logger = new Mock<ILogger<A2AToAGUITranslator>>();
+        var debugOptions = SessionEventIngestorTests.BuildDebugOptions(fullMessages: false);
+        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger.Object, debugOptions);
+
+        var parsed = ParseTask("""
+        {
+          "kind": "task",
+          "id": "task-1",
+          "contextId": "ctx-1",
+          "status": { "state": "submitted" }
+        }
+        """);
+
+        translator.Translate(parsed, _ctx).ToList();
+
+        logger.Verify(l => l.Log(
+            It.IsAny<LogLevel>(),
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.translate")),
+            It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 }

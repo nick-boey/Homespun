@@ -4,6 +4,7 @@ import {
   type Query,
   type PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
+import { SpanKind, trace } from "@opentelemetry/api";
 import type {
   SessionInfo,
   AskUserQuestionInput,
@@ -757,43 +758,65 @@ export class SessionManager {
     },
     sessionOptions: Record<string, unknown>,
   ): void {
+    // Per-message `homespun.sdk.rx` spans wrap each iteration of the SDK
+    // Query forwarder. Motivation: the Hono SERVER span for POST /api/sessions
+    // ends as soon as the handler returns (~ms), and any long-lived span
+    // around the full stream would never end for an idle-but-open session,
+    // so `BatchSpanProcessor` would never export it and Aspire's waterfall
+    // could not nest the logs. A short-lived span per yielded SDK message
+    // gives each `sdkDebug("rx", ...)` log a span whose time window covers
+    // it and which is exported promptly.
+    const sessionTracer = trace.getTracer("homespun.worker.session");
     (async () => {
       try {
         info(`Query processing started (sessionId: ${session.id})`);
         let messageCount = 0;
         session.inventoryEmitted = false;
         for await (const msg of q) {
-          // Capture point 4: every raw SDK message yielded by the Query.
-          if (isSdkDebugEnabled()) {
-            sdkDebug("rx", msg);
-          }
-          if (
-            !session.inventoryEmitted &&
-            msg.type === "system" &&
-            (msg as { subtype?: string }).subtype === "init"
-          ) {
-            session.inventoryEmitted = true;
-            const initLike = msg as unknown as SdkInitMessageLike;
-            session.init = initLike;
+          await sessionTracer.startActiveSpan("homespun.sdk.rx", {
+            kind: SpanKind.INTERNAL,
+            attributes: {
+              "homespun.session.id": session.id,
+              "homespun.sdk.message.type": msg.type,
+              "homespun.sdk.message.subtype":
+                (msg as { subtype?: string }).subtype ?? "",
+            },
+          }, async (span) => {
             try {
-              const record = await buildInventoryFromInit(
-                initLike,
-                sessionOptions,
-                "create",
-                session.id,
-              );
-              emitInventoryLog(record);
-            } catch (err) {
-              warn(
-                `inventory emission failed for session '${session.id}': ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
-              );
-            }
-          }
+              if (isSdkDebugEnabled()) {
+                sdkDebug("rx", msg);
+              }
+              if (
+                !session.inventoryEmitted &&
+                msg.type === "system" &&
+                (msg as { subtype?: string }).subtype === "init"
+              ) {
+                session.inventoryEmitted = true;
+                const initLike = msg as unknown as SdkInitMessageLike;
+                session.init = initLike;
+                try {
+                  const record = await buildInventoryFromInit(
+                    initLike,
+                    sessionOptions,
+                    "create",
+                    session.id,
+                  );
+                  emitInventoryLog(record);
+                } catch (err) {
+                  warn(
+                    `inventory emission failed for session '${session.id}': ${
+                      err instanceof Error ? err.message : String(err)
+                    }`,
+                  );
+                }
+              }
 
-          outputChannel.push(msg);
-          messageCount++;
+              outputChannel.push(msg);
+              messageCount++;
+            } finally {
+              span.end();
+            }
+          });
         }
         const duration = Date.now() - startTime;
         info(

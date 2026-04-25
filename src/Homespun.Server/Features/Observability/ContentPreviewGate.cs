@@ -25,7 +25,17 @@ public sealed class ContentPreviewGate : IContentPreviewGate
 
     internal static string? Truncate(string? text, int chars)
     {
-        if (chars <= 0 || text is null)
+        if (text is null)
+        {
+            return null;
+        }
+
+        if (chars == -1)
+        {
+            return text;
+        }
+
+        if (chars <= 0)
         {
             return null;
         }

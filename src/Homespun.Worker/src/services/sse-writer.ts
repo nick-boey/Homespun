@@ -25,6 +25,7 @@ import {
   extractA2ACorrelation,
   extractMessagePreview,
   gateContentPreview,
+  a2aEmitDebug,
   type A2AEmitSpanFields,
 } from "../utils/otel-logger.js";
 
@@ -126,6 +127,10 @@ export function emitAndFormatSSE(
   });
   span.setAttributes(mapFieldsToAttributes(fields));
   span.end();
+
+  // Full-body debug log gated by HOMESPUN_DEBUG_FULL_MESSAGES (umbrella) or
+  // DEBUG_AGENT_SDK (back-compat). No-op when neither is set.
+  a2aEmitDebug(fields.SessionId, event, data, fields.Seq);
 
   return formatSSE(event, data);
 }

@@ -68,7 +68,8 @@ public class RefreshFidelityTests
 
         _ingestor = new SessionEventIngestor(
             _store, _translator, _hub.Object, NullLogger<SessionEventIngestor>.Instance,
-            new NullServiceProvider());
+            new NullServiceProvider(),
+            SessionEventIngestorTests.BuildDebugOptions(fullMessages: false));
     }
 
     private sealed class NullServiceProvider : IServiceProvider

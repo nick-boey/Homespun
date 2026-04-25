@@ -95,6 +95,41 @@ public class OtlpScrubberTests
     }
 
     [Test]
+    public void Content_preview_passes_through_unchanged_when_chars_minus_one()
+    {
+        var scrubber = BuildScrubber(contentPreviewChars: -1);
+        var longText = new string('a', 5000);
+        var req = BuildLogsRequest(new KeyValue
+        {
+            Key = "homespun.content.preview",
+            Value = new AnyValue { StringValue = longText },
+        });
+
+        scrubber.Scrub(req);
+
+        var attr = req.ResourceLogs[0].ScopeLogs[0].LogRecords[0].Attributes[0];
+        Assert.That(attr.Value.StringValue, Is.EqualTo(longText), "minus-one sentinel must not truncate");
+        Assert.That(attr.Value.StringValue.Length, Is.EqualTo(5000));
+    }
+
+    [Test]
+    public void Content_preview_minus_one_still_applies_secret_substring_redaction()
+    {
+        var scrubber = BuildScrubber(contentPreviewChars: -1, secretSubstrings: "authorization");
+        var req = BuildLogsRequest(new KeyValue
+        {
+            Key = "http.request.header.authorization",
+            Value = new AnyValue { StringValue = "Bearer secret" },
+        });
+
+        scrubber.Scrub(req);
+
+        var attr = req.ResourceLogs[0].ScopeLogs[0].LogRecords[0].Attributes[0];
+        Assert.That(attr.Value.StringValue, Is.EqualTo("[REDACTED]"),
+            "secret redaction is independent of content-preview gating");
+    }
+
+    [Test]
     public void Authorization_attribute_redacted()
     {
         var scrubber = BuildScrubber(contentPreviewChars: 80, secretSubstrings: "authorization");

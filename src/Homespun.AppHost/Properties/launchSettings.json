@@ -10,6 +10,9 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
+        "DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21679",
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
         "HOMESPUN_DEV_HOSTING_MODE": "host",
         "MOCK_MODE_USE_LIVE_SESSIONS": "false"
@@ -24,6 +27,9 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
+        "DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21679",
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
         "HOMESPUN_DEV_HOSTING_MODE": "host",
         "MOCK_MODE_USE_LIVE_SESSIONS": "true",
@@ -39,6 +45,9 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
+        "DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21679",
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
         "HOMESPUN_DEV_HOSTING_MODE": "host",
         "MOCK_MODE_USE_LIVE_SESSIONS": "true",
@@ -54,9 +63,29 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
+        "DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21679",
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
         "HOMESPUN_DEV_HOSTING_MODE": "container",
         "MOCK_MODE_USE_LIVE_SESSIONS": "true"
+      }
+    },
+    "prod": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17178;http://localhost:15178",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21178",
+        "DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21679",
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
+        "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22178",
+        "HOMESPUN_DEV_HOSTING_MODE": "container",
+        "HOMESPUN_PROFILE_KIND": "prod"
       }
     }
   }

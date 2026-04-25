@@ -39,7 +39,14 @@ Two mutations happen before fan-out (see
 
 1. Attribute key `homespun.content.preview`
     - When `SessionEventContent:ContentPreviewChars == 0` → attribute removed.
-    - Otherwise string value truncated to `Chars` chars + `…`.
+    - When `SessionEventContent:ContentPreviewChars == -1` → the "no
+      truncation" sentinel; the attribute passes through unchanged
+      regardless of length. Wired by the
+      `HOMESPUN_DEBUG_FULL_MESSAGES=true` umbrella flag via the AppHost
+      fan-out (see the "Debug a session end-to-end" recipe in
+      [docs/troubleshooting.md](../troubleshooting.md)).
+    - Otherwise (positive value) string value truncated to `Chars`
+      chars + `…`.
 2. Any attribute whose key contains a configured secret substring
    (`token`, `secret`, `password`, `authorization`, `credential` by default,
    case-insensitive) → value replaced with `[REDACTED]`. Non-string value

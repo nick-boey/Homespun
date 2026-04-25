@@ -13,6 +13,8 @@ vi.mock('#src/utils/otel-logger.js', () => ({
   extractA2ACorrelation: vi.fn((kind: string) => ({ SessionId: '', A2AKind: kind })),
   extractMessagePreview: vi.fn(() => undefined),
   gateContentPreview: vi.fn(() => undefined),
+  a2aEmitDebug: vi.fn(),
+  isFullMessagesDebugEnabled: vi.fn(() => false),
 }));
 
 import { info, debug } from '#src/utils/otel-logger.js';

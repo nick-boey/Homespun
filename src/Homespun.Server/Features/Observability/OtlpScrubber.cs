@@ -85,7 +85,11 @@ public sealed class OtlpScrubber : IOtlpScrubber
                     continue;
                 }
 
-                if (kv.Value?.ValueCase == AnyValue.ValueOneofCase.StringValue)
+                if (contentPreviewChars == -1)
+                {
+                    // Sentinel: no truncation. Fall through to secret-key check.
+                }
+                else if (kv.Value?.ValueCase == AnyValue.ValueOneofCase.StringValue)
                 {
                     kv.Value.StringValue = TruncateWithEllipsis(kv.Value.StringValue, contentPreviewChars);
                 }

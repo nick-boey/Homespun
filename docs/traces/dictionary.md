@@ -49,6 +49,7 @@ asserts that the reverse also holds.
 | `homespun.web.session-events`           | client       | Tracer        | Envelope rx + reducer-apply spans                        |
 | `homespun.worker`                       | worker       | Logger        | Hono worker logger (spans deferred — see Planned)        |
 | `homespun.worker.http`                  | worker       | Tracer        | Hono inbound-request SERVER spans from `traceparentMiddleware` (parent comes from the caller's `traceparent` header) |
+| `homespun.worker.session`               | worker       | Tracer        | Per-SDK-message `homespun.sdk.rx` INTERNAL spans wrapping each iteration of `session-manager.runQueryForwarder` |
 
 ---
 
@@ -375,6 +376,29 @@ Discrete leave span. Emitted by
 
 ## Worker-originated traces
 
+### `homespun.sdk.rx`
+
+Short-lived INTERNAL span wrapping one iteration of the SDK `query()`
+forwarder in `session-manager.runQueryForwarder`. Each yielded SDK
+message starts and ends one of these spans under the
+`homespun.worker.session` tracer. The `sdkDebug("rx", msg)` log record
+emitted inside the span inherits its `span_id`, so the Aspire trace
+waterfall nests the log under a span whose time window actually covers
+it.
+
+Per-message (not per-session) because the Query iterator can stay open
+indefinitely for an idle session; a session-wide span would never end
+and `BatchSpanProcessor` would never export it, leaving the log records'
+`span_id` unresolved in Aspire.
+
+- **Originator:** worker
+- **Kind:** `INTERNAL`
+- **Parent:** the Hono request span at forwarder-start time (the
+  detached forwarder IIFE inherits the POST /api/sessions server span
+  context from `traceparentMiddleware`).
+- **Required attrs:** `homespun.session.id`,
+  `homespun.sdk.message.type`, `homespun.sdk.message.subtype`.
+
 ### `homespun.a2a.emit`
 
 Emitted by `src/Homespun.Worker/src/services/sse-writer.ts` on the
@@ -389,6 +413,35 @@ stream. Represents the worker → server handoff.
   `homespun.artifact.id`, `homespun.status.timestamp`, `homespun.agui.type`,
   `homespun.agui.custom_name`, `homespun.seq`, `homespun.event.id`,
   `homespun.content.preview` (gated by `CONTENT_PREVIEW_CHARS` env).
+
+---
+
+## Log records (full-body debug path)
+
+Log-record catalog for the `HOMESPUN_DEBUG_FULL_MESSAGES=true` full-body
+debug path. These are OTel **log events**, not spans — the drift check
+ignores this section (it scans for `StartActivity` / tracer names, not
+logger calls). Added here so future maintainers have the same
+single-source-of-truth guarantee for log names as spans.
+
+All entries are gated on `SessionDebugLoggingOptions.FullMessages` on
+the server, `isFullMessagesDebugEnabled()` on the worker, and the
+build-time `import.meta.env.VITE_HOMESPUN_DEBUG_FULL_MESSAGES === 'true'`
+flag on the web client.
+
+| Record                    | Tier   | Emitter                                                                                                                       | Template                                                            | Replay-tagged? |
+|---------------------------|--------|-------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------|----------------|
+| `a2a.emit`                | worker | `src/Homespun.Worker/src/services/sse-writer.ts` (`emitAndFormatSSE` → `a2aEmitDebug`)                                        | `a2a.emit kind={Kind} seq={Seq} body={Body}`                        | n/a            |
+| `a2a.rx`                  | server | `src/Homespun.Server/Features/ClaudeCode/Services/SessionEventIngestor.cs`                                                    | `a2a.rx kind={Kind} seq={Seq} body={Body}`                          | live only      |
+| `agui.translate`          | server | `src/Homespun.Server/Features/ClaudeCode/Services/A2AToAGUITranslator.cs`                                                     | `agui.translate type={Type} sessionId={SessionId} body={Body}`      | live + replay  |
+| `agui.tx`                 | server | `src/Homespun.Server/Features/ClaudeCode/Services/SessionEventIngestor.cs` (broadcast site)                                   | `agui.tx seq={Seq} sessionId={SessionId} traceparent={Traceparent} body={Body}` | live only      |
+| `agui.replay`             | server | `src/Homespun.Server/Features/ClaudeCode/Controllers/SessionEventsController.cs` (per-event)                                  | `agui.replay seq={Seq} sessionId={SessionId} type={Type} body={Body}` | replay only    |
+| `agui.replay.batch`       | server | `src/Homespun.Server/Features/ClaudeCode/Controllers/SessionEventsController.cs` (per-batch summary)                          | `agui.replay.batch sessionId={SessionId} mode={Mode} since={Since} count={Count}` | replay only    |
+| `homespun.envelope.rx`    | web    | `src/Homespun.Web/src/instrumentation.ts` (`logEnvelopeRx`, called from `features/sessions/hooks/use-session-events.ts`)      | `homespun.envelope.rx seq={seq} sessionId={sessionId} type={type} body={body}` | n/a            |
+
+Replay-path entries carry a `homespun.replay=true` attribute (pushed via
+an `ILogger.BeginScope` in `SessionEventsController`) so Seq queries can
+filter them out with `homespun.replay is null`.
 
 ---
 
