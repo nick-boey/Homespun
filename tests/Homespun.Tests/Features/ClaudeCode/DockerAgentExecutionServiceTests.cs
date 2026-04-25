@@ -1,5 +1,10 @@
+using System.Net;
+using System.Text.Json;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Secrets;
+using Homespun.Shared.Models.Sessions;
+using Homespun.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -9,12 +14,30 @@ namespace Homespun.Tests.Features.ClaudeCode;
 /// <summary>
 /// Unit tests for <see cref="DockerAgentExecutionService"/> covering the
 /// OTel environment injection (task 7.2) and the SIGTERM-friendly stop
-/// flag (task 7.3) introduced by the <c>worker-otel</c> change.
+/// flag (task 7.3) introduced by the <c>worker-otel</c> change, plus the
+/// rewire onto <see cref="IPerSessionEventStream"/> (task 8 of the
+/// <c>fix-post-result-events</c> plan).
 /// </summary>
 [TestFixture]
 public class DockerAgentExecutionServiceTests
 {
     private static DockerAgentExecutionService Build(
+        DockerAgentExecutionOptions? options = null,
+        IPerSessionEventStream? perSession = null)
+    {
+        return new DockerAgentExecutionService(
+            Options.Create(options ?? new DockerAgentExecutionOptions
+            {
+                ServerOtlpProxyUrl = "http://host.docker.internal:5101/api/otlp/v1",
+            }),
+            NullLogger<DockerAgentExecutionService>.Instance,
+            new Mock<ISecretsService>().Object,
+            perSession ?? new Mock<IPerSessionEventStream>().Object);
+    }
+
+    private static DockerAgentExecutionService BuildWithHttp(
+        HttpClient httpClient,
+        IPerSessionEventStream perSession,
         DockerAgentExecutionOptions? options = null)
     {
         return new DockerAgentExecutionService(
@@ -24,7 +47,8 @@ public class DockerAgentExecutionServiceTests
             }),
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
-            new Mock<Homespun.Features.ClaudeCode.Services.ISessionEventIngestor>().Object);
+            perSession,
+            httpClient);
     }
 
     [Test]
@@ -262,5 +286,165 @@ public class DockerAgentExecutionServiceTests
         var redacted = DockerAgentExecutionService.RedactSecretsInDockerArgs(raw);
 
         Assert.That(redacted, Is.EqualTo(raw));
+    }
+
+    // -------------------------------------------------------------------
+    // Task 8: PerSessionEventStream rewire
+    // -------------------------------------------------------------------
+
+    /// <summary>
+    /// Emits a single <see cref="SdkResultMessage"/> and ends. Mirrors the shape
+    /// <see cref="IPerSessionEventStream.SubscribeTurnAsync"/> gives real consumers:
+    /// the sequence terminates on the first result message.
+    /// </summary>
+    private static async IAsyncEnumerable<SdkMessage> ResultOnly(string sessionId)
+    {
+        await Task.Yield();
+        yield return new SdkResultMessage(
+            SessionId: sessionId,
+            Uuid: Guid.NewGuid().ToString(),
+            Subtype: "success",
+            DurationMs: 42,
+            DurationApiMs: 10,
+            IsError: false,
+            NumTurns: 1,
+            TotalCostUsd: 0m,
+            Result: "ok",
+            Errors: null);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_posts_json_then_subscribes_to_per_session_stream()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("/message", new { ok = true });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://fake/") };
+
+        var perSession = new Mock<IPerSessionEventStream>();
+        perSession
+            .Setup(p => p.SubscribeTurnAsync("outer-s1", It.IsAny<CancellationToken>()))
+            .Returns(ResultOnly("outer-s1"));
+
+        var svc = BuildWithHttp(httpClient, perSession.Object);
+        svc.RegisterSessionForTesting(
+            homespunSessionId: "outer-s1",
+            workerSessionId: "worker-s1",
+            workerUrl: "http://fake",
+            projectId: "p1");
+
+        var request = new AgentMessageRequest(
+            SessionId: "outer-s1",
+            Message: "hello",
+            Mode: SessionMode.Build,
+            Model: "sonnet");
+
+        var yielded = new List<SdkMessage>();
+        await foreach (var msg in svc.SendMessageAsync(request, CancellationToken.None))
+        {
+            yielded.Add(msg);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(yielded, Has.Count.EqualTo(1), "expected exactly the single SdkResultMessage");
+            Assert.That(yielded[0], Is.InstanceOf<SdkResultMessage>());
+            Assert.That(((SdkResultMessage)yielded[0]).SessionId, Is.EqualTo("outer-s1"),
+                "RemapSessionId should have rewritten the result's session id");
+        });
+
+        var messagePost = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("/api/sessions/worker-s1/message"));
+        Assert.That(messagePost, Is.Not.Null, "expected a POST to /api/sessions/{workerSessionId}/message");
+        // Body is JSON; verify it round-trips and contains the message text.
+        var body = messagePost!.Body;
+        Assert.That(body, Is.Not.Null.And.Contains("\"message\""));
+        Assert.That(body, Does.Contain("hello"));
+
+        perSession.Verify(
+            p => p.SubscribeTurnAsync("outer-s1", It.IsAny<CancellationToken>()),
+            Times.Once,
+            "SendMessageAsync must subscribe to the per-session stream exactly once for the turn");
+    }
+
+    [Test]
+    public async Task StopSessionAsync_stops_the_per_session_event_stream()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWithStatus("/api/sessions/worker-s1", HttpStatusCode.OK);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://fake/") };
+
+        var perSession = new Mock<IPerSessionEventStream>();
+        perSession.Setup(p => p.StopAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var svc = BuildWithHttp(httpClient, perSession.Object);
+        svc.RegisterSessionForTesting(
+            homespunSessionId: "outer-s1",
+            workerSessionId: "worker-s1",
+            workerUrl: "http://fake",
+            projectId: "p1");
+
+        await svc.StopSessionAsync("outer-s1", forceStopContainer: false, CancellationToken.None);
+
+        perSession.Verify(
+            p => p.StopAsync("outer-s1"),
+            Times.Once,
+            "StopSessionAsync must halt the per-session reader before teardown");
+    }
+
+    [Test]
+    public async Task StartSessionAsync_starts_per_session_event_stream_and_drains_turn()
+    {
+        // This test exercises only the HTTP + per-session-stream wiring, bypassing
+        // container startup by pre-registering the session through the test seam
+        // and invoking the internal runner directly.
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("/api/sessions", new { sessionId = "worker-s1", conversationId = (string?)null });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://fake/") };
+
+        var perSession = new Mock<IPerSessionEventStream>();
+        perSession
+            .Setup(p => p.StartAsync(
+                "outer-s1", "http://fake", "worker-s1", "p1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask)
+            .Verifiable();
+        perSession
+            .Setup(p => p.SubscribeTurnAsync("outer-s1", It.IsAny<CancellationToken>()))
+            .Returns(ResultOnly("outer-s1"));
+
+        var svc = BuildWithHttp(httpClient, perSession.Object);
+        svc.RegisterSessionForTesting(
+            homespunSessionId: "outer-s1",
+            workerSessionId: null,
+            workerUrl: "http://fake",
+            projectId: "p1");
+
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/tmp/clone",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "go",
+            IssueId: "i1",
+            ProjectId: "p1",
+            HomespunSessionId: "outer-s1");
+
+        var yielded = await svc.RunStartSessionWorkerLoopForTestingAsync(
+            "outer-s1", "http://fake", request, CancellationToken.None);
+
+        perSession.Verify(
+            p => p.StartAsync("outer-s1", "http://fake", "worker-s1", "p1", It.IsAny<CancellationToken>()),
+            Times.Once,
+            "StartSessionAsync must start the per-session reader with the parsed worker session id");
+
+        perSession.Verify(
+            p => p.SubscribeTurnAsync("outer-s1", It.IsAny<CancellationToken>()),
+            Times.Once,
+            "StartSessionAsync must drain the first turn through the per-session subscription");
+
+        var startPost = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.EndsWith("/api/sessions"));
+        Assert.That(startPost, Is.Not.Null, "expected a POST to /api/sessions");
+
+        Assert.That(yielded, Has.Some.InstanceOf<SdkResultMessage>(),
+            "the turn drain should surface the result message");
     }
 }

@@ -8,6 +8,11 @@ import { createSessionsRoute } from '#src/routes/sessions.js';
 import { discoverSessions } from '#src/services/session-discovery.js';
 import { createMockSessionManager } from '../helpers/mock-session-manager.js';
 import { parseSSEEvents } from '../helpers/sse-helpers.js';
+import {
+  createAssistantMessage,
+  createResultMessage,
+  createSystemMessage,
+} from '../helpers/test-fixtures.js';
 
 const mockDiscoverSessions = vi.mocked(discoverSessions);
 
@@ -136,11 +141,42 @@ describe('GET /sessions', () => {
 });
 
 describe('POST /sessions', () => {
-  it('returns SSE stream response', async () => {
+  it('returns JSON body with sessionId and conversationId', async () => {
+    const { sm, app } = createApp();
+    sm.create.mockResolvedValue({ id: 'new-session', conversationId: 'c1' });
+
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Hello',
+        model: 'sonnet',
+        mode: 'Plan',
+        systemPrompt: 'sys',
+        workingDirectory: '/tmp/wd',
+        resumeSessionId: 'prev-1',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ sessionId: 'new-session', conversationId: 'c1' });
+
+    expect(sm.create).toHaveBeenCalledTimes(1);
+    expect(sm.create).toHaveBeenCalledWith({
+      prompt: 'Hello',
+      model: 'sonnet',
+      mode: 'Plan',
+      systemPrompt: 'sys',
+      workingDirectory: '/tmp/wd',
+      resumeSessionId: 'prev-1',
+    });
+  });
+
+  it('returns conversationId: null when WorkerSession has none', async () => {
     const { sm, app } = createApp();
     sm.create.mockResolvedValue({ id: 'new-session' });
-    sm.get.mockReturnValue({ id: 'new-session', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
 
     const res = await app.request('/', {
       method: 'POST',
@@ -153,13 +189,12 @@ describe('POST /sessions', () => {
     });
 
     expect(res.status).toBe(200);
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    // A2A Protocol: session start emits 'task' event instead of 'session_started'
-    expect(events.some((e) => e.event === 'task')).toBe(true);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ sessionId: 'new-session', conversationId: null });
   });
 
-  it('returns STARTUP_ERROR event on create failure', async () => {
+  it('returns JSON 500 with STARTUP_ERROR code on create failure', async () => {
     const { sm, app } = createApp();
     sm.create.mockRejectedValue(new Error('SDK init failed'));
 
@@ -173,67 +208,36 @@ describe('POST /sessions', () => {
       }),
     });
 
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    const errorEvent = events.find((e) => e.event === 'error');
-    expect(errorEvent).toBeDefined();
-    expect(errorEvent!.data).toMatchObject({
-      code: 'STARTUP_ERROR',
-      message: 'SDK init failed',
-    });
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'SDK init failed', code: 'STARTUP_ERROR' });
   });
 });
 
 describe('POST /sessions/:id/message', () => {
-  it('calls send() and streams events', async () => {
+  it('returns JSON { ok: true } and calls send with (sessionId, message, model, mode)', async () => {
     const { sm, app } = createApp();
     sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
 
     const res = await app.request('/sess-1/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up' }),
+      body: JSON.stringify({ message: 'Follow up', model: 'sonnet', mode: 'Build' }),
     });
 
     expect(res.status).toBe(200);
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
+
+    expect(sm.send).toHaveBeenCalledTimes(1);
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', 'sonnet', 'Build');
   });
 
-  it('passes mode to send()', async () => {
+  it('returns JSON 500 with MESSAGE_ERROR code when send throws', async () => {
     const { sm, app } = createApp();
-    sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
-
-    await app.request('/sess-1/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up', mode: 'Build' }),
-    });
-
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, 'Build');
-  });
-
-  it('passes undefined mode when not provided', async () => {
-    const { sm, app } = createApp();
-    sm.send.mockResolvedValue(undefined);
-    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
-    sm.stream.mockReturnValue((async function* () {})());
-
-    await app.request('/sess-1/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up' }),
-    });
-
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
-  });
-
-  it('returns MESSAGE_ERROR event on send failure', async () => {
-    const { sm, app } = createApp();
-    sm.send.mockRejectedValue(new Error('Session lost'));
+    sm.send.mockRejectedValue(new Error('boom'));
 
     const res = await app.request('/sess-1/message', {
       method: 'POST',
@@ -241,12 +245,10 @@ describe('POST /sessions/:id/message', () => {
       body: JSON.stringify({ message: 'Follow up' }),
     });
 
-    const text = await res.text();
-    const events = parseSSEEvents(text);
-    const errorEvent = events.find((e) => e.event === 'error');
-    expect(errorEvent!.data).toMatchObject({
-      code: 'MESSAGE_ERROR',
-    });
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ ok: false, error: 'boom', code: 'MESSAGE_ERROR' });
   });
 });
 
@@ -448,5 +450,107 @@ describe('DELETE /sessions/:id', () => {
     const res = await app.request('/bad-id', { method: 'DELETE' });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /sessions/:id/clear-context', () => {
+  it('returns JSON body with oldSessionId and newSessionId', async () => {
+    const { sm, app } = createApp();
+    sm.clearContextAndCreate.mockResolvedValue({
+      newSession: { id: 'new-sess' },
+      oldSessionId: 'old-sess',
+    });
+
+    const res = await app.request('/old-sess/clear-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Restart',
+        model: 'sonnet',
+        mode: 'Build',
+        systemPrompt: 'sys',
+        workingDirectory: '/tmp/wd',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ oldSessionId: 'old-sess', newSessionId: 'new-sess' });
+
+    expect(sm.clearContextAndCreate).toHaveBeenCalledTimes(1);
+    expect(sm.clearContextAndCreate).toHaveBeenCalledWith('old-sess', {
+      prompt: 'Restart',
+      model: 'sonnet',
+      mode: 'Build',
+      systemPrompt: 'sys',
+      workingDirectory: '/tmp/wd',
+    });
+  });
+
+  it('returns JSON 500 with CLEAR_CONTEXT_ERROR code when clearContextAndCreate throws', async () => {
+    const { sm, app } = createApp();
+    sm.clearContextAndCreate.mockRejectedValue(new Error('clear boom'));
+
+    const res = await app.request('/old-sess/clear-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: 'Restart',
+        model: 'sonnet',
+        mode: 'Build',
+      }),
+    });
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'clear boom', code: 'CLEAR_CONTEXT_ERROR' });
+  });
+});
+
+describe('GET /:id/events', () => {
+  it('emits every A2A event including task_notification arriving after result', async () => {
+    const { sm, app } = createApp();
+
+    // Seed: assistant text → result → task_notification (crosses the turn boundary).
+    const events = [
+      createAssistantMessage({ session_id: 's1' }),
+      createResultMessage({
+        session_id: 's1',
+        subtype: 'success',
+        is_error: false,
+      } as any),
+      createSystemMessage({ session_id: 's1', subtype: 'task_notification' } as any),
+    ];
+
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
+    sm.stream.mockReturnValue(
+      (async function* () {
+        for (const e of events) yield e;
+      })(),
+    );
+
+    const res = await app.request('/s1/events');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+
+    const text = await res.text();
+    const frames = parseSSEEvents(text);
+
+    const statusUpdates = frames.filter((f) => f.event === 'status-update');
+    const messages = frames.filter((f) => f.event === 'message');
+
+    // Result → completed translation should emit one status-update with
+    // state 'completed' and final: true.
+    const completed = statusUpdates.filter(
+      (f) =>
+        (f.data as any)?.status?.state === 'completed' &&
+        (f.data as any)?.final === true,
+    );
+    expect(completed).toHaveLength(1);
+    // At minimum: assistant text + task_notification (post-result) as message frames.
+    expect(messages.length).toBeGreaterThanOrEqual(2);
   });
 });

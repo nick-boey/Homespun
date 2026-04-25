@@ -8,7 +8,11 @@ import {
 import { trace } from '@opentelemetry/api';
 import { emitAndFormatSSE, formatSSE, streamSessionEvents } from '#src/services/sse-writer.js';
 import { createMockSessionManager } from '../helpers/mock-session-manager.js';
-import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
+import {
+  createAssistantMessage,
+  createResultMessage,
+  createSystemMessage,
+} from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 import { parseSSEEvents } from '../helpers/sse-helpers.js';
 
@@ -131,6 +135,42 @@ describe('streamSessionEvents (A2A Protocol)', () => {
     const finalUpdate = statusUpdates[statusUpdates.length - 1];
     expect(finalUpdate.data.final).toBe(true);
     expect(finalUpdate.data.status.state).toMatch(/completed|failed/);
+  });
+
+  // SDK query iterators stay open across turns; post-result task_notification
+  // / task_started / task_updated messages MUST keep flowing to the consumer.
+  // Closing the SSE generator on `result` orphans them in OutputChannel until
+  // the user's next prompt drains it, which is the bug this test guards.
+  it('keeps emitting after a result so post-result task_notification reaches the consumer', async () => {
+    const sm = createMockSessionManager();
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
+
+    const assistantMsg = createAssistantMessage();
+    const resultMsg = createResultMessage();
+    const taskNotification = createSystemMessage({
+      subtype: 'task_notification',
+    } as any);
+
+    sm.stream.mockReturnValue(
+      (async function* () {
+        yield assistantMsg;
+        yield resultMsg;
+        yield taskNotification;
+      })(),
+    );
+
+    const chunks = await collectAsyncGenerator(streamSessionEvents(sm as any, 's1'));
+    const allText = chunks.join('');
+    const events = parseSSEEvents(allText);
+
+    const completed = events.filter(
+      (e) => e.event === 'status-update' && (e.data as any).status?.state === 'completed',
+    );
+    expect(completed).toHaveLength(1);
+
+    // assistant text + post-result task_notification system message
+    const messages = events.filter((e) => e.event === 'message');
+    expect(messages.length).toBeGreaterThanOrEqual(2);
   });
 
   // A2A Protocol: errors are emitted as status-update with state 'failed'

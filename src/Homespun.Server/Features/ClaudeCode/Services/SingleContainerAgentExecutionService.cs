@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -26,6 +25,16 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// intentional no-ops: the dev runs <c>docker compose up worker</c> separately
 /// and the shim holds no container-lifetime responsibility.
 /// </para>
+///
+/// <para>
+/// Event delivery runs through <see cref="IPerSessionEventStream"/> — the
+/// worker's <c>POST /api/sessions</c> and <c>POST /api/sessions/:id/message</c>
+/// endpoints now return JSON, and the long-lived <c>GET /api/sessions/:id/events</c>
+/// SSE reader owned by <see cref="IPerSessionEventStream"/> fans out parsed
+/// <see cref="SdkMessage"/>s to per-turn subscribers and drives the ingestor on
+/// every A2A event. This keeps post-result background events flowing to the
+/// client after a turn has ended, mirroring the Docker executor.
+/// </para>
 /// </summary>
 public sealed class SingleContainerAgentExecutionService : IAgentExecutionService, IDisposable
 {
@@ -36,8 +45,9 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
 
     private readonly SingleContainerAgentExecutionOptions _options;
     private readonly ILogger<SingleContainerAgentExecutionService> _logger;
-    private readonly ISessionEventIngestor _eventIngestor;
+    private readonly IPerSessionEventStream _perSession;
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsHttpClient;
 
     private readonly SemaphoreSlim _slotLock = new(1, 1);
     private ActiveSession? _active;
@@ -56,14 +66,22 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         public string? ProjectId { get; init; }
     }
 
+    /// <summary>
+    /// Response parsed from the worker's <c>POST /api/sessions</c> and
+    /// <c>POST /api/sessions/:id/message</c> endpoints now that those endpoints
+    /// return JSON rather than an SSE stream (task 3 / task 4 of the
+    /// <c>fix-post-result-events</c> plan).
+    /// </summary>
+    private sealed record WorkerStartResponse(string SessionId, string? ConversationId);
+
     public SingleContainerAgentExecutionService(
         IOptions<SingleContainerAgentExecutionOptions> options,
         ILogger<SingleContainerAgentExecutionService> logger,
-        ISessionEventIngestor eventIngestor)
+        IPerSessionEventStream perSession)
     {
         _options = options.Value;
         _logger = logger;
-        _eventIngestor = eventIngestor;
+        _perSession = perSession;
 
         if (string.IsNullOrWhiteSpace(_options.WorkerUrl))
         {
@@ -75,6 +93,32 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         {
             Timeout = _options.RequestTimeout,
         };
+        _ownsHttpClient = true;
+    }
+
+    /// <summary>
+    /// Test-only constructor that accepts a pre-configured <see cref="HttpClient"/>
+    /// so unit tests can exercise the per-session wiring against
+    /// <see cref="Homespun.Tests.Helpers.MockHttpMessageHandler"/>-style fakes.
+    /// </summary>
+    internal SingleContainerAgentExecutionService(
+        IOptions<SingleContainerAgentExecutionOptions> options,
+        ILogger<SingleContainerAgentExecutionService> logger,
+        IPerSessionEventStream perSession,
+        HttpClient httpClient)
+    {
+        _options = options.Value;
+        _logger = logger;
+        _perSession = perSession;
+
+        if (string.IsNullOrWhiteSpace(_options.WorkerUrl))
+        {
+            throw new InvalidOperationException(
+                "AgentExecution:SingleContainer:WorkerUrl must be set when AgentExecution:Mode=SingleContainer.");
+        }
+
+        _httpClient = httpClient;
+        _ownsHttpClient = false;
     }
 
     public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
@@ -128,19 +172,108 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
             homespunSessionId = sessionId,
         };
 
-        var url = $"{_options.WorkerUrl.TrimEnd('/')}/api/sessions";
-        await foreach (var msg in StreamAgentEventsAsync(url, startBody, sessionId, request.ProjectId, session.Cts.Token))
+        var workerUrl = _options.WorkerUrl.TrimEnd('/');
+        var startUrl = $"{workerUrl}/api/sessions";
+
+        // POST to the worker — response is JSON (task 3 of the fix-post-result-events
+        // plan: the worker no longer streams SSE from the start endpoint).
+        var startJson = JsonSerializer.Serialize(startBody, CamelCaseJsonOptions);
+        using var startContent = new StringContent(startJson, Encoding.UTF8, "application/json");
+        using var startResponse = await _httpClient.PostAsync(startUrl, startContent, session.Cts.Token);
+        if (!startResponse.IsSuccessStatusCode)
         {
-            if (msg is SdkSystemMessage sys && sys.Subtype == "session_started" &&
-                !string.IsNullOrEmpty(sys.SessionId))
-            {
-                session.WorkerSessionId = sys.SessionId;
-            }
+            var errorBody = await startResponse.Content.ReadAsStringAsync(session.Cts.Token);
+            throw new InvalidOperationException(
+                $"SingleContainer worker at {startUrl} returned {startResponse.StatusCode}: {errorBody}");
+        }
+
+        var responseBody = await startResponse.Content.ReadAsStringAsync(session.Cts.Token);
+        var parsed = JsonSerializer.Deserialize<WorkerStartResponse>(
+            responseBody,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (parsed is null || string.IsNullOrEmpty(parsed.SessionId))
+        {
+            throw new InvalidOperationException(
+                $"SingleContainer worker at {startUrl} returned an empty / malformed start response: {responseBody}");
+        }
+
+        session.WorkerSessionId = parsed.SessionId;
+
+        // Start the long-lived per-session reader and drain the first turn's
+        // messages through it. Matching task 8 of this plan: every executor
+        // routes events through IPerSessionEventStream so post-result background
+        // events (task_notification / task_updated / task_started) keep flowing
+        // to the client after the turn's SdkResultMessage.
+        await _perSession.StartAsync(sessionId, workerUrl, parsed.SessionId, request.ProjectId, session.Cts.Token);
+
+        await foreach (var msg in DrainWithBestEffortStopAsync(sessionId, session.Cts.Token))
+        {
             if (msg is SdkResultMessage result)
             {
                 session.ConversationId = result.SessionId;
             }
             yield return msg;
+        }
+    }
+
+    /// <summary>
+    /// Wraps <see cref="IPerSessionEventStream.SubscribeTurnAsync"/> so a faulted
+    /// turn drain best-effort stops the reader. Mirrors the Task 8 I1 follow-up
+    /// on the Docker executor: if we skip this, a later session reusing the same
+    /// id would see a stale reader subscribed to the wrong worker session.
+    /// </summary>
+    private async IAsyncEnumerable<SdkMessage> DrainWithBestEffortStopAsync(
+        string sessionId,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        IAsyncEnumerator<SdkMessage>? enumerator = null;
+        try
+        {
+            enumerator = _perSession.SubscribeTurnAsync(sessionId, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await BestEffortStopAsync(sessionId, ex);
+            throw;
+        }
+
+        try
+        {
+            while (true)
+            {
+                bool hasNext;
+                try
+                {
+                    hasNext = await enumerator.MoveNextAsync();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    await BestEffortStopAsync(sessionId, ex);
+                    throw;
+                }
+
+                if (!hasNext) break;
+                yield return enumerator.Current;
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+    }
+
+    private async Task BestEffortStopAsync(string sessionId, Exception cause)
+    {
+        try
+        {
+            await _perSession.StopAsync(sessionId);
+        }
+        catch (Exception stopEx)
+        {
+            _logger.LogWarning(stopEx,
+                "Best-effort PerSessionEventStream.StopAsync failed for session {SessionId} after {Cause}",
+                sessionId, cause.GetType().Name);
         }
     }
 
@@ -182,7 +315,15 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
 
         var url = $"{_options.WorkerUrl.TrimEnd('/')}/api/sessions/{active.WorkerSessionId}/message";
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, active.Cts.Token);
-        await foreach (var msg in StreamAgentEventsAsync(url, body, active.SessionId, null, linked.Token))
+
+        // The worker's /message endpoint is JSON-only under the long-lived SSE design —
+        // stream events ride the long-lived /events SSE consumed by PerSessionEventStream.
+        var messageJson = JsonSerializer.Serialize(body, CamelCaseJsonOptions);
+        using var content = new StringContent(messageJson, Encoding.UTF8, "application/json");
+        using var response = await _httpClient.PostAsync(url, content, linked.Token);
+        response.EnsureSuccessStatusCode();
+
+        await foreach (var msg in _perSession.SubscribeTurnAsync(active.SessionId, linked.Token))
         {
             yield return msg;
         }
@@ -208,6 +349,22 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
         if (toStop is null) return;
 
         toStop.Cts.Cancel();
+
+        // Halt the long-lived PerSessionEventStream reader before tearing the
+        // session down so no post-stop events race an already-removed slot.
+        // Even though this service doesn't tear down the container (it's
+        // shared), it must still stop the reader so a subsequent session for
+        // a different id doesn't have a stale reader subscribed to the wrong
+        // session. StopAsync is safe to call for unknown ids.
+        try
+        {
+            await _perSession.StopAsync(sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "PerSessionEventStream.StopAsync failed for session {SessionId}; continuing teardown", sessionId);
+        }
 
         if (!string.IsNullOrEmpty(toStop.WorkerSessionId))
         {
@@ -434,103 +591,11 @@ public sealed class SingleContainerAgentExecutionService : IAgentExecutionServic
 
     public void Dispose()
     {
-        _httpClient.Dispose();
+        if (_ownsHttpClient)
+        {
+            _httpClient.Dispose();
+        }
         _slotLock.Dispose();
         _active?.Cts.Dispose();
-    }
-
-    private async IAsyncEnumerable<SdkMessage> StreamAgentEventsAsync(
-        string url,
-        object requestBody,
-        string sessionId,
-        string? projectId,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException(
-                $"SingleContainer worker at {url} returned {response.StatusCode}: {errorBody}");
-        }
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream);
-
-        string? eventType = null;
-        var data = new StringBuilder();
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (line is null) break;
-
-            if (line.StartsWith("event: "))
-            {
-                eventType = line[7..];
-            }
-            else if (line.StartsWith("data: "))
-            {
-                data.Append(line[6..]);
-            }
-            else if (line.Length == 0)
-            {
-                if (!string.IsNullOrEmpty(eventType) && data.Length > 0)
-                {
-                    var raw = data.ToString();
-                    await TryIngestA2AAsync(eventType, raw, sessionId, projectId, cancellationToken);
-                    var msg = TryParseSdkMessage(eventType, raw, sessionId);
-                    if (msg is not null)
-                    {
-                        yield return msg;
-                        if (msg is SdkResultMessage) yield break;
-                    }
-                }
-                eventType = null;
-                data.Clear();
-            }
-        }
-    }
-
-    private async Task TryIngestA2AAsync(string eventKind, string rawData, string sessionId, string? projectId, CancellationToken cancellationToken)
-    {
-        if (!A2AMessageParser.IsA2AEventKind(eventKind)) return;
-        try
-        {
-            using var doc = JsonDocument.Parse(rawData);
-            var payload = doc.RootElement.Clone();
-
-            var effectiveProjectId = string.IsNullOrEmpty(projectId) ? "unknown" : projectId;
-            await _eventIngestor.IngestAsync(effectiveProjectId, sessionId, eventKind, payload, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "SingleContainer ingestor tap failed for session {SessionId} kind {Kind}",
-                sessionId, eventKind);
-        }
-    }
-
-    private SdkMessage? TryParseSdkMessage(string eventKind, string rawData, string sessionId)
-    {
-        try
-        {
-            if (A2AMessageParser.IsA2AEventKind(eventKind))
-            {
-                var a2aEvent = A2AMessageParser.ParseSseEvent(eventKind, rawData);
-                if (a2aEvent is null) return null;
-                return A2AMessageParser.ConvertToSdkMessage(a2aEvent, sessionId);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse worker SSE event {EventKind}", eventKind);
-        }
-        return null;
     }
 }

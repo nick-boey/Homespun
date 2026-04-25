@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import type { SessionManager } from '../services/session-manager.js';
-import { streamSessionEvents, formatSSE } from '../services/sse-writer.js';
+import { streamSessionEvents } from '../services/sse-writer.js';
 import { discoverSessions } from '../services/session-discovery.js';
 import type {
   StartSessionRequest,
@@ -50,68 +50,40 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     });
   });
 
-  // POST /sessions - Start or resume a session (SSE stream)
+  // POST /sessions - Start or resume a session (JSON response)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();
     info(`POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        const ws = await sessionManager.create({
-          prompt: body.prompt,
-          model: body.model,
-          mode: body.mode,
-          systemPrompt: body.systemPrompt,
-          workingDirectory: body.workingDirectory,
-          resumeSessionId: body.resumeSessionId,
-        });
-
-        for await (const chunk of streamSessionEvents(sessionManager, ws.id)) {
-          await s.write(chunk);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId: 'unknown',
-          message,
-          code: 'STARTUP_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+    try {
+      const ws = await sessionManager.create({
+        prompt: body.prompt,
+        model: body.model,
+        mode: body.mode,
+        systemPrompt: body.systemPrompt,
+        workingDirectory: body.workingDirectory,
+        resumeSessionId: body.resumeSessionId,
+      });
+      return c.json({ sessionId: ws.id, conversationId: ws.conversationId ?? null });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message, code: 'STARTUP_ERROR' }, 500);
+    }
   });
 
-  // POST /sessions/:id/message - Send a message to an existing session (SSE stream)
+  // POST /sessions/:id/message - Send a message to an existing session (JSON response)
   sessions.post('/:id/message', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<SendMessageRequest>();
     info(`POST /sessions/${sessionId}/message - mode=${body.mode}, messageLength=${body.message?.length}, model=${body.model}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        await sessionManager.send(sessionId, body.message, body.model, body.mode);
-
-        for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
-          await s.write(chunk);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId,
-          message,
-          code: 'MESSAGE_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+    try {
+      await sessionManager.send(sessionId, body.message, body.model, body.mode);
+      return c.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: message, code: 'MESSAGE_ERROR' }, 500);
+    }
   });
 
   // POST /sessions/:id/answer - Answer a pending question (JSON response)
@@ -191,6 +163,24 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true });
   });
 
+  // GET /sessions/:id/events - Long-lived SSE stream of session events.
+  // Stays open for the life of the session; emits every A2A event including
+  // task notifications that arrive after the SDK result message.
+  sessions.get('/:id/events', async (c) => {
+    const sessionId = c.req.param('id');
+    info(`GET /sessions/${sessionId}/events - long-lived SSE consumer opened`);
+
+    c.header('Content-Type', 'text/event-stream');
+    c.header('Cache-Control', 'no-cache');
+    c.header('Connection', 'keep-alive');
+
+    return stream(c, async (s) => {
+      for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
+        await s.write(chunk);
+      }
+    });
+  });
+
   // GET /sessions/:id - Get session info
   sessions.get('/:id', (c) => {
     const sessionId = c.req.param('id');
@@ -224,49 +214,28 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true, message: 'Session stopped', sessionId });
   });
 
-  // POST /sessions/:id/clear-context - Clear context and start a new session (SSE stream)
+  // POST /sessions/:id/clear-context - Clear context and start a new session (JSON response)
   sessions.post('/:id/clear-context', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<ClearContextRequest>();
     info(`POST /sessions/${sessionId}/clear-context - mode=${body.mode}, model=${body.model}`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
-
-    return stream(c, async (s) => {
-      try {
-        const { newSession, oldSessionId } = await sessionManager.clearContextAndCreate(
-          sessionId,
-          {
-            prompt: body.prompt,
-            model: body.model,
-            mode: body.mode,
-            systemPrompt: body.systemPrompt,
-            workingDirectory: body.workingDirectory,
-          }
-        );
-
-        // Send initial event with new session info
-        await s.write(formatSSE('context_cleared', {
-          oldSessionId,
-          newSessionId: newSession.id,
-        }));
-
-        // Stream the new session events
-        for await (const chunk of streamSessionEvents(sessionManager, newSession.id)) {
-          await s.write(chunk);
+    try {
+      const { newSession, oldSessionId } = await sessionManager.clearContextAndCreate(
+        sessionId,
+        {
+          prompt: body.prompt,
+          model: body.model,
+          mode: body.mode,
+          systemPrompt: body.systemPrompt,
+          workingDirectory: body.workingDirectory,
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId,
-          message,
-          code: 'CLEAR_CONTEXT_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+      );
+      return c.json({ oldSessionId, newSessionId: newSession.id });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message, code: 'CLEAR_CONTEXT_ERROR' }, 500);
+    }
   });
 
   return sessions;

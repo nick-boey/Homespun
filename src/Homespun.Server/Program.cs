@@ -307,6 +307,16 @@ else
     // envelope broadcast. Single point where the append-before-broadcast invariant lives.
     builder.Services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
 
+    // PerSessionEventStream — long-lived background reader that consumes the worker's
+    // GET /api/sessions/{id}/events endpoint for the full session lifetime and drives
+    // the ingestor on every A2A event. This is what keeps post-result background events
+    // (task_notification / task_updated / task_started) flowing to the client after a
+    // turn has ended. MUST be a singleton (the service holds a per-session reader
+    // dictionary) — see PerSessionEventStreamServiceCollectionExtensions for the
+    // named-HttpClient wiring that keeps the service a clean singleton while
+    // IHttpClientFactory manages handler lifetime.
+    builder.Services.AddPerSessionEventStream();
+
     // Pending-tool-call registry + result appender — bridge between the translator's
     // input-required → TOOL_CALL_* emission and the hub's AnswerQuestion / ApprovePlan
     // handlers. The translator registers the toolCallId; the hub dequeues it and feeds a

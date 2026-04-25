@@ -252,7 +252,12 @@ export async function* streamSessionEvents(
 
         const statusUpdate = translateResultToStatus(msg, ctx);
         yield emitAndFormatSSE(sessionId, statusUpdate.kind, statusUpdate);
-        return;
+        // Do NOT return here: the SDK query iterator stays open across turns
+        // and still emits task_notification / task_started / task_updated
+        // messages whenever background tools finish (sometimes minutes after
+        // the result). The long-lived GET /events consumer on the server
+        // drains them; closing the generator orphans them in OutputChannel.
+        continue;
       }
 
       // Regular SDK messages -> A2A Message
