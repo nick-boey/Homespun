@@ -39,6 +39,8 @@ The server SHALL translate every stored A2A event to an AG-UI event envelope usi
 - **THEN** the translator SHALL emit an AG-UI `Custom` event with `name = "raw"` and the original payload under `data.original`
 - **AND** the translator SHALL NOT throw
 
+## ADDED Requirements
+
 ### Requirement: Answering an input-required tool call appends a TOOL_CALL_RESULT envelope
 
 When the user submits an answer to an `ask_user_question` tool call, or approves/rejects a `propose_plan` tool call, the server SHALL append a `TOOL_CALL_RESULT` envelope to the session's event log after the worker confirms the submission.
@@ -60,16 +62,9 @@ When the user submits an answer to an `ask_user_question` tool call, or approves
 - **THEN** the `TOOL_CALL_RESULT.toolCallId` SHALL equal `T`
 - **AND** no intervening `TOOL_CALL_*` envelopes for the same `toolCallId` SHALL be emitted between start and result
 
-## REMOVED Requirements
-
 <!-- The question.pending / plan.pending / status.resumed Custom event names are retired.
-     These were never a stand-alone requirement in session-messaging; they appeared as
-     examples inside the "Non-canonical concerns" scenario above, which is being MODIFIED
-     rather than removed. This section exists only to state the retirement explicitly so
-     downstream consumers (reducer, client) can plan their removals. -->
-
-### Requirement: Input-required emits question.pending / plan.pending Custom events
-
-**Reason**: These names caused the client to model question/plan state as modal ghost-state instead of conversation content. Tool-call events model the same interaction more faithfully and benefit from standard AG-UI replay and idempotence semantics.
-
-**Migration**: Server translator change lands together with the client's Tool UI toolkit entries (`ask_user_question`, `propose_plan`) per the `questions-plans-as-tools` change. Stale browser tabs that connect post-deploy SHALL gracefully render unknown tool calls via the fallback path; they will not see `question.pending` / `plan.pending` Custom events again.
+     They were never a stand-alone requirement in session-messaging; they appeared as
+     examples inside the "Non-canonical concerns" scenario, which the MODIFIED block above
+     rewrites to drop them. No top-level REMOVED Requirements block is therefore needed —
+     downstream consumers (reducer, client) drop them via the questions-plans-as-tools
+     change. -->

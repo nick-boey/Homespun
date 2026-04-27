@@ -3,9 +3,7 @@
 ## Purpose
 
 This capability defines the worker-to-server-to-client messaging pipeline for Claude Code sessions. A2A events emitted by the worker are persisted verbatim in a per-session append-only log, translated once into AG-UI envelopes, and delivered to clients via both live SignalR broadcast and a replay endpoint that share a single translator so live and replay streams are equivalent.
-
 ## Requirements
-
 ### Requirement: A2A events are stored verbatim with per-session monotonic sequence numbers
 
 The server SHALL persist every A2A event received from the worker into an append-only per-session log, assigning a strictly monotonic `seq` number starting at 1 for each new session. The stored record SHALL include the original A2A event payload, a server-assigned UUID `eventId`, the session id, the `seq`, and the receive timestamp.
@@ -48,11 +46,21 @@ The server SHALL translate every stored A2A event to an AG-UI event envelope usi
 - **THEN** the result SHALL be an AG-UI `ToolCallStart` + `ToolCallArgs` + `ToolCallEnd` sequence
 - **WHEN** an A2A `StatusUpdate` with state `completed` is translated
 - **THEN** the result SHALL be an AG-UI `RunFinished` event
+- **WHEN** an A2A `StatusUpdate` with state `input-required` and `inputType = question` is translated
+- **THEN** the result SHALL be an AG-UI `ToolCallStart` + `ToolCallArgs` + `ToolCallEnd` sequence with `toolName = "ask_user_question"` and the question payload serialised into the args
+- **WHEN** an A2A `StatusUpdate` with state `input-required` and `inputType = plan-approval` is translated
+- **THEN** the result SHALL be an AG-UI `ToolCallStart` + `ToolCallArgs` + `ToolCallEnd` sequence with `toolName = "propose_plan"` and the plan payload (including `planContent` and optional `planFilePath`) serialised into the args
 
 #### Scenario: Non-canonical concerns map to AG-UI Custom events
 
-- **WHEN** an A2A `Message` system-init, system-hook_started, system-hook_response, thinking block, `StatusUpdate` input-required (question/plan), status_resumed, or workflow_complete is translated
-- **THEN** the result SHALL be an AG-UI `Custom` event with a Homespun-namespaced `name` (`system.init`, `hook.started`, `hook.response`, `thinking`, `question.pending`, `plan.pending`, `status.resumed`, `workflow.complete`) and the source payload carried in `data`
+- **WHEN** an A2A `Message` system-init, system-hook_started, system-hook_response, thinking block, or `StatusUpdate` workflow_complete is translated
+- **THEN** the result SHALL be an AG-UI `Custom` event with a Homespun-namespaced `name` (`system.init`, `hook.started`, `hook.response`, `thinking`, `workflow.complete`) and the source payload carried in `data`
+
+#### Scenario: Input-required does NOT emit a Custom event
+
+- **WHEN** an A2A `StatusUpdate` with state `input-required` is translated
+- **THEN** the translator SHALL NOT emit a `Custom` event with `name` in `{"question.pending", "plan.pending", "status.resumed"}`
+- **AND** the emitted envelopes SHALL be `ToolCallStart` / `ToolCallArgs` / `ToolCallEnd` only
 
 #### Scenario: Unknown A2A variants never break translation
 
@@ -259,3 +267,32 @@ When running under `SingleContainerAgentExecutionService`, the system SHALL perm
 
 - **WHEN** the active session is stopped
 - **THEN** a subsequent start request SHALL succeed as if no session had been active
+
+### Requirement: Answering an input-required tool call appends a TOOL_CALL_RESULT envelope
+
+When the user submits an answer to an `ask_user_question` tool call, or approves/rejects a `propose_plan` tool call, the server SHALL append a `TOOL_CALL_RESULT` envelope to the session's event log after the worker confirms the submission.
+
+#### Scenario: Answered question emits TOOL_CALL_RESULT
+
+- **WHEN** the user submits a question answer and the worker confirms resolution
+- **THEN** the server SHALL append a `TOOL_CALL_RESULT` envelope with the `toolCallId` of the original `ToolCallStart` and the answer payload serialised as the result
+- **AND** the envelope SHALL be broadcast live to SignalR clients AND available via replay
+
+#### Scenario: Approved plan emits TOOL_CALL_RESULT
+
+- **WHEN** the user approves or rejects a plan and the worker confirms
+- **THEN** the server SHALL append a `TOOL_CALL_RESULT` envelope with the `toolCallId` of the original plan `ToolCallStart` and a payload of `{ approved: boolean, keepContext: boolean, feedback?: string }`
+
+#### Scenario: Tool-call id is stable across the input-required round-trip
+
+- **WHEN** an input-required `TOOL_CALL_START` is emitted with `toolCallId = T` and later a `TOOL_CALL_RESULT` is appended for the same submission
+- **THEN** the `TOOL_CALL_RESULT.toolCallId` SHALL equal `T`
+- **AND** no intervening `TOOL_CALL_*` envelopes for the same `toolCallId` SHALL be emitted between start and result
+
+<!-- The question.pending / plan.pending / status.resumed Custom event names are retired.
+     They were never a stand-alone requirement in session-messaging; they appeared as
+     examples inside the "Non-canonical concerns" scenario, which the MODIFIED block above
+     rewrites to drop them. No top-level REMOVED Requirements block is therefore needed —
+     downstream consumers (reducer, client) drop them via the questions-plans-as-tools
+     change. -->
+
