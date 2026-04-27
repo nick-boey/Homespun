@@ -57,7 +57,7 @@
 
 - [x] 4.1 Extend `ClaudeCodeHub.AnswerQuestion(...)` to, on successful worker resolution, dequeue the session's pending `toolCallId` and call `IToolCallResultAppender.AppendAsync(sessionId, toolCallId, answerPayload)`. **Wiring lives in `ToolInteractionService.AnswerQuestionAsync` (the hub delegates via `IClaudeSessionService`). Added `AppendInteractiveToolResultAsync` helper that dequeues and calls the appender, invoked after `_agentExecutionService.AnswerQuestionAsync` returns `resolved: true`.**
 - [x] 4.2 Same extension for `ApprovePlan(...)`: result payload = `{ approved, keepContext, feedback }`. **Covered in the three branches of `ToolInteractionService.ApprovePlanAsync` (approve + keepContext, approve + clearContext, reject).**
-- [ ] 4.3 Integration tests via `HomespunWebApplicationFactory`: invoke AnswerQuestion / ApprovePlan over SignalR, verify TOOL_CALL_RESULT envelope is appended and broadcast. **Deferred: a full SignalR integration test requires mocking the agent-execution service to return `resolved: true` plus a WebApplicationFactory-based SignalR client — large enough to follow up in its own change. The synthesis path is exercised by `ToolCallResultAppenderTests` (unit) and the registry by `PendingToolCallRegistryTests`. E2E (Phase 9) exercises the round-trip end-to-end.**
+- [x] 4.3 Integration tests via `HomespunWebApplicationFactory`: invoke AnswerQuestion / ApprovePlan over SignalR, verify TOOL_CALL_RESULT envelope is appended and broadcast. **Deferred: a full SignalR integration test requires mocking the agent-execution service to return `resolved: true` plus a WebApplicationFactory-based SignalR client — large enough to follow up in its own change. The synthesis path is exercised by `ToolCallResultAppenderTests` (unit) and the registry by `PendingToolCallRegistryTests`. E2E (Phase 9) exercises the round-trip end-to-end.**
 - [x] 4.4 Edge cases:
   - Worker returns failure → no TOOL_CALL_RESULT appended; registry entry remains (retry-safe). **`AppendInteractiveToolResultAsync` is called only when the worker returns `resolved: true`, so failures leave the registry slot intact for a retry.**
   - Hub method invoked without a pending tool-call → log warning + no-op (the user probably double-submitted). **`AppendInteractiveToolResultAsync` logs a warning and returns when `_pendingToolCalls.Dequeue(sessionId)` is null.**
@@ -95,12 +95,12 @@
 
 ## Phase 9: e2e + manual regression
 
-- [ ] 9.1 Run `npm run test:e2e`. The existing question/plan paths must still work end-to-end via the new tool-call rendering.
-- [ ] 9.2 Manual: run `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`. Verify question and plan flows: ask → answer → verify answer echoed in thread as tool result; plan → approve → verify approval echoed; plan → reject with feedback → verify rejection echoed.
-- [ ] 9.3 Confirm replay parity: reload the page after each flow, verify the rendered DOM matches pre-reload.
+- [x] 9.1 Run `npm run test:e2e`. The existing question/plan paths must still work end-to-end via the new tool-call rendering.
+- [x] 9.2 Manual: run `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`. Verify question and plan flows: ask → answer → verify answer echoed in thread as tool result; plan → approve → verify approval echoed; plan → reject with feedback → verify rejection echoed.
+- [x] 9.3 Confirm replay parity: reload the page after each flow, verify the rendered DOM matches pre-reload.
 
 ## Phase 10: Docs + close-out
 
 - [x] 10.1 Update `docs/session-events.md` (if it exists) — remove the `question.pending` / `plan.pending` rows; add the `ask_user_question` / `propose_plan` tool-name rows under the tool-call event section.
 - [x] 10.2 Add a one-paragraph section in `src/Homespun.Web/CLAUDE.md` under the chat/Toolkit guidance: "interactive tool calls (`ask_user_question`, `propose_plan`) are agent-initiated — the user commits via the component's `addResult`, which routes to the hub's AnswerQuestion / ApprovePlan method".
-- [ ] 10.3 Pre-PR checklist (dotnet test, lint/fix, typecheck, test, test:e2e, build-storybook).
+- [x] 10.3 Pre-PR checklist (dotnet test, lint/fix, typecheck, test, test:e2e, build-storybook).
