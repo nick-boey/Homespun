@@ -6,7 +6,8 @@ import type { SessionMode } from '@/types/signalr'
 
 interface UseChangeSessionSettingsResult {
   changeMode: (mode: SessionMode) => Promise<void>
-  changeModel: (model: ModelSelection) => Promise<void>
+  /** Accepts either a tier alias (`opus`/`sonnet`/`haiku`) or a live-catalogue model id. */
+  changeModel: (model: string) => Promise<void>
   isChanging: boolean
   error: string | null
 }
@@ -59,7 +60,7 @@ export function useChangeSessionSettings(sessionId: string): UseChangeSessionSet
   )
 
   const changeModel = useCallback(
-    async (model: ModelSelection) => {
+    async (model: string) => {
       if (!methods) {
         setError('Not connected to server')
         return
@@ -68,12 +69,16 @@ export function useChangeSessionSettings(sessionId: string): UseChangeSessionSet
       setIsChanging(true)
       setError(null)
 
-      // Update cache optimistically
+      // Update cache optimistically. The store types model as `ModelSelection`
+      // (the tier-alias union) but in practice accepts any string from the
+      // live catalogue — see use-session-settings.ts where the cast is the
+      // same.
+      const tierModel = model as ModelSelection
       const currentSettings = useSessionSettingsStore.getState().getSession(sessionId)
       if (currentSettings) {
-        useSessionSettingsStore.getState().updateSession(sessionId, currentSettings.mode, model)
+        useSessionSettingsStore.getState().updateSession(sessionId, currentSettings.mode, tierModel)
       } else {
-        useSessionSettingsStore.getState().initSession(sessionId, 'build', model)
+        useSessionSettingsStore.getState().initSession(sessionId, 'build', tierModel)
       }
 
       try {

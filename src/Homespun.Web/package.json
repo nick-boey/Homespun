@@ -27,7 +27,8 @@
     "generate:api:fetch": "curl -sf -o swagger.json ${SWAGGER_URL:-http://localhost:5000/swagger/v1/swagger.json} && openapi-ts && rm swagger.json"
   },
   "dependencies": {
-    "@assistant-ui/react": "0.12.25",
+    "@assistant-ui/react": "^0.12.26",
+    "@assistant-ui/react-markdown": "^0.12.11",
     "@hookform/resolvers": "^5.2.2",
     "@microsoft/signalr": "^10.0.0",
     "@opentelemetry/api": "^1.9.1",
@@ -68,8 +69,9 @@
     "shiki": "^4.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tw-shimmer": "^0.4.11",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

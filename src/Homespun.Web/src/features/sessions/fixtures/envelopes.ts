@@ -285,6 +285,140 @@ export const runError: SessionEventEnvelope[] = [
   }),
 ]
 
+/**
+ * Reasoning-only turn that is still streaming — no TEXT/TOOL parts arrive.
+ * Used to exercise the `Reasoning` group's "expanded while it is the only/last
+ * streaming part" behaviour.
+ */
+export const reasoningStreaming: SessionEventEnvelope[] = [
+  env(1, 'e1', { type: 'RUN_STARTED', threadId: SESSION_ID, runId: 'r1', timestamp: 0 }),
+  env(2, 'e2', {
+    type: 'CUSTOM',
+    name: AGUICustomEventName.Thinking,
+    value: {
+      text: 'Considering the shape of the problem before answering — still working on the plan…',
+      parentMessageId: 'a1',
+    },
+    timestamp: 1,
+  }),
+  // No RUN_FINISHED — message is still running.
+]
+
+/**
+ * Assistant turn with four consecutive tool calls (Bash → Read → Grep → Write)
+ * followed by a closing text part. Exercises the `ToolGroup` collapsible.
+ */
+export const multiToolGroup: SessionEventEnvelope[] = [
+  env(1, 'e1', { type: 'RUN_STARTED', threadId: SESSION_ID, runId: 'r1', timestamp: 0 }),
+  // Bash
+  env(2, 'e2', {
+    type: 'TOOL_CALL_START',
+    toolCallId: 'tc-bash',
+    toolCallName: 'Bash',
+    parentMessageId: 'a1',
+    timestamp: 1,
+  }),
+  env(3, 'e3', {
+    type: 'TOOL_CALL_ARGS',
+    toolCallId: 'tc-bash',
+    delta: '{"command":"ls -la"}',
+    timestamp: 2,
+  }),
+  env(4, 'e4', { type: 'TOOL_CALL_END', toolCallId: 'tc-bash', timestamp: 3 }),
+  env(5, 'e5', {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: 'tc-bash',
+    content: 'total 4\ndrwxr-xr-x 2 user user 4096 Apr 22 src\n',
+    messageId: 'a1',
+    role: 'tool',
+    timestamp: 4,
+  }),
+  // Read
+  env(6, 'e6', {
+    type: 'TOOL_CALL_START',
+    toolCallId: 'tc-read',
+    toolCallName: 'Read',
+    parentMessageId: 'a1',
+    timestamp: 5,
+  }),
+  env(7, 'e7', {
+    type: 'TOOL_CALL_ARGS',
+    toolCallId: 'tc-read',
+    delta: '{"file_path":"README.md"}',
+    timestamp: 6,
+  }),
+  env(8, 'e8', { type: 'TOOL_CALL_END', toolCallId: 'tc-read', timestamp: 7 }),
+  env(9, 'e9', {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: 'tc-read',
+    content: '# Project',
+    messageId: 'a1',
+    role: 'tool',
+    timestamp: 8,
+  }),
+  // Grep
+  env(10, 'e10', {
+    type: 'TOOL_CALL_START',
+    toolCallId: 'tc-grep',
+    toolCallName: 'Grep',
+    parentMessageId: 'a1',
+    timestamp: 9,
+  }),
+  env(11, 'e11', {
+    type: 'TOOL_CALL_ARGS',
+    toolCallId: 'tc-grep',
+    delta: '{"pattern":"TODO","path":"src"}',
+    timestamp: 10,
+  }),
+  env(12, 'e12', { type: 'TOOL_CALL_END', toolCallId: 'tc-grep', timestamp: 11 }),
+  env(13, 'e13', {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: 'tc-grep',
+    content: 'src/foo.ts:12: // TODO: revisit',
+    messageId: 'a1',
+    role: 'tool',
+    timestamp: 12,
+  }),
+  // Write
+  env(14, 'e14', {
+    type: 'TOOL_CALL_START',
+    toolCallId: 'tc-write',
+    toolCallName: 'Write',
+    parentMessageId: 'a1',
+    timestamp: 13,
+  }),
+  env(15, 'e15', {
+    type: 'TOOL_CALL_ARGS',
+    toolCallId: 'tc-write',
+    delta: '{"file_path":"NOTES.md"}',
+    timestamp: 14,
+  }),
+  env(16, 'e16', { type: 'TOOL_CALL_END', toolCallId: 'tc-write', timestamp: 15 }),
+  env(17, 'e17', {
+    type: 'TOOL_CALL_RESULT',
+    toolCallId: 'tc-write',
+    content: 'File written successfully',
+    messageId: 'a1',
+    role: 'tool',
+    timestamp: 16,
+  }),
+  // Closing text
+  env(18, 'e18', {
+    type: 'TEXT_MESSAGE_START',
+    messageId: 'a1',
+    role: 'assistant',
+    timestamp: 17,
+  }),
+  env(19, 'e19', {
+    type: 'TEXT_MESSAGE_CONTENT',
+    messageId: 'a1',
+    delta: 'Investigation complete — see notes above.',
+    timestamp: 18,
+  }),
+  env(20, 'e20', { type: 'TEXT_MESSAGE_END', messageId: 'a1', timestamp: 19 }),
+  env(21, 'e21', { type: 'RUN_FINISHED', threadId: SESSION_ID, runId: 'r1', timestamp: 20 }),
+]
+
 export const streamingInterrupted: SessionEventEnvelope[] = [
   env(1, 'e1', { type: 'RUN_STARTED', threadId: SESSION_ID, runId: 'r1', timestamp: 0 }),
   env(2, 'e2', {
@@ -313,6 +447,8 @@ export const envelopeFixtures = {
   toolCallLifecycle,
   thinkingBlock,
   multiBlockTurn,
+  reasoningStreaming,
+  multiToolGroup,
   askUserQuestionPending,
   askUserQuestionAnswered,
   proposePlanPending,
