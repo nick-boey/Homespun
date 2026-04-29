@@ -184,61 +184,13 @@ function ChatInputContent({
   )
 
   return (
-    <ComposerPrimitive.Unstable_TriggerPopoverRoot
-      adapter={mentionAdapter}
-      onSelect={{ type: 'insertDirective', formatter: mentionFormatter }}
-    >
-      <ComposerPrimitive.Unstable_TriggerPopoverRoot
-        trigger="/"
-        adapter={SLASH_ADAPTER}
-        onSelect={{ type: 'action', handler: () => {} }}
+    <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+      <ComposerPrimitive.Unstable_TriggerPopover
+        char="@"
+        adapter={mentionAdapter}
+        className="bg-popover text-popover-foreground z-50 max-h-72 w-80 overflow-auto rounded-md border shadow-md"
       >
-        <ComposerPrimitive.Root className="bg-background border-input focus-within:border-ring focus-within:ring-ring/50 flex w-full flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <ModeTabs mode={sessionMode} onChange={onModeChange} disabled={disabled} />
-              <ModelPicker value={sessionModel} onChange={onModelChange} disabled={disabled} />
-            </div>
-          </div>
-
-          <ComposerPrimitive.Input
-            placeholder={placeholder}
-            disabled={disabled}
-            rows={1}
-            onKeyDown={handleKeyDown}
-            className={cn(
-              'placeholder:text-muted-foreground max-h-60 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none',
-              disabled && 'cursor-not-allowed opacity-60'
-            )}
-          />
-
-          <div className="flex items-center justify-end px-1 pb-1">
-            <ComposerPrimitive.Send asChild>
-              <Button
-                type="submit"
-                size="icon"
-                variant="ghost"
-                disabled={disabled}
-                aria-label="Send message"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </ComposerPrimitive.Send>
-          </div>
-        </ComposerPrimitive.Root>
-
-        <ComposerPrimitive.Unstable_TriggerPopoverPopover className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-3 text-sm shadow-md">
-          <p className="text-muted-foreground" data-testid="slash-empty-state">
-            No commands available yet
-          </p>
-        </ComposerPrimitive.Unstable_TriggerPopoverPopover>
-      </ComposerPrimitive.Unstable_TriggerPopoverRoot>
-
-      <ComposerPrimitive.Unstable_TriggerPopoverPopover className="bg-popover text-popover-foreground z-50 max-h-72 w-80 overflow-auto rounded-md border shadow-md">
+        <ComposerPrimitive.Unstable_TriggerPopover.Directive formatter={mentionFormatter} />
         <ComposerPrimitive.Unstable_TriggerPopoverBack className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-1 px-2 py-1.5 text-left text-sm" />
         <ComposerPrimitive.Unstable_TriggerPopoverCategories>
           {(categories) =>
@@ -281,7 +233,56 @@ function ChatInputContent({
             )
           }
         </ComposerPrimitive.Unstable_TriggerPopoverItems>
-      </ComposerPrimitive.Unstable_TriggerPopoverPopover>
+      </ComposerPrimitive.Unstable_TriggerPopover>
+
+      <ComposerPrimitive.Unstable_TriggerPopover
+        char="/"
+        adapter={SLASH_ADAPTER}
+        className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-3 text-sm shadow-md"
+      >
+        <ComposerPrimitive.Unstable_TriggerPopover.Action onExecute={() => {}} />
+        <p className="text-muted-foreground" data-testid="slash-empty-state">
+          No commands available yet
+        </p>
+      </ComposerPrimitive.Unstable_TriggerPopover>
+
+      <ComposerPrimitive.Root className="bg-background border-input focus-within:border-ring focus-within:ring-ring/50 flex w-full flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <ModeTabs mode={sessionMode} onChange={onModeChange} disabled={disabled} />
+            <ModelPicker value={sessionModel} onChange={onModelChange} disabled={disabled} />
+          </div>
+        </div>
+
+        <ComposerPrimitive.Input
+          placeholder={placeholder}
+          disabled={disabled}
+          rows={1}
+          onKeyDown={handleKeyDown}
+          className={cn(
+            'placeholder:text-muted-foreground max-h-60 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none',
+            disabled && 'cursor-not-allowed opacity-60'
+          )}
+        />
+
+        <div className="flex items-center justify-end px-1 pb-1">
+          <ComposerPrimitive.Send asChild>
+            <Button
+              type="submit"
+              size="icon"
+              variant="ghost"
+              disabled={disabled}
+              aria-label="Send message"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </ComposerPrimitive.Send>
+        </div>
+      </ComposerPrimitive.Root>
     </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   )
 }
