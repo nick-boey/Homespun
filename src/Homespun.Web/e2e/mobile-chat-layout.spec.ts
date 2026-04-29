@@ -22,7 +22,7 @@ test.describe('Mobile Chat Layout', () => {
 
   test('chat bubbles use 90% width on mobile', async ({ page }) => {
     // Find a message bubble — `max-w-[90%]` lives on the bubble itself.
-    const bubble = page.locator('[data-testid^="message-content-"]').first()
+    const bubble = page.locator('[data-testid^="message-content-"][data-role="user"]').first()
     await expect(bubble).toBeVisible()
 
     // Verify mobile width (90%)
@@ -50,7 +50,7 @@ test.describe('Mobile Chat Layout', () => {
       await page.goto(`/sessions/${sessionId}`)
       await page.waitForSelector('[data-testid^="message-"]')
 
-      const bubble = page.locator('[data-testid^="message-content-"]').first()
+      const bubble = page.locator('[data-testid^="message-content-"][data-role="user"]').first()
       await expect(bubble).toBeVisible()
 
       // Verify desktop width (80%)
@@ -83,7 +83,7 @@ test.describe('Mobile Chat Layout', () => {
     // Start with mobile viewport
     await page.setViewportSize({ width: 375, height: 667 })
 
-    const bubble = page.locator('[data-testid^="message-content-"]').first()
+    const bubble = page.locator('[data-testid^="message-content-"][data-role="user"]').first()
     await page.waitForTimeout(100) // Allow CSS to apply after viewport change
     await expect(bubble).toHaveCSS('max-width', /90%/)
 

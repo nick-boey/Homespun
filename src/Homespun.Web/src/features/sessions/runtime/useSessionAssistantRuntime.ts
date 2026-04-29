@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   useExternalStoreRuntime,
   type AssistantRuntime,
@@ -6,6 +7,7 @@ import {
 
 import type { AGUISessionState, AGUIMessage } from '../utils/agui-reducer'
 
+import { coalesceAssistantMessages } from './coalesceAssistantMessages'
 import { convertAGUIMessage } from './convertAGUIMessage'
 
 export interface UseSessionAssistantRuntimeOptions {
@@ -27,8 +29,9 @@ export function useSessionAssistantRuntime(
   options: UseSessionAssistantRuntimeOptions
 ): AssistantRuntime {
   const { state, sendMessage, cancel } = options
+  const messages = useMemo(() => coalesceAssistantMessages(state.messages), [state.messages])
   return useExternalStoreRuntime<AGUIMessage>({
-    messages: state.messages,
+    messages,
     isRunning: state.isRunning,
     convertMessage: convertAGUIMessage,
     onNew: async (message: AppendMessage) => {

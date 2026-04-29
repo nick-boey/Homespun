@@ -72,3 +72,9 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
   writable: true,
   value: () => {},
 })
+
+// Mock scrollTo for AUI thread viewport auto-scroll (jsdom does not implement it)
+Object.defineProperty(Element.prototype, 'scrollTo', {
+  writable: true,
+  value: () => {},
+})

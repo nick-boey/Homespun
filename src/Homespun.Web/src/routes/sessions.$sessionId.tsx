@@ -42,7 +42,6 @@ import { useMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { Sessions, SessionType } from '@/api'
 import { toast } from 'sonner'
-import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
 import {
   AlertDialog,
@@ -130,7 +129,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   // `user.message` custom AG-UI event, so the reducer picks it up from the envelope
   // stream — no local optimistic append is needed.
   const handleSend = useCallback(
-    async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
+    async (message: string, sessionMode: SessionMode, _model: string) => {
       if (!isConnected || !isJoined) return
 
       // Normal message sending flow — plan approval and question answering are now

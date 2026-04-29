@@ -169,19 +169,23 @@ test.describe('Mention search', () => {
       await textarea.click()
       await textarea.fill('@')
 
-      // Popup should appear
-      const popup = page.getByRole('listbox', { name: /file search results/i })
-      await expect(popup).toBeVisible()
+      // The chat composer now uses Assistant UI's `Unstable_TriggerPopover`
+      // for `@`-mention search; popover items render as role=option.
+      await expect(page.getByRole('option').first()).toBeVisible()
     })
 
-    test('shows PR search popup when typing # in chat', async ({ page }) => {
+    test('chat composer no longer has a `#` PR popup (only `@` for files+PRs)', async ({
+      page,
+    }) => {
+      // The new chat composer dropped the `#` trigger — file mentions and PR
+      // mentions both flow through `@` (the `Unstable_TriggerAdapter` exposes
+      // both categories under a single trigger). This documents the behavior
+      // change so the issue-edit popup tests above remain authoritative for
+      // the old `#`-trigger UX.
       const textarea = page.getByPlaceholder(/type a message/i)
       await textarea.click()
       await textarea.fill('#')
-
-      // Popup should appear
-      const popup = page.getByRole('listbox', { name: /pr search results/i })
-      await expect(popup).toBeVisible()
+      await expect(page.getByRole('option')).not.toBeVisible({ timeout: 1000 })
     })
   })
 

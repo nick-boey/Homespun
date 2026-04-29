@@ -2,6 +2,7 @@ import { CheckCircle, Search } from 'lucide-react'
 import type { Toolkit } from '@assistant-ui/react'
 
 import { CodeBlock } from '@/components/tool-ui/code-block'
+import { Terminal } from '@/components/tool-ui/terminal'
 import { cn } from '@/lib/utils'
 
 import {
@@ -52,28 +53,22 @@ export const toolkit: Toolkit = {
     type: 'backend',
     render: ({ toolCallId, argsText, result, isError }) => {
       const args = parseArgs(argsText)
-      const command = typeof args.command === 'string' ? args.command : undefined
+      const command = typeof args.command === 'string' ? args.command : ''
       const output = toString(result)
       return (
-        <div className="space-y-2">
-          {command && (
-            <div className="text-muted-foreground text-xs">
-              Command: <span className="bg-muted rounded px-1 py-0.5 font-mono">{command}</span>
-            </div>
+        <div
+          className={cn(
+            'overflow-hidden rounded-lg',
+            isError && 'border-destructive/50 rounded-lg border'
           )}
-          <div
-            className={cn(
-              'overflow-hidden rounded border',
-              isError ? 'border-destructive/50' : 'border-border'
-            )}
-          >
-            <CodeBlock
-              id={codeBlockId(toolCallId, 'bash')}
-              language="bash"
-              code={output}
-              lineNumbers="hidden"
-            />
-          </div>
+        >
+          <Terminal
+            id={codeBlockId(toolCallId, 'bash')}
+            command={command}
+            stdout={isError ? undefined : output}
+            stderr={isError ? output : undefined}
+            exitCode={isError ? 1 : 0}
+          />
         </div>
       )
     },
