@@ -99,14 +99,6 @@ internal class MockIssueServiceAdapter : IFleeceService
     public Task<IReadOnlyList<Issue>> GetNextIssuesAsync(string? parentId = null, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
         => _innerService.GetNextIssuesAsync(parentId, sortConfig, cancellationToken);
 
-    public Task<TaskGraph> BuildTaskGraphLayoutAsync(InactiveVisibility inactiveVisibility = InactiveVisibility.Hide,
-        string? assignedTo = null, GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
-        => _innerService.BuildTaskGraphLayoutAsync(inactiveVisibility, assignedTo, sortConfig, cancellationToken);
-
-    public Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(IReadOnlySet<string> matchedIds,
-        GraphSortConfig? sortConfig = null, CancellationToken cancellationToken = default)
-        => _innerService.BuildFilteredTaskGraphLayoutAsync(matchedIds, sortConfig, cancellationToken);
-
     public Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(string issueId, bool includeParents = true,
         bool includeChildren = true, CancellationToken cancellationToken = default)
         => _innerService.GetIssueHierarchyAsync(issueId, includeParents, includeChildren, cancellationToken);

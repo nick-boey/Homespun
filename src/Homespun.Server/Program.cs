@@ -6,6 +6,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Commands;
 using Homespun.Features.Containers.Services;
+using Fleece.Core.Services.GraphLayout;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
@@ -169,6 +170,8 @@ else
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
+    builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IGraphLayoutService, GraphLayoutService>();
+    builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IIssueLayoutService, IssueLayoutService>();
     builder.Services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();

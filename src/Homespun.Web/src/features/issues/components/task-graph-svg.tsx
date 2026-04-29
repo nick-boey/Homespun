@@ -1,12 +1,11 @@
 /**
  * SVG rendering for task graph nodes and connectors.
- * Ports TimelineSvgRenderer logic from C#.
  */
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { IssueType as IssueTypeEnum } from '@/api'
-import type { TaskGraphIssueRenderLine } from '../services'
+import type { TaskGraphIssueRenderLine, TaskGraphRenderLine, TaskGraphEdge } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
 export const LANE_WIDTH = 24
@@ -97,7 +96,8 @@ interface TaskGraphNodeSvgProps {
 }
 
 /**
- * Renders an SVG for a task graph issue node with all its connectors.
+ * Renders an SVG for a task graph issue node (shape + indicators only; connectors are
+ * handled by the TaskGraphEdges overlay).
  */
 export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
   line,
@@ -108,205 +108,12 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
   const cx = getLaneCenterX(line.lane)
   const cy = getRowCenterY()
   const nodeColor = getTypeColor(line.issueType)
-  const effectiveLane0Color = line.lane0Color ?? '#6b7280'
 
-  // Determine if node should be outline only (no description)
   const isOutlineOnly = !line.hasDescription
 
   return (
     <svg width={width} height={ROW_HEIGHT} className="shrink-0" aria-hidden="true">
-      {/* Lane guide lines (behind everything) */}
       <LaneGuideLines maxLanes={maxLanes} />
-
-      {/* Parent lane reservation lines (in front of guides, behind edges) */}
-      {line.parentLaneReservations.map((res, i) => (
-        <line
-          key={`res-${i}`}
-          x1={getLaneCenterX(res.lane)}
-          y1={0}
-          x2={getLaneCenterX(res.lane)}
-          y2={ROW_HEIGHT}
-          stroke={getTypeColor(res.issueType)}
-          strokeWidth={LINE_STROKE_WIDTH}
-          fill="none"
-        />
-      ))}
-
-      {/* Lane 0 merged-PR connector */}
-      {line.drawLane0PassThrough && (
-        <path
-          d={`M ${getLaneCenterX(0)} 0 L ${getLaneCenterX(0)} ${ROW_HEIGHT}`}
-          stroke={effectiveLane0Color}
-          strokeWidth={LINE_STROKE_WIDTH}
-          fill="none"
-        />
-      )}
-
-      {line.drawLane0Connector && !line.drawLane0PassThrough && (
-        <>
-          {line.isLastLane0Connector ? (
-            // Last connector: vertical from top to junction, arc, horizontal to node
-            <path
-              d={`M ${getLaneCenterX(0)} 0 L ${getLaneCenterX(0)} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${getLaneCenterX(0) + NODE_RADIUS} ${cy} L ${cx - NODE_RADIUS - 2} ${cy}`}
-              stroke={effectiveLane0Color}
-              strokeWidth={LINE_STROKE_WIDTH}
-              fill="none"
-            />
-          ) : (
-            // Non-last connector: full vertical at lane 0 + horizontal branch to node
-            <>
-              <path
-                d={`M ${getLaneCenterX(0)} 0 L ${getLaneCenterX(0)} ${ROW_HEIGHT}`}
-                stroke={effectiveLane0Color}
-                strokeWidth={LINE_STROKE_WIDTH}
-                fill="none"
-              />
-              <path
-                d={`M ${getLaneCenterX(0)} ${cy} L ${cx - NODE_RADIUS - 2} ${cy}`}
-                stroke={effectiveLane0Color}
-                strokeWidth={LINE_STROKE_WIDTH}
-                fill="none"
-              />
-            </>
-          )}
-        </>
-      )}
-
-      {/* Parent connector (parallel mode - tree view: parent is LEFT of child) */}
-      {!line.isSeriesChild &&
-        line.parentLane != null &&
-        line.parentLane < line.lane &&
-        (() => {
-          const parentX = getLaneCenterX(line.parentLane!)
-          const R = NODE_RADIUS
-          return (
-            <>
-              {line.isFirstChild ? (
-                // First child: vertical from top + arc curving into horizontal (same as non-first)
-                <>
-                  <path
-                    d={`M ${parentX} 0 L ${parentX} ${line.isLastChild ? cy : ROW_HEIGHT}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                  <path
-                    d={`M ${parentX} ${cy - R} A ${R} ${R} 0 0 0 ${parentX + R} ${cy} L ${cx - R - 2} ${cy}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                </>
-              ) : (
-                // Non-first child: continuous vertical + branch arc into horizontal
-                <>
-                  <path
-                    d={`M ${parentX} 0 L ${parentX} ${line.isLastChild ? cy : ROW_HEIGHT}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                  <path
-                    d={`M ${parentX} ${cy - R} A ${R} ${R} 0 0 0 ${parentX + R} ${cy} L ${cx - R - 2} ${cy}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                </>
-              )}
-            </>
-          )
-        })()}
-
-      {/* Parent connector (parallel mode - next view: parent is RIGHT of child) */}
-      {!line.isSeriesChild &&
-        line.parentLane != null &&
-        line.parentLane > line.lane &&
-        (() => {
-          const parentX = getLaneCenterX(line.parentLane!)
-          const R = NODE_RADIUS
-          return (
-            <>
-              {line.isFirstChild ? (
-                <path
-                  d={`M ${cx + R + 2} ${cy} L ${parentX - R} ${cy} A ${R} ${R} 0 0 1 ${parentX} ${cy + R} L ${parentX} ${ROW_HEIGHT}`}
-                  stroke={nodeColor}
-                  strokeWidth={LINE_STROKE_WIDTH}
-                  fill="none"
-                />
-              ) : (
-                <>
-                  <path
-                    d={`M ${cx + R + 2} ${cy} L ${parentX} ${cy}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                  <path
-                    d={`M ${parentX} 0 L ${parentX} ${ROW_HEIGHT}`}
-                    stroke={nodeColor}
-                    strokeWidth={LINE_STROKE_WIDTH}
-                    fill="none"
-                  />
-                </>
-              )}
-            </>
-          )
-        })()}
-
-      {/* Series connector to children (L-shaped) */}
-      {line.seriesConnectorFromLane != null &&
-        (() => {
-          const childLaneX = getLaneCenterX(line.seriesConnectorFromLane)
-          const isRightward = line.seriesConnectorFromLane > line.lane
-          return isRightward ? (
-            // Tree view: rightward L-shape
-            <path
-              d={`M ${cx + NODE_RADIUS + 2} ${cy} L ${childLaneX - NODE_RADIUS} ${cy} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 1 ${childLaneX} ${cy + NODE_RADIUS} L ${childLaneX} ${ROW_HEIGHT}`}
-              stroke={nodeColor}
-              strokeWidth={LINE_STROKE_WIDTH}
-              fill="none"
-            />
-          ) : (
-            // Next view: leftward L-shape (from above into node)
-            <path
-              d={`M ${childLaneX} 0 L ${childLaneX} ${cy - NODE_RADIUS} A ${NODE_RADIUS} ${NODE_RADIUS} 0 0 0 ${childLaneX + NODE_RADIUS} ${cy} L ${cx - NODE_RADIUS - 2} ${cy}`}
-              stroke={nodeColor}
-              strokeWidth={LINE_STROKE_WIDTH}
-              fill="none"
-            />
-          )
-        })()}
-
-      {/* Top line (series continuity) */}
-      {line.drawTopLine && (
-        <path
-          d={`M ${cx} 0 L ${cx} ${cy - NODE_RADIUS - 2}`}
-          stroke={nodeColor}
-          strokeWidth={LINE_STROKE_WIDTH}
-          fill="none"
-        />
-      )}
-
-      {/* Bottom line (series continuity) */}
-      {line.drawBottomLine && (
-        <path
-          d={`M ${cx} ${cy + NODE_RADIUS + 2} L ${cx} ${ROW_HEIGHT}`}
-          stroke={nodeColor}
-          strokeWidth={LINE_STROKE_WIDTH}
-          fill="none"
-        />
-      )}
-
-      {/* Parallel parent bottom connection (extends from node to bottom of row) */}
-      {line.hasParallelChildren && (
-        <path
-          d={`M ${cx} ${cy + NODE_RADIUS + 2} L ${cx} ${ROW_HEIGHT}`}
-          stroke={nodeColor}
-          strokeWidth={LINE_STROKE_WIDTH}
-          fill="none"
-        />
-      )}
 
       {/* Agent status ring */}
       {line.agentStatus?.isActive &&
@@ -634,3 +441,129 @@ export const TaskGraphLoadMoreSvg = memo(function TaskGraphLoadMoreSvg({
     </svg>
   )
 })
+
+interface TaskGraphEdgesProps {
+  edges: TaskGraphEdge[]
+  renderLines: TaskGraphRenderLine[]
+  expandedIds: Set<string>
+  maxLanes: number
+}
+
+/**
+ * Renders all graph edges as a single absolutely-positioned SVG overlay spanning
+ * the full height of the issue list. Each edge maps to one <path> element; geometry
+ * is derived from the Fleece v3 edge kind and attach-point metadata.
+ */
+export const TaskGraphEdges = memo(function TaskGraphEdges({
+  edges,
+  renderLines,
+  expandedIds,
+  maxLanes,
+}: TaskGraphEdgesProps) {
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, { x: number; y: number; color: string }>()
+    let y = 0
+    for (const line of renderLines) {
+      if (line.type === 'issue') {
+        map.set(line.issueId, {
+          x: getLaneCenterX(line.lane),
+          y: y + ROW_HEIGHT / 2,
+          color: getTypeColor(line.issueType),
+        })
+        y += expandedIds.has(line.issueId) ? ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT : ROW_HEIGHT
+      } else {
+        y += ROW_HEIGHT
+      }
+    }
+    return map
+  }, [renderLines, expandedIds])
+
+  const totalHeight = useMemo(() => {
+    let h = 0
+    for (const line of renderLines) {
+      h +=
+        line.type === 'issue' && expandedIds.has(line.issueId)
+          ? ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT
+          : ROW_HEIGHT
+    }
+    return h
+  }, [renderLines, expandedIds])
+
+  const width = calculateSvgWidth(maxLanes)
+
+  if (edges.length === 0) return null
+
+  return (
+    <svg
+      width={width}
+      height={totalHeight}
+      style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+      aria-hidden="true"
+    >
+      {edges.map((edge, i) => {
+        const from = nodeMap.get(edge.from)
+        const to = nodeMap.get(edge.to)
+        if (!from || !to) return null
+
+        const d = buildEdgePath(edge, from, to)
+        return (
+          <path
+            key={`edge-${i}`}
+            d={d}
+            stroke={from.color}
+            strokeWidth={LINE_STROKE_WIDTH}
+            fill="none"
+          />
+        )
+      })}
+    </svg>
+  )
+})
+
+function getAttachPoint(cx: number, cy: number, side: string): [number, number] {
+  const r = NODE_RADIUS + 2
+  switch (side) {
+    case 'Top':
+      return [cx, cy - r]
+    case 'Bottom':
+      return [cx, cy + r]
+    case 'Left':
+      return [cx - r, cy]
+    case 'Right':
+      return [cx + r, cy]
+    default:
+      return [cx, cy]
+  }
+}
+
+function buildEdgePath(
+  edge: TaskGraphEdge,
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): string {
+  const [sx, sy] = getAttachPoint(from.x, from.y, edge.sourceAttach)
+  const [ex, ey] = getAttachPoint(to.x, to.y, edge.targetAttach)
+
+  switch (edge.kind) {
+    case 'SeriesSibling':
+      // Straight line between attach points
+      return `M ${sx} ${sy} L ${ex} ${ey}`
+
+    case 'SeriesCornerToParent': {
+      // Vertical from source attach down to target Y, then horizontal to target attach.
+      // Source (child) is at a lower lane; target (parent) is at a higher lane.
+      // Pivot is at (sx, ey).
+      return `M ${sx} ${sy} L ${sx} ${ey} L ${ex} ${ey}`
+    }
+
+    case 'ParallelChildToSpine': {
+      // Horizontal from source attach to pivot lane, then vertical to target attach.
+      // Source (child) goes right to the parent spine lane, then down to the parent node.
+      const pivotX = edge.pivotLane != null ? getLaneCenterX(edge.pivotLane) : to.x
+      return `M ${sx} ${sy} L ${pivotX} ${sy} L ${pivotX} ${ey}`
+    }
+
+    default:
+      return `M ${sx} ${sy} L ${ex} ${ey}`
+  }
+}

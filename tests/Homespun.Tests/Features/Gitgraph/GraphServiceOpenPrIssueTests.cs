@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
@@ -118,10 +119,13 @@ public class GraphServiceOpenPrIssueTests
 
         // Set up FleeceService to return the completed issue when specifically requested
         // and the task graph with the issue included
-        var taskGraph = new TaskGraph
+        var taskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
-            Nodes = [new TaskGraphNode { Issue = completedIssue, Lane = 0, Row = 0, IsActionable = false }]
+            TotalRows = 1,
+            Nodes = [new PositionedNode<Issue> { Node = completedIssue, Lane = 0, Row = 0 }],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1]
         };
 
         _mockFleeceService
@@ -148,10 +152,13 @@ public class GraphServiceOpenPrIssueTests
         // Arrange - Create an open issue without any linked PR
         var openIssue = CreateIssue("issue-456", IssueStatus.Open);
 
-        var taskGraph = new TaskGraph
+        var taskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
-            Nodes = [new TaskGraphNode { Issue = openIssue, Lane = 0, Row = 0, IsActionable = true }]
+            TotalRows = 1,
+            Nodes = [new PositionedNode<Issue> { Node = openIssue, Lane = 0, Row = 0 }],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1]
         };
 
         _mockFleeceService
@@ -176,10 +183,13 @@ public class GraphServiceOpenPrIssueTests
         // Arrange - Create a completed issue WITHOUT any linked PR
         // The task graph should be empty because there are no open issues and no open-PR-linked issues
 
-        var emptyTaskGraph = new TaskGraph
+        var emptyTaskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
-            Nodes = []
+            TotalRows = 0,
+            Nodes = [],
+            Edges = [],
+            Occupancy = new OccupancyCell[0, 0]
         };
 
         _mockFleeceService
@@ -210,14 +220,17 @@ public class GraphServiceOpenPrIssueTests
         // Create tracked PR for the completed issue
         await CreateTrackedPullRequest(_testProject.Id, "completed-with-pr", prNumber: 99);
 
-        var taskGraph = new TaskGraph
+        var taskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
+            TotalRows = 2,
             Nodes =
             [
-                new TaskGraphNode { Issue = openIssue, Lane = 0, Row = 0, IsActionable = true },
-                new TaskGraphNode { Issue = completedWithPr, Lane = 0, Row = 1, IsActionable = false }
-            ]
+                new PositionedNode<Issue> { Node = openIssue, Lane = 0, Row = 0 },
+                new PositionedNode<Issue> { Node = completedWithPr, Lane = 0, Row = 1 }
+            ],
+            Edges = [],
+            Occupancy = new OccupancyCell[2, 1]
         };
 
         _mockFleeceService
@@ -246,10 +259,13 @@ public class GraphServiceOpenPrIssueTests
         var issue = CreateIssue("issue-with-pr", IssueStatus.Progress);
         await CreateTrackedPullRequest(_testProject.Id, "issue-with-pr", prNumber: 123);
 
-        var taskGraph = new TaskGraph
+        var taskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
-            Nodes = [new TaskGraphNode { Issue = issue, Lane = 0, Row = 0, IsActionable = true }]
+            TotalRows = 1,
+            Nodes = [new PositionedNode<Issue> { Node = issue, Lane = 0, Row = 0 }],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1]
         };
 
         _mockFleeceService
@@ -276,10 +292,13 @@ public class GraphServiceOpenPrIssueTests
         var issue = CreateIssue("ISSUE-ABC", IssueStatus.Complete);
         await CreateTrackedPullRequest(_testProject.Id, "issue-abc", prNumber: 50); // lowercase
 
-        var taskGraph = new TaskGraph
+        var taskGraph = new GraphLayout<Issue>
         {
             TotalLanes = 1,
-            Nodes = [new TaskGraphNode { Issue = issue, Lane = 0, Row = 0, IsActionable = false }]
+            TotalRows = 1,
+            Nodes = [new PositionedNode<Issue> { Node = issue, Lane = 0, Row = 0 }],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1]
         };
 
         _mockFleeceService

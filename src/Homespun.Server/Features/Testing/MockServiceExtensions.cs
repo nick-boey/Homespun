@@ -69,6 +69,12 @@ public static class MockServiceExtensions
         services.AddOptions<FleeceHistoryOptions>();
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
 
+        // Register Fleece.Core layout services (required by ProjectFleeceService)
+        services.AddSingleton<global::Fleece.Core.Services.Interfaces.IGraphLayoutService,
+            global::Fleece.Core.Services.GraphLayout.GraphLayoutService>();
+        services.AddSingleton<global::Fleece.Core.Services.Interfaces.IIssueLayoutService,
+            global::Fleece.Core.Services.GraphLayout.IssueLayoutService>();
+
         // Register real FleeceService (reads/writes to temp .fleece directories)
         services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
 

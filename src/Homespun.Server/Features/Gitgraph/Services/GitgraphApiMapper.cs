@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -66,6 +69,23 @@ public class GitgraphApiMapper
     {
         var data = ToJson(graph);
         return JsonSerializer.Serialize(data, JsonOptions);
+    }
+
+    public static TaskGraphEdgeResponse MapEdge(Edge<Issue> edge)
+    {
+        return new TaskGraphEdgeResponse
+        {
+            From = edge.From.Id,
+            To = edge.To.Id,
+            Kind = edge.Kind.ToString(),
+            StartRow = edge.Start.Row,
+            StartLane = edge.Start.Lane,
+            EndRow = edge.End.Row,
+            EndLane = edge.End.Lane,
+            PivotLane = edge.PivotLane,
+            SourceAttach = edge.SourceAttach.ToString(),
+            TargetAttach = edge.TargetAttach.ToString()
+        };
     }
 }
 

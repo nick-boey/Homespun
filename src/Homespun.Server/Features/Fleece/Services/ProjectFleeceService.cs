@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Shared.Requests;
@@ -20,16 +21,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly IIssueHistoryService _historyService;
+    private readonly IIssueLayoutService _issueLayoutService;
     private readonly ILogger<ProjectFleeceService> _logger;
     private bool _disposed;
 
     public ProjectFleeceService(
         IIssueSerializationQueue serializationQueue,
         IIssueHistoryService historyService,
+        IIssueLayoutService issueLayoutService,
         ILogger<ProjectFleeceService> logger)
     {
         _serializationQueue = serializationQueue;
         _historyService = historyService;
+        _issueLayoutService = issueLayoutService;
         _logger = logger;
     }
 
@@ -528,14 +532,16 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
 
     #region Task Graph Operations
 
-    public async Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
+    public async Task<GraphLayout<Issue>?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
     {
         return await GetTaskGraphWithAdditionalIssuesAsync(projectPath, additionalIssueIds: null, ct);
     }
 
-    public async Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
+    public async Task<GraphLayout<Issue>?> GetTaskGraphWithAdditionalIssuesAsync(
         string projectPath, IEnumerable<string>? additionalIssueIds, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
         var additionalIds = additionalIssueIds?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
@@ -557,13 +563,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Draft or IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
             projectPath);
 
-        var service = GetOrCreateFleeceService(projectPath);
-        var issueIdSet = includedIssues.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var taskGraph = await service.BuildFilteredTaskGraphLayoutAsync(issueIdSet, cancellationToken: ct);
-
-        _logger.LogDebug("Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",
-            taskGraph.Nodes.Count, taskGraph.TotalLanes, projectPath);
-        return taskGraph;
+        try
+        {
+            var layout = _issueLayoutService.LayoutForTree(includedIssues, InactiveVisibility.Hide);
+            _logger.LogDebug(
+                "Built layout: {Nodes}n / {Lanes}l / {Rows}r / {Edges}e for {Path}",
+                layout.Nodes.Count, layout.TotalLanes, layout.TotalRows, layout.Edges.Count, projectPath);
+            return layout;
+        }
+        catch (InvalidGraphException ex)
+        {
+            _logger.LogWarning(ex, "Layout rejected for {Path}: {Msg}", projectPath, ex.Message);
+            return null;
+        }
     }
 
     #endregion

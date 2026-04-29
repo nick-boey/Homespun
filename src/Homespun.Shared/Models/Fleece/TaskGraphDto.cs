@@ -7,6 +7,8 @@ public class TaskGraphResponse
 {
     public List<TaskGraphNodeResponse> Nodes { get; set; } = [];
     public int TotalLanes { get; set; }
+    public List<TaskGraphEdgeResponse> Edges { get; set; } = [];
+    public int TotalRows { get; set; }
 
     /// <summary>
     /// Merged/closed PRs to display at the top of the task graph.
@@ -75,4 +77,22 @@ public class TaskGraphLinkedPr
     public int Number { get; set; }
     public string? Url { get; set; }
     public string Status { get; set; } = "";
+}
+
+/// <summary>
+/// Represents a semantic edge between two issues in the task graph layout.
+/// Carries the geometry needed for the frontend to draw connectors without re-deriving them.
+/// </summary>
+public class TaskGraphEdgeResponse
+{
+    public required string From { get; set; }
+    public required string To { get; set; }
+    public required string Kind { get; set; }
+    public required int StartRow { get; set; }
+    public required int StartLane { get; set; }
+    public required int EndRow { get; set; }
+    public required int EndLane { get; set; }
+    public int? PivotLane { get; set; }
+    public required string SourceAttach { get; set; }
+    public required string TargetAttach { get; set; }
 }

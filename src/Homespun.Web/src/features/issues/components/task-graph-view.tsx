@@ -55,7 +55,7 @@ import {
 import { InlineIssueEditor } from './inline-issue-editor'
 import { OrphanedChangesList } from './orphan-changes'
 import { aggregateOrphans } from '../services/orphan-aggregation'
-import { ROW_HEIGHT, LANE_WIDTH, getTypeColor } from './task-graph-svg'
+import { ROW_HEIGHT, LANE_WIDTH, getTypeColor, TaskGraphEdges } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
   projectId: string
@@ -160,8 +160,8 @@ export const TaskGraphView = memo(
     })
 
     // Compute render lines from task graph
-    const unfilteredRenderLines = useMemo(() => {
-      if (!taskGraph) return []
+    const { lines: unfilteredRenderLines, edges } = useMemo(() => {
+      if (!taskGraph) return { lines: [], edges: [] }
       return computeLayout(taskGraph, depth, viewMode)
     }, [taskGraph, depth, viewMode])
 
@@ -934,194 +934,204 @@ export const TaskGraphView = memo(
         )}
         onKeyDown={handleKeyDown}
       >
-        {renderLines.map((line, index) => {
-          if (isIssueRenderLine(line)) {
-            const isSelected = selectedIssueId === line.issueId
-            const isExpanded = expandedIds.has(line.issueId)
-            const isEditing =
-              editMode === KeyboardEditMode.EditingExisting && pendingEdit?.issueId === line.issueId
+        {/* Relative container so TaskGraphEdges can be absolutely positioned */}
+        <div style={{ position: 'relative' }}>
+          <TaskGraphEdges
+            edges={edges}
+            renderLines={renderLines}
+            expandedIds={expandedIds}
+            maxLanes={maxLanes}
+          />
+          {renderLines.map((line, index) => {
+            if (isIssueRenderLine(line)) {
+              const isSelected = selectedIssueId === line.issueId
+              const isExpanded = expandedIds.has(line.issueId)
+              const isEditing =
+                editMode === KeyboardEditMode.EditingExisting &&
+                pendingEdit?.issueId === line.issueId
 
-            // Check if we should insert inline editor ABOVE this issue
-            const shouldInsertAbove =
-              editMode === KeyboardEditMode.CreatingNew &&
-              pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
+              // Check if we should insert inline editor ABOVE this issue
+              const shouldInsertAbove =
+                editMode === KeyboardEditMode.CreatingNew &&
+                pendingNewIssue?.isAbove &&
+                pendingNewIssue?.referenceIssueId === line.issueId
 
-            // Check if we should insert inline editor BELOW this issue
-            const shouldInsertBelow =
-              editMode === KeyboardEditMode.CreatingNew &&
-              !pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
+              // Check if we should insert inline editor BELOW this issue
+              const shouldInsertBelow =
+                editMode === KeyboardEditMode.CreatingNew &&
+                !pendingNewIssue?.isAbove &&
+                pendingNewIssue?.referenceIssueId === line.issueId
 
-            const renderKey = getRenderKey(line)
+              const renderKey = getRenderKey(line)
 
-            return (
-              <div key={renderKey}>
-                {/* Insert inline editor ABOVE if creating above this issue */}
-                {shouldInsertAbove && renderInlineEditor(line.lane)}
+              return (
+                <div key={renderKey}>
+                  {/* Insert inline editor ABOVE if creating above this issue */}
+                  {shouldInsertAbove && renderInlineEditor(line.lane)}
 
-                {/* Issue row (or inline edit if editing existing) */}
-                {isEditing && pendingEdit ? (
-                  <div
-                    data-testid="task-graph-issue-row"
-                    data-issue-id={line.issueId}
-                    className={cn(
-                      'flex items-center gap-2 transition-colors',
-                      'bg-muted ring-primary/50 ring-2'
-                    )}
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {/* SVG placeholder for alignment */}
-                    <div style={{ width: LANE_WIDTH * maxLanes + 12, flexShrink: 0 }} />
-
-                    {/* Type badge */}
-                    <span
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                      style={{
-                        backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
-                        color: getTypeColor(IssueType.TASK),
-                      }}
+                  {/* Issue row (or inline edit if editing existing) */}
+                  {isEditing && pendingEdit ? (
+                    <div
+                      data-testid="task-graph-issue-row"
+                      data-issue-id={line.issueId}
+                      className={cn(
+                        'flex items-center gap-2 transition-colors',
+                        'bg-muted ring-primary/50 ring-2'
+                      )}
+                      style={{ height: ROW_HEIGHT }}
                     >
-                      Task
-                    </span>
+                      {/* SVG placeholder for alignment */}
+                      <div style={{ width: LANE_WIDTH * maxLanes + 12, flexShrink: 0 }} />
 
-                    {/* ID */}
-                    <span className="text-muted-foreground shrink-0 font-mono text-xs">
-                      {line.issueId.substring(0, 6)}
-                    </span>
+                      {/* Type badge */}
+                      <span
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        style={{
+                          backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
+                          color: getTypeColor(IssueType.TASK),
+                        }}
+                      >
+                        Task
+                      </span>
 
-                    {/* Inline editor */}
-                    <InlineIssueEditor
-                      title={pendingEdit.title}
-                      onTitleChange={handleTitleChange}
-                      onSave={async () => {
-                        if (!pendingEdit.title.trim()) {
-                          handleCancelEdit()
-                          return
-                        }
-                        // Only save if title changed
-                        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
-                          try {
-                            await updateIssue({
-                              issueId: line.issueId,
-                              data: { projectId, title: pendingEdit.title.trim() },
-                            })
-                          } catch {
-                            // Keep edit mode on error
+                      {/* ID */}
+                      <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                        {line.issueId.substring(0, 6)}
+                      </span>
+
+                      {/* Inline editor */}
+                      <InlineIssueEditor
+                        title={pendingEdit.title}
+                        onTitleChange={handleTitleChange}
+                        onSave={async () => {
+                          if (!pendingEdit.title.trim()) {
+                            handleCancelEdit()
+                            return
                           }
-                        } else {
-                          handleCancelEdit()
-                        }
-                        containerRef.current?.focus()
-                      }}
-                      onSaveAndEdit={async () => {
-                        if (!pendingEdit.title.trim()) {
-                          handleCancelEdit()
-                          return
-                        }
-                        // Save title if changed, then navigate to edit
-                        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
-                          try {
-                            await updateIssue({
-                              issueId: line.issueId,
-                              data: { projectId, title: pendingEdit.title.trim() },
-                            })
+                          // Only save if title changed
+                          if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+                            try {
+                              await updateIssue({
+                                issueId: line.issueId,
+                                data: { projectId, title: pendingEdit.title.trim() },
+                              })
+                            } catch {
+                              // Keep edit mode on error
+                            }
+                          } else {
+                            handleCancelEdit()
+                          }
+                          containerRef.current?.focus()
+                        }}
+                        onSaveAndEdit={async () => {
+                          if (!pendingEdit.title.trim()) {
+                            handleCancelEdit()
+                            return
+                          }
+                          // Save title if changed, then navigate to edit
+                          if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+                            try {
+                              await updateIssue({
+                                issueId: line.issueId,
+                                data: { projectId, title: pendingEdit.title.trim() },
+                              })
+                              onEditIssue?.(line.issueId)
+                            } catch {
+                              // Keep edit mode on error
+                            }
+                          } else {
                             onEditIssue?.(line.issueId)
-                          } catch {
-                            // Keep edit mode on error
                           }
+                        }}
+                        onCancel={handleCancelEdit}
+                        onIndent={() => {}}
+                        onUnindent={() => {}}
+                        placeholder="Enter issue title..."
+                        cursorPosition={pendingEdit.cursorPosition}
+                      />
+                    </div>
+                  ) : (
+                    <TaskGraphIssueRow
+                      ref={(el) => {
+                        if (el) {
+                          rowRefs.current.set(renderKey, el)
                         } else {
-                          onEditIssue?.(line.issueId)
+                          rowRefs.current.delete(renderKey)
                         }
                       }}
-                      onCancel={handleCancelEdit}
-                      onIndent={() => {}}
-                      onUnindent={() => {}}
-                      placeholder="Enter issue title..."
-                      cursorPosition={pendingEdit.cursorPosition}
+                      line={line}
+                      maxLanes={maxLanes}
+                      projectId={projectId}
+                      isSelected={isSelected}
+                      isExpanded={isExpanded}
+                      searchQuery={searchQuery}
+                      onToggleExpand={() => toggleExpanded(line.issueId)}
+                      onEdit={onEditIssue}
+                      onRunAgent={onRunAgent}
+                      onOpenSession={onOpenSession}
+                      onClick={() => handleRowClick(line.issueId)}
+                      onTypeChange={handleTypeChange}
+                      onStatusChange={handleStatusChange}
+                      onExecutionModeChange={handleExecutionModeChange}
+                      onSelectFirstInstance={handleSelectFirstInstance}
+                      openSpecState={taskGraph?.openSpecStates?.[line.issueId] ?? null}
+                      isMoveSource={moveSourceIssueId === line.issueId}
+                      isMoveOperationActive={!!moveOperation}
+                      aria-rowindex={index + 1}
+                      data-testid="task-graph-issue-row"
+                      data-issue-id={line.issueId}
                     />
-                  </div>
-                ) : (
-                  <TaskGraphIssueRow
-                    ref={(el) => {
-                      if (el) {
-                        rowRefs.current.set(renderKey, el)
-                      } else {
-                        rowRefs.current.delete(renderKey)
-                      }
-                    }}
-                    line={line}
-                    maxLanes={maxLanes}
-                    projectId={projectId}
-                    isSelected={isSelected}
-                    isExpanded={isExpanded}
-                    searchQuery={searchQuery}
-                    onToggleExpand={() => toggleExpanded(line.issueId)}
-                    onEdit={onEditIssue}
-                    onRunAgent={onRunAgent}
-                    onOpenSession={onOpenSession}
-                    onClick={() => handleRowClick(line.issueId)}
-                    onTypeChange={handleTypeChange}
-                    onStatusChange={handleStatusChange}
-                    onExecutionModeChange={handleExecutionModeChange}
-                    onSelectFirstInstance={handleSelectFirstInstance}
-                    openSpecState={taskGraph?.openSpecStates?.[line.issueId] ?? null}
-                    isMoveSource={moveSourceIssueId === line.issueId}
-                    isMoveOperationActive={!!moveOperation}
-                    aria-rowindex={index + 1}
-                    data-testid="task-graph-issue-row"
-                    data-issue-id={line.issueId}
-                  />
-                )}
+                  )}
 
-                {/* Expanded details */}
-                {isExpanded && !isEditing && (
-                  <TaskGraphExpandedDetails
-                    line={line}
-                    maxLanes={maxLanes}
-                    onEdit={onEditIssue}
-                    onRunAgent={onRunAgent}
-                    onOpenSession={onOpenSession}
-                    onClose={() => toggleExpanded(line.issueId)}
-                  />
-                )}
+                  {/* Expanded details */}
+                  {isExpanded && !isEditing && (
+                    <TaskGraphExpandedDetails
+                      line={line}
+                      maxLanes={maxLanes}
+                      onEdit={onEditIssue}
+                      onRunAgent={onRunAgent}
+                      onOpenSession={onOpenSession}
+                      onClose={() => toggleExpanded(line.issueId)}
+                    />
+                  )}
 
-                {/* Insert inline editor BELOW if creating below this issue */}
-                {shouldInsertBelow && renderInlineEditor(line.lane)}
-              </div>
-            )
-          }
+                  {/* Insert inline editor BELOW if creating below this issue */}
+                  {shouldInsertBelow && renderInlineEditor(line.lane)}
+                </div>
+              )
+            }
 
-          if (isPrRenderLine(line)) {
-            return (
-              <TaskGraphPrRow
-                key={`pr-${line.prNumber}`}
-                line={line}
-                maxLanes={maxLanes}
-                aria-rowindex={index + 1}
-              />
-            )
-          }
+            if (isPrRenderLine(line)) {
+              return (
+                <TaskGraphPrRow
+                  key={`pr-${line.prNumber}`}
+                  line={line}
+                  maxLanes={maxLanes}
+                  aria-rowindex={index + 1}
+                />
+              )
+            }
 
-          if (isSeparatorRenderLine(line)) {
-            return <TaskGraphSeparatorRow key={`separator-${index}`} maxLanes={maxLanes} />
-          }
+            if (isSeparatorRenderLine(line)) {
+              return <TaskGraphSeparatorRow key={`separator-${index}`} maxLanes={maxLanes} />
+            }
 
-          if (isLoadMoreRenderLine(line)) {
-            return (
-              <TaskGraphLoadMoreRow
-                key="load-more"
-                maxLanes={maxLanes}
-                onLoadMore={() => {
-                  // TODO: Implement load more PRs
-                  console.log('Load more PRs')
-                }}
-              />
-            )
-          }
+            if (isLoadMoreRenderLine(line)) {
+              return (
+                <TaskGraphLoadMoreRow
+                  key="load-more"
+                  maxLanes={maxLanes}
+                  onLoadMore={() => {
+                    // TODO: Implement load more PRs
+                    console.log('Load more PRs')
+                  }}
+                />
+              )
+            }
 
-          return null
-        })}
+            return null
+          })}
+        </div>
 
         {/* Deduped orphan changes across main + every branch. */}
         {taskGraph && (

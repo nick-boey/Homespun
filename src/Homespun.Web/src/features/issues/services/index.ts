@@ -12,6 +12,8 @@ export {
   type TaskGraphPrRenderLine,
   type TaskGraphSeparatorRenderLine,
   type TaskGraphLoadMoreRenderLine,
+  type TaskGraphEdge,
+  type TaskGraphLayoutResult,
 } from './task-graph-layout'
 
 // Priority colors

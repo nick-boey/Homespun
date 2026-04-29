@@ -1,37 +1,39 @@
 using Fleece.Core.Models;
-using Fleece.Core.Services;
+using Fleece.Core.Models.Graph;
+using Fleece.Core.Services.GraphLayout;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.Testing.Services;
 
 namespace Homespun.Tests.Features.Gitgraph;
 
 [TestFixture]
 public class TaskGraphTextRendererTests
 {
-    private static async Task<TaskGraph> BuildTaskGraph(List<Issue> issues)
+    private static GraphLayout<Issue> BuildLayout(List<Issue> issues)
     {
-        // Use MockIssueServiceAdapter which implements graph methods via IssueGraphService (Fleece.Core v1.4.0)
-        var adapter = new MockIssueServiceAdapter(issues);
-        return await adapter.BuildTaskGraphLayoutAsync();
+        var layoutService = new IssueLayoutService(new GraphLayoutService());
+        return layoutService.LayoutForTree(issues, InactiveVisibility.Hide);
     }
 
     [Test]
     public void Render_EmptyGraph_ReturnsEmptyString()
     {
-        var taskGraph = new TaskGraph
+        var layout = new GraphLayout<Issue>
         {
             Nodes = [],
+            Edges = [],
+            Occupancy = new OccupancyCell[0, 0],
+            TotalRows = 0,
             TotalLanes = 0
         };
 
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         Assert.That(result, Is.EqualTo(string.Empty));
     }
 
     [Test]
-    public async Task Render_SingleOrphan_ShowsMarkerAndTitle()
+    public void Render_SingleOrphan_ShowsMarkerAndTitle()
     {
         var issues = new List<Issue>
         {
@@ -46,8 +48,8 @@ public class TaskGraphTextRendererTests
             }
         };
 
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         Assert.That(result, Does.Contain("TEST-001"));
         Assert.That(result, Does.Contain("Standalone issue"));
@@ -56,7 +58,7 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_ParentChild_DrawsConnector()
+    public void Render_ParentChild_DrawsConnector()
     {
         var issues = new List<Issue>
         {
@@ -81,8 +83,8 @@ public class TaskGraphTextRendererTests
             }
         };
 
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         // Should contain both issues
         Assert.That(result, Does.Contain("CHILD-001"));
@@ -92,7 +94,7 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_ThreeNodeChain_StaircasePattern()
+    public void Render_ThreeNodeChain_StaircasePattern()
     {
         var issues = new List<Issue>
         {
@@ -127,8 +129,8 @@ public class TaskGraphTextRendererTests
             }
         };
 
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         // All three should be present
         Assert.That(result, Does.Contain("ROOT-001"));
@@ -141,7 +143,7 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_TwoSiblings_SeriesParent_NoHorizontalConnectors()
+    public void Render_TwoSiblings_SeriesParent_NoHorizontalConnectors()
     {
         var issues = new List<Issue>
         {
@@ -177,8 +179,8 @@ public class TaskGraphTextRendererTests
             }
         };
 
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         // Both children and parent present
         Assert.That(result, Does.Contain("CHILD-A"));
@@ -194,7 +196,7 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_TwoSiblings_ParallelParent_ShowsHorizontalConnectors()
+    public void Render_TwoSiblings_ParallelParent_ShowsHorizontalConnectors()
     {
         var issues = new List<Issue>
         {
@@ -230,8 +232,8 @@ public class TaskGraphTextRendererTests
             }
         };
 
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         // Both children and parent present
         Assert.That(result, Does.Contain("CHILD-A"));
@@ -245,11 +247,11 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_MockIssueData_MatchesExpectedOutput()
+    public void Render_MockIssueData_MatchesExpectedOutput()
     {
         var issues = GetMockIssues();
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         // Fleece.Core v1.7.0 uses mandatory lexical ordering and configurable Lane 0 sorting
         // ISSUE-003 is Progress status - not actionable (◌), sorted to bottom of Lane 0
@@ -277,11 +279,11 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_MockIssueData_NextIssuesAreActionable()
+    public void Render_MockIssueData_NextIssuesAreActionable()
     {
         var issues = GetMockIssues();
-        var taskGraph = await BuildTaskGraph(issues);
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var layout = BuildLayout(issues);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         var lines = result.Split('\n');
 
@@ -310,14 +312,14 @@ public class TaskGraphTextRendererTests
     [Test]
     public void Render_CompletedIssue_UsesFilledMarker()
     {
-        // TaskGraphService filters out terminal statuses, so build TaskGraph directly
-        var taskGraph = new TaskGraph
+        // TaskGraphService filters out terminal statuses, so build GraphLayout directly
+        var layout = new GraphLayout<Issue>
         {
             Nodes =
             [
-                new TaskGraphNode
+                new PositionedNode<Issue>
                 {
-                    Issue = new Issue
+                    Node = new Issue
                     {
                         Id = "DONE-001",
                         Title = "Completed task",
@@ -327,14 +329,16 @@ public class TaskGraphTextRendererTests
                         LastUpdate = DateTimeOffset.UtcNow
                     },
                     Lane = 0,
-                    Row = 0,
-                    IsActionable = false
+                    Row = 0
                 }
             ],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1],
+            TotalRows = 1,
             TotalLanes = 1
         };
 
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         Assert.That(result, Does.Contain("\u25CF")); // ● filled marker for complete
     }
@@ -342,14 +346,14 @@ public class TaskGraphTextRendererTests
     [Test]
     public void Render_ClosedIssue_UsesClosedMarker()
     {
-        // TaskGraphService filters out terminal statuses, so build TaskGraph directly
-        var taskGraph = new TaskGraph
+        // TaskGraphService filters out terminal statuses, so build GraphLayout directly
+        var layout = new GraphLayout<Issue>
         {
             Nodes =
             [
-                new TaskGraphNode
+                new PositionedNode<Issue>
                 {
-                    Issue = new Issue
+                    Node = new Issue
                     {
                         Id = "CLOSED-001",
                         Title = "Closed task",
@@ -359,14 +363,16 @@ public class TaskGraphTextRendererTests
                         LastUpdate = DateTimeOffset.UtcNow
                     },
                     Lane = 0,
-                    Row = 0,
-                    IsActionable = false
+                    Row = 0
                 }
             ],
+            Edges = [],
+            Occupancy = new OccupancyCell[1, 1],
+            TotalRows = 1,
             TotalLanes = 1
         };
 
-        var result = TaskGraphTextRenderer.Render(taskGraph);
+        var result = TaskGraphTextRenderer.Render(layout);
 
         Assert.That(result, Does.Contain("\u2298")); // ⊘ closed marker
     }

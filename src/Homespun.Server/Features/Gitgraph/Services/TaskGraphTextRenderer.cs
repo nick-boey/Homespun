@@ -1,283 +1,118 @@
 using System.Text;
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 
 namespace Homespun.Features.Gitgraph.Services;
 
 /// <summary>
-/// Renders a Fleece.Core TaskGraph as a plain text string with box-drawing connectors.
-/// Pure function with no external dependencies.
+/// Renders a Fleece.Core v3 GraphLayout&lt;Issue&gt; as a plain text string with box-drawing connectors.
+/// Uses the layout's Nodes list (row-ordered) and Edge list as the source of truth for geometry;
+/// no connector inference is performed here.
 /// </summary>
 public static class TaskGraphTextRenderer
 {
     // Node markers
-    private const char ActionableMarker = '\u25CB';  // ○ - actionable (next)
-    private const char OpenMarker = '\u25CC';         // ◌ - open but not actionable
-    private const char CompleteMarker = '\u25CF';     // ● - complete
-    private const char ClosedMarker = '\u2298';       // ⊘ - closed/archived
+    private const char ActionableMarker = '○';  // ○ - actionable (next)
+    private const char OpenMarker = '◌';         // ◌ - open but not actionable
+    private const char CompleteMarker = '●';     // ● - complete
+    private const char ClosedMarker = '⊘';       // ⊘ - closed/archived
 
     // Box-drawing characters
-    private const char Horizontal = '\u2500';  // ─
-    private const char Vertical = '\u2502';    // │
-    private const char TopRight = '\u2510';    // ┐
-    private const char RightTee = '\u2524';    // ┤
-    private const char BottomRight = '\u2514'; // └
+    private const char Horizontal = '─';  // ─
+    private const char TopRight = '┐';    // ┐
+    private const char RightTee = '┤';    // ┤
+    private const char BottomRight = '└'; // └
 
     /// <summary>
-    /// Renders the task graph as a text string.
+    /// Renders the task graph layout as a text string.
     /// </summary>
-    public static string Render(TaskGraph taskGraph)
+    public static string Render(GraphLayout<Issue> layout, IReadOnlySet<string>? actionableIds = null)
     {
-        if (taskGraph.Nodes.Count == 0)
+        if (layout.Nodes.Count == 0)
             return string.Empty;
-
-        // Group nodes into disconnected components by walking parent relationships.
-        // Each group is rendered separately with a blank line between groups.
-        var groups = GroupNodes(taskGraph.Nodes);
 
         var sb = new StringBuilder();
 
-        foreach (var group in groups)
+        foreach (var node in layout.Nodes)
         {
-            RenderGroup(sb, group, taskGraph.TotalLanes);
+            var lane = node.Lane;
+            var isActionable = actionableIds?.Contains(node.Node.Id)
+                ?? IsActionableByLayout(layout, node.Node.Id, node.Node.Status);
+            var marker = GetMarker(node.Node, isActionable);
+
+            // SeriesCornerToParent edges produce └─marker on the TARGET (parent) row
+            var incomingCorner = layout.Edges.FirstOrDefault(e =>
+                string.Equals(e.To.Id, node.Node.Id, StringComparison.OrdinalIgnoreCase)
+                && e.Kind == EdgeKind.SeriesCornerToParent);
+
+            // ParallelChildToSpine edges produce marker─┐/marker─┤ on the SOURCE (child) row
+            var outgoingParallel = layout.Edges.FirstOrDefault(e =>
+                string.Equals(e.From.Id, node.Node.Id, StringComparison.OrdinalIgnoreCase)
+                && e.Kind == EdgeKind.ParallelChildToSpine);
+
+            var nodeRow = new StringBuilder();
+
+            if (incomingCorner != null)
+            {
+                // └─marker: series chain corner connecting the last child's lane to this parent's lane
+                var fromLane = incomingCorner.Start.Lane;
+                nodeRow.Append(new string(' ', fromLane * 2));
+                nodeRow.Append(BottomRight);
+                for (var col = fromLane * 2 + 1; col < lane * 2; col++)
+                    nodeRow.Append(Horizontal);
+                nodeRow.Append(marker);
+            }
+            else if (outgoingParallel != null)
+            {
+                // marker─┐ / marker─┤: parallel child connecting to parent spine
+                var pivot = outgoingParallel.PivotLane ?? (lane + 1);
+                nodeRow.Append(new string(' ', lane * 2));
+                nodeRow.Append(marker);
+                nodeRow.Append(Horizontal);
+                for (var col = lane * 2 + 2; col < pivot * 2; col++)
+                    nodeRow.Append(Horizontal);
+                nodeRow.Append(IsFirstParallelChild(layout, outgoingParallel.To.Id, node.Row) ? TopRight : RightTee);
+            }
+            else
+            {
+                // Plain: orphan, root, or series sibling (SeriesSibling edges have no text connector)
+                nodeRow.Append(new string(' ', lane * 2));
+                nodeRow.Append(marker);
+            }
+
+            sb.Append(nodeRow);
+            sb.Append("  ");
+            sb.Append(node.Node.Id);
+            sb.Append(' ');
+            sb.Append(node.Node.Title);
+            sb.Append('\n');
         }
 
         return sb.ToString().TrimEnd('\n');
     }
 
-    /// <summary>
-    /// Groups nodes into disconnected components. Nodes in the same dependency tree
-    /// belong to the same group. Groups are ordered by their first node's row.
-    /// </summary>
-    private static List<List<TaskGraphNode>> GroupNodes(IReadOnlyList<TaskGraphNode> nodes)
+    private static bool IsFirstParallelChild(GraphLayout<Issue> layout, string parentId, int currentRow)
     {
-        // Build a lookup of issue ID to node
-        var nodeById = new Dictionary<string, TaskGraphNode>(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in nodes)
-            nodeById[node.Issue.Id] = node;
-
-        // Build adjacency: parent <-> child (undirected for grouping)
-        var adjacency = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in nodes)
-        {
-            if (!adjacency.ContainsKey(node.Issue.Id))
-                adjacency[node.Issue.Id] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var parentRef in node.Issue.ParentIssues)
-            {
-                if (!nodeById.ContainsKey(parentRef.ParentIssue)) continue;
-
-                adjacency[node.Issue.Id].Add(parentRef.ParentIssue);
-
-                if (!adjacency.ContainsKey(parentRef.ParentIssue))
-                    adjacency[parentRef.ParentIssue] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                adjacency[parentRef.ParentIssue].Add(node.Issue.Id);
-            }
-        }
-
-        // BFS to find connected components
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var groups = new List<List<TaskGraphNode>>();
-
-        foreach (var node in nodes)
-        {
-            if (visited.Contains(node.Issue.Id)) continue;
-
-            var component = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var queue = new Queue<string>();
-            queue.Enqueue(node.Issue.Id);
-            visited.Add(node.Issue.Id);
-
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                component.Add(current);
-
-                if (adjacency.TryGetValue(current, out var neighbors))
-                {
-                    foreach (var neighbor in neighbors)
-                    {
-                        if (visited.Add(neighbor))
-                            queue.Enqueue(neighbor);
-                    }
-                }
-            }
-
-            // Collect nodes in this component, ordered by Row
-            var group = nodes
-                .Where(n => component.Contains(n.Issue.Id))
-                .OrderBy(n => n.Row)
-                .ToList();
-            groups.Add(group);
-        }
-
-        // Order groups by their first node's row
-        groups.Sort((a, b) => a[0].Row.CompareTo(b[0].Row));
-
-        return groups;
+        return !layout.Edges.Any(e =>
+            string.Equals(e.To.Id, parentId, StringComparison.OrdinalIgnoreCase)
+            && e.Kind == EdgeKind.ParallelChildToSpine
+            && e.Start.Row < currentRow);
     }
 
-    /// <summary>
-    /// Renders a single group of connected nodes.
-    /// </summary>
-    private static void RenderGroup(StringBuilder sb, List<TaskGraphNode> group, int totalLanes)
+    private static bool IsActionableByLayout(GraphLayout<Issue> layout, string issueId, IssueStatus status)
     {
-        if (group.Count == 0) return;
-
-        // Find the minimum lane in this group to normalize lane positions
-        var minLane = group.Min(n => n.Lane);
-
-        // Pre-compute parent assignments and children-per-parent counts
-        var parentByNode = new Dictionary<string, TaskGraphNode>(StringComparer.OrdinalIgnoreCase);
-        var childrenCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var node in group)
-        {
-            TaskGraphNode? pNode = null;
-            foreach (var parentRef in node.Issue.ParentIssues)
-            {
-                var candidate = group.FirstOrDefault(n =>
-                    string.Equals(n.Issue.Id, parentRef.ParentIssue, StringComparison.OrdinalIgnoreCase));
-                if (candidate != null && (pNode == null || candidate.Lane > pNode.Lane))
-                    pNode = candidate;
-            }
-
-            if (pNode != null && pNode.Lane - minLane > node.Lane - minLane)
-            {
-                parentByNode[node.Issue.Id] = pNode;
-                childrenCountByParent.TryGetValue(pNode.Issue.Id, out var count);
-                childrenCountByParent[pNode.Issue.Id] = count + 1;
-            }
-        }
-
-        // Pre-compute series child lane by parent
-        var seriesChildLaneByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in group)
-        {
-            if (parentByNode.TryGetValue(node.Issue.Id, out var pNode)
-                && pNode.Issue.ExecutionMode == ExecutionMode.Series)
-            {
-                seriesChildLaneByParent[pNode.Issue.Id] = node.Lane - minLane;
-            }
-        }
-
-        // Track how many children have been rendered per parent (for ┐ vs ┤ decision)
-        var childrenRendered = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        for (var i = 0; i < group.Count; i++)
-        {
-            var node = group[i];
-            var lane = node.Lane - minLane;
-            var marker = GetMarker(node);
-
-            parentByNode.TryGetValue(node.Issue.Id, out var parentNode);
-            var parentLane = parentNode != null ? parentNode.Lane - minLane : -1;
-
-            // Determine if this is a series child (parent has Series execution mode)
-            var isSeriesChild = parentNode != null
-                && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
-
-            // Check if this parent receives series children (L-shaped connector from child lane)
-            var hasSeriesConnector = seriesChildLaneByParent.TryGetValue(node.Issue.Id, out var seriesChildLane);
-
-            // Build the node row
-            var nodeRow = new StringBuilder();
-
-            if (hasSeriesConnector && parentNode != null && parentLane > lane && !isSeriesChild)
-            {
-                // Parent receiving series children AND has its own parallel connector
-                // Draw: └─marker─┐ (or └─marker─┤)
-                nodeRow.Append(new string(' ', seriesChildLane * 2));
-                nodeRow.Append(BottomRight);
-                // Horizontal from series child lane to this node's lane
-                for (var col = seriesChildLane + 1; col < lane; col++)
-                {
-                    nodeRow.Append(Horizontal);
-                    nodeRow.Append(Horizontal);
-                }
-                if (seriesChildLane < lane)
-                    nodeRow.Append(Horizontal);
-                nodeRow.Append(marker);
-                nodeRow.Append(Horizontal);
-
-                // Horizontal from this node to parent lane
-                for (var col = lane + 1; col < parentLane; col++)
-                {
-                    nodeRow.Append(Horizontal);
-                    nodeRow.Append(Horizontal);
-                }
-
-                // Junction at parent lane
-                if (!childrenRendered.ContainsKey(parentNode.Issue.Id))
-                    childrenRendered[parentNode.Issue.Id] = 0;
-                childrenRendered[parentNode.Issue.Id]++;
-
-                var isFirstChild = childrenRendered[parentNode.Issue.Id] == 1;
-                nodeRow.Append(isFirstChild ? TopRight : RightTee);
-            }
-            else if (hasSeriesConnector)
-            {
-                // Parent receiving series children (no parallel connector to own parent)
-                // Draw: └─marker
-                nodeRow.Append(new string(' ', seriesChildLane * 2));
-                nodeRow.Append(BottomRight);
-                for (var col = seriesChildLane + 1; col < lane; col++)
-                {
-                    nodeRow.Append(Horizontal);
-                    nodeRow.Append(Horizontal);
-                }
-                if (seriesChildLane < lane)
-                    nodeRow.Append(Horizontal);
-                nodeRow.Append(marker);
-            }
-            else if (parentNode != null && parentLane > lane && !isSeriesChild)
-            {
-                // Parallel child: Node connects to parent on the right with horizontal connector
-                nodeRow.Append(new string(' ', lane * 2));
-                nodeRow.Append(marker);
-                nodeRow.Append(Horizontal);
-
-                // Draw horizontal line to parent lane
-                for (var col = lane + 1; col < parentLane; col++)
-                {
-                    nodeRow.Append(Horizontal);
-                    nodeRow.Append(Horizontal);
-                }
-
-                // Junction at parent lane
-                if (!childrenRendered.ContainsKey(parentNode.Issue.Id))
-                    childrenRendered[parentNode.Issue.Id] = 0;
-                childrenRendered[parentNode.Issue.Id]++;
-
-                var isFirstChild = childrenRendered[parentNode.Issue.Id] == 1;
-                nodeRow.Append(isFirstChild ? TopRight : RightTee);
-            }
-            else
-            {
-                // Orphan, parent on same lane, or series child - just place the marker
-                nodeRow.Append(new string(' ', lane * 2));
-                nodeRow.Append(marker);
-            }
-
-            // Append issue label
-            sb.Append(nodeRow);
-            sb.Append("  ");
-            sb.Append(node.Issue.Id);
-            sb.Append(' ');
-            sb.Append(node.Issue.Title);
-            sb.Append('\n');
-        }
+        if (status is IssueStatus.Progress or IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Archived)
+            return false;
+        return !layout.Edges.Any(e => string.Equals(e.To.Id, issueId, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// Gets the appropriate marker character for a node based on its status and actionability.
-    /// </summary>
-    private static char GetMarker(TaskGraphNode node)
+    private static char GetMarker(Issue issue, bool isActionable)
     {
-        return node.Issue.Status switch
+        return issue.Status switch
         {
             IssueStatus.Complete => CompleteMarker,
             IssueStatus.Closed or IssueStatus.Archived => ClosedMarker,
-            _ => node.IsActionable ? ActionableMarker : OpenMarker
+            _ => isActionable ? ActionableMarker : OpenMarker
         };
     }
 }

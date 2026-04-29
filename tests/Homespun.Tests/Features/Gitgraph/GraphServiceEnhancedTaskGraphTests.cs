@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
@@ -59,7 +60,7 @@ public class GraphServiceEnhancedTaskGraphTests
                 _testProject.LocalPath,
                 It.IsAny<IEnumerable<string>?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TaskGraph { Nodes = [], TotalLanes = 1 });
+            .ReturnsAsync(new GraphLayout<Issue> { Nodes = [], Edges = [], Occupancy = new OccupancyCell[0, 0], TotalRows = 0, TotalLanes = 1 });
 
         _mockSessionStore = new Mock<IClaudeSessionStore>();
         _mockSessionStore.Setup(s => s.GetByProjectId(_testProject.Id))

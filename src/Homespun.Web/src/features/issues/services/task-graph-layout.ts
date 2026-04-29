@@ -15,6 +15,24 @@ import type {
   ExecutionMode as ExecutionModeEnum,
 } from '@/api'
 import { ExecutionMode, IssueStatus, IssueType } from '@/api'
+
+export type TaskGraphEdge = {
+  from: string
+  to: string
+  kind: 'SeriesSibling' | 'SeriesCornerToParent' | 'ParallelChildToSpine' | string
+  startRow: number
+  startLane: number
+  endRow: number
+  endLane: number
+  pivotLane?: number | null
+  sourceAttach: 'Top' | 'Bottom' | 'Left' | 'Right' | string
+  targetAttach: 'Top' | 'Bottom' | 'Left' | 'Right' | string
+}
+
+export type TaskGraphLayoutResult = {
+  lines: TaskGraphRenderLine[]
+  edges: TaskGraphEdge[]
+}
 import { getPriorityColor } from './priority-colors'
 import { generateBranchName } from './branch-name'
 import { ViewMode } from '../types'
@@ -134,9 +152,9 @@ export function computeLayout(
   taskGraph: TaskGraphResponse | null | undefined,
   maxDepth = 3,
   viewMode: ViewMode = ViewMode.Tree
-): TaskGraphRenderLine[] {
+): TaskGraphLayoutResult {
   if (!taskGraph) {
-    return []
+    return { lines: [], edges: [] }
   }
 
   const nodes = taskGraph.nodes ?? []
@@ -146,7 +164,7 @@ export function computeLayout(
 
   // Return early if no nodes and no PRs
   if (nodes.length === 0 && mergedPrs.length === 0) {
-    return []
+    return { lines: [], edges: [] }
   }
 
   const result: TaskGraphRenderLine[] = []
@@ -400,7 +418,20 @@ export function computeLayout(
     }
   } // end isTreeView reservation post-processing
 
-  return result
+  const edges: TaskGraphEdge[] = (taskGraph.edges ?? []).map((e) => ({
+    from: e.from,
+    to: e.to,
+    kind: e.kind,
+    startRow: e.startRow,
+    startLane: e.startLane,
+    endRow: e.endRow,
+    endLane: e.endLane,
+    pivotLane: e.pivotLane,
+    sourceAttach: e.sourceAttach,
+    targetAttach: e.targetAttach,
+  }))
+
+  return { lines: result, edges }
 }
 
 /**

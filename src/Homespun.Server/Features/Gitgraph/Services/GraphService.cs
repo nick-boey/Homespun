@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
@@ -248,7 +249,7 @@ public class GraphService(
     }
 
     /// <inheritdoc />
-    public async Task<TaskGraph?> BuildTaskGraphAsync(string projectId)
+    public async Task<GraphLayout<Issue>?> BuildTaskGraphAsync(string projectId)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -259,8 +260,8 @@ public class GraphService(
 
         try
         {
-            var taskGraph = await fleeceService.GetTaskGraphAsync(project.LocalPath);
-            if (taskGraph == null)
+            var layout = await fleeceService.GetTaskGraphAsync(project.LocalPath);
+            if (layout == null)
             {
                 logger.LogDebug("No task graph available for project {ProjectId}", projectId);
                 return null;
@@ -268,9 +269,9 @@ public class GraphService(
 
             logger.LogDebug(
                 "Building task graph for project {ProjectId}: {NodeCount} nodes, {TotalLanes} lanes",
-                projectId, taskGraph.Nodes.Count, taskGraph.TotalLanes);
+                projectId, layout.Nodes.Count, layout.TotalLanes);
 
-            return taskGraph;
+            return layout;
         }
         catch (Exception ex)
         {
@@ -282,11 +283,11 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<string?> BuildTaskGraphTextAsync(string projectId)
     {
-        var taskGraph = await BuildTaskGraphAsync(projectId);
-        if (taskGraph == null)
+        var layout = await BuildTaskGraphAsync(projectId);
+        if (layout == null)
             return null;
 
-        return TaskGraphTextRenderer.Render(taskGraph);
+        return TaskGraphTextRenderer.Render(layout);
     }
 
     /// <summary>
@@ -534,6 +535,11 @@ public class GraphService(
             .Select(pr => pr.FleeceIssueId!);
     }
 
+    private static bool ComputeIsActionable(Issue issue, int lane, IReadOnlySet<string> openPrLinkedIssueIds)
+    {
+        return lane == 0 || openPrLinkedIssueIds.Contains(issue.Id);
+    }
+
     /// <summary>
     /// Gets issues from Fleece.
     /// Returns open issues only (no Complete, Closed, Archived, or Deleted).
@@ -580,18 +586,22 @@ public class GraphService(
         {
             // Get issue IDs that are linked to open PRs (tracked PRs are always open)
             // These issues should be included in the task graph regardless of their status
-            var openPrLinkedIssueIds = GetOpenPrLinkedIssueIds(projectId);
+            var openPrLinkedIssueIds = GetOpenPrLinkedIssueIds(projectId).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            global::Fleece.Core.Models.TaskGraph? taskGraph;
+            GraphLayout<Issue>? layout;
             using (var fleeceScan = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.fleece.scan"))
             {
                 fleeceScan?.SetTag("project.id", projectId);
-                taskGraph = await fleeceService.GetTaskGraphWithAdditionalIssuesAsync(
+                layout = await fleeceService.GetTaskGraphWithAdditionalIssuesAsync(
                     project.LocalPath,
                     openPrLinkedIssueIds);
+                fleeceScan?.SetTag("layout.nodes", layout?.Nodes.Count ?? 0);
+                fleeceScan?.SetTag("layout.edges", layout?.Edges.Count ?? 0);
+                fleeceScan?.SetTag("layout.rows", layout?.TotalRows ?? 0);
+                fleeceScan?.SetTag("layout.lanes", layout?.TotalLanes ?? 0);
             }
 
-            if (taskGraph == null)
+            if (layout == null)
             {
                 logger.LogDebug("No task graph available for project {ProjectId}", projectId);
                 return null;
@@ -600,14 +610,16 @@ public class GraphService(
             // Build task graph response
             var response = new TaskGraphResponse
             {
-                TotalLanes = taskGraph.TotalLanes,
-                Nodes = taskGraph.Nodes.Select(n => new TaskGraphNodeResponse
+                TotalLanes = layout.TotalLanes,
+                TotalRows = layout.TotalRows,
+                Nodes = layout.Nodes.Select(n => new TaskGraphNodeResponse
                 {
-                    Issue = IssueDtoMapper.ToResponse(n.Issue),
+                    Issue = IssueDtoMapper.ToResponse(n.Node),
                     Lane = n.Lane,
                     Row = n.Row,
-                    IsActionable = n.IsActionable
-                }).ToList()
+                    IsActionable = ComputeIsActionable(n.Node, n.Lane, openPrLinkedIssueIds)
+                }).ToList(),
+                Edges = layout.Edges.Select(GitgraphApiMapper.MapEdge).ToList()
             };
 
             using (var prCacheSpan = GraphgraphActivitySource.Instance.StartActivity("graph.taskgraph.prcache"))

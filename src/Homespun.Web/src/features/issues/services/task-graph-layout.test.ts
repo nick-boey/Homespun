@@ -14,6 +14,15 @@ import {
 } from './task-graph-layout'
 import type { TaskGraphResponse, TaskGraphNodeResponse, IssueResponse } from '@/api'
 import { IssueStatus, IssueType, ExecutionMode } from '@/api'
+import { ViewMode } from '../types'
+
+function computeLines(
+  taskGraph: TaskGraphResponse | null | undefined,
+  maxDepth = 3,
+  viewMode = ViewMode.Tree
+) {
+  return computeLayout(taskGraph, maxDepth, viewMode).lines
+}
 
 // Helper to create a mock issue
 function createIssue(overrides: Partial<IssueResponse> = {}): IssueResponse {
@@ -110,12 +119,12 @@ describe('computeLayout', () => {
 
   describe('empty and null inputs', () => {
     it('returns empty array for null taskGraph', () => {
-      const result = computeLayout(null)
+      const result = computeLines(null)
       expect(result).toEqual([])
     })
 
     it('returns empty array for undefined taskGraph', () => {
-      const result = computeLayout(undefined)
+      const result = computeLines(undefined)
       expect(result).toEqual([])
     })
 
@@ -127,7 +136,7 @@ describe('computeLayout', () => {
         agentStatuses: {},
         linkedPrs: {},
       }
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       expect(result).toEqual([])
     })
   })
@@ -143,7 +152,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       expect(result).toHaveLength(1)
       expect(isIssueRenderLine(result[0])).toBe(true)
@@ -165,7 +174,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
       expect(line.marker).toBe(TaskGraphMarkerType.Open)
     })
@@ -180,7 +189,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
       expect(line.marker).toBe(TaskGraphMarkerType.Complete)
     })
@@ -195,7 +204,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
       expect(line.marker).toBe(TaskGraphMarkerType.Closed)
     })
@@ -219,7 +228,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       // Tree view skips PRs entirely - no nodes means empty result
       expect(result).toHaveLength(0)
@@ -235,7 +244,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       // Tree view: only the issue, no PR or separator
       expect(result).toHaveLength(1)
@@ -258,7 +267,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       expect(result).toHaveLength(2)
 
@@ -288,7 +297,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const childLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
@@ -309,7 +318,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const child1Line = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child1'
@@ -345,7 +354,7 @@ describe('computeLayout', () => {
       }
 
       // maxDepth = 1 means show lanes 0 and 1 from root
-      const result = computeLayout(taskGraph, 1)
+      const result = computeLines(taskGraph, 1)
 
       // parent at lane 0, child at lane 1 (shown)
       // grandchild at lane 2 filtered (depth 2 > maxDepth 1)
@@ -373,7 +382,7 @@ describe('computeLayout', () => {
       }
 
       // maxDepth = 0 means only show lane 0 (root)
-      const result = computeLayout(taskGraph, 0)
+      const result = computeLines(taskGraph, 0)
 
       expect(result).toHaveLength(1)
       const parentLine = result[0] as TaskGraphIssueRenderLine
@@ -398,7 +407,7 @@ describe('computeLayout', () => {
 
       // maxDepth = 1: root (lane 0) and children (lane 1) visible
       // grandchild at lane 2 is filtered out
-      const result = computeLayout(taskGraph, 1)
+      const result = computeLines(taskGraph, 1)
 
       const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
       expect(issueIds).toContain('parent')
@@ -421,7 +430,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       // Both should render since they're disconnected
       expect(result).toHaveLength(2)
@@ -439,7 +448,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
 
       expect(issueLine.lane).toBe(0) // No lane offset in tree view
@@ -461,7 +470,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.agentStatus).toEqual({
@@ -483,7 +492,7 @@ describe('computeLayout', () => {
         },
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.linkedPr).toEqual({
@@ -505,7 +514,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBe('user@example.com')
@@ -521,7 +530,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBeNull()
@@ -541,7 +550,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const childLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
@@ -562,7 +571,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const childLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
@@ -584,7 +593,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const childLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child'
@@ -612,7 +621,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const child1Line = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'child1'
@@ -657,7 +666,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
 
       const parallelChildLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'parallel-child'
@@ -687,7 +696,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       // Branch name should be generated from type and workingBranchId
@@ -710,7 +719,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBe('user@example.com')
@@ -729,7 +738,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBeNull()
@@ -749,7 +758,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBeNull()
@@ -771,7 +780,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.executionMode).toBe(ExecutionMode.SERIES)
@@ -791,7 +800,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.executionMode).toBe(ExecutionMode.PARALLEL)
@@ -811,7 +820,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.executionMode).toBe(ExecutionMode.SERIES)
@@ -830,7 +839,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       expect(result).toHaveLength(1)
       const rootLine = result[0] as TaskGraphIssueRenderLine
@@ -850,7 +859,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const parentLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'parent'
@@ -874,7 +883,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       // Should not have PR lines or separator
       const prLines = result.filter(isPrRenderLine)
@@ -897,7 +906,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const loadMoreLines = result.filter(isLoadMoreRenderLine)
       expect(loadMoreLines).toHaveLength(0)
@@ -924,7 +933,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const grandparentLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'grandparent'
@@ -955,7 +964,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const issueLines = result.filter(isIssueRenderLine)
       expect(issueLines).toHaveLength(3)
@@ -1007,7 +1016,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
       const issueLines = result.filter(isIssueRenderLine)
 
       expect(issueLines.map((l) => l.issueId)).toEqual(['a', 'b', 'd', 'e', 'c', 'f'])
@@ -1026,7 +1035,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       expect(result).toHaveLength(2)
       const root1Line = result.find(
@@ -1062,7 +1071,7 @@ describe('computeLayout', () => {
       }
 
       // maxDepth=1 means show lanes 0 and 1 (parent and child, not grandchild)
-      const result = computeLayout(taskGraph, 1)
+      const result = computeLines(taskGraph, 1)
 
       const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
       expect(issueIds).toContain('parent')
@@ -1101,7 +1110,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       // The shared child should appear twice (once per parent)
       const sharedLines = result.filter(
@@ -1154,7 +1163,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const sharedLines = result.filter(
         (l) => isIssueRenderLine(l) && l.issueId === 'shared'
@@ -1184,7 +1193,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
       expect(issueLine.drawLane0Connector).toBe(false)
@@ -1203,7 +1212,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph, 3)
+      const result = computeLines(taskGraph, 3)
 
       const parentLine = result.find(
         (l) => isIssueRenderLine(l) && l.issueId === 'parent'
@@ -1231,7 +1240,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const issueLines = result.filter(isIssueRenderLine)
 
       expect(issueLines).toHaveLength(2)
@@ -1267,7 +1276,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const issueLines = result.filter(isIssueRenderLine)
 
       // Each issueId should appear at most once (unique in this graph)
@@ -1298,7 +1307,7 @@ describe('computeLayout', () => {
         linkedPrs: {},
       }
 
-      const result = computeLayout(taskGraph)
+      const result = computeLines(taskGraph)
       const line = result.find(isIssueRenderLine)!
 
       // Single occurrence: no index needed

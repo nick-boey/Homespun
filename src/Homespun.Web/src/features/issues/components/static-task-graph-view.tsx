@@ -57,8 +57,8 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
   onSelectIssue,
 }: StaticTaskGraphViewProps) {
   // Compute render lines from task graph data
-  const renderLines = useMemo(() => {
-    if (!data) return []
+  const { lines: renderLines } = useMemo(() => {
+    if (!data) return { lines: [], edges: [] }
     return computeLayout(data, depth)
   }, [data, depth])
 
