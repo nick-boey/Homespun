@@ -176,6 +176,20 @@ export const MultiToolGroup: Story = {
   },
 }
 
+export const SequentialToolMessages: Story = {
+  args: { envelopes: envelopeFixtures.sequentialToolMessages },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Each tool call arrives in its own SDK assistant message (different
+    // parentMessageId per call). Coalescing in `useSessionAssistantRuntime`
+    // collapses them into a single assistant turn so the four tool calls
+    // share one ToolGroup, matching `multiToolGroup` end-state.
+    const groupRoots = canvasElement.querySelectorAll('[data-slot="tool-group-root"]')
+    expect(groupRoots.length).toBe(1)
+    expect(await canvas.findByText(/4 tool calls/i)).toBeInTheDocument()
+  },
+}
+
 export const BashTerminal: Story = {
   args: { envelopes: envelopeFixtures.toolCallLifecycle },
   play: async ({ canvasElement }) => {
