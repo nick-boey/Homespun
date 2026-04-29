@@ -5,14 +5,14 @@ The `openspec-integration` spec at `Requirement: Virtual sub-issue rendering fro
 ## What Changes
 
 - Add a new `'phase'` render-line type to the task graph layout pipeline. Phase lines are full participants in the render result (selection, expand, scroll-into-view, vertical layout) but are rendered with a distinct visual treatment.
-- Render phase lines with a diamond ◆ symbol (`TaskGraphPhaseSvg`) parented to the issue node above, using the existing series-child connector geometry.
+- Render phase lines with a diamond ◆ symbol (`TaskGraphPhaseSvg`) parented to the issue node above, using a synthetic `Edge` (`kind: 'SeriesSibling'`, `sourceAttach: 'Bottom'`, `targetAttach: 'Top'`) added to the post-Fleece edge collection.
 - Replace the modal-based `PhaseRollupBadges` flow with inline expansion: double-click or ⏎ on a phase row toggles an `InlinePhaseDetailRow` showing the checkbox task list directly under the phase row.
 - Remove `phase-rollup.tsx` entirely and the modal it renders.
 - Block edit / run-agent / move / hierarchy hotkeys when a phase row is the selected row (selection itself works; the actions silently no-op).
 - Phase rows render no editable pills (no type/status dropdowns), no execution-mode toggle, no `IssueRowActions`, no multi-parent badge.
 - **BREAKING (UI-only):** the existing phase-rollup badges and modal are removed; any tests asserting on `data-testid="phase-rollup-badges"` or `data-testid="phase-badge"` need updating to the new row testids.
 - Drop the `EXPANDED_DETAIL_HEIGHT = 700` fixed-height constant in `task-graph-svg.tsx`. Inline detail content gets `max-h-[400px] overflow-y-auto` on its inner scroll region instead of a fixed outer height. Replace `getRowY` callers (scroll-into-view) with `element.offsetTop` measurement.
-- Thread `openSpecStates` into `computeLayout` so phase-row synthesis happens in one place.
+- Synthesise phase render lines as a post-pass over `computeLayout`'s output: take `{ lines, edges }` from the post-Fleece pipeline and splice phase lines (plus their synthetic edges) immediately after each parent issue line whose `openSpecStates[issueId]?.phases` is non-empty.
 
 ## Capabilities
 
@@ -46,3 +46,4 @@ The `openspec-integration` spec at `Requirement: Virtual sub-issue rendering fro
   - Update tests that asserted on the old badge/modal flow
   - New e2e test covering the keyboard-selection + expand interaction on a phase row in the seeded mock data
 - **Depends on `mock-openspec-seeding`** for visual validation.
+- **Depends on `upgrade-fleece-core-v3`**, which migrates Homespun off `Fleece.Core` 2.1.1 (whose `BuildFilteredTaskGraphLayoutAsync` is removed in 3.0.0) and rewrites `task-graph-layout.ts` on top of the v3 wire-format `Edges[]` collection. After it lands, `computeLayout` returns `{ lines, edges }` (not just `lines`); `renderGroup` and `renderGroupTreeView` are deleted; `TaskGraphIssueRenderLine` no longer carries `drawTopLine` / `drawBottomLine` / `seriesConnectorFromLane` / `parentLane` / `parentLaneReservations` / `multiParentIndex` / `lane0*` / `hasHiddenParent` fields. Phase synthesis becomes a post-pass over `lines` (insert phase lines after their parent issue line) plus synthetic `Edge` entries with `kind: 'SeriesSibling'`, `sourceAttach: 'Bottom'`, `targetAttach: 'Top'`. Implementation tasks 1.x and 4.x in this change are written against the post-Fleece shape — see `design.md` for the rebased plan.

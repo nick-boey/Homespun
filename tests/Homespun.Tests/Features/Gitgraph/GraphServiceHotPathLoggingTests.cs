@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Features.Fleece.Services;
@@ -45,7 +46,7 @@ public class GraphServiceHotPathLoggingTests
             var fleece = new Mock<IProjectFleeceService>();
             fleece.Setup(f => f.GetTaskGraphWithAdditionalIssuesAsync(
                     testPath, It.IsAny<IEnumerable<string>?>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new TaskGraph { Nodes = [], TotalLanes = 1 });
+                .ReturnsAsync(new GraphLayout<Issue> { Nodes = [], Edges = [], Occupancy = new OccupancyCell[0, 0], TotalRows = 0, TotalLanes = 1 });
 
             var sessionStore = new Mock<IClaudeSessionStore>();
             var sessions = Enumerable.Range(0, 5)

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Commands.Telemetry;
@@ -128,14 +129,15 @@ public class GraphTracingTests
                 _testPath,
                 It.IsAny<IEnumerable<string>?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TaskGraph
+            .ReturnsAsync(new GraphLayout<Issue>
             {
                 TotalLanes = 1,
+                TotalRows = 1,
                 Nodes =
                 [
-                    new TaskGraphNode
+                    new PositionedNode<Issue>
                     {
-                        Issue = new Issue
+                        Node = new Issue
                         {
                             Id = "issue-1",
                             Title = "test",
@@ -145,10 +147,11 @@ public class GraphTracingTests
                             LastUpdate = DateTime.UtcNow
                         },
                         Lane = 0,
-                        Row = 0,
-                        IsActionable = true
+                        Row = 0
                     }
-                ]
+                ],
+                Edges = [],
+                Occupancy = new OccupancyCell[1, 1]
             });
         fleeceService
             .Setup(f => f.GetIssueAsync(_testPath, "issue-1", It.IsAny<CancellationToken>()))

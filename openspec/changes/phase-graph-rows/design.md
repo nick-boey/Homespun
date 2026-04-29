@@ -1,5 +1,7 @@
 ## Context
 
+> **Sequencing note (2026-04-29):** this change has been rebased to land **after** `upgrade-fleece-core-v3`. That change migrates the server off `Fleece.Core` 2.1.1's removed `BuildFilteredTaskGraphLayoutAsync` API, pushes semantic edges (`Edge<Issue>` with `EdgeKind` + `SourceAttach` / `TargetAttach`) over the wire as a new `Edges[]` collection on `TaskGraphResponse`, and rewrites `task-graph-layout.ts` as a thin pass-through that drops the entire connector-inference layer. Most of the per-row connector fields that earlier drafts of this design referenced (`drawTopLine`, `drawBottomLine`, `seriesConnectorFromLane`, `isSeriesChild`, `parentLane`, `parentLaneReservations`, `multiParentIndex`, lane-0 handling, hidden-parent flags) are gone after the Fleece migration. `computeLayout` returns `{ lines, edges }` instead of `TaskGraphRenderLine[]`, and `renderGroup` / `renderGroupTreeView` no longer exist. The decisions below have been updated accordingly.
+
 The current `PhaseRollupBadges` component (`src/Homespun.Web/src/features/issues/components/phase-rollup.tsx`) renders OpenSpec change phases as inline pills inside the issue row's content strip:
 
 ```
@@ -10,11 +12,11 @@ The badges live in a `flex flex-wrap gap-1` container, and the parent row is `st
 
 The `openspec-integration` spec already explicitly requires phases to be rendered as virtual graph nodes ("one virtual sub-node per phase heading") with no dispatch action. The implementation drift is the bug.
 
-The task graph layout pipeline (`computeLayout` in `services/task-graph-layout.ts`) builds a list of `TaskGraphRenderLine`s from a `TaskGraphResponse`. Two existing union variants matter for this work: `TaskGraphIssueRenderLine` (an issue row) and `TaskGraphPrRenderLine` (a merged-PR row above the issue list). Render lines are produced once and consumed by `task-graph-view.tsx`, which switches on `line.type` to mount the right row component.
+The (post-Fleece-v3) task graph layout pipeline (`computeLayout` in `services/task-graph-layout.ts`) builds `{ lines: TaskGraphRenderLine[], edges: TaskGraphEdge[] }` from a `TaskGraphResponse`. Two existing union variants matter for this work: `TaskGraphIssueRenderLine` (an issue row) and `TaskGraphPrRenderLine` (a merged-PR row above the issue list). Render lines and edges are produced once and consumed by `task-graph-view.tsx` (which switches on `line.type` to mount the right row component) plus `task-graph-svg.tsx` (which renders one path per `edge`).
 
 `OpenSpecState.Phases` is already on the wire — `IssueGraphOpenSpecEnricher.ResolveForIssueAsync` populates `response.OpenSpecStates[issueId].Phases` on every graph fetch. The data is just not threaded into the layout function today; the row component reaches for it directly via `taskGraph.openSpecStates?.[id]` at render time.
 
-The `mock-openspec-seeding` change (sister change, must land first) provides realistic phase data to validate this work against.
+The `mock-openspec-seeding` change (sister change, must land first) provides realistic phase data to validate this work against. The `upgrade-fleece-core-v3` change (sequencing dependency above) must land before any work in this change begins.
 
 ## Goals / Non-Goals
 
@@ -43,19 +45,25 @@ The `mock-openspec-seeding` change (sister change, must land first) provides rea
 
 **Alternative considered:** Attach a `phases?: PhaseSummary[]` to the issue line and have `TaskGraphIssueRow` render its own `<PhaseSubRow>` children. Rejected — duplicates the render-line model in two places (top-level union + nested), and selection state would need a parallel `(issueId, phaseIndex)` addressing scheme.
 
-### Phase synthesis happens in `computeLayout`, not as a post-processing pass
+### Phase synthesis is a post-processing pass over `computeLayout`'s output (rebased)
 
-**Decision:** Thread `openSpecStates` into `computeLayout(taskGraph, maxDepth, viewMode, openSpecStates)`. Inside `renderGroup` and `renderGroupTreeView`, immediately after pushing each issue line, look up `openSpecStates[issueId]?.phases` and push one `TaskGraphPhaseRenderLine` per `PhaseSummary`.
+**Decision:** Thread `openSpecStates` into `computeLayout(taskGraph, maxDepth, viewMode, openSpecStates)`. After the function has produced `{ lines, edges }` from the server response, run a single splice pass: for each `TaskGraphIssueRenderLine` whose `openSpecStates[issueId]?.phases` is non-empty, walk forward from its index and insert one `TaskGraphPhaseRenderLine` per `PhaseSummary` (preserving document order). For each new phase line, append a synthetic `TaskGraphEdge` to `edges` — `kind: 'SeriesSibling'` between consecutive phases under the same parent, and `kind: 'SeriesCornerToParent'` from the first phase to its parent issue, both with `sourceAttach: 'Bottom'` and `targetAttach: 'Top'`. Phase row IDs follow `${issueId}::phase::${name}`.
 
-**Why:** Keeps all hierarchy logic in one place. A post-processing pass would have to re-derive the lane / connector geometry that `renderGroup*` already computes for the parent. By emitting phase lines in the same loop, they pick up the correct lane (parent.lane + 1) and series-child connector geometry naturally.
+**Why:** Post-Fleece-v3, `computeLayout` no longer iterates the issue tree — it iterates the server-supplied `PositionedNode[]` which already comes pre-positioned. The edge collection is also server-supplied. There is no `renderGroup` / `renderGroupTreeView` loop to splice into anymore; the only sensible insertion point is after the pass-through. The work that earlier drafts wanted to avoid duplicating ("re-derive lane / connector geometry") has moved to the server in `Fleece.Core.IIssueLayoutService` — Homespun no longer derives it at all. Phase synthesis is therefore the only Homespun-side derivation left in the layout pipeline, and a single localised splice is the cleanest place for it.
 
-**Alternative considered:** Splice phases in via a separate post-pass after `computeLayout` returns. Rejected — duplicates connector geometry logic, harder to test in isolation.
+**Why phases as Edge entries in the same wire-format-derived collection:** unifies how the SVG renderer consumes connectors. `task-graph-svg.tsx`'s `<TaskGraphEdges>` component (added in `upgrade-fleece-core-v3`) renders every edge with a switch on `(kind, sourceAttach, targetAttach)`. Phase edges are just synthetic entries in that same collection — no parallel rendering path, no special-case "phase connector" code in the SVG layer.
 
-### Treat phase rows as series children for connector geometry
+**Alternative considered:** Modify the in-Fleece engine to know about phases. Rejected — phases are an OpenSpec concept entirely orthogonal to Fleece issues; they have no `Issue` representation in `.fleece/`.
 
-**Decision:** Phase render lines set `isSeriesChild: true` and use `lane = parentIssue.lane + 1` regardless of the parent issue's `executionMode`.
+**Alternative considered:** Synthesise phase edges only inside `task-graph-svg.tsx` rather than threading them through `computeLayout`'s return. Rejected — the edge collection is the single source of connector-geometry truth post-Fleece, and the rendering layer's job is to draw, not to invent. Keeping all edge synthesis in `computeLayout` keeps the layer responsibilities clean.
 
-**Why:** The visual model "issue ┊ phase ┊ phase ┊ phase" is conceptually serial — phases are an ordered checklist. The series-child connector code (top-line + arc into node) already produces the right shape. Trying to render phases as parallel siblings would put them all at the same lane offset and look noisy.
+### Phase rows occupy `parent.lane + 1` and use `Bottom → Top` attach geometry
+
+**Decision:** A phase line sits at `lane = parentIssueLine.lane + 1` and `row = parentIssueLine.row + (1-based phase index)`. Subsequent issue lines are shifted down by the number of phase rows synthesised above them — this is the same row-shift bookkeeping the splice pass does naturally as it inserts elements into the array. Synthetic phase edges all use `sourceAttach: 'Bottom'`, `targetAttach: 'Top'` (vertical drop into the diamond).
+
+**Why:** Phases are an ordered checklist conceptually parallel to a series chain, so the "stairstep down + right" geometry of `LayoutMode.IssueGraph` is the wrong fit (it would put each phase at a different lane). Using a single child lane (`parent.lane + 1`) with a vertical chain is closer to `LayoutMode.NormalTree`'s edge geometry and reads correctly visually. The synthetic edges adopt that geometry directly: `Bottom → Top` is "drop straight down into me", which is the simplest visual signal that a phase row is a child of the issue above it.
+
+**Note on row shifts:** since the splice pass inserts entries after the phase's parent issue line, every subsequent issue line's effective render row index increases by N (where N is the number of phases inserted above it). This is purely a visual / scroll-into-view concern — the original `Row` value on `TaskGraphNodeResponse` is preserved on the underlying issue render line, but selection / keyboard navigation operates on the post-splice line array. No edges from the server need adjustment because phase rows are inserted *between* issue rows; they do not displace any existing edge endpoint's `(row, lane)` coordinates within the SVG render coordinate space — the SVG layer maps render-line-index → y-pixel via `rowRefs[rowIndex]?.offsetTop` (per Decision "Drop `EXPANDED_DETAIL_HEIGHT`…"), which sees the post-splice positions naturally.
 
 ### Diamond ◆ shape for the phase node
 
@@ -87,11 +95,11 @@ The `mock-openspec-seeding` change (sister change, must land first) provides rea
 
 **Why:** Silent no-op was the agreed UX. Toasts on every disallowed key would be noisy; visually disabling buttons is moot because phase rows don't render those buttons at all. The keyboard short-circuit is the only place the disabled-action behaviour needs explicit enforcement.
 
-### `multiParentIndex` and `parentLaneReservations` post-processing skips phase lines
+### `multiParentIndex` and `parentLaneReservations` post-processing is gone (rebased)
 
-**Decision:** The two `computeLayout` post-processing passes that compute multi-parent indices and parent-lane reservations both filter on `isIssueRenderLine(line)`. Phase lines (which are `'phase'`, not `'issue'`) are naturally skipped.
+**Decision:** N/A after `upgrade-fleece-core-v3`. Both post-passes are deleted as part of that change because the connector geometry they computed now arrives as `Edges[]` from the server. There is no need for a `phase`-aware filter — the passes do not exist.
 
-**Why:** Phase lines never have multi-parent semantics or participate in cross-issue lane reservation. The existing type guards already exclude them; no extra code needed beyond confirming this in tests.
+**Note:** if a future change re-introduces a `multiParentIndex`-style post-pass for some other purpose (e.g. rendering a "this issue appears N times" badge), it must guard on `isIssueRenderLine(line)` so it skips phase lines. Phase lines never have multi-parent semantics.
 
 ## Risks / Trade-offs
 
@@ -103,11 +111,12 @@ The `mock-openspec-seeding` change (sister change, must land first) provides rea
 
 ## Migration Plan
 
-This is a UI-only refactor. Deploy:
+This is a UI-only refactor (within Homespun) but it depends on a backend wire-format change that has to land first. Sequence:
 
-1. Land `mock-openspec-seeding` first (sister change, dependency for visual validation).
-2. Land this change. Phase badges + modal are removed; phase rows appear inline.
-3. Rollback: revert this change. The previous badges + modal return. No persistent state to migrate.
+1. Land `mock-openspec-seeding` (sister change, dependency for visual validation).
+2. Land `upgrade-fleece-core-v3` (foundation: Fleece 3.0.0 migration + wire-format `Edges[]` collection + frontend `task-graph-layout.ts` rewrite that drops every connector-inference field this change used to splice into). All implementation tasks below assume the post-Fleece shape.
+3. Land this change. Phase badges + modal are removed; phase rows appear inline as a localised splice over `computeLayout`'s `{ lines, edges }` output.
+4. Rollback: revert this change. The previous badges + modal return; the post-Fleece pipeline keeps working without phase rows. No persistent state to migrate.
 
 ## Open Questions
 

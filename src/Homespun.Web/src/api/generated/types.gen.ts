@@ -1071,9 +1071,24 @@ export type TaskGraphPrResponse = {
     agentStatus?: AgentStatusData;
 };
 
+export type TaskGraphEdgeResponse = {
+    from: string;
+    to: string;
+    kind: string;
+    startRow: number;
+    startLane: number;
+    endRow: number;
+    endLane: number;
+    pivotLane?: number | null;
+    sourceAttach: string;
+    targetAttach: string;
+};
+
 export type TaskGraphResponse = {
     nodes?: Array<TaskGraphNodeResponse> | null;
     totalLanes?: number;
+    totalRows?: number;
+    edges?: Array<TaskGraphEdgeResponse> | null;
     mergedPrs?: Array<TaskGraphPrResponse> | null;
     hasMorePastPrs?: boolean;
     totalPastPrsShown?: number;

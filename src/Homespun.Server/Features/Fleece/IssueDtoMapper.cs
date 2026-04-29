@@ -1,4 +1,6 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
+using Homespun.Features.Gitgraph.Services;
 using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Features.Fleece;
@@ -40,18 +42,21 @@ public static class IssueDtoMapper
         return issues.Select(i => i.ToResponse()).ToList();
     }
 
-    public static TaskGraphResponse ToResponse(this TaskGraph taskGraph)
+    public static TaskGraphResponse ToResponse(this GraphLayout<Issue> layout)
     {
         return new TaskGraphResponse
         {
-            Nodes = taskGraph.Nodes.Select(n => new TaskGraphNodeResponse
+            Nodes = layout.Nodes.Select(n => new TaskGraphNodeResponse
             {
-                Issue = n.Issue.ToResponse(),
+                Issue = n.Node.ToResponse(),
                 Lane = n.Lane,
                 Row = n.Row,
-                IsActionable = n.IsActionable
+                IsActionable = n.Lane == 0
             }).ToList(),
-            TotalLanes = taskGraph.TotalLanes
+            TotalLanes = layout.TotalLanes,
+            TotalRows = layout.TotalRows,
+            Edges = layout.Edges.Select(GitgraphApiMapper.MapEdge).ToList()
         };
     }
+
 }

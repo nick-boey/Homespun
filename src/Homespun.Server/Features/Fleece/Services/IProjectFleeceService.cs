@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Fleece.Core.Models.Graph;
 using Homespun.Shared.Requests;
 
 namespace Homespun.Features.Fleece.Services;
@@ -80,26 +81,26 @@ public interface IProjectFleeceService
     #region Task Graph Operations
 
     /// <summary>
-    /// Builds a task graph for the specified project using Fleece.Core's TaskGraphService.
-    /// The task graph organizes issues with actionable items at lane 0 (left) and
+    /// Builds a task graph layout for the specified project via <see cref="IIssueLayoutService"/>.
+    /// The layout organizes issues with actionable items at lane 0 (left) and
     /// parent/blocking issues at higher lanes (right).
     /// </summary>
     /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>The task graph, or null if no issues exist.</returns>
-    Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default);
+    /// <returns>The <see cref="GraphLayout{Issue}"/>, or null if no issues exist.</returns>
+    Task<GraphLayout<Issue>?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default);
 
     /// <summary>
-    /// Builds a task graph for the specified project, including additional issues by ID
-    /// regardless of their status. This is used to ensure issues linked to open PRs
-    /// are included in the graph even if they have a terminal status (Complete, Closed, etc.).
+    /// Builds a task graph layout for the specified project, including additional issues by ID
+    /// regardless of their status. Uses <see cref="IIssueLayoutService.LayoutForTree"/> on the
+    /// pre-filtered issue set.
     /// </summary>
     /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
     /// <param name="additionalIssueIds">Issue IDs to include regardless of status.
     /// These issues will be included in the graph even if their status would normally exclude them.</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>The task graph, or null if no issues exist.</returns>
-    Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
+    /// <returns>The <see cref="GraphLayout{Issue}"/>, or null if no issues exist.</returns>
+    Task<GraphLayout<Issue>?> GetTaskGraphWithAdditionalIssuesAsync(
         string projectPath,
         IEnumerable<string>? additionalIssueIds,
         CancellationToken ct = default);

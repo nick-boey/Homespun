@@ -38,7 +38,7 @@ public class FleeceServiceTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        _service = new ProjectFleeceService(_mockQueue.Object, _mockHistoryService.Object, _mockLogger.Object);
+        _service = new ProjectFleeceService(_mockQueue.Object, _mockHistoryService.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
     }
 
     [TearDown]
