@@ -87,7 +87,8 @@ test.describe.serial('Streaming Session Content', () => {
     await page.waitForSelector('[data-testid^="message-"]', { timeout: 15000 })
 
     // Wait for the chat input to be enabled (session joined)
-    const chatInput = page.locator('textarea')
+    // AUI adds a hidden sizing textarea; target by placeholder to avoid strict-mode violation.
+    const chatInput = page.getByPlaceholder('Type a message...')
     await expect(chatInput).toBeVisible({ timeout: 10000 })
     await expect(chatInput).toBeEnabled({ timeout: 15000 })
 
@@ -118,7 +119,7 @@ test.describe.serial('Streaming Session Content', () => {
     await page.waitForLoadState('networkidle')
 
     // Verify the session detail page has a chat input (indicates session loaded)
-    const chatInput = page.locator('textarea')
+    const chatInput = page.getByPlaceholder('Type a message...')
     await expect(chatInput).toBeVisible({ timeout: 10000 })
 
     // Verify session messages are displayed
