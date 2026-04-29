@@ -9,11 +9,7 @@ import {
   type AssistantRuntime,
 } from '@assistant-ui/react'
 import { unstable_defaultDirectiveFormatter } from '@assistant-ui/core'
-import type {
-  Unstable_TriggerAdapter,
-  Unstable_TriggerCategory,
-  Unstable_TriggerItem,
-} from '@assistant-ui/core'
+import type { Unstable_TriggerAdapter, Unstable_TriggerItem } from '@assistant-ui/core'
 import { Send, Loader2, Shield, Sparkles, Hammer } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -123,47 +119,169 @@ function ChatInputContent({
     [sessionMode, onModeChange]
   )
 
+  const { files } = useProjectFiles(projectId)
+  const { prs } = useSearchablePrs(projectId)
+
+  const fileItems = useMemo<readonly Unstable_TriggerItem[]>(
+    () =>
+      (files ?? []).map((path) => ({
+        id: `file:${path}`,
+        type: 'file',
+        label: path,
+        metadata: { path },
+      })),
+    [files]
+  )
+  const prItems = useMemo<readonly Unstable_TriggerItem[]>(
+    () =>
+      (prs ?? []).map((pr) => ({
+        id: `pr:${pr.number}`,
+        type: 'pr',
+        label: `#${pr.number} ${pr.title ?? ''}`.trim(),
+        description: pr.title ?? undefined,
+        metadata: { number: pr.number ?? 0, title: pr.title ?? '' },
+      })),
+    [prs]
+  )
+
+  const mentionAdapter = useMemo<Unstable_TriggerAdapter>(
+    () => ({
+      categories: () =>
+        [
+          fileItems.length > 0 ? { id: 'files', label: 'Files' } : null,
+          prItems.length > 0 ? { id: 'prs', label: 'Pull requests' } : null,
+        ].filter((c): c is { id: string; label: string } => c !== null),
+      categoryItems: (categoryId: string) => {
+        if (categoryId === 'files') return fileItems
+        if (categoryId === 'prs') return prItems
+        return []
+      },
+      search: (query: string) => {
+        const q = query.toLowerCase()
+        const matches = (label: string) => label.toLowerCase().includes(q)
+        return [
+          ...fileItems.filter((item) => matches(item.label)),
+          ...prItems.filter((item) => matches(item.label)),
+        ].slice(0, 50)
+      },
+    }),
+    [fileItems, prItems]
+  )
+
+  const mentionFormatter = useMemo(
+    () => ({
+      ...unstable_defaultDirectiveFormatter,
+      serialize: (item: Unstable_TriggerItem) => {
+        if (item.type === 'pr') {
+          const num = (item.metadata as { number?: number } | undefined)?.number ?? 0
+          return `PR #${num}`
+        }
+        const path = (item.metadata as { path?: string } | undefined)?.path ?? item.label
+        return path.includes(' ') ? `@"${path}"` : `@${path}`
+      },
+    }),
+    []
+  )
+
   return (
-    <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      <MentionTrigger projectId={projectId} />
-      <SlashTrigger />
-      <ComposerPrimitive.Root className="bg-background border-input focus-within:border-ring focus-within:ring-ring/50 flex w-full flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <ModeTabs mode={sessionMode} onChange={onModeChange} disabled={disabled} />
-            <ModelPicker value={sessionModel} onChange={onModelChange} disabled={disabled} />
+    <ComposerPrimitive.Unstable_TriggerPopoverRoot
+      adapter={mentionAdapter}
+      onSelect={{ type: 'insertDirective', formatter: mentionFormatter }}
+    >
+      <ComposerPrimitive.Unstable_TriggerPopoverRoot
+        trigger="/"
+        adapter={SLASH_ADAPTER}
+        onSelect={{ type: 'action', handler: () => {} }}
+      >
+        <ComposerPrimitive.Root className="bg-background border-input focus-within:border-ring focus-within:ring-ring/50 flex w-full flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <ModeTabs mode={sessionMode} onChange={onModeChange} disabled={disabled} />
+              <ModelPicker value={sessionModel} onChange={onModelChange} disabled={disabled} />
+            </div>
           </div>
-        </div>
 
-        <ComposerPrimitive.Input
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          onKeyDown={handleKeyDown}
-          className={cn(
-            'placeholder:text-muted-foreground max-h-60 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none',
-            disabled && 'cursor-not-allowed opacity-60'
-          )}
-        />
+          <ComposerPrimitive.Input
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            onKeyDown={handleKeyDown}
+            className={cn(
+              'placeholder:text-muted-foreground max-h-60 min-h-[44px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none',
+              disabled && 'cursor-not-allowed opacity-60'
+            )}
+          />
 
-        <div className="flex items-center justify-end px-1 pb-1">
-          <ComposerPrimitive.Send asChild>
-            <Button
-              type="submit"
-              size="icon"
-              variant="ghost"
-              disabled={disabled}
-              aria-label="Send message"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </ComposerPrimitive.Send>
-        </div>
-      </ComposerPrimitive.Root>
+          <div className="flex items-center justify-end px-1 pb-1">
+            <ComposerPrimitive.Send asChild>
+              <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                disabled={disabled}
+                aria-label="Send message"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </ComposerPrimitive.Send>
+          </div>
+        </ComposerPrimitive.Root>
+
+        <ComposerPrimitive.Unstable_TriggerPopoverPopover className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-3 text-sm shadow-md">
+          <p className="text-muted-foreground" data-testid="slash-empty-state">
+            No commands available yet
+          </p>
+        </ComposerPrimitive.Unstable_TriggerPopoverPopover>
+      </ComposerPrimitive.Unstable_TriggerPopoverRoot>
+
+      <ComposerPrimitive.Unstable_TriggerPopoverPopover className="bg-popover text-popover-foreground z-50 max-h-72 w-80 overflow-auto rounded-md border shadow-md">
+        <ComposerPrimitive.Unstable_TriggerPopoverBack className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-1 px-2 py-1.5 text-left text-sm" />
+        <ComposerPrimitive.Unstable_TriggerPopoverCategories>
+          {(categories) =>
+            categories.length === 0 ? (
+              <div className="text-muted-foreground p-3 text-center text-sm">No matches</div>
+            ) : (
+              <ul className="p-1">
+                {categories.map((cat) => (
+                  <li key={cat.id}>
+                    <ComposerPrimitive.Unstable_TriggerPopoverCategoryItem
+                      categoryId={cat.id}
+                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+                    >
+                      {cat.label}
+                    </ComposerPrimitive.Unstable_TriggerPopoverCategoryItem>
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        </ComposerPrimitive.Unstable_TriggerPopoverCategories>
+        <ComposerPrimitive.Unstable_TriggerPopoverItems>
+          {(items) =>
+            items.length === 0 ? (
+              <div className="text-muted-foreground p-3 text-center text-sm">No matches</div>
+            ) : (
+              <ul className="p-1">
+                {items.map((item, index) => (
+                  <li key={item.id}>
+                    <ComposerPrimitive.Unstable_TriggerPopoverItem
+                      item={item}
+                      index={index}
+                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+                    >
+                      <span className="truncate">{item.label}</span>
+                    </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        </ComposerPrimitive.Unstable_TriggerPopoverItems>
+      </ComposerPrimitive.Unstable_TriggerPopoverPopover>
     </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   )
 }
@@ -240,147 +358,8 @@ function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
   )
 }
 
-// -----------------------------------------------------------------------------
-// `@`-mention trigger popover
-// -----------------------------------------------------------------------------
-
-const MENTION_FILES_CATEGORY: Unstable_TriggerCategory = {
-  id: 'files',
-  label: 'Files',
-}
-const MENTION_PRS_CATEGORY: Unstable_TriggerCategory = {
-  id: 'prs',
-  label: 'Pull requests',
-}
-
-interface MentionTriggerProps {
-  projectId: string
-}
-
-function MentionTrigger({ projectId }: MentionTriggerProps) {
-  const { files } = useProjectFiles(projectId)
-  const { prs } = useSearchablePrs(projectId)
-
-  const fileItems = useMemo<readonly Unstable_TriggerItem[]>(
-    () =>
-      (files ?? []).map((path) => ({
-        id: `file:${path}`,
-        type: 'file',
-        label: path,
-        metadata: { path },
-      })),
-    [files]
-  )
-  const prItems = useMemo<readonly Unstable_TriggerItem[]>(
-    () =>
-      (prs ?? []).map((pr) => ({
-        id: `pr:${pr.number}`,
-        type: 'pr',
-        label: `#${pr.number} ${pr.title ?? ''}`.trim(),
-        description: pr.title ?? undefined,
-        metadata: {
-          number: pr.number ?? 0,
-          title: pr.title ?? '',
-        },
-      })),
-    [prs]
-  )
-
-  const adapter = useMemo<Unstable_TriggerAdapter>(
-    () => ({
-      categories: () =>
-        [
-          fileItems.length > 0 ? MENTION_FILES_CATEGORY : null,
-          prItems.length > 0 ? MENTION_PRS_CATEGORY : null,
-        ].filter((c): c is Unstable_TriggerCategory => c !== null),
-      categoryItems: (categoryId: string) => {
-        if (categoryId === MENTION_FILES_CATEGORY.id) return fileItems
-        if (categoryId === MENTION_PRS_CATEGORY.id) return prItems
-        return []
-      },
-      search: (query: string) => {
-        const q = query.toLowerCase()
-        const matches = (label: string) => label.toLowerCase().includes(q)
-        return [
-          ...fileItems.filter((item) => matches(item.label)),
-          ...prItems.filter((item) => matches(item.label)),
-        ].slice(0, 50)
-      },
-    }),
-    [fileItems, prItems]
-  )
-
-  // The default directive formatter renders `@id`. Override `serialize` to
-  // produce the existing mention syntax: `@path` / `@"path with spaces"` for
-  // files, and `PR #N` for pull requests.
-  const formatter = useMemo(
-    () => ({
-      ...unstable_defaultDirectiveFormatter,
-      serialize: (item: Unstable_TriggerItem) => {
-        if (item.type === 'pr') {
-          const num = (item.metadata as { number?: number } | undefined)?.number ?? 0
-          return `PR #${num}`
-        }
-        const path = (item.metadata as { path?: string } | undefined)?.path ?? item.label
-        return path.includes(' ') ? `@"${path}"` : `@${path}`
-      },
-    }),
-    []
-  )
-
-  return (
-    <ComposerPrimitive.Unstable_TriggerPopover
-      char="@"
-      adapter={adapter}
-      className="bg-popover text-popover-foreground z-50 max-h-72 w-80 overflow-auto rounded-md border shadow-md"
-    >
-      <ComposerPrimitive.Unstable_TriggerPopover.Directive formatter={formatter} />
-      <ComposerPrimitive.Unstable_TriggerPopoverItems>
-        {(items) =>
-          items.length === 0 ? (
-            <div className="text-muted-foreground p-3 text-center text-sm">No matches</div>
-          ) : (
-            <ul className="p-1">
-              {items.map((item, index) => (
-                <li key={item.id}>
-                  <ComposerPrimitive.Unstable_TriggerPopoverItem
-                    item={item}
-                    index={index}
-                    className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
-                  >
-                    <span className="truncate">{item.label}</span>
-                  </ComposerPrimitive.Unstable_TriggerPopoverItem>
-                </li>
-              ))}
-            </ul>
-          )
-        }
-      </ComposerPrimitive.Unstable_TriggerPopoverItems>
-    </ComposerPrimitive.Unstable_TriggerPopover>
-  )
-}
-
-// -----------------------------------------------------------------------------
-// `/`-command trigger popover (empty-state placeholder)
-// -----------------------------------------------------------------------------
-
 const SLASH_ADAPTER: Unstable_TriggerAdapter = {
   categories: () => [],
   categoryItems: () => [],
   search: () => [],
-}
-
-function SlashTrigger() {
-  return (
-    <ComposerPrimitive.Unstable_TriggerPopover
-      char="/"
-      adapter={SLASH_ADAPTER}
-      className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-3 text-sm shadow-md"
-    >
-      <ComposerPrimitive.Unstable_TriggerPopover.Action onExecute={() => {}} />
-      <p className="text-muted-foreground" data-testid="slash-empty-state">
-        No commands available yet
-      </p>
-    </ComposerPrimitive.Unstable_TriggerPopover>
-  )
 }
