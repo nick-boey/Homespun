@@ -7,6 +7,7 @@ import type { SessionSummary } from '@/api/generated/types.gen'
 interface SidebarSessionRowProps {
   session: SessionSummary
   title: string
+  isActive?: boolean
   onNavigate?: () => void
 }
 
@@ -16,7 +17,12 @@ interface SidebarSessionRowProps {
  * Layout: status colour dot + truncated title. Hover tooltip carries the
  * full title. Clicking navigates to `/sessions/$sessionId`.
  */
-export function SidebarSessionRow({ session, title, onNavigate }: SidebarSessionRowProps) {
+export function SidebarSessionRow({
+  session,
+  title,
+  isActive,
+  onNavigate,
+}: SidebarSessionRowProps) {
   const colorClass = getSessionStatusColor(session.status)
   const sessionId = session.id
 
@@ -32,11 +38,14 @@ export function SidebarSessionRow({ session, title, onNavigate }: SidebarSession
           params={{ sessionId }}
           onClick={onNavigate}
           data-testid={`sidebar-session-${sessionId}`}
+          aria-current={isActive ? 'page' : undefined}
           className={cn(
             'flex min-h-[36px] items-center gap-2 rounded-md py-1.5 pr-3 pl-9 text-sm font-medium transition-colors',
             'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
             'active:bg-sidebar-accent/80',
-            'text-sidebar-foreground/90'
+            isActive
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/90'
           )}
         >
           <span

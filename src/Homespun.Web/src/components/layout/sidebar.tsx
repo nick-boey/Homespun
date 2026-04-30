@@ -54,10 +54,17 @@ interface ProjectNavRowProps {
   project: Project
   isActive: boolean
   hasSessions: boolean
+  activeSessionId: string | null
   onNavigate?: () => void
 }
 
-function ProjectNavRow({ project, isActive, hasSessions, onNavigate }: ProjectNavRowProps) {
+function ProjectNavRow({
+  project,
+  isActive,
+  hasSessions,
+  activeSessionId,
+  onNavigate,
+}: ProjectNavRowProps) {
   const projectId = project.id!
   const projectName = project.name!
   const [open, setOpen] = useLocalStorageBoolean(
@@ -104,7 +111,11 @@ function ProjectNavRow({ project, isActive, hasSessions, onNavigate }: ProjectNa
         />
       </div>
       <CollapsibleContent data-testid={`sidebar-project-content-${projectId}`}>
-        <SidebarSessionList projectId={projectId} onNavigate={onNavigate} />
+        <SidebarSessionList
+          projectId={projectId}
+          activeSessionId={activeSessionId}
+          onNavigate={onNavigate}
+        />
       </CollapsibleContent>
     </Collapsible>
   )
@@ -121,6 +132,10 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const { data: projects } = useProjects()
   const { data: allSessions } = useAllSessions()
   const grouped = useGroupedSessionsByProject(allSessions)
+
+  const sessionDetailMatch = pathname.match(/^\/sessions\/([^/]+)\/?$/)
+  const activeSessionId = sessionDetailMatch?.[1] ?? null
+  const isGlobalSessionsActive = pathname === '/sessions' || pathname === '/sessions/'
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -168,6 +183,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                   project={project}
                   isActive={isProjectActive(project.id!)}
                   hasSessions={hasSessions}
+                  activeSessionId={activeSessionId}
                   onNavigate={onNavigate}
                 />
               )
@@ -183,7 +199,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             to="/sessions"
             icon={<Bot className="h-4 w-4" />}
             label="Sessions"
-            isActive={isActive('/sessions')}
+            isActive={isGlobalSessionsActive}
             onClick={onNavigate}
           />
           <NavItem
