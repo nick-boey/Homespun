@@ -1,34 +1,60 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Sidebar } from './sidebar'
-import { Projects } from '@/api'
-import type { Project } from '@/api/generated/types.gen'
+import { Projects, Sessions, Issues, PullRequests, ClaudeSessionStatus, SessionMode } from '@/api'
+import type { Project, SessionSummary } from '@/api/generated/types.gen'
+import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 
-vi.mock('@/api', () => ({
-  Projects: {
-    getApiProjects: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Projects: {
+      getApiProjects: vi.fn(),
+    },
+    Sessions: {
+      getApiSessions: vi.fn(),
+    },
+    Issues: {
+      getApiIssuesByIssueId: vi.fn().mockResolvedValue({ data: undefined }),
+    },
+    PullRequests: {
+      getApiPullRequestsById: vi.fn().mockResolvedValue({ data: undefined }),
+    },
+  }
+})
 
 // Mock TanStack Router
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
     to,
+    params,
     onClick,
     className,
+    ...rest
   }: {
     children: React.ReactNode
     to: string
+    params?: Record<string, string>
     onClick?: () => void
     className?: string
-  }) => (
-    <a href={to} onClick={onClick} className={className}>
-      {children}
-    </a>
-  ),
+    [key: string]: unknown
+  }) => {
+    let href = to
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        href = href.replace(`$${k}`, v)
+      }
+    }
+    return (
+      <a href={href} onClick={onClick} className={className} {...rest}>
+        {children}
+      </a>
+    )
+  },
   useRouterState: () => ({
     location: {
       pathname: '/',
@@ -57,74 +83,82 @@ const mockProjects: Project[] = [
   },
 ]
 
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
+function makeSession(overrides: Partial<SessionSummary>): SessionSummary {
+  return {
+    id: 'session-default',
+    entityId: 'entity-default',
+    projectId: 'proj-1',
+    model: 'sonnet',
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.RUNNING,
+    createdAt: '2024-01-01T10:00:00Z',
+    lastActivityAt: '2024-01-01T10:00:00Z',
+    ...overrides,
+  }
+}
+
+function createWrapper(queryClient: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children)
+}
+
+function makeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
 
 describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(Sessions.getApiSessions as Mock).mockResolvedValue({ data: [] })
+    ;(Issues.getApiIssuesByIssueId as Mock).mockResolvedValue({ data: undefined })
+    ;(PullRequests.getApiPullRequestsById as Mock).mockResolvedValue({ data: undefined })
   })
 
   it('renders the sidebar with branding', () => {
-    const mockGetApiProjects = Projects.getApiProjects as Mock
-    mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+    ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-    render(<Sidebar />, { wrapper: createWrapper() })
+    render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
     expect(screen.getByText('Homespun')).toBeInTheDocument()
   })
 
   it('renders All Projects link', () => {
-    const mockGetApiProjects = Projects.getApiProjects as Mock
-    mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+    ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-    render(<Sidebar />, { wrapper: createWrapper() })
+    render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
     expect(screen.getByText('All Projects')).toBeInTheDocument()
   })
 
   it('renders Sessions link', () => {
-    const mockGetApiProjects = Projects.getApiProjects as Mock
-    mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+    ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-    render(<Sidebar />, { wrapper: createWrapper() })
+    render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
     expect(screen.getByText('Sessions')).toBeInTheDocument()
   })
 
   it('renders Settings link', () => {
-    const mockGetApiProjects = Projects.getApiProjects as Mock
-    mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+    ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-    render(<Sidebar />, { wrapper: createWrapper() })
+    render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
     expect(screen.getByText('Settings')).toBeInTheDocument()
   })
 
   it('renders version in footer', () => {
-    const mockGetApiProjects = Projects.getApiProjects as Mock
-    mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+    ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-    render(<Sidebar />, { wrapper: createWrapper() })
+    render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
     expect(screen.getByText('Homespun v0.1.0')).toBeInTheDocument()
   })
 
   describe('Project links', () => {
     it('displays project links when projects are loaded', async () => {
-      const mockGetApiProjects = Projects.getApiProjects as Mock
-      mockGetApiProjects.mockResolvedValueOnce({ data: mockProjects })
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
 
-      render(<Sidebar />, { wrapper: createWrapper() })
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
       await waitFor(() => {
         expect(screen.getByText('Project Alpha')).toBeInTheDocument()
@@ -134,10 +168,9 @@ describe('Sidebar', () => {
     })
 
     it('links to correct project URL', async () => {
-      const mockGetApiProjects = Projects.getApiProjects as Mock
-      mockGetApiProjects.mockResolvedValueOnce({ data: mockProjects })
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
 
-      render(<Sidebar />, { wrapper: createWrapper() })
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
       await waitFor(() => {
         expect(screen.getByText('Project Alpha')).toBeInTheDocument()
@@ -151,28 +184,23 @@ describe('Sidebar', () => {
     })
 
     it('renders no project links when projects list is empty', async () => {
-      const mockGetApiProjects = Projects.getApiProjects as Mock
-      mockGetApiProjects.mockResolvedValueOnce({ data: [] })
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: [] })
 
-      render(<Sidebar />, { wrapper: createWrapper() })
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
       await waitFor(() => {
-        expect(mockGetApiProjects).toHaveBeenCalled()
+        expect(Projects.getApiProjects).toHaveBeenCalled()
       })
 
-      // Should still have All Projects link
       expect(screen.getByText('All Projects')).toBeInTheDocument()
-
-      // But no individual project links
       expect(screen.queryByText('Project Alpha')).not.toBeInTheDocument()
     })
 
     it('calls onNavigate when project link is clicked', async () => {
-      const mockGetApiProjects = Projects.getApiProjects as Mock
-      mockGetApiProjects.mockResolvedValueOnce({ data: mockProjects })
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
 
       const onNavigate = vi.fn()
-      render(<Sidebar onNavigate={onNavigate} />, { wrapper: createWrapper() })
+      render(<Sidebar onNavigate={onNavigate} />, { wrapper: createWrapper(makeQueryClient()) })
 
       await waitFor(() => {
         expect(screen.getByText('Project Alpha')).toBeInTheDocument()
@@ -184,10 +212,9 @@ describe('Sidebar', () => {
     })
 
     it('renders project links with indentation', async () => {
-      const mockGetApiProjects = Projects.getApiProjects as Mock
-      mockGetApiProjects.mockResolvedValueOnce({ data: mockProjects })
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
 
-      render(<Sidebar />, { wrapper: createWrapper() })
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
 
       await waitFor(() => {
         expect(screen.getByText('Project Alpha')).toBeInTheDocument()
@@ -195,6 +222,189 @@ describe('Sidebar', () => {
 
       const projectAlphaLink = screen.getByText('Project Alpha').closest('a')
       expect(projectAlphaLink).toHaveClass('pl-8')
+    })
+  })
+
+  describe('Session list (live updates)', () => {
+    it('renders no chevron toggle for projects with zero non-STOPPED sessions', async () => {
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [makeSession({ id: 'a', projectId: 'proj-1', status: ClaudeSessionStatus.STOPPED })],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
+
+      await waitFor(() => {
+        expect(screen.getByText('Project Alpha')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByTestId('sidebar-project-toggle-proj-1')).not.toBeInTheDocument()
+    })
+
+    it('renders the chevron + session row for a project with at least one running session', async () => {
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'sess-running',
+            projectId: 'proj-1',
+            entityId: 'Implement OAuth',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-project-toggle-proj-1')).toBeInTheDocument()
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-sess-running')).toBeInTheDocument()
+      })
+
+      const dot = screen.getByTestId('sidebar-session-sess-running-dot')
+      expect(dot).toHaveClass('bg-green-500')
+    })
+
+    it('SessionStarted: a new row appears after invalidation', async () => {
+      const queryClient = makeQueryClient()
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({ data: [] })
+
+      render(<Sidebar />, { wrapper: createWrapper(queryClient) })
+
+      await waitFor(() => {
+        expect(screen.getByText('Project Alpha')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('sidebar-project-toggle-proj-1')).not.toBeInTheDocument()
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'newly-started',
+            projectId: 'proj-1',
+            entityId: 'Newly started session',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      await act(async () => {
+        await invalidateAllSessionsQueries(queryClient)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-newly-started')).toBeInTheDocument()
+      })
+    })
+
+    it('SessionStatusChanged: dot colour changes from green to yellow after invalidation', async () => {
+      const queryClient = makeQueryClient()
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'changing',
+            projectId: 'proj-1',
+            entityId: 'Status will change',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(queryClient) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-changing-dot')).toHaveClass('bg-green-500')
+      })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'changing',
+            projectId: 'proj-1',
+            entityId: 'Status will change',
+            status: ClaudeSessionStatus.WAITING_FOR_INPUT,
+          }),
+        ],
+      })
+
+      await act(async () => {
+        await invalidateAllSessionsQueries(queryClient)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-changing-dot')).toHaveClass('bg-yellow-500')
+      })
+    })
+
+    it('SessionStopped: the row disappears after the session transitions to STOPPED', async () => {
+      const queryClient = makeQueryClient()
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'will-stop',
+            projectId: 'proj-1',
+            entityId: 'Will stop',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(queryClient) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-will-stop')).toBeInTheDocument()
+      })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'will-stop',
+            projectId: 'proj-1',
+            entityId: 'Will stop',
+            status: ClaudeSessionStatus.STOPPED,
+          }),
+        ],
+      })
+
+      await act(async () => {
+        await invalidateAllSessionsQueries(queryClient)
+      })
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('sidebar-session-will-stop')).not.toBeInTheDocument()
+      })
+    })
+
+    it('any of the six lifecycle event invalidations refetch the all-sessions query', async () => {
+      const queryClient = makeQueryClient()
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      const sessionsMock = Sessions.getApiSessions as Mock
+      sessionsMock.mockResolvedValue({ data: [] })
+
+      render(<Sidebar />, { wrapper: createWrapper(queryClient) })
+
+      await waitFor(() => {
+        expect(screen.getByText('Project Alpha')).toBeInTheDocument()
+      })
+
+      const callsAfterInitialMount = sessionsMock.mock.calls.length
+      expect(callsAfterInitialMount).toBeGreaterThan(0)
+
+      // Each of the six lifecycle events ultimately funnels through
+      // `invalidateAllSessionsQueries`, so a single invalidation per event is
+      // sufficient to assert that the all-sessions query is registered under
+      // the invalidation namespace.
+      for (let i = 0; i < 6; i++) {
+        await act(async () => {
+          await invalidateAllSessionsQueries(queryClient)
+        })
+      }
+
+      await waitFor(() => {
+        expect(sessionsMock.mock.calls.length).toBeGreaterThan(callsAfterInitialMount)
+      })
     })
   })
 })

@@ -1,5 +1,11 @@
 import { Link } from '@tanstack/react-router'
 import { Circle } from 'lucide-react'
+import { ClaudeSessionStatus } from '@/api'
+import {
+  getSessionStatusColorName,
+  getSessionStatusTextColor,
+  type SessionStatusColorName,
+} from '@/features/sessions/utils/session-status-color'
 import { useAllSessionsCount } from '../hooks'
 import { cn } from '@/lib/utils'
 
@@ -13,13 +19,10 @@ interface ActiveAgentsIndicatorProps {
  * Clicking navigates to the sessions list.
  */
 export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps) {
-  // Always call both hooks to satisfy React rules
   const allSessionsData = useAllSessionsCount()
 
-  // Build the sessions URL - global or project-specific
   const sessionsUrl = '/sessions'
 
-  // Loading state
   const isLoading = allSessionsData.isLoading
   if (isLoading) {
     return (
@@ -39,59 +42,80 @@ export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps)
     hasActive,
   } = allSessionsData
 
-  // Build array of status indicators to display
   type StatusIndicator = {
     count: number
     label: string
+    colorName: SessionStatusColorName
     colorClass: string
     testId: string
     showPing: boolean
   }
 
-  const statusIndicators: StatusIndicator[] = [
+  // Each category is keyed off a representative ClaudeSessionStatus so the
+  // shared colour utility is the single source of truth.
+  const indicatorBlueprints: Array<{
+    count: number
+    label: string
+    representativeStatus: ClaudeSessionStatus
+    testId: string
+    showPing: boolean
+  }> = [
     {
       count: workingCount,
       label: 'Working',
-      colorClass: 'text-green-500',
+      representativeStatus: ClaudeSessionStatus.RUNNING,
       testId: 'status-working',
       showPing: true,
     },
     {
       count: waitingForInputCount,
       label: 'Waiting for input',
-      colorClass: 'text-yellow-500',
+      representativeStatus: ClaudeSessionStatus.WAITING_FOR_INPUT,
       testId: 'status-waiting-input',
       showPing: false,
     },
     {
       count: waitingForAnswerCount,
       label: 'Waiting for answer',
-      colorClass: 'text-purple-500',
+      representativeStatus: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
       testId: 'status-waiting-answer',
       showPing: false,
     },
     {
       count: waitingForPlanCount,
       label: 'Waiting for plan',
-      colorClass: 'text-orange-500',
+      representativeStatus: ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
       testId: 'status-waiting-plan',
       showPing: false,
     },
     {
       count: errorCount,
       label: 'Error',
-      colorClass: 'text-red-500',
+      representativeStatus: ClaudeSessionStatus.ERROR,
       testId: 'status-error',
       showPing: false,
     },
-  ].filter((status) => status.count > 0)
+  ]
 
-  // Don't render anything if no active sessions
+  const statusIndicators: StatusIndicator[] = indicatorBlueprints
+    .filter((status) => status.count > 0)
+    .map((status) => {
+      const colorName = getSessionStatusColorName(status.representativeStatus)!
+      const colorClass = getSessionStatusTextColor(status.representativeStatus)!
+      return {
+        count: status.count,
+        label: status.label,
+        colorName,
+        colorClass,
+        testId: status.testId,
+        showPing: status.showPing,
+      }
+    })
+
   if (!hasActive || statusIndicators.length === 0) {
     return null
   }
 
-  // Render status indicators
   return (
     <Link
       to={sessionsUrl}
@@ -105,7 +129,7 @@ export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps)
               <span
                 className={cn(
                   'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-                  status.colorClass === 'text-green-500' && 'bg-green-400'
+                  status.colorName === 'green' && 'bg-green-400'
                 )}
               />
               <Circle
