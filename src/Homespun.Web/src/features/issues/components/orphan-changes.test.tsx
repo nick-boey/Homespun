@@ -211,7 +211,7 @@ describe('OrphanedChangesList', () => {
     expect(within(pinned).getByText('Issue One')).toBeInTheDocument()
   })
 
-  it('T012.3b selecting an issue in picker fans out one POST per occurrence with selected fleeceId', async () => {
+  it('T012.3b selecting an issue in picker emits a single branchless link call with the selected fleeceId', async () => {
     const user = userEvent.setup()
     const entries: OrphanEntry[] = [
       {
@@ -231,17 +231,15 @@ describe('OrphanedChangesList', () => {
     await user.click(screen.getByTestId('orphan-link-to-issue'))
     await user.click(await screen.findByTestId('orphan-picker-row-i2'))
 
-    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(2))
-    const bodies = mockLink.mock.calls.map((c) => c[0]?.body)
-    expect(bodies).toEqual(
-      expect.arrayContaining([
-        { projectId: 'p1', branch: null, changeName: 'beta', fleeceId: 'i2' },
-        { projectId: 'p1', branch: 'feat/x+i1', changeName: 'beta', fleeceId: 'i2' },
-      ])
-    )
+    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(1))
+    expect(mockLink.mock.calls[0]?.[0]?.body).toEqual({
+      projectId: 'p1',
+      changeName: 'beta',
+      fleeceId: 'i2',
+    })
   })
 
-  it('T012.4a split-button primary creates issue then links all occurrences', async () => {
+  it('T012.4a split-button primary creates issue then issues a single branchless link call', async () => {
     const user = userEvent.setup()
     const entries: OrphanEntry[] = [
       {
@@ -267,14 +265,12 @@ describe('OrphanedChangesList', () => {
     })
     expect(mockCreate.mock.calls[0]?.[0]?.body?.parentIssueId).toBeUndefined()
 
-    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(2))
-    const bodies = mockLink.mock.calls.map((c) => c[0]?.body)
-    expect(bodies).toEqual(
-      expect.arrayContaining([
-        { projectId: 'p1', branch: null, changeName: 'alpha', fleeceId: 'new-issue-1' },
-        { projectId: 'p1', branch: 'feat/x+i1', changeName: 'alpha', fleeceId: 'new-issue-1' },
-      ])
-    )
+    await waitFor(() => expect(mockLink).toHaveBeenCalledTimes(1))
+    expect(mockLink.mock.calls[0]?.[0]?.body).toEqual({
+      projectId: 'p1',
+      changeName: 'alpha',
+      fleeceId: 'new-issue-1',
+    })
   })
 
   it('T012.4b split-button dropdown opens picker in choose-parent mode; selected parent passed to createIssue', async () => {
@@ -305,7 +301,7 @@ describe('OrphanedChangesList', () => {
     })
     await waitFor(() =>
       expect(mockLink).toHaveBeenCalledWith({
-        body: { projectId: 'p1', branch: null, changeName: 'alpha', fleeceId: 'new-issue-1' },
+        body: { projectId: 'p1', changeName: 'alpha', fleeceId: 'new-issue-1' },
       })
     )
   })

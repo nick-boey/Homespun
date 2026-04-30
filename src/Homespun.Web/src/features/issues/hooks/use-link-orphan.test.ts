@@ -50,14 +50,14 @@ describe('useLinkOrphan', () => {
     vi.clearAllMocks()
   })
 
-  it('T011.1 single-occurrence input emits exactly one POST with the occurrence branch', async () => {
+  it('emits exactly one branchless POST per mutateAsync invocation', async () => {
     mockLink.mockResolvedValue(okResponse())
     const client = makeClient()
     const { result } = renderHook(() => useLinkOrphan(), { wrapper: wrap(client) })
 
     await result.current.mutateAsync({
       projectId: 'p1',
-      occurrences: [{ branch: 'feat/x', changeName: 'add-foo' }],
+      changeName: 'add-foo',
       fleeceId: 'f1',
     })
 
@@ -65,57 +65,43 @@ describe('useLinkOrphan', () => {
     expect(mockLink).toHaveBeenCalledWith({
       body: {
         projectId: 'p1',
-        branch: 'feat/x',
         changeName: 'add-foo',
         fleeceId: 'f1',
       },
     })
   })
 
-  it('T011.2 multi-occurrence input emits one POST per occurrence in parallel', async () => {
+  it('does not include a branch field on the request body', async () => {
     mockLink.mockResolvedValue(okResponse())
     const client = makeClient()
     const { result } = renderHook(() => useLinkOrphan(), { wrapper: wrap(client) })
 
     await result.current.mutateAsync({
       projectId: 'p1',
-      occurrences: [
-        { branch: null, changeName: 'add-foo' },
-        { branch: 'feat/x', changeName: 'add-foo' },
-      ],
+      changeName: 'add-foo',
       fleeceId: 'f1',
     })
 
-    expect(mockLink).toHaveBeenCalledTimes(2)
-    const calls = mockLink.mock.calls.map((c) => c[0]?.body)
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        { projectId: 'p1', branch: null, changeName: 'add-foo', fleeceId: 'f1' },
-        { projectId: 'p1', branch: 'feat/x', changeName: 'add-foo', fleeceId: 'f1' },
-      ])
-    )
+    const body = mockLink.mock.calls[0]?.[0]?.body
+    expect(body).toBeDefined()
+    expect(body).not.toHaveProperty('branch')
   })
 
-  it('T011.3 any call failing rejects the mutation', async () => {
-    mockLink.mockResolvedValueOnce(okResponse())
-    mockLink.mockResolvedValueOnce(errorResponse('change directory not found'))
-
+  it('rejects with the server detail when the call fails', async () => {
+    mockLink.mockResolvedValue(errorResponse('change directory not found in any tracked clone'))
     const client = makeClient()
     const { result } = renderHook(() => useLinkOrphan(), { wrapper: wrap(client) })
 
     await expect(
       result.current.mutateAsync({
         projectId: 'p1',
-        occurrences: [
-          { branch: null, changeName: 'add-foo' },
-          { branch: 'feat/x', changeName: 'add-foo' },
-        ],
+        changeName: 'add-foo',
         fleeceId: 'f1',
       })
-    ).rejects.toThrow('change directory not found')
+    ).rejects.toThrow('change directory not found in any tracked clone')
   })
 
-  it('T011.4 onSuccess invalidates task-graph once', async () => {
+  it('onSuccess invalidates task-graph exactly once', async () => {
     mockLink.mockResolvedValue(okResponse())
     const client = makeClient()
     const spy = vi.spyOn(client, 'invalidateQueries')
@@ -124,10 +110,7 @@ describe('useLinkOrphan', () => {
 
     await result.current.mutateAsync({
       projectId: 'p1',
-      occurrences: [
-        { branch: null, changeName: 'add-foo' },
-        { branch: 'feat/x', changeName: 'add-foo' },
-      ],
+      changeName: 'add-foo',
       fleeceId: 'f1',
     })
 

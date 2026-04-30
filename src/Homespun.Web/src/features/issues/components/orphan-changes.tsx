@@ -100,7 +100,7 @@ export function OrphanedChangesList({
     try {
       await link.mutateAsync({
         projectId,
-        occurrences: entry.occurrences,
+        changeName: entry.name,
         fleeceId: issueId,
       })
     } finally {
@@ -119,7 +119,7 @@ export function OrphanedChangesList({
       if (issue?.id) {
         await link.mutateAsync({
           projectId,
-          occurrences: entry.occurrences,
+          changeName: entry.name,
           fleeceId: issue.id,
         })
       }

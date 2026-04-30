@@ -3,6 +3,7 @@ using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.OpenSpec;
+using Homespun.Shared.Models.Projects;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.OpenSpec.Controllers;
@@ -106,9 +107,19 @@ public class ChangeSnapshotController(
 
     /// <summary>
     /// Writes a <c>.homespun.yaml</c> sidecar linking an orphan change to a Fleece
-    /// issue. When <see cref="LinkOrphanRequest.Branch"/> is null or empty the
-    /// project's main clone is used (main-branch orphans). The next branch scan
-    /// picks the sidecar up and the graph reclassifies the change as linked.
+    /// issue. Two modes:
+    /// <list type="bullet">
+    /// <item><description><b>Branchless</b> (<see cref="LinkOrphanRequest.Branch"/> null/empty):
+    /// scans every tracked clone (main + <c>.clones/*</c>) for one carrying
+    /// <c>openspec/changes/&lt;changeName&gt;/</c> and writes the sidecar into every
+    /// match within one request. Returns 404 only when no clone carries the change.</description></item>
+    /// <item><description><b>Branch-scoped</b> (<see cref="LinkOrphanRequest.Branch"/> set):
+    /// resolves the named clone via <see cref="IGitCloneService.GetClonePathForBranchAsync"/>
+    /// and writes the sidecar to that single clone. Returns 404 if the clone or change
+    /// directory is missing.</description></item>
+    /// </list>
+    /// The next branch scan picks the sidecar(s) up and the graph reclassifies the change
+    /// as linked.
     /// </summary>
     [HttpPost("changes/link")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -131,47 +142,107 @@ public class ChangeSnapshotController(
             return NotFound("project or local path not found");
         }
 
-        string? clonePath;
-        if (string.IsNullOrWhiteSpace(request.Branch))
-        {
-            clonePath = project.LocalPath;
-        }
-        else
-        {
-            clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath, request.Branch);
-        }
-
-        if (string.IsNullOrEmpty(clonePath) || !Directory.Exists(clonePath))
-        {
-            return NotFound("clone path not resolved");
-        }
-
-        var changeDir = Path.Combine(clonePath, "openspec", "changes", request.ChangeName);
-        if (!Directory.Exists(changeDir))
-        {
-            return NotFound("change directory not found");
-        }
-
         var sidecar = new ChangeSidecar
         {
             FleeceId = request.FleeceId,
             CreatedBy = "server"
         };
-        await sidecarService.WriteSidecarAsync(changeDir, sidecar, ct);
 
-        // Invalidate cached snapshot so the next graph read reflects the link.
-        if (!string.IsNullOrWhiteSpace(request.Branch))
+        if (string.IsNullOrWhiteSpace(request.Branch))
         {
-            cache.Invalidate(request.ProjectId, request.Branch);
+            return await LinkAcrossClonesAsync(project, request.ChangeName, sidecar, ct);
         }
 
-        // Bust the warm task-graph snapshot too so /taskgraph/data recomputes
-        // on the next read instead of waiting for the refresher tick.
-        snapshotStore?.InvalidateProject(request.ProjectId);
+        return await LinkOnBranchAsync(project, request.Branch, request.ChangeName, sidecar, ct);
+    }
+
+    private async Task<IActionResult> LinkOnBranchAsync(
+        Project project,
+        string branch,
+        string changeName,
+        ChangeSidecar sidecar,
+        CancellationToken ct)
+    {
+        var clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath!, branch);
+        if (string.IsNullOrEmpty(clonePath) || !Directory.Exists(clonePath))
+        {
+            return NotFound("clone path not resolved");
+        }
+
+        var changeDir = Path.Combine(clonePath, "openspec", "changes", changeName);
+        if (!Directory.Exists(changeDir))
+        {
+            return NotFound("change directory not found");
+        }
+
+        await sidecarService.WriteSidecarAsync(changeDir, sidecar, ct);
+
+        cache.Invalidate(project.Id, branch);
+        snapshotStore?.InvalidateProject(project.Id);
 
         logger.LogInformation(
             "Linked orphan change {Change} on branch {Branch} to fleece issue {Fleece}",
-            request.ChangeName, request.Branch ?? "(main)", request.FleeceId);
+            changeName, branch, sidecar.FleeceId);
+
+        return NoContent();
+    }
+
+    private async Task<IActionResult> LinkAcrossClonesAsync(
+        Project project,
+        string changeName,
+        ChangeSidecar sidecar,
+        CancellationToken ct)
+    {
+        var matches = new List<(string ClonePath, string ChangeDir, string? BranchKey)>();
+
+        if (Directory.Exists(project.LocalPath))
+        {
+            var mainChangeDir = Path.Combine(project.LocalPath!, "openspec", "changes", changeName);
+            if (Directory.Exists(mainChangeDir))
+            {
+                matches.Add((project.LocalPath!, mainChangeDir, null));
+            }
+        }
+
+        var clones = await cloneService.ListClonesAsync(project.LocalPath!);
+        foreach (var clone in clones)
+        {
+            if (clone.IsBare) continue;
+
+            var workdir = !string.IsNullOrEmpty(clone.WorkdirPath) ? clone.WorkdirPath : clone.Path;
+            if (string.IsNullOrEmpty(workdir) || !Directory.Exists(workdir)) continue;
+
+            var changeDir = Path.Combine(workdir, "openspec", "changes", changeName);
+            if (!Directory.Exists(changeDir)) continue;
+
+            var branchKey = !string.IsNullOrEmpty(clone.ExpectedBranch)
+                ? clone.ExpectedBranch
+                : clone.Branch?.Replace("refs/heads/", "");
+
+            matches.Add((workdir, changeDir, branchKey));
+        }
+
+        if (matches.Count == 0)
+        {
+            return NotFound("change directory not found in any tracked clone");
+        }
+
+        await Task.WhenAll(matches.Select(m =>
+            sidecarService.WriteSidecarAsync(m.ChangeDir, sidecar, ct)));
+
+        foreach (var match in matches)
+        {
+            if (!string.IsNullOrEmpty(match.BranchKey))
+            {
+                cache.Invalidate(project.Id, match.BranchKey);
+            }
+        }
+
+        snapshotStore?.InvalidateProject(project.Id);
+
+        logger.LogInformation(
+            "Linked orphan change {Change} to fleece issue {Fleece} across {Count} clone(s)",
+            changeName, sidecar.FleeceId, matches.Count);
 
         return NoContent();
     }
