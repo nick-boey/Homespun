@@ -6,6 +6,7 @@ import {
   translateResultToStatus,
   translateControlEvent,
   createErrorStatus,
+  getEventKind,
   type TranslationContext,
 } from '#src/services/a2a-translator.js';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -241,5 +242,153 @@ describe('createErrorStatus', () => {
     expect(status.status.state).toBe('failed');
     expect(status.final).toBe(true);
     expect(status.metadata).toMatchObject({ errorCode: 'CONNECTION_ERROR' });
+  });
+});
+
+// FI-2: a2a-translator coverage gap fill — exercise the suppression rules for
+// `AskUserQuestion` / `ExitPlanMode` (the design D6 "the suppression rules
+// in `a2a-translator.ts`" callout) and the `tool_result` + unknown-block
+// branches under `translateContentBlocks`, plus the `getEventKind` classifier.
+
+describe('translateSdkMessage — interactive tool suppression (FI-2)', () => {
+  it('drops AskUserQuestion tool_use blocks at the translator boundary', () => {
+    const sdkMsg: SDKMessage = {
+      type: 'assistant',
+      session_id: 'sess-1',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'q-1', name: 'AskUserQuestion', input: {} },
+        ],
+      },
+    } as SDKMessage;
+
+    const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+    expect(a2aMsg).not.toBeNull();
+    expect(a2aMsg!.parts).toHaveLength(0);
+  });
+
+  it('drops the paired tool_result for a suppressed AskUserQuestion call', () => {
+    const turnCtx: TranslationContext = {
+      taskId: 't1',
+      contextId: 'c1',
+      suppressedToolUseIds: new Set<string>(),
+    };
+
+    const askMsg: SDKMessage = {
+      type: 'assistant',
+      session_id: 's',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'tool-suppressed', name: 'ExitPlanMode', input: {} },
+        ],
+      },
+    } as SDKMessage;
+    translateSdkMessage(askMsg, turnCtx);
+    expect(turnCtx.suppressedToolUseIds!.has('tool-suppressed')).toBe(true);
+
+    const resultMsg: SDKMessage = {
+      type: 'user',
+      session_id: 's',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'tool-suppressed', content: 'x', is_error: false },
+        ],
+      },
+    } as SDKMessage;
+
+    const a2aMsg = translateSdkMessage(resultMsg, turnCtx);
+    expect(a2aMsg).not.toBeNull();
+    expect(a2aMsg!.parts).toHaveLength(0);
+  });
+
+  it('emits non-suppressed tool_result blocks as data parts with kind=tool_result', () => {
+    const sdkMsg: SDKMessage = {
+      type: 'user',
+      session_id: 's',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'bash-1', content: 'ok', is_error: false },
+        ],
+      },
+    } as SDKMessage;
+
+    const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+    expect(a2aMsg!.parts).toHaveLength(1);
+    expect(a2aMsg!.parts[0].kind).toBe('data');
+    const dataPart = a2aMsg!.parts[0] as { kind: 'data'; data: any; metadata?: any };
+    expect(dataPart.data.toolUseId).toBe('bash-1');
+    expect(dataPart.data.content).toBe('ok');
+    expect(dataPart.data.isError).toBe(false);
+    expect(dataPart.metadata?.kind).toBe('tool_result');
+  });
+
+  it('preserves an unknown content block as data part with kind=unknown_block', () => {
+    const sdkMsg: SDKMessage = {
+      type: 'assistant',
+      session_id: 's',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'unrecognized_kind', extra: 'data' },
+        ],
+      },
+    } as SDKMessage;
+
+    const a2aMsg = translateSdkMessage(sdkMsg, ctx);
+
+    expect(a2aMsg!.parts).toHaveLength(1);
+    expect(a2aMsg!.parts[0].kind).toBe('data');
+    const dataPart = a2aMsg!.parts[0] as { kind: 'data'; data: any; metadata?: any };
+    expect(dataPart.metadata?.kind).toBe('unknown_block');
+  });
+});
+
+describe('getEventKind (FI-2)', () => {
+  it('classifies question_pending control events as status-update', () => {
+    expect(
+      getEventKind({ type: 'question_pending', data: { questions: [] } } as any),
+    ).toBe('status-update');
+  });
+
+  it('classifies plan_pending control events as status-update', () => {
+    expect(getEventKind({ type: 'plan_pending', data: { plan: '' } } as any)).toBe(
+      'status-update',
+    );
+  });
+
+  it('classifies status_resumed control events as status-update', () => {
+    expect(getEventKind({ type: 'status_resumed', data: {} } as any)).toBe('status-update');
+  });
+
+  it('classifies SDK result messages as status-update', () => {
+    expect(getEventKind({ type: 'result', session_id: 's' } as SDKMessage)).toBe(
+      'status-update',
+    );
+  });
+
+  it('classifies SDK assistant messages as message', () => {
+    expect(
+      getEventKind({
+        type: 'assistant',
+        session_id: 's',
+        message: { role: 'assistant', content: [] },
+      } as SDKMessage),
+    ).toBe('message');
+  });
+
+  it('classifies SDK user messages as message', () => {
+    expect(
+      getEventKind({
+        type: 'user',
+        session_id: 's',
+        message: { role: 'user', content: [] },
+      } as SDKMessage),
+    ).toBe('message');
   });
 });

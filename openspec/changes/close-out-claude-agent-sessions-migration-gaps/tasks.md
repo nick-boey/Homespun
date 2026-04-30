@@ -80,10 +80,10 @@ description: "Phased task list for close-out-claude-agent-sessions-migration-gap
 
 **Scope:** test-only delta inside `tests/Homespun.Worker/`.
 
-- [ ] 4.1 Run `npm run test:coverage` from `src/Homespun.Worker/` against `main`. Capture the per-file coverage for `services/session-manager.ts`, `services/session-discovery.ts`, `services/a2a-translator.ts`, `services/sse-writer.ts`. Record the baseline in the PR description.
-- [ ] 4.2 Identify uncovered branches in each module — focus on error paths, boundary conditions, and the suppression rules in `a2a-translator.ts` (`AskUserQuestion` / `ExitPlanMode` re-expression).
-- [ ] 4.3 Author targeted test cases for the gaps. Prefer table-driven tests with explicit fixture inputs.
-- [ ] 4.4 Re-run `npm run test:coverage`; PR description must show the new module-wide coverage percentage and the per-file delta.
+- [x] 4.1 Run `npm run test:coverage` from `src/Homespun.Worker/` against `main`. Capture the per-file coverage for `services/session-manager.ts`, `services/session-discovery.ts`, `services/a2a-translator.ts`, `services/sse-writer.ts`. Record the baseline in the PR description. _(Baseline: a2a-translator 75% lines / 50% branches; session-manager 88.73% / 75%; sse-writer 94.49% / 81.91%; session-discovery already 100%. Module-wide lines 87.89%, branches 72.86%.)_
+- [x] 4.2 Identify uncovered branches in each module — focus on error paths, boundary conditions, and the suppression rules in `a2a-translator.ts` (`AskUserQuestion` / `ExitPlanMode` re-expression). _(Gaps: a2a-translator lines 240-259 — `tool_result` suppression + unknown_block default; lines 407-424 — `getEventKind`. session-manager lines 1177, 1282-1307 — `clearContextAndCreate`. sse-writer lines 215-223 — `status_resumed` control branch. session-discovery already covered.)_
+- [x] 4.3 Author targeted test cases for the gaps. Prefer table-driven tests with explicit fixture inputs. _(Added 10 a2a-translator tests covering FI-2 suppression rules + `getEventKind` for every classification branch; 2 sse-writer tests covering `status_resumed` and `question_pending` translator paths; 2 session-manager tests covering `clearContextAndCreate` for both existing-session and unknown-session inputs.)_
+- [x] 4.4 Re-run `npm run test:coverage`; PR description must show the new module-wide coverage percentage and the per-file delta. _(After: a2a-translator 96.87% lines / 81.03% branches (+21.87/+31.03); session-manager 90.98% / 76.36% (+2.25/+1.36); sse-writer 98.16% / 82.97% (+3.67/+1.06); session-discovery still 100%. Module-wide lines 87.89% → 90.04% (+2.15), branches 72.86% → 75.62% (+2.76). All four target files now comfortably above the spec's 80%-on-changed-lines threshold.)_
 - [ ] 4.5 Run the full pre-PR gate. Update Fleece: `fleece edit PDEv8G -s review --linked-pr <PR>`.
 
 ---

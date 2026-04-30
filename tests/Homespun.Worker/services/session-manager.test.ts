@@ -721,4 +721,46 @@ describe('SessionManager', () => {
       await expect(manager.closeAll()).resolves.not.toThrow();
     });
   });
+
+  // FI-2: clearContextAndCreate is the entry point used by the server's
+  // ClearContextAndStartNew flow. Cover both the existing-session and
+  // unknown-session paths so the close-then-create sequencing is asserted.
+  describe('clearContextAndCreate() (FI-2)', () => {
+    it('closes the existing session and creates a new one', async () => {
+      let uuidCount = 0;
+      mockRandomUUID.mockImplementation(() => `uuid-${++uuidCount}`);
+      setMockQuery(createBlockingMockQuery());
+
+      const old = await manager.create({
+        prompt: 'first',
+        model: 'sonnet',
+        mode: 'Build',
+      });
+
+      const result = await manager.clearContextAndCreate(old.id, {
+        prompt: 'fresh',
+        model: 'sonnet',
+        mode: 'Build',
+      });
+
+      expect(result.oldSessionId).toBe(old.id);
+      expect(result.newSession.id).not.toBe(old.id);
+      expect(manager.get(old.id)).toBeUndefined();
+      expect(manager.get(result.newSession.id)).toBe(result.newSession);
+    });
+
+    it('still creates a new session when the current id is unknown', async () => {
+      setMockQuery(createBlockingMockQuery());
+
+      const result = await manager.clearContextAndCreate('unknown', {
+        prompt: 'fresh',
+        model: 'sonnet',
+        mode: 'Build',
+      });
+
+      expect(result.oldSessionId).toBe('unknown');
+      expect(result.newSession).toBeDefined();
+      expect(manager.get(result.newSession.id)).toBe(result.newSession);
+    });
+  });
 });
