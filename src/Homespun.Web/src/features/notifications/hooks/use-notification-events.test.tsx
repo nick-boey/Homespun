@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
+import { toast } from 'sonner'
 import { useNotificationEvents } from './use-notification-events'
 import { useNotificationStore } from '../stores/notification-store'
 import type { NotificationDto, IssueChangeType } from '@/types/signalr'
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
+}))
 
 // Mock the SignalR provider hooks
 const mockConnection = {
@@ -153,6 +163,53 @@ describe('useNotificationEvents', () => {
       const notifications = useNotificationStore.getState().notifications
       expect(notifications.length).toBeGreaterThan(0)
       expect(notifications[0].title).toContain('Issue')
+    })
+  })
+
+  it('surfaces AgentStartFailed via a sonner toast in addition to the store', async () => {
+    let agentStartFailedHandler: (
+      issueId: string,
+      projectId: string,
+      error: string
+    ) => void = () => {}
+
+    mockConnection.on.mockImplementation((event: string, handler: unknown) => {
+      if (event === 'AgentStartFailed') {
+        agentStartFailedHandler = handler as (
+          issueId: string,
+          projectId: string,
+          error: string
+        ) => void
+      }
+    })
+    // Reassert the empty-active-notifications mock — earlier tests in this file
+    // mutate the resolved value, and that bleeds across cases (it would replace
+    // our just-added store entry once the mount-time getActiveNotifications
+    // promise resolves).
+    mockMethods.getActiveNotifications.mockResolvedValue([])
+
+    // Mount on a *different* project — simulates the user having navigated away.
+    renderHook(() => useNotificationEvents({ projectId: 'unrelated-project' }))
+
+    agentStartFailedHandler('issue-42', 'origin-project', 'Base branch is blocked')
+
+    // The toast surfaces the failure regardless of the current route's projectId
+    // filter on the bell dropdown — that's the whole point of FI-2.
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Agent Start Failed',
+        expect.objectContaining({
+          description: 'Base branch is blocked',
+          id: 'agent-start-failed-issue-42',
+        })
+      )
+    })
+
+    // Store entry is also added so the bell-dropdown history is preserved
+    // for the originating project.
+    await waitFor(() => {
+      const stored = useNotificationStore.getState().notifications
+      expect(stored.some((n) => n.title === 'Agent Start Failed')).toBe(true)
     })
   })
 

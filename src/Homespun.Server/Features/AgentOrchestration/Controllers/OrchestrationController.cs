@@ -36,6 +36,16 @@ public class OrchestrationController(
 
         var result = await branchIdGeneratorService.GenerateAsync(request.Title, cancellationToken);
 
+        // Surface the fallback path to the client via the standard HTTP Warning header.
+        // RFC 7234 §5.5 — `Warning: 199 - "agent" "text"`. Lets a UI annotate "AI was unavailable,
+        // returning a deterministic slug" without parsing the JSON body.
+        if (result.Success && !result.WasAiGenerated)
+        {
+            Response.Headers.Append(
+                "Warning",
+                "199 - \"homespun\" \"AI branch-id generation unavailable; deterministic fallback used\"");
+        }
+
         return Ok(new GenerateBranchIdResponse(
             Success: result.Success,
             BranchId: result.BranchId,

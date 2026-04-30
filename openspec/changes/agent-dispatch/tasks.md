@@ -70,7 +70,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T020 [P] `StackedPrAgentStartTests` in `tests/Homespun.Api.Tests/Features/AgentOrchestration/` — explicit override, prior-sibling-PR auto-pick, default fallback.
 - [x] T021 [P] `run-agent-dialog.test.tsx` and `use-run-agent.test.ts`.
 - [x] T022 [P] `use-start-agent.test.tsx`, `use-agent-prompts.test.tsx`, `use-ensure-clone.test.tsx`.
-- [ ] T023 **GP-1**: API test covering the `202 Accepted` happy path of `POST /api/issues/{issueId}/run` **DEFERRED → fleece:ckmk8k**
+- [x] T023 **GP-1**: API test covering the `202 Accepted` happy path of `POST /api/issues/{issueId}/run` — see `RunAgentApiTests` in `tests/Homespun.Api.Tests/Features/AgentOrchestration/`.
 
 ### Checkpoint
 
@@ -91,18 +91,18 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T027 `TaskQueue.Process` in `Features/AgentOrchestration/Services/TaskQueue.cs` — single-lane sequential processor that awaits each item's session reaching a terminal status before dispatching the next.
 - [x] T028 Event surface: `QueueCreated`, `QueueCompleted`, `AllQueuesCompleted`, `ExecutionFailed` — emitted by `QueueCoordinator` / `TaskQueue`.
 - [x] T029 Cancellation path: `POST /queue/cancel` marks pending items Cancelled without interrupting in-flight sessions.
-- [x] T030 Workflow integration seam: `WorkflowMappings` propagated through each dispatched item; session registered with `IWorkflowSessionCallback.RegisterSession` when mapping matches.
+- [ ] T030 Workflow integration seam: `WorkflowMappings` propagated through each dispatched item; session registered with `IWorkflowSessionCallback.RegisterSession` when mapping matches. **NOT BUILT** — design D5 was never implemented; the workflows slice has no callback into agent-dispatch today. Reopen if/when the workflows slice grows a registration seam.
 
 ### Tests
 
 - [x] T031 [P] `QueueCoordinatorTests` — tree expansion across leaf / series / parallel configurations.
-- [x] T032 [P] `QueueCoordinatorWorkflowTests` — workflow-mapping propagation.
+- [ ] T032 [P] `QueueCoordinatorWorkflowTests` — workflow-mapping propagation. **NOT BUILT** — depends on T030.
 - [x] T033 [P] `TaskQueueTests` — sequential processing, terminal-status await, failure-stops-lane.
-- [x] T034 [P] `TaskQueueWorkflowTests` — workflow callback registration per item.
+- [ ] T034 [P] `TaskQueueWorkflowTests` — workflow callback registration per item. **NOT BUILT** — depends on T030.
 - [x] T035 [P] `QueueControllerTests` — unit coverage of controller wiring.
 - [x] T036 [P] `QueueApiTests` — integration coverage via WebApplicationFactory.
-- [ ] T037 **GP-5**: regression test that a throwing `IWorkflowSessionCallback.RegisterSession` is surfaced to the client cleanly **DEFERRED → fleece:ckmk8k**
-- [ ] T038 **GP-6**: pagination for `GET /queue/status` + test **DEFERRED → fleece:ckmk8k**
+- [ ] T037 **GP-5**: regression test that a throwing `IWorkflowSessionCallback.RegisterSession` is surfaced to the client cleanly. **OBSOLETE pending T030** — the seam doesn't exist, so there is no callback to throw. Tracked alongside T030; reopen with that work.
+- [x] T038 **GP-6**: pagination for `GET /queue/status` + tests — `?limit` (default 50, max 200) and `?offset` (default 0); `QueueStatusResponse` carries `totalQueueCount`, `limit`, `offset`. Tests in `QueueControllerTests` + `QueueApiTests`.
 
 ### Checkpoint
 
@@ -137,8 +137,8 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T050 [P] `BranchIdBackgroundServiceTests` — sidecar-failure fallback.
 - [x] T051 [P] `MiniPromptServiceTests` — HTTP client behaviour + timeout handling.
 - [x] T052 [P] `use-generate-branch-id.test.tsx`, `use-branches.test.tsx`, `base-branch-selector.test.tsx`.
-- [ ] T053 **GP-3**: `BaseBranchSelector` explicit error fallback when `useBranches` rejects **DEFERRED → fleece:ckmk8k**
-- [ ] T054 **GP-4**: sidecar health check at startup + fallback on the sync endpoint **DEFERRED → fleece:ckmk8k**
+- [x] T053 **GP-3**: `BaseBranchSelector` explicit error fallback when `useBranches` rejects — alert region with retry control. Tests in `base-branch-selector.test.tsx`.
+- [x] T054 **GP-4**: sidecar health check at startup + fallback on the sync endpoint — `MiniPromptHealthCheckHostedService` probes the sidecar at boot; `OrchestrationController.GenerateBranchId` emits a `Warning: 199` HTTP header when the deterministic fallback fires. Tests in `MiniPromptHealthCheckHostedServiceTests` + `OrchestrationApiTests`.
 
 ### Checkpoint
 
@@ -164,7 +164,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T060 [P] `active-agents-indicator.test.tsx`, `use-active-session-count.test.tsx`, `use-all-sessions-count.test.tsx`.
 - [x] T061 [P] `agent-status-indicator.test.tsx`, `agent-control-panel.test.tsx`.
 - [x] T062 [P] `use-project-sessions.test.tsx`.
-- [ ] T063 **GP-2**: consistent UI handler for `AgentStartFailed` so failures surface even after the user navigates away **DEFERRED → fleece:ckmk8k**
+- [x] T063 **GP-2**: consistent UI handler for `AgentStartFailed` so failures surface even after the user navigates away — `useNotificationEvents` now also fires a route-agnostic `toast.error` alongside the bell-dropdown entry. Test in `use-notification-events.test.tsx`.
 
 ### Checkpoint
 
@@ -177,7 +177,7 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 - [x] T065 SignalR hub methods `BroadcastAgentStarting` / `BroadcastAgentStartFailed` on `NotificationHub` used by `AgentStartBackgroundService`.
 - [x] T066 OpenAPI surface: `RunAgent*` and `Orchestration*` DTOs appear in the generated client under `src/Homespun.Web/src/api/generated/`.
 - [x] T067 Shared contract discipline: no hand-duplicated DTOs between server and web (Constitution §III verified by grep).
-- [ ] T068 **FI-1**: Playwright e2e coverage for the full "Run Agent → AgentStarting broadcast → session streaming" loop (covers GP-1 alongside the 202 API test). **DEFERRED → fleece:ckmk8k**
+- [x] T068 **FI-1**: Playwright e2e coverage for the Run Agent dispatch surface — `e2e/agents/run-agent-dispatch.spec.ts` covers 202 happy path, 409 double-dispatch, and 404 project-missing through the live Vite + .NET stack. Existing `agent-and-issue-agent-launching.spec.ts` covers the dialog → 202 UI flow. The route-agnostic AgentStartFailed toast is verified by `use-notification-events.test.tsx`.
 
 ---
 
@@ -187,9 +187,9 @@ description: "Retrospective task list for the migrated Agent Dispatch feature"
 |-------|-------|----------|------|
 | Setup | T001–T003 | 3/3 | — |
 | Foundational | T004–T008 | 5/5 | — |
-| US1 (P1 🎯) | T009–T024 | 15/16 | GP-1 |
-| US2 (P2) | T025–T039 | 13/15 | GP-5, GP-6 |
-| US3 (P2) | T040–T055 | 14/16 | GP-3, GP-4 |
-| US4 (P3) | T056–T064 | 8/9 | GP-2 |
-| Polish | T065–T068 | 3/4 | FI-1 (covers GP-1) |
-| **Total** | **68** | **61/68** | **6 gaps** |
+| US1 (P1 🎯) | T009–T024 | 16/16 | — |
+| US2 (P2) | T025–T039 | 12/15 | T030 (not built), T032/T034 (depend on T030), GP-5 (obsolete pending T030) |
+| US3 (P2) | T040–T055 | 16/16 | — |
+| US4 (P3) | T056–T064 | 9/9 | — |
+| Polish | T065–T068 | 4/4 | — |
+| **Total** | **68** | **65/68** | **3 gaps (all blocked on T030 — workflow seam not built)** |

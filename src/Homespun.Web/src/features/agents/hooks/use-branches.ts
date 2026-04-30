@@ -42,6 +42,7 @@ export function useBranches(repoPath: string | undefined, defaultBranch?: string
   return {
     branches: query.data ?? [],
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,

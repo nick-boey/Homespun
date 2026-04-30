@@ -16,6 +16,9 @@ public class QueueController(
     IProjectService projectService,
     ILogger<QueueController> logger) : ControllerBase
 {
+    private const int DefaultLimit = 50;
+    private const int MaxLimit = 200;
+
     /// <summary>
     /// Start queue execution on a root issue.
     /// </summary>
@@ -56,13 +59,26 @@ public class QueueController(
     }
 
     /// <summary>
-    /// Get current queue coordinator state for a project.
+    /// Get current queue coordinator state for a project. Queues are paginated
+    /// via the optional <paramref name="limit"/> (default 50, max 200) and
+    /// <paramref name="offset"/> (default 0) query parameters.
     /// </summary>
     [HttpGet("status")]
     [ProducesResponseType<QueueStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<QueueStatusResponse>> GetStatus(string projectId)
+    public async Task<ActionResult<QueueStatusResponse>> GetStatus(
+        string projectId,
+        [FromQuery] int? limit = null,
+        [FromQuery] int? offset = null)
     {
+        // Bounds-check pagination first so callers see 400 even when the project or
+        // execution does not exist — keeps client retry logic simple.
+        if (limit is < 1 or > MaxLimit)
+            return BadRequest($"limit must be between 1 and {MaxLimit}");
+        if (offset is < 0)
+            return BadRequest("offset must be >= 0");
+
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
             return NotFound("Project not found");
@@ -71,7 +87,7 @@ public class QueueController(
         if (state == null)
             return NotFound("No active execution for this project");
 
-        var response = BuildStatusResponse(projectId);
+        var response = BuildStatusResponse(projectId, limit ?? DefaultLimit, offset ?? 0);
         return Ok(response);
     }
 
@@ -99,28 +115,36 @@ public class QueueController(
         return Ok(response);
     }
 
-    private QueueStatusResponse? BuildStatusResponse(string projectId)
+    private QueueStatusResponse? BuildStatusResponse(
+        string projectId,
+        int limit = DefaultLimit,
+        int offset = 0)
     {
         var state = queueCoordinator.GetStatus(projectId);
         if (state == null)
             return null;
 
-        var queues = state.ActiveQueues.Select(q => new QueueDetail
-        {
-            Id = q.Id,
-            State = q.State.ToString(),
-            CurrentIssueId = q.CurrentRequest?.IssueId,
-            PendingCount = q.PendingRequests.Count,
-            History = q.History.Select(h => new QueueHistoryEntry
+        var pageQueues = state.ActiveQueues
+            .Skip(offset)
+            .Take(limit)
+            .Select(q => new QueueDetail
             {
-                IssueId = h.IssueId,
-                Success = h.Success,
-                Error = h.Error,
-                StartedAt = h.StartedAt,
-                CompletedAt = h.CompletedAt
-            }).ToList()
-        }).ToList();
+                Id = q.Id,
+                State = q.State.ToString(),
+                CurrentIssueId = q.CurrentRequest?.IssueId,
+                PendingCount = q.PendingRequests.Count,
+                History = q.History.Select(h => new QueueHistoryEntry
+                {
+                    IssueId = h.IssueId,
+                    Success = h.Success,
+                    Error = h.Error,
+                    StartedAt = h.StartedAt,
+                    CompletedAt = h.CompletedAt
+                }).ToList()
+            })
+            .ToList();
 
+        // Progress is ALWAYS computed across the full queue set, not the page.
         var allHistory = state.ActiveQueues.SelectMany(q => q.History).ToList();
         var currentCount = state.ActiveQueues.Count(q => q.CurrentRequest != null);
         var pendingCount = state.ActiveQueues.Sum(q => q.PendingRequests.Count);
@@ -132,7 +156,10 @@ public class QueueController(
             RootIssueId = state.RootIssueId,
             MaxConcurrency = state.MaxConcurrency,
             RunningQueueCount = state.RunningQueueCount,
-            Queues = queues,
+            Queues = pageQueues,
+            TotalQueueCount = state.ActiveQueues.Count,
+            Limit = limit,
+            Offset = offset,
             Progress = new QueueProgress
             {
                 TotalIssues = allHistory.Count + currentCount + pendingCount,

@@ -375,6 +375,7 @@ else
         builder.Configuration.GetSection(MiniPromptOptions.SectionName));
     builder.Services.AddHttpClient("MiniPrompt");
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
+    builder.Services.AddHostedService<MiniPromptHealthCheckHostedService>();
     builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
     builder.Services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
     builder.Services.AddScoped<IBaseBranchResolver, BaseBranchResolver>();

@@ -7,6 +7,8 @@ import {
 } from '@/components/ui/select'
 import { useBranches } from '../hooks'
 import { Loader } from '@/components/ui/loader'
+import { Button } from '@/components/ui/button'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 
 interface BaseBranchSelectorProps {
   /** Path to the git repository */
@@ -35,7 +37,7 @@ export function BaseBranchSelector({
   disabled = false,
   'aria-label': ariaLabel = 'Select base branch',
 }: BaseBranchSelectorProps) {
-  const { branches, isLoading, isError } = useBranches(repoPath, defaultBranch)
+  const { branches, isLoading, isError, isFetching, refetch } = useBranches(repoPath, defaultBranch)
 
   // If no value is set and branches are loaded, auto-select default or first branch
   const effectiveValue = value || defaultBranch || branches[0]?.shortName || ''
@@ -50,7 +52,30 @@ export function BaseBranchSelector({
   }
 
   if (isError) {
-    return <div className="text-destructive text-sm">Failed to load branches</div>
+    return (
+      <div
+        role="alert"
+        className="border-destructive/50 bg-destructive/5 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+      >
+        <div className="text-destructive flex items-center gap-2 text-sm">
+          <AlertCircle className="size-4" aria-hidden="true" />
+          <span>Failed to load branches</span>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCw
+            className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`}
+            aria-hidden="true"
+          />
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (
