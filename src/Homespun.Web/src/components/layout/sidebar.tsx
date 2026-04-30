@@ -1,7 +1,23 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { FolderKanban, List, Settings, Bot, FolderGit2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  FolderKanban,
+  List,
+  Settings,
+  Bot,
+  FolderGit2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjects } from '@/features/projects/hooks/use-projects'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  useAllSessions,
+  useGroupedSessionsByProject,
+} from '@/features/sessions/hooks/use-all-sessions'
+import { SidebarSessionList } from '@/features/sessions/components/sidebar-session-list'
+import { useLocalStorageBoolean } from '@/hooks/use-local-storage-boolean'
+import type { Project } from '@/api/generated/types.gen'
 
 interface NavItemProps {
   to: string
@@ -34,6 +50,66 @@ function NavItem({ to, icon, label, isActive, indent, onClick }: NavItemProps) {
   )
 }
 
+interface ProjectNavRowProps {
+  project: Project
+  isActive: boolean
+  hasSessions: boolean
+  onNavigate?: () => void
+}
+
+function ProjectNavRow({ project, isActive, hasSessions, onNavigate }: ProjectNavRowProps) {
+  const projectId = project.id!
+  const projectName = project.name!
+  const [open, setOpen] = useLocalStorageBoolean(
+    `homespun.sidebar.project-expanded.${projectId}`,
+    true
+  )
+
+  if (!hasSessions) {
+    return (
+      <NavItem
+        to={`/projects/${projectId}`}
+        icon={<FolderGit2 className="h-4 w-4" />}
+        label={projectName}
+        isActive={isActive}
+        indent
+        onClick={onNavigate}
+      />
+    )
+  }
+
+  const ChevronIcon = open ? ChevronDown : ChevronRight
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="relative">
+        <CollapsibleTrigger
+          aria-label={`Toggle ${projectName} sessions`}
+          data-testid={`sidebar-project-toggle-${projectId}`}
+          className={cn(
+            'absolute top-1/2 left-1 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded',
+            'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+            'focus:ring-ring focus-visible:ring-2 focus-visible:outline-none'
+          )}
+        >
+          <ChevronIcon className="h-4 w-4" />
+        </CollapsibleTrigger>
+        <NavItem
+          to={`/projects/${projectId}`}
+          icon={<FolderGit2 className="h-4 w-4" />}
+          label={projectName}
+          isActive={isActive}
+          indent
+          onClick={onNavigate}
+        />
+      </div>
+      <CollapsibleContent data-testid={`sidebar-project-content-${projectId}`}>
+        <SidebarSessionList projectId={projectId} onNavigate={onNavigate} />
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 interface SidebarProps {
   className?: string
   onNavigate?: () => void
@@ -43,6 +119,8 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
   const { data: projects } = useProjects()
+  const { data: allSessions } = useAllSessions()
+  const grouped = useGroupedSessionsByProject(allSessions)
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -82,17 +160,18 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
           />
           {projects
             ?.filter((project) => project.id && project.name)
-            .map((project) => (
-              <NavItem
-                key={project.id}
-                to={`/projects/${project.id}`}
-                icon={<FolderGit2 className="h-4 w-4" />}
-                label={project.name!}
-                isActive={isProjectActive(project.id!)}
-                indent
-                onClick={onNavigate}
-              />
-            ))}
+            .map((project) => {
+              const hasSessions = (grouped.get(project.id!) ?? []).length > 0
+              return (
+                <ProjectNavRow
+                  key={project.id}
+                  project={project}
+                  isActive={isProjectActive(project.id!)}
+                  hasSessions={hasSessions}
+                  onNavigate={onNavigate}
+                />
+              )
+            })}
         </div>
 
         <div className="mb-2">

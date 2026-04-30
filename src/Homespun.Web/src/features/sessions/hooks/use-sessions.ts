@@ -3,16 +3,19 @@ import { Sessions } from '@/api'
 
 export const sessionsQueryKey = ['sessions'] as const
 export const allSessionsCountQueryKey = ['all-sessions-count'] as const
+export const allSessionsQueryKey = ['all-sessions'] as const
 
 /**
  * Invalidates all session-related queries.
  * This includes the main sessions query, the all-sessions-count query used by the header indicator,
+ * the all-sessions query used by the sidebar session list,
  * and all project-specific session queries.
  */
 export async function invalidateAllSessionsQueries(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: sessionsQueryKey }),
     queryClient.invalidateQueries({ queryKey: allSessionsCountQueryKey }),
+    queryClient.invalidateQueries({ queryKey: allSessionsQueryKey }),
     queryClient.invalidateQueries({
       predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === 'project-sessions',
