@@ -54,13 +54,23 @@ public class ClaudeSessionStore : IClaudeSessionStore
     /// <inheritdoc />
     public bool Update(ClaudeSession session)
     {
-        if (!_sessions.ContainsKey(session.Id))
+        // Atomic compare-and-swap: only mutate the slot if it currently holds
+        // a session with the same id. The pre-fix `ContainsKey` + indexer
+        // pattern could race with a concurrent `Remove` and re-insert a
+        // just-removed session — see FI-5 in
+        // close-out-claude-agent-sessions-migration-gaps.
+        while (_sessions.TryGetValue(session.Id, out var current))
         {
-            return false;
+            if (_sessions.TryUpdate(session.Id, session, current))
+            {
+                return true;
+            }
+            // Another writer raced us to TryUpdate; retry against the
+            // newly-observed value. Loop terminates because TryGetValue
+            // returns false once a Remove has won.
         }
 
-        _sessions[session.Id] = session;
-        return true;
+        return false;
     }
 
     /// <inheritdoc />

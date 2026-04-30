@@ -274,7 +274,8 @@ else
             var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
             return new ContainerRecoveryHostedService(
                 discoveryService,
-                container => executionService?.RegisterDiscoveredContainer(container),
+                (container, ct) => executionService?.RegisterDiscoveredContainerAsync(container, ct)
+                    ?? Task.CompletedTask,
                 logger);
         });
     }

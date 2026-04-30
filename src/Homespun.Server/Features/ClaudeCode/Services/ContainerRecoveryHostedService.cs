@@ -9,23 +9,39 @@ namespace Homespun.Features.ClaudeCode.Services;
 public class ContainerRecoveryHostedService : BackgroundService
 {
     private readonly IContainerDiscoveryService _discoveryService;
-    private readonly Action<DiscoveredContainer> _registerContainer;
+    private readonly Func<DiscoveredContainer, CancellationToken, Task> _registerContainer;
     private readonly ILogger<ContainerRecoveryHostedService> _logger;
 
     /// <summary>
     /// Creates a new instance of the container recovery service.
     /// </summary>
     /// <param name="discoveryService">Service for discovering containers.</param>
-    /// <param name="registerContainer">Action to register a discovered container.</param>
+    /// <param name="registerContainer">Async callback to register a discovered container.</param>
     /// <param name="logger">Logger instance.</param>
     public ContainerRecoveryHostedService(
         IContainerDiscoveryService discoveryService,
-        Action<DiscoveredContainer> registerContainer,
+        Func<DiscoveredContainer, CancellationToken, Task> registerContainer,
         ILogger<ContainerRecoveryHostedService> logger)
     {
         _discoveryService = discoveryService;
         _registerContainer = registerContainer;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Sync-callback overload preserved for callers that don't need to await
+    /// the registration (e.g. existing tests). Internally adapted to the async
+    /// callback signature.
+    /// </summary>
+    public ContainerRecoveryHostedService(
+        IContainerDiscoveryService discoveryService,
+        Action<DiscoveredContainer> registerContainer,
+        ILogger<ContainerRecoveryHostedService> logger)
+        : this(
+            discoveryService,
+            (container, _) => { registerContainer(container); return Task.CompletedTask; },
+            logger)
+    {
     }
 
     /// <inheritdoc />
@@ -54,7 +70,7 @@ public class ContainerRecoveryHostedService : BackgroundService
 
                 try
                 {
-                    _registerContainer(container);
+                    await _registerContainer(container, stoppingToken);
                     _logger.LogInformation(
                         "Recovered container {ContainerName} ({ContainerId}) for {WorkingDirectory}",
                         container.ContainerName, container.ContainerId, container.WorkingDirectory);

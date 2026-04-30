@@ -1,10 +1,12 @@
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Containers;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Controllers;
 
@@ -19,6 +21,7 @@ public class SessionsController(
     IProjectService projectService,
     IContainerQueryService containerService,
     IModelCatalogService modelCatalog,
+    IOptions<SessionEventsOptions> sessionEventsOptions,
     ILogger<SessionsController> logger) : ControllerBase
 {
     /// <summary>
@@ -109,8 +112,10 @@ public class SessionsController(
     /// </summary>
     [HttpPost]
     [ProducesResponseType<ClaudeSession>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ClaudeSession>(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ClaudeSession>(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ClaudeSession>> Create(
         [FromBody] CreateSessionRequest request,
         CancellationToken cancellationToken)
@@ -126,45 +131,57 @@ public class SessionsController(
             request.Model ?? project.DefaultModel,
             cancellationToken);
 
+        ClaudeSession session;
         try
         {
-            var session = await sessionService.StartSessionAsync(
+            session = await sessionService.StartSessionAsync(
                 request.EntityId,
                 request.ProjectId,
                 workingDirectory,
                 request.Mode,
                 model,
                 request.SystemPrompt);
-
-            // If an initial message is provided, send it to start the agent work
-            if (!string.IsNullOrWhiteSpace(request.InitialMessage))
-            {
-                // Fire and forget - don't block the response
-                // The message processing will happen asynchronously and clients
-                // will receive updates via SignalR
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await sessionService.SendMessageAsync(
-                            session.Id,
-                            request.InitialMessage,
-                            request.Mode);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log but don't fail - session is already created
-                        // The error will be communicated via SignalR
-                        logger.LogError(ex, "Error sending initial message for session {SessionId}", session.Id);
-                    }
-                });
-            }
-
-            return CreatedAtAction(nameof(GetById), new { id = session.Id }, session);
         }
         catch (Exception ex)
         {
             return BadRequest($"Failed to start session: {ex.Message}");
+        }
+
+        // If no initial message, return 201 immediately.
+        if (string.IsNullOrWhiteSpace(request.InitialMessage))
+        {
+            return CreatedAtAction(nameof(GetById), new { id = session.Id }, session);
+        }
+
+        // Bounded await on the initial-message dispatch. On success, 201 Created.
+        // On timeout, 202 Accepted and the SignalR stream surfaces the eventual
+        // result. On dispatch failure, 500 Internal Server Error with the session
+        // id so the client can act even without an active hub connection.
+        var timeoutSeconds = Math.Max(1, sessionEventsOptions.Value.DispatchTimeoutSeconds);
+        using var dispatchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        dispatchCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        try
+        {
+            await sessionService.SendMessageAsync(
+                session.Id,
+                request.InitialMessage,
+                request.Mode,
+                dispatchCts.Token);
+
+            return CreatedAtAction(nameof(GetById), new { id = session.Id }, session);
+        }
+        catch (OperationCanceledException) when (dispatchCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Initial-message dispatch for session {SessionId} did not complete within {TimeoutSeconds}s — returning 202 Accepted",
+                session.Id, timeoutSeconds);
+            return Accepted(Url.Action(nameof(GetById), new { id = session.Id }), session);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Initial-message dispatch failed for session {SessionId}", session.Id);
+            return StatusCode(StatusCodes.Status500InternalServerError, session);
         }
     }
 

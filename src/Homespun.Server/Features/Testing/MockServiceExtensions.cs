@@ -187,7 +187,8 @@ public static class MockServiceExtensions
         services.AddSingleton<IA2AToAGUITranslator, A2AToAGUITranslator>();
         services.AddSingleton<ISessionEventIngestor, SessionEventIngestor>();
         services.AddSingleton<IToolCallResultAppender, ToolCallResultAppender>();
-        services.Configure<Homespun.Features.ClaudeCode.Settings.SessionEventsOptions>(_ => { });
+        services.Configure<Homespun.Features.ClaudeCode.Settings.SessionEventsOptions>(
+            configuration.GetSection(Homespun.Features.ClaudeCode.Settings.SessionEventsOptions.SectionName));
 
         // Pull request workflow service (needed by GraphService)
         services.AddScoped<PullRequestWorkflowService>();
@@ -257,7 +258,8 @@ public static class MockServiceExtensions
                 var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
                 return new ContainerRecoveryHostedService(
                     discoveryService,
-                    container => executionService?.RegisterDiscoveredContainer(container),
+                    (container, ct) => executionService?.RegisterDiscoveredContainerAsync(container, ct)
+                        ?? Task.CompletedTask,
                     logger);
             });
         }

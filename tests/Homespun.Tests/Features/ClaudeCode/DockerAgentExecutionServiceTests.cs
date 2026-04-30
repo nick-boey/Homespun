@@ -23,7 +23,8 @@ public class DockerAgentExecutionServiceTests
 {
     private static DockerAgentExecutionService Build(
         DockerAgentExecutionOptions? options = null,
-        IPerSessionEventStream? perSession = null)
+        IPerSessionEventStream? perSession = null,
+        ISessionMetadataStore? metadataStore = null)
     {
         return new DockerAgentExecutionService(
             Options.Create(options ?? new DockerAgentExecutionOptions
@@ -32,13 +33,15 @@ public class DockerAgentExecutionServiceTests
             }),
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
-            perSession ?? new Mock<IPerSessionEventStream>().Object);
+            perSession ?? new Mock<IPerSessionEventStream>().Object,
+            metadataStore ?? new Mock<ISessionMetadataStore>().Object);
     }
 
     private static DockerAgentExecutionService BuildWithHttp(
         HttpClient httpClient,
         IPerSessionEventStream perSession,
-        DockerAgentExecutionOptions? options = null)
+        DockerAgentExecutionOptions? options = null,
+        ISessionMetadataStore? metadataStore = null)
     {
         return new DockerAgentExecutionService(
             Options.Create(options ?? new DockerAgentExecutionOptions
@@ -48,7 +51,8 @@ public class DockerAgentExecutionServiceTests
             NullLogger<DockerAgentExecutionService>.Instance,
             new Mock<ISecretsService>().Object,
             perSession,
-            httpClient);
+            httpClient,
+            metadataStore);
     }
 
     [Test]
@@ -446,5 +450,165 @@ public class DockerAgentExecutionServiceTests
 
         Assert.That(yielded, Has.Some.InstanceOf<SdkResultMessage>(),
             "the turn drain should surface the result message");
+    }
+
+    // -------------------------------------------------------------------
+    // FI-3: persisted Mode/Model on DockerSession survive list/status
+    // and recovery (close-out-claude-agent-sessions-migration-gaps).
+    // -------------------------------------------------------------------
+
+    [Test]
+    public async Task ListSessionsAsync_returns_persisted_mode_and_model()
+    {
+        var svc = Build();
+        svc.RegisterSessionForTesting(
+            homespunSessionId: "session-plan-opus",
+            workerSessionId: "worker-1",
+            workerUrl: "http://fake",
+            projectId: "p1",
+            mode: SessionMode.Plan,
+            model: "opus");
+
+        var statuses = await svc.ListSessionsAsync(CancellationToken.None);
+        var status = statuses.SingleOrDefault(s => s.SessionId == "session-plan-opus");
+
+        Assert.That(status, Is.Not.Null, "expected the registered session to be listed");
+        Assert.Multiple(() =>
+        {
+            Assert.That(status!.Mode, Is.EqualTo(SessionMode.Plan),
+                "ListSessionsAsync must surface the persisted Mode (was hardcoded to Build)");
+            Assert.That(status.Model, Is.EqualTo("opus"),
+                "ListSessionsAsync must surface the persisted Model (was hardcoded to \"sonnet\")");
+        });
+    }
+
+    [Test]
+    public async Task GetSessionStatusAsync_returns_persisted_mode_and_model()
+    {
+        var svc = Build();
+        svc.RegisterSessionForTesting(
+            homespunSessionId: "session-plan-haiku",
+            workerSessionId: "worker-1",
+            workerUrl: "http://fake",
+            projectId: "p1",
+            mode: SessionMode.Plan,
+            model: "haiku");
+
+        var status = await svc.GetSessionStatusAsync("session-plan-haiku", CancellationToken.None);
+
+        Assert.That(status, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(status!.Mode, Is.EqualTo(SessionMode.Plan),
+                "GetSessionStatusAsync must surface the persisted Mode (was hardcoded to Build)");
+            Assert.That(status.Model, Is.EqualTo("haiku"),
+                "GetSessionStatusAsync must surface the persisted Model (was hardcoded to \"sonnet\")");
+        });
+    }
+
+    [Test]
+    public async Task RegisterDiscoveredContainerAsync_recovers_session_using_worker_active_response()
+    {
+        // Worker reports an active session in Plan mode running opus — recovered
+        // session should surface those values via ListSessionsAsync without any
+        // SessionMetadataStore lookup.
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("/api/sessions/active", new
+        {
+            hasActiveSession = true,
+            sessionId = "recovered-1",
+            status = "idle",
+            mode = "plan",
+            model = "opus",
+            hasPendingQuestion = false,
+            hasPendingPlanApproval = false,
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://fake/") };
+
+        var metadata = new Mock<ISessionMetadataStore>();
+        var perSession = new Mock<IPerSessionEventStream>();
+        var svc = BuildWithHttp(httpClient, perSession.Object, metadataStore: metadata.Object);
+
+        var container = new DiscoveredContainer(
+            ContainerId: "c1",
+            ContainerName: "homespun-issue-p1-i1",
+            WorkerUrl: "http://fake",
+            ProjectId: "p1",
+            IssueId: "i1",
+            WorkingDirectory: "/data/p1",
+            CreatedAt: DateTime.UtcNow);
+
+        await svc.RegisterDiscoveredContainerAsync(container, CancellationToken.None);
+
+        var statuses = await svc.ListSessionsAsync(CancellationToken.None);
+        var recovered = statuses.SingleOrDefault(s => s.SessionId == "recovered-1");
+
+        Assert.That(recovered, Is.Not.Null, "recovered session must appear in ListSessionsAsync");
+        Assert.Multiple(() =>
+        {
+            Assert.That(recovered!.Mode, Is.EqualTo(SessionMode.Plan));
+            Assert.That(recovered.Model, Is.EqualTo("opus"));
+        });
+
+        metadata.Verify(
+            m => m.GetBySessionIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never,
+            "metadata store should not be queried when the worker reports both Mode and Model");
+    }
+
+    [Test]
+    public async Task RegisterDiscoveredContainerAsync_falls_back_to_metadata_store_when_worker_omits_values()
+    {
+        // Worker reports an active session but with empty Mode/Model — recovery
+        // should fall back to the SessionMetadataStore for the persisted values.
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("/api/sessions/active", new
+        {
+            hasActiveSession = true,
+            sessionId = "recovered-2",
+            status = "idle",
+            mode = (string?)null,
+            model = (string?)null,
+            hasPendingQuestion = false,
+            hasPendingPlanApproval = false,
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://fake/") };
+
+        var metadata = new Mock<ISessionMetadataStore>();
+        metadata
+            .Setup(m => m.GetBySessionIdAsync("recovered-2", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionMetadata(
+                SessionId: "recovered-2",
+                EntityId: "i1",
+                ProjectId: "p1",
+                WorkingDirectory: "/data/p1",
+                Mode: SessionMode.Plan,
+                Model: "opus",
+                SystemPrompt: null,
+                CreatedAt: DateTime.UtcNow));
+
+        var perSession = new Mock<IPerSessionEventStream>();
+        var svc = BuildWithHttp(httpClient, perSession.Object, metadataStore: metadata.Object);
+
+        var container = new DiscoveredContainer(
+            ContainerId: "c1",
+            ContainerName: "homespun-issue-p1-i1",
+            WorkerUrl: "http://fake",
+            ProjectId: "p1",
+            IssueId: "i1",
+            WorkingDirectory: "/data/p1",
+            CreatedAt: DateTime.UtcNow);
+
+        await svc.RegisterDiscoveredContainerAsync(container, CancellationToken.None);
+
+        var status = await svc.GetSessionStatusAsync("recovered-2", CancellationToken.None);
+        Assert.That(status, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(status!.Mode, Is.EqualTo(SessionMode.Plan),
+                "Mode must come from SessionMetadataStore when the worker omits it");
+            Assert.That(status.Model, Is.EqualTo("opus"),
+                "Model must come from SessionMetadataStore when the worker omits it");
+        });
     }
 }
