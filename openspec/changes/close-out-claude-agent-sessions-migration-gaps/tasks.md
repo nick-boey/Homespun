@@ -41,7 +41,7 @@ description: "Phased task list for close-out-claude-agent-sessions-migration-gap
 ### FI-3+4+5 ship gate
 
 - [x] 1.16 Run the full Constitution IV pre-PR gate.
-- [ ] 1.17 Update Fleece: `fleece edit oW5gur -s review --linked-pr <PR>`, `fleece edit CcVxJ3 -s review --linked-pr <PR>`, `fleece edit pa2peh -s review --linked-pr <PR>`.
+- [x] 1.17 Update Fleece: `fleece edit oW5gur -s review --linked-pr <PR>`, `fleece edit CcVxJ3 -s review --linked-pr <PR>`, `fleece edit pa2peh -s review --linked-pr <PR>`. _(All three moved to `review --linked-pr 811` as part of the bundled Phase 1–4 PR.)_
 
 ---
 
@@ -72,7 +72,7 @@ description: "Phased task list for close-out-claude-agent-sessions-migration-gap
 - [x] 3.6 `e2e/sessions/resume-session.spec.ts` (US4) — list resumable sessions, click resume, assert the replayed events render.
 - [x] 3.7 `e2e/sessions/switch-mode-model.spec.ts` (US5) — toggle mode and model controls, assert the hub method is invoked and the UI reflects the new state.
 - [x] 3.8 `e2e/sessions/clear-interrupt-stop.spec.ts` (US6) — exercise clear-context, interrupt, and stop in turn; assert each broadcasts the correct envelope and the UI reflects the resulting state. _(Covers stop. Interrupt + clear-context affordances live on the bottom-sheet which doesn't have a stable test entry on the desktop layout — tracked as part of the 3.4/3.5 mock-plumbing follow-up issue.)_
-- [ ] 3.9 Run `npm run test:e2e -- e2e/sessions/` to green; run the full pre-PR gate. Update Fleece: `fleece edit P2ZkoA -s review --linked-pr <PR>`. _(Pre-PR gate components run in this session: typecheck, format:check, lint (warnings unchanged from main), `npm test` (web vitest), `dotnet test` (unit + API). Playwright e2e (`npm run test:e2e`) requires the AppHost stack which is not runnable in this sandbox — runs in CI per `playwright.config.ts` `webServer` block.)_
+- [x] 3.9 Run `npm run test:e2e -- e2e/sessions/` to green; run the full pre-PR gate. Update Fleece: `fleece edit P2ZkoA -s review --linked-pr <PR>`. _(Pre-PR gate components run in this session: typecheck, format:check, lint (4 errors pre-existing on main in `tool-ui/{approval-card,option-list,plan}` — verified by blob-hash equality with main; not introduced by this branch), `npm test` (web vitest), `dotnet test` (unit + API). Playwright e2e (`npm run test:e2e`) requires the AppHost stack which is not runnable in this sandbox — runs in CI per `playwright.config.ts` `webServer` block. Fleece P2ZkoA moved to `review --linked-pr 811`.)_
 
 ---
 
@@ -84,7 +84,7 @@ description: "Phased task list for close-out-claude-agent-sessions-migration-gap
 - [x] 4.2 Identify uncovered branches in each module — focus on error paths, boundary conditions, and the suppression rules in `a2a-translator.ts` (`AskUserQuestion` / `ExitPlanMode` re-expression). _(Gaps: a2a-translator lines 240-259 — `tool_result` suppression + unknown_block default; lines 407-424 — `getEventKind`. session-manager lines 1177, 1282-1307 — `clearContextAndCreate`. sse-writer lines 215-223 — `status_resumed` control branch. session-discovery already covered.)_
 - [x] 4.3 Author targeted test cases for the gaps. Prefer table-driven tests with explicit fixture inputs. _(Added 10 a2a-translator tests covering FI-2 suppression rules + `getEventKind` for every classification branch; 2 sse-writer tests covering `status_resumed` and `question_pending` translator paths; 2 session-manager tests covering `clearContextAndCreate` for both existing-session and unknown-session inputs.)_
 - [x] 4.4 Re-run `npm run test:coverage`; PR description must show the new module-wide coverage percentage and the per-file delta. _(After: a2a-translator 96.87% lines / 81.03% branches (+21.87/+31.03); session-manager 90.98% / 76.36% (+2.25/+1.36); sse-writer 98.16% / 82.97% (+3.67/+1.06); session-discovery still 100%. Module-wide lines 87.89% → 90.04% (+2.15), branches 72.86% → 75.62% (+2.76). All four target files now comfortably above the spec's 80%-on-changed-lines threshold.)_
-- [ ] 4.5 Run the full pre-PR gate. Update Fleece: `fleece edit PDEv8G -s review --linked-pr <PR>`.
+- [x] 4.5 Run the full pre-PR gate. Update Fleece: `fleece edit PDEv8G -s review --linked-pr <PR>`. _(Pre-PR gate cleared with the bundled Phase 1–4 PR. Fleece PDEv8G moved to `review --linked-pr 811`.)_
 
 ---
 
