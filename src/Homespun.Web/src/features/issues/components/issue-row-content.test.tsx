@@ -32,32 +32,17 @@ function makeLine(overrides: Partial<TaskGraphIssueRenderLine> = {}): TaskGraphI
     branchName: null,
     lane: 0,
     marker: TaskGraphMarkerType.Actionable,
-    parentLane: null,
-    isFirstChild: false,
-    isSeriesChild: false,
-    drawTopLine: false,
-    drawBottomLine: false,
-    seriesConnectorFromLane: null,
     issueType: IssueType.TASK,
     status: IssueStatus.OPEN,
     hasDescription: false,
     linkedPr: null,
     agentStatus: null,
     assignedTo: null,
-    drawLane0Connector: false,
-    isLastLane0Connector: false,
-    drawLane0PassThrough: false,
-    lane0Color: null,
-    hasHiddenParent: false,
-    hiddenParentIsSeriesMode: false,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
-    multiParentIndex: null,
-    multiParentTotal: null,
-    isLastChild: false,
-    hasParallelChildren: false,
+    appearanceIndex: 1,
+    totalAppearances: 1,
     parentIssueId: null,
-    parentLaneReservations: [],
     ...overrides,
   }
 }
@@ -174,7 +159,7 @@ describe('IssueRowContent', () => {
   })
 
   it('hides the multi-parent badge when editable=false (picker shell)', () => {
-    const line = makeLine({ multiParentIndex: 0, multiParentTotal: 2 })
+    const line = makeLine({ appearanceIndex: 1, totalAppearances: 2 })
     const { rerender } = render(<IssueRowContent line={line} projectId="p1" editable />, {
       wrapper: wrapper(),
     })

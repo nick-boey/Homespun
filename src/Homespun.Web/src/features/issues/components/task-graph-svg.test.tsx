@@ -32,30 +32,15 @@ describe('TaskGraphNodeSvg', () => {
     branchName: null,
     hasDescription: true,
     lane: 0,
-    parentLane: null,
-    isFirstChild: false,
-    drawTopLine: false,
-    drawBottomLine: false,
-    isSeriesChild: false,
-    seriesConnectorFromLane: null,
-    drawLane0Connector: false,
-    isLastLane0Connector: false,
-    drawLane0PassThrough: false,
-    lane0Color: null,
-    hasHiddenParent: false,
-    hiddenParentIsSeriesMode: false,
     marker: TaskGraphMarkerType.Open,
     linkedPr: null,
     agentStatus: null,
     assignedTo: null,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
-    multiParentIndex: null,
-    multiParentTotal: null,
-    isLastChild: false,
-    hasParallelChildren: false,
+    appearanceIndex: 1,
+    totalAppearances: 1,
     parentIssueId: null,
-    parentLaneReservations: [],
     ...overrides,
   })
 
@@ -261,10 +246,7 @@ describe('TaskGraphNodeSvg', () => {
   describe('connector rendering based on isSeriesChild', () => {
     it('does NOT render parallel connector when isSeriesChild=true', () => {
       const line = createMockLine({
-        isSeriesChild: true,
         lane: 1,
-        parentLane: 0,
-        isFirstChild: true,
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
 
@@ -280,11 +262,7 @@ describe('TaskGraphNodeSvg', () => {
 
     it('does NOT render series lines when drawTopLine and drawBottomLine are false', () => {
       const line = createMockLine({
-        isSeriesChild: true,
         lane: 0,
-        parentLane: 1,
-        drawTopLine: false,
-        drawBottomLine: false,
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
 
@@ -300,7 +278,7 @@ describe('TaskGraphNodeSvg', () => {
   })
 
   describe('multi-parent indicator', () => {
-    it('renders no diagonal when multiParentIndex is null', () => {
+    it('renders no diagonal when appearanceIndex is null', () => {
       const line = createMockLine()
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -313,7 +291,7 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('renders down-right diagonal for first multi-parent instance', () => {
-      const line = createMockLine({ multiParentIndex: 0, multiParentTotal: 3 })
+      const line = createMockLine({ appearanceIndex: 1, totalAppearances: 3 })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
       const lines = container.querySelectorAll('line')
@@ -322,7 +300,7 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('renders up-left diagonal for last multi-parent instance', () => {
-      const line = createMockLine({ multiParentIndex: 2, multiParentTotal: 3 })
+      const line = createMockLine({ appearanceIndex: 2, totalAppearances: 3 })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
       const lines = container.querySelectorAll('line')
@@ -331,7 +309,7 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('renders both diagonals for middle instance', () => {
-      const line = createMockLine({ multiParentIndex: 1, multiParentTotal: 3 })
+      const line = createMockLine({ appearanceIndex: 1, totalAppearances: 3 })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
       const lines = container.querySelectorAll('line')
@@ -403,30 +381,15 @@ describe('TaskGraphEdges', () => {
     branchName: null,
     hasDescription: true,
     lane,
-    parentLane: null,
-    isFirstChild: false,
-    drawTopLine: false,
-    drawBottomLine: false,
-    isSeriesChild: false,
-    seriesConnectorFromLane: null,
-    drawLane0Connector: false,
-    isLastLane0Connector: false,
-    drawLane0PassThrough: false,
-    lane0Color: null,
-    hasHiddenParent: false,
-    hiddenParentIsSeriesMode: false,
     marker: TaskGraphMarkerType.Open,
     linkedPr: null,
     agentStatus: null,
     assignedTo: null,
     executionMode: ExecutionMode.SERIES,
     parentIssues: null,
-    multiParentIndex: null,
-    multiParentTotal: null,
-    isLastChild: false,
-    hasParallelChildren: false,
+    appearanceIndex: 1,
+    totalAppearances: 1,
     parentIssueId: null,
-    parentLaneReservations: [],
   })
 
   it('renders null when edges array is empty', () => {

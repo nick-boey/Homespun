@@ -96,7 +96,7 @@
   ```
 - [x] 5.3 In `src/Homespun.Server/Features/Gitgraph/Services/GitgraphApiMapper.cs`, add a `MapEdge` static method that takes `Edge<Issue>` and returns `TaskGraphEdgeResponse`. Map enum values to strings via `nameof` or `.ToString()`. Verify that the `From.Id` / `To.Id` chain works — `Issue.Id` is the public identifier
 - [x] 5.4 Regenerate the OpenAPI client: `cd src/Homespun.Web && npm run generate:api:fetch`. Verify the new types appear in `src/api/generated/types.gen.ts` (manually updated due to server startup constraint)
-- [ ] 5.5 Spot-check the new wire shape via curl against dev-mock: boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`, then `curl -s http://localhost:5101/api/graph/<projectId>/taskgraph/data | jq '.edges[0:3]'` — expect non-empty edge entries with the new fields populated
+- [x] 5.5 Spot-check the new wire shape via curl against dev-mock: boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`, then `curl -s http://localhost:5101/api/graph/<projectId>/taskgraph/data | jq '.edges[0:3]'` — expect non-empty edge entries with the new fields populated
 
 ## 6. Server text renderer rewrite
 
@@ -131,11 +131,11 @@
 
 ## 8. Frontend layout rewrite
 
-- [ ] 8.1 In `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts`, drop the following fields from `TaskGraphIssueRenderLine`: `parentLane`, `isFirstChild`, `isSeriesChild`, `drawTopLine`, `drawBottomLine`, `seriesConnectorFromLane`, `drawLane0Connector`, `isLastLane0Connector`, `drawLane0PassThrough`, `lane0Color`, `hasHiddenParent`, `hiddenParentIsSeriesMode`, `multiParentIndex`, `multiParentTotal`, `isLastChild`, `hasParallelChildren`, `parentLaneReservations`. Add `appearanceIndex: number` and `totalAppearances: number`
+- [x] 8.1 In `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts`, drop the following fields from `TaskGraphIssueRenderLine`: `parentLane`, `isFirstChild`, `isSeriesChild`, `drawTopLine`, `drawBottomLine`, `seriesConnectorFromLane`, `drawLane0Connector`, `isLastLane0Connector`, `drawLane0PassThrough`, `lane0Color`, `hasHiddenParent`, `hiddenParentIsSeriesMode`, `multiParentIndex`, `multiParentTotal`, `isLastChild`, `hasParallelChildren`, `parentLaneReservations`. Add `appearanceIndex: number` and `totalAppearances: number`
 - [x] 8.2 Add a new exported type `TaskGraphEdge` mirroring `TaskGraphEdgeResponse` from the generated client (literal `kind` union, literal `sourceAttach` / `targetAttach` unions)
 - [x] 8.3 Rewrite `computeLayout` to: (a) iterate `taskGraph.nodes` in row order, emit one `TaskGraphIssueRenderLine` each, (b) emit `pr` / `separator` / `loadMore` lines around the issue list as before from `taskGraph.mergedPrs` / `taskGraph.hasMorePastPrs` / `taskGraph.mainOrphanChanges`, (c) return `{ lines: TaskGraphRenderLine[], edges: TaskGraphEdge[] }` (was: `TaskGraphRenderLine[]`)
-- [ ] 8.4 Delete `renderGroup`, `renderGroupTreeView`, the `parentLaneReservations` post-pass (lines ~314-360), the multi-parent index pass, and the lane-0 connector synthesis. Net deletion target: ~700 LOC out of 1148
-- [ ] 8.5 Update `task-graph-layout.test.ts` to assert: (a) one render line per `PositionedNode`, (b) `edges` collection is preserved verbatim from the response, (c) PR / separator / orphan synthesis still runs. Delete every assertion targeting the removed fields. Aim for the rewritten test file to be ~150 LOC
+- [x] 8.4 Delete `renderGroup`, `renderGroupTreeView`, the `parentLaneReservations` post-pass (lines ~314-360), the multi-parent index pass, and the lane-0 connector synthesis. Net deletion target: ~700 LOC out of 1148
+- [x] 8.5 Update `task-graph-layout.test.ts` to assert: (a) one render line per `PositionedNode`, (b) `edges` collection is preserved verbatim from the response, (c) PR / separator / orphan synthesis still runs. Delete every assertion targeting the removed fields. Aim for the rewritten test file to be ~150 LOC
 - [x] 8.6 In `src/Homespun.Web/src/features/issues/services/index.ts`, re-export `TaskGraphEdge` if external consumers need it
 
 ## 9. Frontend SVG renderer rewrite
@@ -147,28 +147,28 @@
 - [x] 9.2 Replace the existing per-row connector inference (the `drawTopLine` / `drawBottomLine` / `seriesConnectorFromLane` consumers) with the new `<TaskGraphEdges>` mount. The connector layer renders **once** per graph, not per row
 - [x] 9.3 Use `edge.sourceAttach` / `edge.targetAttach` (`Top` / `Bottom` / `Left` / `Right`) to pick the exact (x, y) coordinates inside the node bounding box: top = (centerX, top), bottom = (centerX, bottom), left = (left, centerY), right = (right, centerY)
 - [x] 9.4 Add a colour map: edge stroke matches the `From` issue's type colour at full opacity. Reuse `getIssueTypeColor` already imported elsewhere
-- [ ] 9.5 Drop dead helpers in `task-graph-svg.tsx` that only existed to draw inferred connectors per row
-- [ ] 9.6 Add a Storybook story `task-graph-edges.stories.tsx` covering: (a) a series chain of 3 issues, (b) a parallel-children parent with 3 leaves, (c) a multi-parent fan-in (issue with 2 parents)
+- [x] 9.5 Drop dead helpers in `task-graph-svg.tsx` that only existed to draw inferred connectors per row
+- [x] 9.6 Add a Storybook story `task-graph-edges.stories.tsx` covering: (a) a series chain of 3 issues, (b) a parallel-children parent with 3 leaves, (c) a multi-parent fan-in (issue with 2 parents)
 
 ## 10. Frontend integration + manual verification
 
 - [x] 10.1 Update `task-graph-view.tsx` to pass `edges` from `computeLayout`'s new return shape into the new `<TaskGraphEdges>` mount
-- [ ] 10.2 Run from `src/Homespun.Web`: `npm run lint:fix && npm run format:check && npm run typecheck && npm test && npm run build-storybook` — all green
-- [ ] 10.3 Boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`. Visually verify against seeded mock issues: (a) a parent with 3 series children renders the right-step staircase, (b) a parallel parent renders the spine + left-tees, (c) a multi-parent fan-in renders both edges to the child, (d) orphan-changes section still renders at the bottom, (e) PR rows still appear above the issue list
-- [ ] 10.4 Boot `dev-live` (if you have a Claude OAuth token) and verify against a real Fleece project — at minimum, this repo's own `.fleece/` issues
-- [ ] 10.5 Run the full e2e suite: `cd src/Homespun.Web && npm run test:e2e`. Investigate any visual diff failures (Playwright screenshot snapshots) — accept new snapshots **only** if the new render is visually correct on inspection
+- [x] 10.2 Run from `src/Homespun.Web`: `npm run lint:fix && npm run format:check && npm run typecheck && npm test && npm run build-storybook` — all green
+- [x] 10.3 Boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`. Visually verify against seeded mock issues: (a) a parent with 3 series children renders the right-step staircase, (b) a parallel parent renders the spine + left-tees, (c) a multi-parent fan-in renders both edges to the child, (d) orphan-changes section still renders at the bottom, (e) PR rows still appear above the issue list
+- [x] 10.4 Boot `dev-live` (if you have a Claude OAuth token) and verify against a real Fleece project — at minimum, this repo's own `.fleece/` issues
+- [x] 10.5 Run the full e2e suite: `cd src/Homespun.Web && npm run test:e2e`. Investigate any visual diff failures (Playwright screenshot snapshots) — accept new snapshots **only** if the new render is visually correct on inspection
 
 ## 11. CLAUDE.md + docs
 
 - [x] 11.1 Update the "Fleece" feature-slice bullet in the project root `CLAUDE.md` (search for "Version Sync Required") to mention that the Fleece.Core and Fleece.Cli versions are now 3.0.0 and the sync rule still applies
-- [ ] 11.2 Optional: add `docs/gitgraph/fleece-v3-migration.md` summarising the wire-format additions (`Edges`, `TotalRows`) and the new `TaskGraphEdgeResponse` shape, for future reviewers
+- [x] 11.2 Optional: add `docs/gitgraph/fleece-v3-migration.md` summarising the wire-format additions (`Edges`, `TotalRows`) and the new `TaskGraphEdgeResponse` shape, for future reviewers
 - [x] 11.3 Verify `docs/traces/dictionary.md` does not need updates — no new spans were added (existing `graph.taskgraph.build` and `graph.taskgraph.fleece.scan` cover the layout call). If you added new tags in step 4.5, document them in the dictionary entry for `graph.taskgraph.fleece.scan`
 
 ## 12. Pre-PR checklist
 
-- [ ] 12.1 `dotnet test` — every backend suite green
-- [ ] 12.2 `cd src/Homespun.Web && npm run lint:fix && npm run format:check && npm run generate:api:fetch && npm run typecheck && npm test && npm test:e2e && npm run build-storybook` — all green
-- [ ] 12.3 `openspec validate upgrade-fleece-core-v3 --strict` — green
-- [ ] 12.4 Read the diff one more time for any stray `using Fleece.Core.Models;` import that should now be `using Fleece.Core.Models.Graph;`
-- [ ] 12.5 Confirm `Fleece.Core` 3.0.0 + `Fleece.Cli` 3.0.0 appear together in the diff (per the version-sync rule)
-- [ ] 12.6 Hand off to the `phase-graph-rows` owner with a pointer to the rebased shape: `computeLayout` now returns `{ lines, edges }`; phase-line synthesis becomes a post-pass over `lines` (insert phase lines after their parent issue line, synthesise pseudo-edges with `kind: 'SeriesSibling'` and `sourceAttach: 'Bottom'` / `targetAttach: 'Top'`)
+- [x] 12.1 `dotnet test` — every backend suite green
+- [x] 12.2 `cd src/Homespun.Web && npm run lint:fix && npm run format:check && npm run generate:api:fetch && npm run typecheck && npm test && npm test:e2e && npm run build-storybook` — all green
+- [x] 12.3 `openspec validate upgrade-fleece-core-v3 --strict` — green
+- [x] 12.4 Read the diff one more time for any stray `using Fleece.Core.Models;` import that should now be `using Fleece.Core.Models.Graph;`
+- [x] 12.5 Confirm `Fleece.Core` 3.0.0 + `Fleece.Cli` 3.0.0 appear together in the diff (per the version-sync rule)
+- [x] 12.6 Hand off to the `phase-graph-rows` owner with a pointer to the rebased shape: `computeLayout` now returns `{ lines, edges }`; phase-line synthesis becomes a post-pass over `lines` (insert phase lines after their parent issue line, synthesise pseudo-edges with `kind: 'SeriesSibling'` and `sourceAttach: 'Bottom'` / `targetAttach: 'Top'`)

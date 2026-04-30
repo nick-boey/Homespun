@@ -51,7 +51,9 @@ public static class IssueDtoMapper
                 Issue = n.Node.ToResponse(),
                 Lane = n.Lane,
                 Row = n.Row,
-                IsActionable = n.Lane == 0
+                IsActionable = n.Lane == 0,
+                AppearanceIndex = n.AppearanceIndex,
+                TotalAppearances = n.TotalAppearances
             }).ToList(),
             TotalLanes = layout.TotalLanes,
             TotalRows = layout.TotalRows,

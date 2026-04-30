@@ -647,12 +647,11 @@ export const TaskGraphView = memo(
           case 'ArrowLeft':
           case 'h': {
             event.preventDefault()
-            // Navigate to parent - find issue at parent lane
+            // Navigate to primary parent by issue id
             const currentLine = issueRenderLines[currentIndex]
-            if (currentLine?.parentLane !== undefined) {
-              const parentLine = issueRenderLines.find(
-                (line) => line.lane === currentLine.parentLane
-              )
+            const parentId = currentLine?.parentIssueId
+            if (parentId) {
+              const parentLine = issueRenderLines.find((line) => line.issueId === parentId)
               if (parentLine) {
                 onSelectIssue?.(parentLine.issueId)
                 rowRefs.current.get(getRenderKey(parentLine))?.scrollIntoView({ block: 'nearest' })
@@ -664,11 +663,11 @@ export const TaskGraphView = memo(
           case 'ArrowRight':
           case 'l': {
             event.preventDefault()
-            // Navigate to first child - find first issue with parentLane === current lane
+            // Navigate to first child whose parentIssueId points at the current issue
             const currentLine = issueRenderLines[currentIndex]
             if (currentLine) {
               const childLine = issueRenderLines.find(
-                (line) => line.parentLane === currentLine.lane
+                (line) => line.parentIssueId === currentLine.issueId
               )
               if (childLine) {
                 onSelectIssue?.(childLine.issueId)

@@ -151,24 +151,14 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
         <circle cx={cx} cy={cy} r={NODE_RADIUS} fill={nodeColor} />
       )}
 
-      {/* Hidden parent indicator (3 small faded dots) */}
-      {line.hasHiddenParent && (
-        <HiddenParentIndicator
-          cx={cx}
-          cy={cy}
-          nodeColor={nodeColor}
-          isSeriesMode={line.hiddenParentIsSeriesMode}
-        />
-      )}
-
-      {/* Multi-parent diagonal indicator */}
-      {line.multiParentIndex != null && line.multiParentTotal != null && (
+      {/* Multi-parent diagonal indicator (issue appears in multiple parent chains) */}
+      {line.totalAppearances > 1 && (
         <MultiParentIndicator
           cx={cx}
           cy={cy}
           nodeColor={nodeColor}
-          multiParentIndex={line.multiParentIndex}
-          multiParentTotal={line.multiParentTotal}
+          appearanceIndex={line.appearanceIndex}
+          totalAppearances={line.totalAppearances}
         />
       )}
     </svg>
@@ -194,61 +184,12 @@ function LaneGuideLines({ maxLanes }: { maxLanes: number }) {
   )
 }
 
-interface HiddenParentIndicatorProps {
-  cx: number
-  cy: number
-  nodeColor: string
-  isSeriesMode: boolean
-}
-
-function HiddenParentIndicator({ cx, cy, nodeColor, isSeriesMode }: HiddenParentIndicatorProps) {
-  const dotRadius = 2
-  const dotSpacing = 5
-  const opacity = 0.4
-
-  if (isSeriesMode) {
-    // Series: dots below the node (vertical arrangement)
-    const startY = cy + NODE_RADIUS + 6
-    return (
-      <>
-        {[0, 1, 2].map((i) => (
-          <circle
-            key={i}
-            cx={cx}
-            cy={startY + i * dotSpacing}
-            r={dotRadius}
-            fill={nodeColor}
-            opacity={opacity}
-          />
-        ))}
-      </>
-    )
-  } else {
-    // Parallel: dots to the left of the node (hidden parent is to the left in tree view)
-    const startX = cx - NODE_RADIUS - 6
-    return (
-      <>
-        {[0, 1, 2].map((i) => (
-          <circle
-            key={i}
-            cx={startX - i * dotSpacing}
-            cy={cy}
-            r={dotRadius}
-            fill={nodeColor}
-            opacity={opacity}
-          />
-        ))}
-      </>
-    )
-  }
-}
-
 interface MultiParentIndicatorProps {
   cx: number
   cy: number
   nodeColor: string
-  multiParentIndex: number
-  multiParentTotal: number
+  appearanceIndex: number
+  totalAppearances: number
 }
 
 /**
@@ -260,14 +201,14 @@ function MultiParentIndicator({
   cx,
   cy,
   nodeColor,
-  multiParentIndex,
-  multiParentTotal,
+  appearanceIndex,
+  totalAppearances,
 }: MultiParentIndicatorProps) {
   const lineLength = ROW_HEIGHT / 2
   const segmentCount = 3
   const segmentLength = lineLength / segmentCount
-  const isFirst = multiParentIndex === 0
-  const isLast = multiParentIndex === multiParentTotal - 1
+  const isFirst = appearanceIndex <= 1
+  const isLast = appearanceIndex >= totalAppearances
 
   // Down-right diagonal (shown on first and middle instances)
   const showDownRight = !isLast
