@@ -117,6 +117,15 @@ public class IssuesAgentController(
 
         logger.LogInformation("Created Issues Agent clone at {ClonePath}", clonePath);
 
+        // Clone presence drives TaskGraphResponse.OpenSpecStates; a new Issues Agent
+        // clone may unlock the selected issue's entry. Invalidate + broadcast so the
+        // client refetches within ~1s instead of waiting for the refresher tick.
+        await notificationHub.BroadcastIssueTopologyChanged(
+            HttpContext.RequestServices,
+            request.ProjectId,
+            IssueChangeType.Updated,
+            request.SelectedIssueId);
+
         // Session mode: use explicit mode from request, default to Build
         var sessionMode = request.Mode ?? SessionMode.Build;
 

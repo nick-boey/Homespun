@@ -1,7 +1,10 @@
+using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Git;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.Git.Controllers;
 
@@ -14,7 +17,8 @@ namespace Homespun.Features.Git.Controllers;
 public class ProjectClonesController(
     IGitCloneService cloneService,
     IProjectService projectService,
-    ICloneEnrichmentService cloneEnrichmentService) : ControllerBase
+    ICloneEnrichmentService cloneEnrichmentService,
+    IHubContext<NotificationHub> notificationHub) : ControllerBase
 {
     /// <summary>
     /// List clones for a project.
@@ -80,6 +84,8 @@ public class ProjectClonesController(
             return BadRequest("Failed to create clone");
         }
 
+        await InvalidateGraphSnapshotAsync(projectId);
+
         return Created(
             string.Empty,
             new CreateCloneResponse { Path = clonePath, BranchName = request.BranchName });
@@ -105,6 +111,8 @@ public class ProjectClonesController(
         {
             return BadRequest("Failed to remove clone");
         }
+
+        await InvalidateGraphSnapshotAsync(projectId);
 
         return NoContent();
     }
@@ -135,6 +143,11 @@ public class ProjectClonesController(
                 Success = success,
                 Error = success ? null : "Failed to remove clone"
             });
+        }
+
+        if (results.Any(r => r.Success))
+        {
+            await InvalidateGraphSnapshotAsync(projectId);
         }
 
         return Ok(new BulkDeleteClonesResponse { Results = results });
@@ -173,6 +186,20 @@ public class ProjectClonesController(
         }
 
         await cloneService.PruneClonesAsync(project.LocalPath);
+        await InvalidateGraphSnapshotAsync(projectId);
         return NoContent();
     }
+
+    /// <summary>
+    /// Clone create/remove/prune all change <see cref="Shared.Models.Fleece.TaskGraphResponse.OpenSpecStates"/>
+    /// for any issue whose branch is touched. The manual API doesn't carry an issue
+    /// id, so we invalidate the whole project snapshot — clients refetch and the
+    /// next /taskgraph/data response reflects the new clone topology within ~1s.
+    /// </summary>
+    private Task InvalidateGraphSnapshotAsync(string projectId) =>
+        notificationHub.BroadcastIssueTopologyChanged(
+            HttpContext.RequestServices,
+            projectId,
+            IssueChangeType.Updated,
+            issueId: null);
 }

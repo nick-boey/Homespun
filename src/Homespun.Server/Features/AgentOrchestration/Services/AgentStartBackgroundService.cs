@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 
@@ -150,6 +151,16 @@ public class AgentStartBackgroundService(
                 logger.LogInformation(
                     "Created clone at {ClonePath} for issue {IssueId}",
                     clonePath, request.IssueId);
+
+                // Clone presence drives TaskGraphResponse.OpenSpecStates[issueId]; a
+                // newly-created clone may unlock that entry, so invalidate the snapshot
+                // and broadcast IssuesChanged so the client refetches within ~1s instead
+                // of waiting up to 10s for the refresher tick.
+                await hubContext.BroadcastIssueTopologyChanged(
+                    scope.ServiceProvider,
+                    request.ProjectId,
+                    IssueChangeType.Updated,
+                    request.IssueId);
             }
             else
             {

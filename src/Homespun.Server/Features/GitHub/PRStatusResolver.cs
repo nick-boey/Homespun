@@ -1,7 +1,10 @@
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.GitHub;
 using Homespun.Shared.Models.PullRequests;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.GitHub;
 
@@ -15,7 +18,9 @@ public class PRStatusResolver(
     IGraphCacheService graphCacheService,
     IIssuePrLinkingService issuePrLinkingService,
     IDataStore dataStore,
-    ILogger<PRStatusResolver> logger) : IPRStatusResolver
+    ILogger<PRStatusResolver> logger,
+    IHubContext<NotificationHub>? notificationHub = null,
+    IServiceProvider? services = null) : IPRStatusResolver
 {
     /// <inheritdoc />
     public async Task ResolveClosedPRStatusesAsync(string projectId, List<RemovedPrInfo> removedPrs)
@@ -88,6 +93,8 @@ public class PRStatusResolver(
                             projectId, removedPr.FleeceIssueId, PullRequestStatus.Merged, removedPr.GitHubPrNumber.Value);
                     }
 
+                    await InvalidateGraphSnapshotAsync(projectId, removedPr.FleeceIssueId);
+
                     logger.LogInformation(
                         "PR #{PrNumber} resolved as Merged (merged at {MergedAt})",
                         removedPr.GitHubPrNumber.Value, prInfo.MergedAt);
@@ -121,6 +128,8 @@ public class PRStatusResolver(
                             projectId, removedPr.FleeceIssueId, PullRequestStatus.Closed, removedPr.GitHubPrNumber.Value);
                     }
 
+                    await InvalidateGraphSnapshotAsync(projectId, removedPr.FleeceIssueId);
+
                     logger.LogInformation(
                         "PR #{PrNumber} resolved as Closed (closed at {ClosedAt})",
                         removedPr.GitHubPrNumber.Value, prInfo.ClosedAt);
@@ -141,5 +150,29 @@ public class PRStatusResolver(
                 // Continue processing other PRs
             }
         }
+    }
+
+    /// <summary>
+    /// A PR transitioning to Merged or Closed flips the linked Fleece issue's
+    /// status (Complete / Closed) and may evict the local clone for that branch
+    /// — both of which reshape <c>TaskGraphResponse.OpenSpecStates</c> for the
+    /// issue. Invalidate via the hub helper so connected clients refetch within
+    /// ~1s instead of waiting up to 10s for the refresher tick. Hub + services
+    /// are nullable so unit tests can construct the resolver without wiring
+    /// SignalR; the snapshot store stays correct on its own via the existing
+    /// graph-cache writes when the broadcast is omitted.
+    /// </summary>
+    private async Task InvalidateGraphSnapshotAsync(string projectId, string? fleeceIssueId)
+    {
+        if (notificationHub is null || services is null)
+        {
+            return;
+        }
+
+        await notificationHub.BroadcastIssueTopologyChanged(
+            services,
+            projectId,
+            IssueChangeType.Updated,
+            string.IsNullOrEmpty(fleeceIssueId) ? null : fleeceIssueId);
     }
 }
