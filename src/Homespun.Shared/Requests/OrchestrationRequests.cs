@@ -61,12 +61,29 @@ public class QueueStatusResponse
     public int RunningQueueCount { get; set; }
 
     /// <summary>
-    /// Per-queue breakdown.
+    /// Per-queue breakdown for the current page.
     /// </summary>
     public List<QueueDetail> Queues { get; set; } = [];
 
     /// <summary>
-    /// Overall progress across all queues.
+    /// Total number of queues for this project across all pages. Equal to
+    /// <see cref="Queues"/>.Count when the response fits in a single page.
+    /// </summary>
+    public int TotalQueueCount { get; set; }
+
+    /// <summary>
+    /// The <c>limit</c> applied to the <see cref="Queues"/> page.
+    /// </summary>
+    public int Limit { get; set; }
+
+    /// <summary>
+    /// The <c>offset</c> applied to the <see cref="Queues"/> page.
+    /// </summary>
+    public int Offset { get; set; }
+
+    /// <summary>
+    /// Overall progress across all queues — always computed across the full
+    /// queue set, never just the current page.
     /// </summary>
     public QueueProgress Progress { get; set; } = new();
 }

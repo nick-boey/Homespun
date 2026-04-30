@@ -226,6 +226,137 @@ public class QueueControllerTests
         });
     }
 
+    [Test]
+    public async Task GetStatus_DefaultPagination_ReturnsAllQueuesUnderLimit()
+    {
+        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+
+        var queues = Enumerable.Range(0, 10)
+            .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
+            .ToList<ITaskQueue>();
+
+        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
+            .Returns(new QueueCoordinatorState
+            {
+                ProjectId = TestProject.Id,
+                Status = QueueCoordinatorStatus.Running,
+                ActiveQueues = queues,
+                MaxConcurrency = 5,
+                RunningQueueCount = 0,
+                RootIssueId = "root-1"
+            });
+
+        var result = await _controller.GetStatus(TestProject.Id);
+
+        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(response!.Queues, Has.Count.EqualTo(10));
+            Assert.That(response.TotalQueueCount, Is.EqualTo(10));
+            Assert.That(response.Limit, Is.EqualTo(50));
+            Assert.That(response.Offset, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task GetStatus_AppliesLimitAndOffset()
+    {
+        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+
+        var queues = Enumerable.Range(0, 10)
+            .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
+            .ToList<ITaskQueue>();
+
+        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
+            .Returns(new QueueCoordinatorState
+            {
+                ProjectId = TestProject.Id,
+                Status = QueueCoordinatorStatus.Running,
+                ActiveQueues = queues,
+                MaxConcurrency = 5,
+                RunningQueueCount = 0,
+                RootIssueId = "root-1"
+            });
+
+        var result = await _controller.GetStatus(TestProject.Id, limit: 3, offset: 5);
+
+        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(response!.Queues, Has.Count.EqualTo(3));
+            Assert.That(response.Queues[0].Id, Is.EqualTo("queue-5"));
+            Assert.That(response.Queues[2].Id, Is.EqualTo("queue-7"));
+            Assert.That(response.TotalQueueCount, Is.EqualTo(10));
+            Assert.That(response.Limit, Is.EqualTo(3));
+            Assert.That(response.Offset, Is.EqualTo(5));
+        });
+    }
+
+    [Test]
+    public async Task GetStatus_OffsetBeyondTotal_ReturnsEmptyPageWithFullTotal()
+    {
+        _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+
+        var queues = Enumerable.Range(0, 3)
+            .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
+            .ToList<ITaskQueue>();
+
+        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
+            .Returns(new QueueCoordinatorState
+            {
+                ProjectId = TestProject.Id,
+                Status = QueueCoordinatorStatus.Running,
+                ActiveQueues = queues,
+                MaxConcurrency = 5,
+                RunningQueueCount = 0,
+                RootIssueId = "root-1"
+            });
+
+        var result = await _controller.GetStatus(TestProject.Id, offset: 100);
+
+        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        Assert.Multiple(() =>
+        {
+            Assert.That(response!.Queues, Is.Empty);
+            Assert.That(response.TotalQueueCount, Is.EqualTo(3));
+            Assert.That(response.Offset, Is.EqualTo(100));
+        });
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(201)]
+    public async Task GetStatus_RejectsLimitOutOfRange(int limit)
+    {
+        var result = await _controller.GetStatus(TestProject.Id, limit: limit);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        // Bounds check fires before project lookup, so the project service is not consulted.
+        _projectServiceMock.Verify(s => s.GetByIdAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GetStatus_RejectsNegativeOffset()
+    {
+        var result = await _controller.GetStatus(TestProject.Id, offset: -1);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _projectServiceMock.Verify(s => s.GetByIdAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    private static Mock<ITaskQueue> CreateMinimalMockQueue(string id)
+    {
+        var queue = new Mock<ITaskQueue>();
+        queue.Setup(q => q.Id).Returns(id);
+        queue.Setup(q => q.State).Returns(TaskQueueState.Idle);
+        queue.Setup(q => q.CurrentRequest).Returns((AgentStartRequest?)null);
+        queue.Setup(q => q.PendingRequests).Returns(new List<AgentStartRequest>());
+        queue.Setup(q => q.History).Returns(new List<TaskQueueHistoryEntry>());
+        return queue;
+    }
+
     #endregion
 
     #region Cancel

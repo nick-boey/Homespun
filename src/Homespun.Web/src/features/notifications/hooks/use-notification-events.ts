@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import { useNotificationHub } from '@/providers/signalr-provider'
 import { useNotificationStore } from '../stores/notification-store'
 import type { NotificationDto, IssueChangeType } from '@/types/signalr'
@@ -77,7 +78,13 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     [addNotification]
   )
 
-  // Handle AgentStartFailed event
+  // Handle AgentStartFailed event.
+  //
+  // The dropdown is project-scoped (filters by current projectId), so a user who
+  // dispatched an agent from /projects/foo and then navigated to /sessions or
+  // /projects/bar would never see the failure surface in the bell. Pair the
+  // store entry with a route-agnostic sonner toast so the failure is always
+  // visible — `toast.error` renders inside the global <Toaster /> in main.tsx.
   const handleAgentStartFailed = useCallback(
     (issueId: string, agentProjectId: string, error: string) => {
       const notification: NotificationDto = {
@@ -92,6 +99,12 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
       }
 
       addNotification(notification)
+
+      toast.error('Agent Start Failed', {
+        id: `agent-start-failed-${issueId}`,
+        description: error,
+        duration: 10_000,
+      })
     },
     [addNotification]
   )

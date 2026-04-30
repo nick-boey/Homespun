@@ -121,6 +121,40 @@ public class QueueApiTests
     }
 
     [Test]
+    public async Task GetStatus_RejectsLimitBelowOne()
+    {
+        var response = await _client.GetAsync("/api/projects/any-project/queue/status?limit=0");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task GetStatus_RejectsLimitAbove200()
+    {
+        var response = await _client.GetAsync("/api/projects/any-project/queue/status?limit=201");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task GetStatus_RejectsNegativeOffset()
+    {
+        var response = await _client.GetAsync("/api/projects/any-project/queue/status?offset=-1");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task GetStatus_AcceptsDefaultPagination()
+    {
+        // No execution exists, so we expect 404 — but specifically NOT 400.
+        // This proves the default limit/offset validation passes.
+        var response = await _client.GetAsync("/api/projects/any-project/queue/status");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
     public async Task Start_Endpoints_DoNotReturn500()
     {
         var request = new StartQueueRequest { IssueId = "issue1" };

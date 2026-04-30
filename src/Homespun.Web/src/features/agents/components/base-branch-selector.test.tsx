@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { BaseBranchSelector } from './base-branch-selector'
 import { Clones } from '@/api'
@@ -93,6 +94,56 @@ describe('BaseBranchSelector', () => {
     await waitFor(() => {
       expect(screen.getByText('Failed to load branches')).toBeInTheDocument()
     })
+
+    // Error state surfaces an alert region with a retry control
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('retries fetching branches when the retry button is clicked', async () => {
+    const mockBranches: BranchInfo[] = [
+      { shortName: 'main', name: 'refs/heads/main' },
+      { shortName: 'develop', name: 'refs/heads/develop' },
+    ]
+    const mockGet = Clones.getApiClonesBranches as Mock
+    mockGet
+      .mockResolvedValueOnce({
+        data: undefined,
+        response: new Response(null, { status: 500 }),
+        request: new Request('http://test'),
+        error: { detail: 'Failed' },
+      } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
+      .mockResolvedValueOnce({
+        data: mockBranches,
+        response: new Response(),
+        request: new Request('http://test'),
+        error: undefined,
+      } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
+
+    const user = userEvent.setup()
+
+    render(
+      <BaseBranchSelector
+        repoPath="/path/to/repo"
+        defaultBranch="main"
+        value="main"
+        onChange={mockOnChange}
+      />,
+      { wrapper }
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load branches')).toBeInTheDocument()
+    })
+    expect(mockGet).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Failed to load branches')).not.toBeInTheDocument()
+    })
+    expect(mockGet).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('does not fetch when repoPath is undefined', () => {

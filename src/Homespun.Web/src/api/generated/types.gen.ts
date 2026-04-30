@@ -855,6 +855,9 @@ export type QueueStatusResponse = {
     maxConcurrency?: number;
     runningQueueCount?: number;
     queues?: Array<QueueDetail> | null;
+    totalQueueCount?: number;
+    limit?: number;
+    offset?: number;
     progress?: QueueProgress;
 };
 
@@ -3397,11 +3400,18 @@ export type GetApiProjectsByProjectIdQueueStatusData = {
     path: {
         projectId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
     url: '/api/projects/{projectId}/queue/status';
 };
 
 export type GetApiProjectsByProjectIdQueueStatusErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
     /**
      * Not Found
      */
