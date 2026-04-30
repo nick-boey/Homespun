@@ -81,3 +81,48 @@ The gRPC path reuses the already-serialised protobuf bytes, wraps them in
 the 5-byte gRPC length-prefix frame (compression flag + big-endian length),
 and POSTs over HTTP/2. Non-zero `grpc-status` trailers are logged at
 Warning and swallowed — same contract as the HTTP/protobuf path.
+
+## Attribute-key contract
+
+Every OTel signal Homespun emits — span tag, log property, log scope —
+uses the same key namespace, so a single Seq predicate can pivot across
+spans, logs, and tiers (worker / server / web) for one trace.
+
+- All Homespun-owned keys match `^homespun\.[a-z0-9_.]+$` (lowercase,
+  dot-delimited namespaces, snake_case segments). This is the
+  OpenTelemetry semantic-conventions naming spec applied to the
+  `homespun.*` private namespace.
+- Standard semconv keys (`service.name`, `event.name`, `http.*`, …) are
+  passed through verbatim — never re-namespaced.
+- Server log sites are written as source-generated
+  `[LoggerMessage]` partial classes with `[TagName("homespun.*")]`
+  parameter overrides (see `Homespun.Features.ClaudeCode.Logging.*Log`).
+  Free-form `ILogger.LogInformation(...)` with PascalCase template
+  captures (`{SessionId}`, `{Seq}`, …) is forbidden for new log sites.
+- W3C `traceparent` is **not** captured as a structured property —
+  the OTel logs bridge auto-populates `LogRecord.TraceId`/`SpanId`
+  from `Activity.Current` and exporters surface them on the wire.
+- Event-name identifiers (`a2a.rx`, `agui.tx`, `agui.translate`,
+  `agui.replay`, `agui.replay.batch`, …) live on
+  `LoggerMessage.EventName` so they show up as the semconv
+  `event.name` attribute, not as a message-prefix substring.
+
+Drift is enforced by
+`tests/Homespun.Tests/Features/Observability/LogAttributeKeyDriftTests.cs`,
+which scans `src/Homespun.Server/**/*Log.cs` for `[TagName(...)]`
+declarations and refuses to merge a key that doesn't match the
+`homespun.*` regex or a known semconv name.
+
+Catalogued keys currently in use (server log sites):
+
+| Key                       | Source                            |
+|---------------------------|-----------------------------------|
+| `homespun.session.id`     | session id (matches span tag)     |
+| `homespun.seq`            | A2A event monotonic seq           |
+| `homespun.a2a.kind`       | A2A SSE event kind                |
+| `homespun.agui.type`      | AG-UI envelope event type         |
+| `homespun.body`           | Full serialised payload (gated by `HOMESPUN_DEBUG_FULL_MESSAGES`) |
+| `homespun.replay`         | `true` on replay-path log entries (scope) |
+| `homespun.replay.mode`    | `incremental` / `full`            |
+| `homespun.replay.since`   | `?since` query argument           |
+| `homespun.replay.count`   | Number of envelopes returned      |

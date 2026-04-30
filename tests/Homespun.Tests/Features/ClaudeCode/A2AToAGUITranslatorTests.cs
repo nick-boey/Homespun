@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
+using Homespun.Tests.Helpers;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -809,9 +810,9 @@ public class A2AToAGUITranslatorTests
     [Test]
     public void Translate_FullMessagesOn_EmitsAguiTranslateLogPerEvent()
     {
-        var logger = new Mock<ILogger<A2AToAGUITranslator>>();
+        var logger = new CapturingLogger<A2AToAGUITranslator>();
         var debugOptions = SessionEventIngestorTests.BuildDebugOptions(fullMessages: true);
-        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger.Object, debugOptions);
+        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger, debugOptions);
 
         var parsed = ParseTask("""
         {
@@ -825,21 +826,22 @@ public class A2AToAGUITranslatorTests
         var events = translator.Translate(parsed, _ctx).ToList();
 
         Assert.That(events, Has.Count.EqualTo(1));
-        logger.Verify(l => l.Log(
-            LogLevel.Information,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.translate") && o.ToString()!.Contains("RUN_STARTED")),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var translate = logger.Entries.SingleOrDefault(e => e.EventId.Name == "agui.translate");
+        Assert.That(translate, Is.Not.Null, "expected an agui.translate log entry");
+        Assert.Multiple(() =>
+        {
+            Assert.That(translate!.Tags["homespun.agui.type"], Is.EqualTo("RUN_STARTED"));
+            Assert.That(translate.Tags["homespun.session.id"], Is.EqualTo(SessionId));
+            Assert.That(translate.Tags["homespun.body"], Is.Not.Null);
+        });
     }
 
     [Test]
     public void Translate_FullMessagesOff_EmitsNoAguiTranslateLog()
     {
-        var logger = new Mock<ILogger<A2AToAGUITranslator>>();
+        var logger = new CapturingLogger<A2AToAGUITranslator>();
         var debugOptions = SessionEventIngestorTests.BuildDebugOptions(fullMessages: false);
-        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger.Object, debugOptions);
+        var translator = new A2AToAGUITranslator(_pendingToolCalls, logger, debugOptions);
 
         var parsed = ParseTask("""
         {
@@ -852,12 +854,7 @@ public class A2AToAGUITranslatorTests
 
         translator.Translate(parsed, _ctx).ToList();
 
-        logger.Verify(l => l.Log(
-            It.IsAny<LogLevel>(),
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.translate")),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Never);
+        Assert.That(logger.Entries.Any(e => e.EventId.Name == "agui.translate"), Is.False,
+            "expected no agui.translate log entry when full-messages is off");
     }
 }

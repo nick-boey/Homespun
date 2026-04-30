@@ -3,6 +3,7 @@ using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
+using Homespun.Features.ClaudeCode.Logging;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
@@ -90,11 +91,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
         if (_debugOptions.CurrentValue.FullMessages)
         {
-            _logger.LogInformation(
-                "a2a.rx kind={Kind} seq={Seq} body={Body}",
-                eventKind,
-                record.Seq,
-                payload.GetRawText());
+            _logger.A2ARx(eventKind, record.Seq, sessionId, payload.GetRawText());
         }
 
         // Step 2: translate. The translator is deliberately tolerant of unknown shapes and
@@ -171,12 +168,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
 
                 if (fullMessages)
                 {
-                    _logger.LogInformation(
-                        "agui.tx seq={Seq} sessionId={SessionId} traceparent={Traceparent} body={Body}",
-                        envelope.Seq,
-                        envelope.SessionId,
-                        envelope.Traceparent,
-                        JsonSerializer.Serialize(envelope));
+                    _logger.AGUITx(envelope.Seq, envelope.SessionId, JsonSerializer.Serialize(envelope));
                 }
 
                 await _hub.BroadcastSessionEvent(sessionId, envelope);
