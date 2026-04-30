@@ -122,10 +122,10 @@ function AskUserQuestionInteractive({
   }
 
   return (
-    <Card className="bg-card/60">
+    <Card className="bg-card/60" data-testid="ask-user-question-card">
       <CardContent className="space-y-4 pt-4">
         {questions.map((q, idx) => (
-          <div key={idx} className="space-y-2">
+          <div key={idx} className="space-y-2" data-testid={`ask-user-question-${idx}`}>
             {q.header && <div className="text-foreground text-sm font-medium">{q.header}</div>}
             <div className="text-muted-foreground text-sm">{q.question}</div>
             <div className="flex flex-wrap gap-2">
@@ -147,6 +147,7 @@ function AskUserQuestionInteractive({
                     }
                     className={cn('text-left')}
                     title={opt.description}
+                    data-testid={`ask-user-question-option-${idx}-${opt.label}`}
                   >
                     {opt.label}
                   </Button>
@@ -161,6 +162,7 @@ function AskUserQuestionInteractive({
             size="sm"
             onClick={handleSubmit}
             disabled={!allAnswered || !canSubmit || isSubmitting}
+            data-testid="ask-user-question-submit"
           >
             {isSubmitting ? 'Submitting…' : 'Submit'}
           </Button>
