@@ -1,6 +1,7 @@
 using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
+using Homespun.Features.ClaudeCode.Logging;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Logging;
@@ -62,11 +63,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
     {
         foreach (var evt in events)
         {
-            _logger!.LogInformation(
-                "agui.translate type={Type} sessionId={SessionId} body={Body}",
-                evt.Type,
-                ctx.SessionId,
-                JsonSerializer.Serialize(evt));
+            _logger!.AGUITranslate(evt.Type, ctx.SessionId, JsonSerializer.Serialize(evt));
             yield return evt;
         }
     }

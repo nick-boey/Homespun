@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
+using Homespun.Tests.Helpers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -27,8 +28,7 @@ public class SessionEventsControllerTests
     private static SessionEventsController BuildController(
         IReadOnlyList<A2AEventRecord> records,
         bool fullMessages,
-        out Mock<ILogger<SessionEventsController>> loggerMock,
-        out List<IReadOnlyDictionary<string, object>> capturedScopes)
+        out CapturingLogger<SessionEventsController> logger)
     {
         var store = new Mock<IA2AEventStore>();
         store.Setup(s => s.ReadAsync(SessionId, It.IsAny<long?>(), It.IsAny<CancellationToken>()))
@@ -39,27 +39,14 @@ public class SessionEventsControllerTests
         var debugOptions = new SessionEventIngestorTests.StaticOptionsMonitor<SessionDebugLoggingOptions>(
             new SessionDebugLoggingOptions { FullMessages = fullMessages });
 
-        loggerMock = new Mock<ILogger<SessionEventsController>>();
-        loggerMock.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
-
-        // Capture scopes so tests can assert homespun.replay=true was pushed.
-        var scopes = new List<IReadOnlyDictionary<string, object>>();
-        capturedScopes = scopes;
-        loggerMock.Setup(l => l.BeginScope(It.IsAny<IReadOnlyDictionary<string, object>>()))
-            .Callback<IReadOnlyDictionary<string, object>>(scopes.Add)
-            .Returns(new DummyDisposable());
+        logger = new CapturingLogger<SessionEventsController>();
 
         return new SessionEventsController(
             store.Object,
             translator,
             options,
             debugOptions,
-            loggerMock.Object);
-    }
-
-    private sealed class DummyDisposable : IDisposable
-    {
-        public void Dispose() { }
+            logger);
     }
 
     [Test]
@@ -70,38 +57,34 @@ public class SessionEventsControllerTests
             Record(1, "task", """{"kind":"task","id":"t-1","contextId":"ctx-1","status":{"state":"submitted"}}"""),
         };
 
-        var controller = BuildController(
-            records,
-            fullMessages: true,
-            out var loggerMock,
-            out var scopes);
+        var controller = BuildController(records, fullMessages: true, out var logger);
 
         await controller.GetEvents(SessionId, since: null, mode: null, ct: default);
 
         // Replay scope must carry homespun.replay=true so agui.replay + agui.translate entries are filterable.
-        Assert.That(scopes, Is.Not.Empty, "expected a logger scope for replay full-body path");
-        var replayScope = scopes.FirstOrDefault(s => s.ContainsKey("homespun.replay"));
+        Assert.That(logger.Scopes, Is.Not.Empty, "expected a logger scope for replay full-body path");
+        var replayScope = logger.Scopes.FirstOrDefault(s => s.ContainsKey("homespun.replay"));
         Assert.That(replayScope, Is.Not.Null);
         Assert.That(replayScope!["homespun.replay"], Is.EqualTo(true));
 
-        // agui.replay per-event body log + agui.replay.batch summary log.
-        loggerMock.Verify(l => l.Log(
-            LogLevel.Information,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.replay") && o.ToString()!.Contains("seq=1")),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeastOnce,
-            "expected per-event agui.replay log");
+        var aguiReplay = logger.Entries.SingleOrDefault(e => e.EventId.Name == "agui.replay");
+        Assert.That(aguiReplay, Is.Not.Null, "expected per-event agui.replay log");
+        Assert.Multiple(() =>
+        {
+            Assert.That(aguiReplay!.Tags["homespun.seq"], Is.EqualTo(1L));
+            Assert.That(aguiReplay.Tags["homespun.session.id"], Is.EqualTo(SessionId));
+            Assert.That(aguiReplay.Tags["homespun.agui.type"], Is.EqualTo("RUN_STARTED"));
+            Assert.That(aguiReplay.Tags["homespun.body"], Is.Not.Null);
+        });
 
-        loggerMock.Verify(l => l.Log(
-            LogLevel.Information,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.replay.batch")),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once,
-            "expected per-batch summary log");
+        var batch = logger.Entries.SingleOrDefault(e => e.EventId.Name == "agui.replay.batch");
+        Assert.That(batch, Is.Not.Null, "expected per-batch summary log");
+        Assert.Multiple(() =>
+        {
+            Assert.That(batch!.Tags["homespun.session.id"], Is.EqualTo(SessionId));
+            Assert.That(batch.Tags["homespun.replay.mode"], Is.EqualTo(SessionEventsReplayMode.Incremental));
+            Assert.That(batch.Tags["homespun.replay.count"], Is.EqualTo(1));
+        });
     }
 
     [Test]
@@ -112,24 +95,15 @@ public class SessionEventsControllerTests
             Record(1, "task", """{"kind":"task","id":"t-1","contextId":"ctx-1","status":{"state":"submitted"}}"""),
         };
 
-        var controller = BuildController(
-            records,
-            fullMessages: false,
-            out var loggerMock,
-            out var scopes);
+        var controller = BuildController(records, fullMessages: false, out var logger);
 
         await controller.GetEvents(SessionId, since: null, mode: null, ct: default);
 
-        Assert.That(scopes.Any(s => s.ContainsKey("homespun.replay")), Is.False,
+        Assert.That(logger.Scopes.Any(s => s.ContainsKey("homespun.replay")), Is.False,
             "no replay scope should be opened when full-body logging is off");
-
-        loggerMock.Verify(l => l.Log(
-            It.IsAny<LogLevel>(),
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains("agui.replay")),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Never,
-            "no agui.replay log entries expected when full-body logging is off");
+        Assert.That(
+            logger.Entries.Any(e => e.EventId.Name == "agui.replay" || e.EventId.Name == "agui.replay.batch"),
+            Is.False,
+            "no agui.replay* log entries expected when full-body logging is off");
     }
 }

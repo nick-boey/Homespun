@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Sessions;
+using Homespun.Tests.Helpers;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -28,7 +29,7 @@ public class SessionEventIngestorTests
     private Mock<IHubContext<ClaudeCodeHub>> _hubMock = null!;
     private Mock<IHubClients> _hubClientsMock = null!;
     private Mock<IClientProxy> _groupClientMock = null!;
-    private Mock<ILogger<SessionEventIngestor>> _loggerMock = null!;
+    private CapturingLogger<SessionEventIngestor> _logger = null!;
 
     private SessionEventIngestor _ingestor = null!;
 
@@ -37,7 +38,7 @@ public class SessionEventIngestorTests
     {
         _storeMock = new Mock<IA2AEventStore>();
         _translatorMock = new Mock<IA2AToAGUITranslator>();
-        _loggerMock = new Mock<ILogger<SessionEventIngestor>>();
+        _logger = new CapturingLogger<SessionEventIngestor>();
 
         _groupClientMock = new Mock<IClientProxy>();
         _hubClientsMock = new Mock<IHubClients>();
@@ -52,7 +53,7 @@ public class SessionEventIngestorTests
             _storeMock.Object,
             _translatorMock.Object,
             _hubMock.Object,
-            _loggerMock.Object,
+            _logger,
             new NullServiceProvider(),
             BuildDebugOptions(fullMessages: false));
     }
@@ -306,7 +307,7 @@ public class SessionEventIngestorTests
             _storeMock.Object,
             _translatorMock.Object,
             _hubMock.Object,
-            _loggerMock.Object,
+            _logger,
             new NullServiceProvider(),
             BuildDebugOptions(fullMessages: true));
 
@@ -323,8 +324,26 @@ public class SessionEventIngestorTests
         var payload = JsonDocument.Parse("""{"id":"t-9","status":{"state":"submitted"}}""").RootElement;
         await ingestor.IngestAsync(ProjectId, SessionId, "task", payload);
 
-        VerifyLogMessageContains(_loggerMock, LogLevel.Information, "a2a.rx kind=task seq=9");
-        VerifyLogMessageContains(_loggerMock, LogLevel.Information, "agui.tx seq=9");
+        var a2aRx = _logger.Entries.SingleOrDefault(e => e.EventId.Name == "a2a.rx");
+        Assert.That(a2aRx, Is.Not.Null, "expected a2a.rx log entry");
+        Assert.Multiple(() =>
+        {
+            Assert.That(a2aRx!.Tags["homespun.a2a.kind"], Is.EqualTo("task"));
+            Assert.That(a2aRx.Tags["homespun.seq"], Is.EqualTo(9L));
+            Assert.That(a2aRx.Tags["homespun.session.id"], Is.EqualTo(SessionId));
+            Assert.That(a2aRx.Tags["homespun.body"], Is.Not.Null);
+        });
+
+        var aguiTx = _logger.Entries.SingleOrDefault(e => e.EventId.Name == "agui.tx");
+        Assert.That(aguiTx, Is.Not.Null, "expected agui.tx log entry");
+        Assert.Multiple(() =>
+        {
+            Assert.That(aguiTx!.Tags["homespun.seq"], Is.EqualTo(9L));
+            Assert.That(aguiTx.Tags["homespun.session.id"], Is.EqualTo(SessionId));
+            Assert.That(aguiTx.Tags["homespun.body"], Is.Not.Null);
+            Assert.That(aguiTx.Tags.ContainsKey("homespun.traceparent"), Is.False,
+                "traceparent must not be captured as a structured tag — the OTel logs bridge auto-populates LogRecord.TraceId/SpanId.");
+        });
     }
 
     [Test]
@@ -344,31 +363,9 @@ public class SessionEventIngestorTests
         var payload = JsonDocument.Parse("""{"id":"t-1","status":{"state":"submitted"}}""").RootElement;
         await _ingestor.IngestAsync(ProjectId, SessionId, "task", payload);
 
-        VerifyLogMessageAbsent(_loggerMock, "a2a.rx");
-        VerifyLogMessageAbsent(_loggerMock, "agui.tx");
-    }
-
-    private static void VerifyLogMessageContains<T>(Mock<ILogger<T>> loggerMock, LogLevel level, string fragment)
-    {
-        loggerMock.Verify(l => l.Log(
-            level,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains(fragment)),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeastOnce,
-            $"expected log entry containing '{fragment}'");
-    }
-
-    private static void VerifyLogMessageAbsent<T>(Mock<ILogger<T>> loggerMock, string fragment)
-    {
-        loggerMock.Verify(l => l.Log(
-            It.IsAny<LogLevel>(),
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((o, _) => o.ToString()!.Contains(fragment)),
-            It.IsAny<Exception?>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Never,
-            $"expected no log entry containing '{fragment}'");
+        Assert.That(_logger.Entries.Any(e => e.EventId.Name == "a2a.rx"), Is.False,
+            "expected no a2a.rx log entry when full-messages is off");
+        Assert.That(_logger.Entries.Any(e => e.EventId.Name == "agui.tx"), Is.False,
+            "expected no agui.tx log entry when full-messages is off");
     }
 }

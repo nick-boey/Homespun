@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Homespun.Features.ClaudeCode.Logging;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Observability;
@@ -92,24 +93,14 @@ public sealed class SessionEventsController(
 
                 if (fullMessages)
                 {
-                    logger.LogInformation(
-                        "agui.replay seq={Seq} sessionId={SessionId} type={Type} body={Body}",
-                        envelope.Seq,
-                        envelope.SessionId,
-                        agui.Type,
-                        JsonSerializer.Serialize(envelope));
+                    logger.AGUIReplay(envelope.Seq, envelope.SessionId, agui.Type, JsonSerializer.Serialize(envelope));
                 }
             }
         }
 
         if (fullMessages)
         {
-            logger.LogInformation(
-                "agui.replay.batch sessionId={SessionId} mode={Mode} since={Since} count={Count}",
-                sessionId,
-                resolvedMode,
-                effectiveSince,
-                envelopes.Count);
+            logger.AGUIReplayBatch(sessionId, resolvedMode, effectiveSince, envelopes.Count);
         }
 
         return Ok(envelopes);
