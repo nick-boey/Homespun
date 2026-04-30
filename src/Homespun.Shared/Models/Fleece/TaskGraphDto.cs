@@ -54,6 +54,8 @@ public class TaskGraphNodeResponse
     public int Lane { get; set; }
     public int Row { get; set; }
     public bool IsActionable { get; set; }
+    public int AppearanceIndex { get; set; }
+    public int TotalAppearances { get; set; } = 1;
 }
 
 /// <summary>

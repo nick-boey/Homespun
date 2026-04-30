@@ -1063,6 +1063,8 @@ export type TaskGraphNodeResponse = {
     lane?: number;
     row?: number;
     isActionable?: boolean;
+    appearanceIndex?: number;
+    totalAppearances?: number;
 };
 
 export type TaskGraphPrResponse = {

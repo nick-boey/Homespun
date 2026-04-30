@@ -202,20 +202,20 @@ export function IssueRowContent({
       />
 
       {/* Multi-parent badge (only in editable/graph shell) */}
-      {editable && line.multiParentTotal != null && line.multiParentIndex != null && (
+      {editable && line.totalAppearances > 1 && (
         <button
           type="button"
           className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[10px] font-medium text-orange-700 transition-colors hover:bg-orange-500/30 dark:text-orange-400"
           onClick={(e) => {
             e.stopPropagation()
-            if (line.multiParentIndex !== 0) {
+            if (line.appearanceIndex !== 1) {
               onSelectFirstInstance?.(line.issueId)
             }
           }}
-          title={`Instance ${line.multiParentIndex + 1} of ${line.multiParentTotal}. Click to go to the first instance.`}
+          title={`Instance ${line.appearanceIndex} of ${line.totalAppearances}. Click to go to the first instance.`}
           data-testid="multi-parent-badge"
         >
-          ({line.multiParentIndex + 1}/{line.multiParentTotal})
+          ({line.appearanceIndex}/{line.totalAppearances})
         </button>
       )}
 

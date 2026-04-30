@@ -617,7 +617,9 @@ public class GraphService(
                     Issue = IssueDtoMapper.ToResponse(n.Node),
                     Lane = n.Lane,
                     Row = n.Row,
-                    IsActionable = ComputeIsActionable(n.Node, n.Lane, openPrLinkedIssueIds)
+                    IsActionable = ComputeIsActionable(n.Node, n.Lane, openPrLinkedIssueIds),
+                    AppearanceIndex = n.AppearanceIndex,
+                    TotalAppearances = n.TotalAppearances
                 }).ToList(),
                 Edges = layout.Edges.Select(GitgraphApiMapper.MapEdge).ToList()
             };
