@@ -210,6 +210,88 @@ public class RefreshFidelityTests
     }
 
     [Test]
+    public async Task Live_Equals_Replay_When_Worker_Omits_ToolUseId()
+    {
+        // Regression for issue rqyT8G: prior to the fix the translator minted fresh Guids
+        // for missing toolUseId on every translation pass, so live and replay envelopes
+        // for the same A2A record diverged on the toolCallId and (cascaded) on
+        // parentMessageId-derived ids. This payload deliberately omits toolUseId so the
+        // FallbackToolCallId path (derived from the stored EventId + part index) is the
+        // one under test. (messageId is required by the A2A SDK schema, so its fallback
+        // is unreachable in practice — the relevant reachable cases are toolUseId on
+        // tool_use blocks, and the always-synthetic toolCallId / question ids inside
+        // BuildInputRequired.)
+        //
+        // The `input` value is written without internal whitespace so that the live
+        // payload (parsed with whitespace-preserving JsonDocument.Parse) and the replay
+        // payload (round-tripped through canonical JsonSerializer.Serialize on disk)
+        // produce a byte-identical TOOL_CALL_ARGS delta. That whitespace canonicalisation
+        // is independent of this issue.
+        JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+        var payloads = new (string Kind, JsonElement Payload)[]
+        {
+            ("task", Parse("""
+            {
+                "id": "task-1",
+                "contextId": "ctx-1",
+                "status": { "state": "submitted" },
+                "kind": "task"
+            }
+            """)),
+
+            ("message", Parse("""
+            {
+                "kind": "message",
+                "messageId": "msg-tool-use",
+                "role": "agent",
+                "parts": [
+                    {
+                        "kind": "data",
+                        "metadata": { "kind": "tool_use" },
+                        "data": { "toolName": "Read", "input":{"path":"README.md"} }
+                    }
+                ],
+                "contextId": "ctx-1",
+                "taskId": "task-1",
+                "metadata": { "sdkMessageType": "assistant" }
+            }
+            """)),
+
+            ("status-update", Parse("""
+            {
+                "taskId": "task-1",
+                "contextId": "ctx-1",
+                "status": { "state": "completed" },
+                "final": true,
+                "kind": "status-update"
+            }
+            """)),
+        };
+
+        foreach (var (kind, payload) in payloads)
+        {
+            await _ingestor.IngestAsync(ProjectId, SessionId, kind, payload);
+        }
+
+        var replay = await ReplayFromStoreAsync(since: 0);
+        AssertEnvelopesEquivalent(_liveEnvelopes, replay);
+
+        // Sanity: confirm the live==replay equivalence is the intended effect — the
+        // toolCallId on the synthesised TOOL_CALL_START must be a derived string keyed
+        // off the stored EventId, not a fresh Guid that just happened to coincide.
+        var toolStart = _liveEnvelopes
+            .Select(e => e.Event)
+            .OfType<ToolCallStartEvent>()
+            .Single();
+        Assert.That(toolStart.ToolCallId, Is.Not.Empty);
+        Assert.That(Guid.TryParse(toolStart.ToolCallId, out _), Is.False,
+            $"fallback toolCallId must be a derived string, not a fresh Guid (got '{toolStart.ToolCallId}')");
+        Assert.That(toolStart.ToolCallId, Does.Contain("-tool-"),
+            "fallback toolCallId must include the part-index suffix from FallbackToolCallId");
+    }
+
+    [Test]
     public async Task ModeFull_Replay_Yields_Identical_Envelopes_As_Incremental_From_Zero()
     {
         foreach (var (kind, payload) in CannedTurn())
@@ -237,7 +319,7 @@ public class RefreshFidelityTests
         foreach (var record in records!)
         {
             var parsed = A2AMessageParser.ParseSseEvent(record.EventKind, record.Payload.GetRawText());
-            var ctx = new TranslationContext(SessionId, RunId: SessionId);
+            var ctx = new TranslationContext(SessionId, RunId: SessionId, EventId: record.EventId);
             IEnumerable<AGUIBaseEvent> aguiEvents = parsed is null
                 ? new[] { AGUIEventFactory.CreateCustomEvent(AGUICustomEventName.Raw, new { original = record.Payload }) }
                 : _translator.Translate(parsed, ctx);
