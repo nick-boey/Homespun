@@ -49,10 +49,13 @@ function makeRouter(content: React.ReactNode) {
 interface RowStoryArgs {
   status: ClaudeSessionStatus
   title: string
+  isActive?: boolean
 }
 
-function RowStory({ status, title }: RowStoryArgs) {
-  const router = makeRouter(<SidebarSessionRow session={makeSession({ status })} title={title} />)
+function RowStory({ status, title, isActive }: RowStoryArgs) {
+  const router = makeRouter(
+    <SidebarSessionRow session={makeSession({ status })} title={title} isActive={isActive} />
+  )
   return <RouterProvider router={router} />
 }
 
@@ -95,5 +98,13 @@ export const TruncatedTitle: Story = {
   args: {
     status: ClaudeSessionStatus.RUNNING,
     title: 'A really long session title that overflows the sidebar width and must be truncated',
+  },
+}
+
+export const Active: Story = {
+  args: {
+    status: ClaudeSessionStatus.RUNNING,
+    title: 'Implement login flow',
+    isActive: true,
   },
 }

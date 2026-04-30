@@ -6,6 +6,7 @@ import { SidebarSessionRow } from './sidebar-session-row'
 
 interface SidebarSessionListProps {
   projectId: string
+  activeSessionId?: string | null
   onNavigate?: () => void
 }
 
@@ -18,7 +19,11 @@ interface SidebarSessionListProps {
  * of the page load. Returns `null` when the project has zero non-`STOPPED`
  * sessions.
  */
-export function SidebarSessionList({ projectId, onNavigate }: SidebarSessionListProps) {
+export function SidebarSessionList({
+  projectId,
+  activeSessionId,
+  onNavigate,
+}: SidebarSessionListProps) {
   const { data: allSessions } = useAllSessions()
   const grouped = useGroupedSessionsByProject(allSessions)
   const projectSessions = grouped.get(projectId)
@@ -47,7 +52,13 @@ export function SidebarSessionList({ projectId, onNavigate }: SidebarSessionList
           if (!id) return null
           const title = titleBySessionId.get(id) ?? session.entityId ?? id
           return (
-            <SidebarSessionRow key={id} session={session} title={title} onNavigate={onNavigate} />
+            <SidebarSessionRow
+              key={id}
+              session={session}
+              title={title}
+              isActive={id === activeSessionId}
+              onNavigate={onNavigate}
+            />
           )
         })}
       </div>

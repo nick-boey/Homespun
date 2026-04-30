@@ -26,7 +26,10 @@ vi.mock('@/api', async (importOriginal) => {
   }
 })
 
-// Mock TanStack Router
+// Mock TanStack Router. `mockPathname` is module-scoped so individual tests
+// can drive the active-highlight logic by setting it before render.
+let mockPathname = '/'
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -57,7 +60,7 @@ vi.mock('@tanstack/react-router', () => ({
   },
   useRouterState: () => ({
     location: {
-      pathname: '/',
+      pathname: mockPathname,
     },
   }),
 }))
@@ -109,6 +112,7 @@ function makeQueryClient() {
 describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPathname = '/'
     ;(Sessions.getApiSessions as Mock).mockResolvedValue({ data: [] })
     ;(Issues.getApiIssuesByIssueId as Mock).mockResolvedValue({ data: undefined })
     ;(PullRequests.getApiPullRequestsById as Mock).mockResolvedValue({ data: undefined })
@@ -405,6 +409,110 @@ describe('Sidebar', () => {
       await waitFor(() => {
         expect(sessionsMock.mock.calls.length).toBeGreaterThan(callsAfterInitialMount)
       })
+    })
+  })
+
+  describe('Active highlight', () => {
+    const ACTIVE_CLASSES = ['bg-sidebar-accent', 'text-sidebar-accent-foreground']
+
+    function getGlobalSessionsLink() {
+      // The global Sessions <NavItem> is a sibling to Settings; identify it by
+      // its href so it can never be confused with a per-project session row.
+      const links = screen.getAllByRole('link')
+      const link = links.find((el) => el.getAttribute('href') === '/sessions')
+      if (!link) throw new Error('Global Sessions link not found')
+      return link
+    }
+
+    it('global Sessions link is highlighted when on /sessions', async () => {
+      mockPathname = '/sessions'
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'sess-running',
+            projectId: 'proj-1',
+            entityId: 'Sess running',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-sess-running')).toBeInTheDocument()
+      })
+
+      const globalLink = getGlobalSessionsLink()
+      for (const cls of ACTIVE_CLASSES) {
+        expect(globalLink).toHaveClass(cls)
+      }
+
+      const row = screen.getByTestId('sidebar-session-sess-running')
+      expect(row).not.toHaveAttribute('aria-current', 'page')
+      for (const cls of ACTIVE_CLASSES) {
+        expect(row).not.toHaveClass(cls)
+      }
+    })
+
+    it('session row is highlighted (and global Sessions is NOT) when on /sessions/$sessionId', async () => {
+      mockPathname = '/sessions/sess-running'
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'sess-running',
+            projectId: 'proj-1',
+            entityId: 'Sess running',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-sess-running')).toBeInTheDocument()
+      })
+
+      const row = screen.getByTestId('sidebar-session-sess-running')
+      expect(row).toHaveAttribute('aria-current', 'page')
+      for (const cls of ACTIVE_CLASSES) {
+        expect(row).toHaveClass(cls)
+      }
+
+      const globalLink = getGlobalSessionsLink()
+      for (const cls of ACTIVE_CLASSES) {
+        expect(globalLink).not.toHaveClass(cls)
+      }
+    })
+
+    it('no row is highlighted when /sessions/<id> does not match any rendered session', async () => {
+      mockPathname = '/sessions/some-other-id'
+      ;(Projects.getApiProjects as Mock).mockResolvedValueOnce({ data: mockProjects })
+      ;(Sessions.getApiSessions as Mock).mockResolvedValue({
+        data: [
+          makeSession({
+            id: 'sess-running',
+            projectId: 'proj-1',
+            entityId: 'Sess running',
+            status: ClaudeSessionStatus.RUNNING,
+          }),
+        ],
+      })
+
+      render(<Sidebar />, { wrapper: createWrapper(makeQueryClient()) })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-session-sess-running')).toBeInTheDocument()
+      })
+
+      const row = screen.getByTestId('sidebar-session-sess-running')
+      expect(row).not.toHaveAttribute('aria-current', 'page')
+      for (const cls of ACTIVE_CLASSES) {
+        expect(row).not.toHaveClass(cls)
+      }
     })
   })
 })
