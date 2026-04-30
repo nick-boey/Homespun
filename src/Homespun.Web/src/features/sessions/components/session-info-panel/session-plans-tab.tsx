@@ -134,7 +134,12 @@ function PlanItem({ plan, workingDirectory }: PlanItemProps) {
               </div>
             </div>
           ) : (
-            <div className="text-muted-foreground p-3 text-sm">Failed to load plan content</div>
+            <div
+              className="text-muted-foreground p-3 text-sm"
+              data-testid={`plan-file-missing-${plan.fileName}`}
+            >
+              Plan file no longer available.
+            </div>
           )}
         </div>
       )}

@@ -337,6 +337,7 @@ public static class MockServiceExtensions
 
         // Session state and decomposed services
         services.AddSingleton<ISessionStateManager, SessionStateManager>();
+        services.AddSingleton<IPlanArtefactStore, PlanArtefactStore>();
         services.AddSingleton<IToolInteractionService, ToolInteractionService>();
         services.AddSingleton<ISessionLifecycleService, SessionLifecycleService>();
         services.AddSingleton<IMessageProcessingService, MessageProcessingService>();

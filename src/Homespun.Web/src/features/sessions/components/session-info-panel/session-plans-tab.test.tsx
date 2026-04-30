@@ -175,6 +175,40 @@ More details...`
     expect(screen.getByText(/This is the complete plan/)).toBeInTheDocument()
   })
 
+  // FI-6: when the read endpoint returns null (file deleted by session lifecycle)
+  // the expanded panel must show a "plan file no longer available" affordance, not
+  // crash and not silently render an empty content area.
+  it('renders the missing-plan-file affordance when content is null', () => {
+    const mockPlans: PlanFileInfo[] = [
+      {
+        fileName: 'deleted-plan.md',
+        filePath: '/path/to/project/.claude/plans/deleted-plan.md',
+        lastModified: new Date().toISOString(),
+        fileSizeBytes: 1024,
+      },
+    ]
+
+    vi.mocked(usePlanFiles).mockReturnValue({
+      data: mockPlans,
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof usePlanFiles>)
+
+    vi.mocked(usePlanContent).mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof usePlanContent>)
+
+    render(<SessionPlansTab session={mockSession} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /deleted-plan\.md/i }))
+
+    expect(screen.getByTestId('plan-file-missing-deleted-plan.md')).toHaveTextContent(
+      /Plan file no longer available/
+    )
+  })
+
   it('shows loading state when fetching plan content', () => {
     const mockPlans: PlanFileInfo[] = [
       {

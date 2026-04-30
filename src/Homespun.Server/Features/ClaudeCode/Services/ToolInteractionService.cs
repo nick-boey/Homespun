@@ -20,6 +20,7 @@ public class ToolInteractionService : IToolInteractionService
     private readonly ISessionStateManager _stateManager;
     private readonly IPendingToolCallRegistry _pendingToolCalls;
     private readonly IToolCallResultAppender _toolCallResultAppender;
+    private readonly IPlanArtefactStore _planArtefactStore;
     private readonly Lazy<IMessageProcessingService> _messageProcessing;
     private readonly Lazy<ISessionLifecycleService> _lifecycle;
 
@@ -32,6 +33,7 @@ public class ToolInteractionService : IToolInteractionService
         ISessionStateManager stateManager,
         IPendingToolCallRegistry pendingToolCalls,
         IToolCallResultAppender toolCallResultAppender,
+        IPlanArtefactStore planArtefactStore,
         Lazy<IMessageProcessingService> messageProcessing,
         Lazy<ISessionLifecycleService> lifecycle)
     {
@@ -43,6 +45,7 @@ public class ToolInteractionService : IToolInteractionService
         _stateManager = stateManager;
         _pendingToolCalls = pendingToolCalls;
         _toolCallResultAppender = toolCallResultAppender;
+        _planArtefactStore = planArtefactStore;
         _messageProcessing = messageProcessing;
         _lifecycle = lifecycle;
     }
@@ -301,6 +304,11 @@ public class ToolInteractionService : IToolInteractionService
             session.PlanFilePath = foundPath;
             session.PlanContent = planContent;
 
+            if (!string.IsNullOrEmpty(foundPath))
+            {
+                _planArtefactStore.Register(sessionId, foundPath);
+            }
+
             // The propose_plan tool call is emitted on the canonical A2A path via
             // A2AToAGUITranslator.BuildInputRequired — do not re-broadcast it here.
 
@@ -556,6 +564,7 @@ public class ToolInteractionService : IToolInteractionService
 
             session.PlanContent = content;
             session.PlanFilePath = filePath;
+            _planArtefactStore.Register(session.Id, filePath);
             _logger.LogInformation("Captured plan content from Write tool: {FilePath} ({Length} chars)",
                 filePath, content.Length);
         }
