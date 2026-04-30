@@ -55,7 +55,6 @@ public sealed class SessionEventsController(
         }
 
         var envelopes = new List<SessionEventEnvelope>();
-        var ctx = new TranslationContext(sessionId, RunId: sessionId);
         var fullMessages = debugOptions.CurrentValue.FullMessages;
 
         // Scope stamps every log entry emitted under the replay path (including
@@ -81,6 +80,9 @@ public sealed class SessionEventsController(
                 continue;
             }
 
+            // Per-record context — the translator threads record.EventId through to derive
+            // deterministic fallback ids when the stored A2A payload omits messageId/toolUseId.
+            var ctx = new TranslationContext(sessionId, RunId: sessionId, EventId: record.EventId);
             foreach (var agui in translator.Translate(parsed, ctx))
             {
                 var envelope = new SessionEventEnvelope(

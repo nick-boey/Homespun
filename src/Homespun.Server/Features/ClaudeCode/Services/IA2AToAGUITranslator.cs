@@ -8,7 +8,14 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// </summary>
 /// <param name="SessionId">The session id — used as the AG-UI <c>threadId</c>.</param>
 /// <param name="RunId">The current run id — used as the AG-UI <c>runId</c>.</param>
-public sealed record TranslationContext(string SessionId, string RunId);
+/// <param name="EventId">
+/// The stored A2A event id of the record being translated. Threaded through so the
+/// translator can derive deterministic fallback ids when an upstream A2A event omits
+/// fields like <c>messageId</c> or <c>toolUseId</c> — without it, replay would mint
+/// fresh Guids on every translation pass and live envelopes would diverge from refresh
+/// envelopes.
+/// </param>
+public sealed record TranslationContext(string SessionId, string RunId, string EventId);
 
 /// <summary>
 /// Pure translator from A2A events to AG-UI events. No I/O, no dependencies.

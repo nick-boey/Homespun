@@ -92,7 +92,9 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
     private static IEnumerable<AGUIBaseEvent> TranslateMessage(AgentMessage message, TranslationContext ctx)
     {
         var sdkMessageType = message.Metadata.GetMetadataString("sdkMessageType");
-        var messageId = message.MessageId ?? Guid.NewGuid().ToString();
+        // Fallback messageId derives from the stored A2A event id so live and replay
+        // produce identical AG-UI envelopes when the worker omits messageId.
+        var messageId = message.MessageId ?? FallbackMessageId(ctx);
 
         // System messages carry subtype in the data part (init, hook_started, hook_response, ...).
         if (sdkMessageType == "system")
@@ -111,7 +113,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 
         if (isAgent)
         {
-            foreach (var evt in TranslateAgentMessageParts(message, messageId))
+            foreach (var evt in TranslateAgentMessageParts(message, messageId, ctx))
             {
                 yield return evt;
             }
@@ -134,7 +136,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
         }
     }
 
-    private static IEnumerable<AGUIBaseEvent> TranslateAgentMessageParts(AgentMessage message, string messageId)
+    private static IEnumerable<AGUIBaseEvent> TranslateAgentMessageParts(AgentMessage message, string messageId, TranslationContext ctx)
     {
         var parts = message.Parts ?? [];
         var textBlockIndex = 0;
@@ -166,7 +168,10 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 
                             case "tool_use":
                                 {
-                                    var toolCallId = dataPart.GetDataString("toolUseId") ?? Guid.NewGuid().ToString();
+                                    // Fallback toolCallId derives from event id + part index so a
+                                    // worker emission missing toolUseId still translates to the
+                                    // same id on live and replay.
+                                    var toolCallId = dataPart.GetDataString("toolUseId") ?? FallbackToolCallId(ctx, i);
                                     var toolName = dataPart.GetDataString("toolName") ?? "unknown";
                                     yield return AGUIEventFactory.CreateToolCallStart(toolCallId, toolName, messageId);
 
@@ -434,7 +439,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
         {
             // Default to question (inputType == "question" or absent).
             toolName = AskUserQuestionToolName;
-            var question = ExtractPendingQuestion(statusUpdate);
+            var question = ExtractPendingQuestion(statusUpdate, ctx);
             if (question is null)
             {
                 yield return RawCustom(new
@@ -447,7 +452,10 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
             argsObject = question;
         }
 
-        var toolCallId = Guid.NewGuid().ToString();
+        // Deterministic toolCallId derived from the stored event id so a live
+        // input-required broadcast and a replay of the same record register and emit
+        // the same id — preserving the live==replay invariant.
+        var toolCallId = FallbackInputRequiredToolCallId(ctx);
         _pendingToolCalls.Register(ctx.SessionId, toolCallId);
 
         var argsJson = JsonSerializer.Serialize(argsObject, JsonOpts);
@@ -513,7 +521,7 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
         return new { text, metadata };
     }
 
-    private static PendingQuestion? ExtractPendingQuestion(TaskStatusUpdateEvent statusUpdate)
+    private static PendingQuestion? ExtractPendingQuestion(TaskStatusUpdateEvent statusUpdate, TranslationContext ctx)
     {
         var toolUseId = statusUpdate.Metadata.GetMetadataString("toolUseId");
         var questions = ExtractA2AQuestions(statusUpdate);
@@ -521,8 +529,10 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
 
         return new PendingQuestion
         {
-            Id = Guid.NewGuid().ToString(),
-            ToolUseId = toolUseId ?? Guid.NewGuid().ToString(),
+            // Both Id and the ToolUseId fallback are derived from the event id so the
+            // serialized AG-UI args payload is byte-identical between live and replay.
+            Id = FallbackQuestionId(ctx),
+            ToolUseId = toolUseId ?? FallbackQuestionToolUseId(ctx),
             Questions = questions.Select(q => new UserQuestion
             {
                 Question = q.Question,
@@ -596,4 +606,32 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
+
+    // Deterministic fallback ids derived from the stored A2A event id. These keep the
+    // live broadcast and the replay path emitting byte-identical AG-UI envelopes when
+    // the upstream worker omits an optional id field. EventId is empty only in legacy
+    // test fixtures that bypass the ingestor; in that case we fall back to a fresh Guid
+    // to preserve the existing "ids must be non-empty" contract.
+    private static string FallbackMessageId(TranslationContext ctx)
+        => string.IsNullOrEmpty(ctx.EventId) ? Guid.NewGuid().ToString() : ctx.EventId;
+
+    private static string FallbackToolCallId(TranslationContext ctx, int partIndex)
+        => string.IsNullOrEmpty(ctx.EventId)
+            ? Guid.NewGuid().ToString()
+            : $"{ctx.EventId}-tool-{partIndex}";
+
+    private static string FallbackInputRequiredToolCallId(TranslationContext ctx)
+        => string.IsNullOrEmpty(ctx.EventId)
+            ? Guid.NewGuid().ToString()
+            : $"{ctx.EventId}-input";
+
+    private static string FallbackQuestionId(TranslationContext ctx)
+        => string.IsNullOrEmpty(ctx.EventId)
+            ? Guid.NewGuid().ToString()
+            : $"{ctx.EventId}-question";
+
+    private static string FallbackQuestionToolUseId(TranslationContext ctx)
+        => string.IsNullOrEmpty(ctx.EventId)
+            ? Guid.NewGuid().ToString()
+            : $"{ctx.EventId}-tooluse";
 }

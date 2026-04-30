@@ -100,7 +100,7 @@ public sealed class SessionEventIngestor : ISessionEventIngestor
         // Step 2: translate. The translator is deliberately tolerant of unknown shapes and
         // never throws; a null parsed result is itself a "we could not parse this" signal and
         // gets wrapped in a raw Custom envelope so the client still receives something.
-        var ctx = new TranslationContext(sessionId, RunId: sessionId);
+        var ctx = new TranslationContext(sessionId, RunId: sessionId, EventId: record.EventId);
         var parsed = A2AMessageParser.ParseSseEvent(eventKind, payload.GetRawText());
 
         ExtractParentCorrelation(

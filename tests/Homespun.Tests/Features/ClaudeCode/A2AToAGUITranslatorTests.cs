@@ -23,13 +23,14 @@ public class A2AToAGUITranslatorTests
 
     private const string SessionId = "session-1";
     private const string RunId = "run-xyz";
+    private const string EventId = "evt-1";
 
     [SetUp]
     public void SetUp()
     {
         _pendingToolCalls = new PendingToolCallRegistry();
         _translator = new A2AToAGUITranslator(_pendingToolCalls);
-        _ctx = new TranslationContext(SessionId, RunId);
+        _ctx = new TranslationContext(SessionId, RunId, EventId);
     }
 
     // ---------------- Task (submitted) ----------------
