@@ -13,6 +13,7 @@ using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -62,6 +63,17 @@ public class IssuesAgentControllerTests
             .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
         _graphServiceMock = new Mock<IGraphService>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
+        // Wire a no-op IHubClients so BroadcastIssueTopologyChanged can broadcast
+        // without throwing — the new clone-lifecycle invalidation hooks call into
+        // it on every CreateSession path.
+        var clientProxy = new Mock<IClientProxy>();
+        clientProxy
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Returns(Task.CompletedTask);
+        var clients = new Mock<IHubClients>();
+        clients.Setup(c => c.All).Returns(clientProxy.Object);
+        clients.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        _notificationHubMock.Setup(h => h.Clients).Returns(clients.Object);
         _loggerMock = new Mock<ILogger<IssuesAgentController>>();
 
         _controller = new IssuesAgentController(
@@ -81,7 +93,10 @@ public class IssuesAgentControllerTests
 
         _controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext()
+            HttpContext = new DefaultHttpContext
+            {
+                RequestServices = new ServiceCollection().BuildServiceProvider()
+            }
         };
 
         // Default setup: project exists, clone succeeds, pull succeeds

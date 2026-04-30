@@ -64,6 +64,25 @@ invalidate via this helper (or directly via `InvalidateProject`):
 - `POST /api/openspec/changes/link` (`ChangeSnapshotController.LinkOrphan`)
   — explicit user-driven orphan link invalidates after writing the
   sidecar.
+- **Clone lifecycle events** — clone presence drives
+  `TaskGraphResponse.OpenSpecStates[issueId]` (the enricher reads OpenSpec
+  artefacts off the working clone), so clones appearing or disappearing
+  also invalidates:
+  - `AgentStartBackgroundService.StartAgentAsync` — after a successful
+    `CreateCloneAsync` for a new agent session (skipped when an existing
+    clone is reused, since presence didn't change).
+  - `IssuesAgentController.CreateSession` — after a successful
+    `CreateCloneAsync` for an Issues Agent session.
+  - `ProjectClonesController` — after a successful `Create`, `Delete`,
+    `BulkDelete` (when at least one removal succeeded), or `Prune`. The
+    manual clone API doesn't carry an issue id, so the helper is invoked
+    with `issueId: null` (bulk change).
+  - `PRStatusResolver.ResolveClosedPRStatusesAsync` — after each PR
+    transitions to Merged or Closed. The linked Fleece issue's status
+    flips (Complete / Closed) and the associated clone may be evicted,
+    both of which reshape `OpenSpecStates` for the issue. The helper is
+    invoked once per resolved PR with the linked `FleeceIssueId` if
+    present, otherwise `null`.
 
 ## In-place field patching
 
