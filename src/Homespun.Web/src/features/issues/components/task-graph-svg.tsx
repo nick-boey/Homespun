@@ -13,6 +13,7 @@ export const ROW_HEIGHT = 40
 export const NODE_RADIUS = 6
 export const LINE_STROKE_WIDTH = 2
 export const EXPANDED_DETAIL_HEIGHT = 700
+export const EDGE_CORNER_RADIUS = 6
 
 /**
  * Computes the Y offset for a row, accounting for expanded detail panels above it.
@@ -477,7 +478,17 @@ function getAttachPoint(cx: number, cy: number, side: string): [number, number] 
   }
 }
 
-function buildEdgePath(
+/**
+ * Quarter-arc corner radius for orthogonal edges. Clipped to never overrun the
+ * shorter of the two perpendicular spans so tight spacing doesn't draw the arc
+ * past the target attach point.
+ */
+export function clipCornerRadius(spanA: number, spanB: number): number {
+  const limit = Math.min(Math.abs(spanA), Math.abs(spanB))
+  return Math.max(0, Math.min(EDGE_CORNER_RADIUS, limit))
+}
+
+export function buildEdgePath(
   edge: TaskGraphEdge,
   from: { x: number; y: number },
   to: { x: number; y: number }
@@ -486,22 +497,68 @@ function buildEdgePath(
   const [ex, ey] = getAttachPoint(to.x, to.y, edge.targetAttach)
 
   switch (edge.kind) {
-    case 'SeriesSibling':
-      // Straight line between attach points
-      return `M ${sx} ${sy} L ${ex} ${ey}`
+    case 'SeriesSibling': {
+      // Same-lane vertical run: no corner, plain line.
+      if (sx === ex) {
+        return `M ${sx} ${sy} L ${ex} ${ey}`
+      }
+      // Off-axis sibling: vertical run, then quarter-arc into target attach.
+      const r = clipCornerRadius(ey - sy, ex - sx)
+      const verticalEnd = ey - Math.sign(ey - sy) * r
+      return `M ${sx} ${sy} L ${sx} ${verticalEnd} Q ${sx} ${ey} ${ex} ${ey}`
+    }
 
     case 'SeriesCornerToParent': {
-      // Vertical from source attach down to target Y, then horizontal to target attach.
-      // Source (child) is at a lower lane; target (parent) is at a higher lane.
-      // Pivot is at (sx, ey).
-      return `M ${sx} ${sy} L ${sx} ${ey} L ${ex} ${ey}`
+      // Degenerate cases: source and target collinear → plain line.
+      if (sx === ex || sy === ey) {
+        return `M ${sx} ${sy} L ${ex} ${ey}`
+      }
+      // Vertical from source down to (sx, ey - r), arc into (sx + r·sign, ey),
+      // horizontal to target.
+      const r = clipCornerRadius(ey - sy, ex - sx)
+      const verticalEnd = ey - Math.sign(ey - sy) * r
+      const arcEnd = sx + Math.sign(ex - sx) * r
+      return `M ${sx} ${sy} L ${sx} ${verticalEnd} Q ${sx} ${ey} ${arcEnd} ${ey} L ${ex} ${ey}`
     }
 
     case 'ParallelChildToSpine': {
-      // Horizontal from source attach to pivot lane, then vertical to target attach.
-      // Source (child) goes right to the parent spine lane, then down to the parent node.
       const pivotX = edge.pivotLane != null ? getLaneCenterX(edge.pivotLane) : to.x
-      return `M ${sx} ${sy} L ${pivotX} ${sy} L ${pivotX} ${ey}`
+
+      // Source already on the spine: pure vertical from source down to target.
+      if (sx === pivotX) {
+        if (ex === pivotX) {
+          return `M ${sx} ${sy} L ${ex} ${ey}`
+        }
+        // Source above pivot → vertical run then arc into horizontal toward target.
+        const r = clipCornerRadius(ey - sy, ex - pivotX)
+        const verticalEnd = ey - Math.sign(ey - sy) * r
+        const arcEnd = pivotX + Math.sign(ex - pivotX) * r
+        return `M ${sx} ${sy} L ${pivotX} ${verticalEnd} Q ${pivotX} ${ey} ${arcEnd} ${ey} L ${ex} ${ey}`
+      }
+
+      // Source on the same row as the target (same-row hop): plain horizontal.
+      if (sy === ey) {
+        return `M ${sx} ${sy} L ${ex} ${ey}`
+      }
+
+      // First bend: horizontal run from source toward pivot, arc into vertical.
+      const r1 = clipCornerRadius(pivotX - sx, ey - sy)
+      const horizontalEnd = pivotX - Math.sign(pivotX - sx) * r1
+      const verticalArcEnd = sy + Math.sign(ey - sy) * r1
+
+      let d = `M ${sx} ${sy} L ${horizontalEnd} ${sy} Q ${pivotX} ${sy} ${pivotX} ${verticalArcEnd}`
+
+      // Target sits on the spine: ride the spine straight down to ey.
+      if (ex === pivotX) {
+        return `${d} L ${pivotX} ${ey}`
+      }
+
+      // Second bend: vertical run, arc out of spine, horizontal to target.
+      const r2 = clipCornerRadius(ey - verticalArcEnd, ex - pivotX)
+      const verticalEnd = ey - Math.sign(ey - verticalArcEnd) * r2
+      const arcEnd = pivotX + Math.sign(ex - pivotX) * r2
+      d += ` L ${pivotX} ${verticalEnd} Q ${pivotX} ${ey} ${arcEnd} ${ey} L ${ex} ${ey}`
+      return d
     }
 
     default:

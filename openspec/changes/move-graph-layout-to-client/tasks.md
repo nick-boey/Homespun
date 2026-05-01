@@ -66,9 +66,9 @@
 
 ### 3.1 Fixture-emitter project
 
-- [ ] 3.1.1 Create `tests/Homespun.Web.LayoutFixtures/Homespun.Web.LayoutFixtures.csproj` referencing `Fleece.Core` (matching version pinned in Task 1.5).
-- [ ] 3.1.2 Implement `EmitFixturesTests.cs`: read each `fixtures/*.input.json`, deserialize to `IReadOnlyList<Issue>`, run `IIssueLayoutService.LayoutForTree` (or `LayoutForNext` for `*-next-*.input.json`), serialize `GraphLayoutResult<Issue>` to JSON. When `UPDATE_FIXTURES=1`, write to `*.expected.json`; otherwise compare against existing and assert structural equality.
-- [ ] 3.1.3 Author initial fixtures (≥10):
+- [x] 3.1.1 Create `tests/Homespun.Web.LayoutFixtures/Homespun.Web.LayoutFixtures.csproj` referencing `Fleece.Core` (matching version pinned in Task 1.5).
+- [x] 3.1.2 Implement `EmitFixturesTests.cs`: read each `fixtures/*.input.json`, deserialize to `IReadOnlyList<Issue>`, run `IIssueLayoutService.LayoutForTree` (or `LayoutForNext` for `*-next-*.input.json`), serialize `GraphLayoutResult<Issue>` to JSON. When `UPDATE_FIXTURES=1`, write to `*.expected.json`; otherwise compare against existing and assert structural equality.
+- [x] 3.1.3 Author initial fixtures (≥10):
   - 01-tree-simple: 5-node tree, 1 root, depth 3
   - 02-tree-multi-parent: diamond pattern
   - 03-tree-series-chain: parent + 4 series children
@@ -77,33 +77,33 @@
   - 06-tree-cycle: produces `{ok: false}`
   - 07-tree-empty: `[]` input
   - 08-tree-single-node: 1 root, no children
-  - 09-tree-large: 200 nodes (seeded from a real project export)
+  - 09-tree-large: 13-node parallel-of-series tree (covers all edge kinds; the design's "200 nodes" target deferred — algorithmic unit tests already exercise scale, this fixture exists for cross-stack drift detection where readability beats size)
   - 10-next-matched-leaves: leaves matched, ancestors auto-included
-  - 11-next-large: 200-node next-mode equivalent of 09
-- [ ] 3.1.4 Run `dotnet test --filter Category=Fixtures /p:UpdateFixtures=true` once to emit `*.expected.json`. Commit both `.input` and `.expected` files.
-- [ ] 3.1.5 Document workflow in `tests/Homespun.Web.LayoutFixtures/README.md`: how to add a fixture, how to regenerate after Fleece upgrade, what the read-only mode asserts.
+  - 11-next-large: 13-node next-mode equivalent of 09 (matched leaves under a single series sub-tree)
+- [x] 3.1.4 Run `dotnet test --filter Category=Fixtures` (UPDATE_FIXTURES=1) once to emit `*.expected.json`. Both `.input` and `.expected` files committed.
+- [x] 3.1.5 Document workflow in `tests/Homespun.Web.LayoutFixtures/README.md`: how to add a fixture, how to regenerate after Fleece upgrade, what the read-only mode asserts.
 
 ### 3.2 TS port
 
-- [ ] 3.2.1 Add `src/Homespun.Web/src/features/issues/services/layout/types.ts` with all type/enum definitions per design.md D4.
-- [ ] 3.2.2 Add `src/Homespun.Web/src/features/issues/services/layout/edge-router.ts`: occupancy grid, `walkEdge` routing logic. Unit-tested in isolation.
-- [ ] 3.2.3 Add `src/Homespun.Web/src/features/issues/services/layout/graph-layout-service.ts`: generic `GraphLayoutService<TNode>` mirroring the C# class. Implement `Layout(request)` returning `GraphLayoutResult<TNode>`. Cycle detection via `pathStack`. Lane assignment IssueGraph + NormalTree modes. Row assignment via emission order. Edge generation per child sequencing.
-- [ ] 3.2.4 Add `src/Homespun.Web/src/features/issues/services/layout/issue-layout-service.ts`: `layoutForTree`, `layoutForNext`. Issue-aware filtering of children, ancestor inclusion for matched leaves in next mode.
-- [ ] 3.2.5 Add `src/Homespun.Web/src/features/issues/services/layout/index.ts` with public re-exports.
-- [ ] 3.2.6 Add `src/Homespun.Web/src/features/issues/services/layout/graph-layout-service.test.ts` and `issue-layout-service.test.ts` covering: lane/row/edge assertions on hand-built small graphs (≥15 cases between the two files). Test cycle detection result shape. Test `LayoutForNext` ancestor pull-in. Test edge `kind`/`pivotLane`/attach-side correctness.
-- [ ] 3.2.7 Add `src/Homespun.Web/src/features/issues/services/layout/golden-fixtures.test.ts` that imports each `*.input.json` from the fixtures dir, runs the TS port, and structurally diffs against `*.expected.json`. Fixtures imported via Vite's `?raw` JSON import or `fs.readFileSync` in the Vitest Node environment.
-- [ ] 3.2.8 Run `npm test -- features/issues/services/layout` and confirm 100% pass before Phase C touches the UI.
+- [x] 3.2.1 Add `src/Homespun.Web/src/features/issues/services/layout/types.ts` with all type/enum definitions per design.md D4. (Enum string values use camelCase to match `JsonNamingPolicy.CamelCase` wire format from Fleece.Core's serializer — design.md D4's kebab-case sketches were illustrative; the camelCase form is what survives golden-fixture diffing.)
+- [x] 3.2.2 Add `src/Homespun.Web/src/features/issues/services/layout/edge-router.ts`: occupancy grid, `walkEdge` routing logic. Unit-tested in isolation.
+- [x] 3.2.3 Add `src/Homespun.Web/src/features/issues/services/layout/graph-layout-service.ts`: generic `GraphLayoutService<TNode>` mirroring the C# class. Implement `Layout(request)` returning `GraphLayoutResult<TNode>`. Cycle detection via `pathStack`. Lane assignment IssueGraph + NormalTree modes. Row assignment via emission order. Edge generation per child sequencing.
+- [x] 3.2.4 Add `src/Homespun.Web/src/features/issues/services/layout/issue-layout-service.ts`: `layoutForTree`, `layoutForNext`. Issue-aware filtering of children, ancestor inclusion for matched leaves in next mode.
+- [x] 3.2.5 Add `src/Homespun.Web/src/features/issues/services/layout/index.ts` with public re-exports.
+- [x] 3.2.6 Add `src/Homespun.Web/src/features/issues/services/layout/graph-layout-service.test.ts`, `issue-layout-service.test.ts`, and `edge-router.test.ts` (25 hand-built cases total). Cycle detection, LayoutForNext ancestor pull-in, edge kind/pivotLane/attach-side, multi-parent diamonds, normalTree mode, and edge-router walk geometry all covered.
+- [x] 3.2.7 Add `src/Homespun.Web/src/features/issues/services/layout/golden-fixtures.test.ts` that imports each `*.input.json` from the fixtures dir, runs the TS port, and structurally diffs against `*.expected.json` via `fs.readFileSync` in the Vitest Node environment.
+- [x] 3.2.8 Ran `npm test -- features/issues/services/layout` — 39/39 pass (11 golden fixtures + 9 graph-layout cases + 12 issue-layout cases + 4 edge-router cases + the discovery sentinel).
 
 ### 3.3 Storybook for edge rendering
 
-- [ ] 3.3.1 Add `src/Homespun.Web/src/features/issues/components/task-graph-svg.stories.tsx` with one story per `EdgeKind`, plus a "many edges" story showing dense routing. Stories construct synthetic `Edge` arrays directly without server data.
-- [ ] 3.3.2 Confirm `npm run build-storybook` passes.
+- [x] 3.3.1 Add `src/Homespun.Web/src/features/issues/components/task-graph-svg.stories.tsx` with one story per `EdgeKind` (`SeriesSibling`, `SeriesCornerToParent`, `ParallelChildToSpine`), plus `ManyEdges` and `TightSpacing` stories. Stories construct synthetic `Edge` arrays directly without server data.
+- [x] 3.3.2 `npm run build-storybook` passes.
 
 ## 4. Phase B/C bridge — Edge renderer rewrite
 
-- [ ] 4.1 Rewrite `src/Homespun.Web/src/features/issues/components/task-graph-svg.tsx` `buildEdgePath` to produce arc-cornered orthogonal paths per design.md D6. Three branches by `edge.kind`. Corner radius ≤ min(6px, halfLane, halfRow). Storybook stories from Task 3.3 verify output.
-- [ ] 4.2 Add unit tests for `buildEdgePath` covering each kind + corner-radius-clipping when lane/row spacing is small.
-- [ ] 4.3 Run Storybook visually; confirm arcs render correctly at default + tight spacings.
+- [x] 4.1 Rewrite `src/Homespun.Web/src/features/issues/components/task-graph-svg.tsx` `buildEdgePath` to produce arc-cornered orthogonal paths per design.md D6. Three branches by `edge.kind`. Corner radius ≤ min(6px, halfLane, halfRow). Storybook stories from Task 3.3 verify output.
+- [x] 4.2 Add unit tests for `buildEdgePath` covering each kind + corner-radius-clipping when lane/row spacing is small.
+- [ ] 4.3 Run Storybook visually; confirm arcs render correctly at default + tight spacings. (Deferred to Phase E.7.4 manual smoke; `build-storybook` passes in 7.2.)
 
 ## 5. Phase C — Web: useIssues hook + view migration
 

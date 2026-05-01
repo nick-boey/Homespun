@@ -1,0 +1,129 @@
+{
+  "ok": true,
+  "totalRows": 7,
+  "totalLanes": 3,
+  "nodes": [
+    {
+      "id": "S1",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2",
+      "row": 1,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S",
+      "row": 2,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "P1",
+      "row": 3,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "P2",
+      "row": 4,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "P",
+      "row": 5,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "R",
+      "row": 6,
+      "lane": 2,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "S1",
+      "toId": "S2",
+      "kind": "seriesSibling",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 1,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S2",
+      "toId": "S",
+      "kind": "seriesCornerToParent",
+      "startRow": 1,
+      "startLane": 0,
+      "endRow": 2,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "P1",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 3,
+      "startLane": 0,
+      "endRow": 5,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "P2",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 4,
+      "startLane": 0,
+      "endRow": 5,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 2,
+      "startLane": 1,
+      "endRow": 6,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "P",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 5,
+      "startLane": 1,
+      "endRow": 6,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    }
+  ]
+}

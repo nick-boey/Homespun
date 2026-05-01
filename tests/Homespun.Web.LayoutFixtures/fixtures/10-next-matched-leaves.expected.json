@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "totalRows": 3,
+  "totalLanes": 3,
+  "nodes": [
+    {
+      "id": "Leaf2",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "Mid2",
+      "row": 1,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "Root",
+      "row": 2,
+      "lane": 2,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "Leaf2",
+      "toId": "Mid2",
+      "kind": "seriesCornerToParent",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 1,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "Mid2",
+      "toId": "Root",
+      "kind": "parallelChildToSpine",
+      "startRow": 1,
+      "startLane": 1,
+      "endRow": 2,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    }
+  ]
+}

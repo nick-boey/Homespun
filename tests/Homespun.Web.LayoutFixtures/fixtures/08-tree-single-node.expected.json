@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "totalRows": 1,
+  "totalLanes": 1,
+  "nodes": [
+    {
+      "id": "Solo",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": []
+}

@@ -7,10 +7,13 @@ import { render } from '@testing-library/react'
 import {
   TaskGraphNodeSvg,
   TaskGraphEdges,
+  buildEdgePath,
+  clipCornerRadius,
   getTypeColor,
   getRowY,
   ROW_HEIGHT,
   EXPANDED_DETAIL_HEIGHT,
+  EDGE_CORNER_RADIUS,
   getLaneCenterX,
   NODE_RADIUS,
   LINE_STROKE_WIDTH,
@@ -432,7 +435,7 @@ describe('TaskGraphEdges', () => {
     expect(d).toBe(`M ${cx} ${row0CY + R} L ${cx} ${row1CY - R}`)
   })
 
-  it('renders SeriesCornerToParent edge as vertical-then-horizontal L-shape', () => {
+  it('renders SeriesCornerToParent edge as arc-cornered vertical-then-horizontal path', () => {
     // Child at row 0 lane 0, parent at row 1 lane 1
     const lines = [baseLine('child', 0), baseLine('parent', 1)]
     const edge: TaskGraphEdge = {
@@ -458,14 +461,15 @@ describe('TaskGraphEdges', () => {
     const parentX = getLaneCenterX(1)
     const childCY = ROW_HEIGHT / 2
     const parentCY = ROW_HEIGHT + ROW_HEIGHT / 2
-    // M (childX, childCY+R) L (childX, parentCY) L (parentX-R, parentCY)
+    const r = EDGE_CORNER_RADIUS
+    // M (childX, childCY+R) L (childX, parentCY-r) Q (childX, parentCY) (childX+r, parentCY) L (parentX-R, parentCY)
     const d = paths[0].getAttribute('d')
     expect(d).toBe(
-      `M ${childX} ${childCY + R} L ${childX} ${parentCY} L ${parentX - R} ${parentCY}`
+      `M ${childX} ${childCY + R} L ${childX} ${parentCY - r} Q ${childX} ${parentCY} ${childX + r} ${parentCY} L ${parentX - R} ${parentCY}`
     )
   })
 
-  it('renders ParallelChildToSpine edge as horizontal-then-vertical L-shape', () => {
+  it('renders ParallelChildToSpine edge as arc-cornered horizontal-then-vertical path', () => {
     // Child at row 0 lane 0, parent at row 2 lane 1, pivotLane=1
     const lines = [baseLine('child', 0), baseLine('mid', 0), baseLine('parent', 1)]
     const edge: TaskGraphEdge = {
@@ -491,9 +495,12 @@ describe('TaskGraphEdges', () => {
     const pivotX = getLaneCenterX(1)
     const childCY = ROW_HEIGHT / 2
     const parentCY = 2 * ROW_HEIGHT + ROW_HEIGHT / 2
-    // M (childX+R, childCY) L (pivotX, childCY) L (pivotX, parentCY-R)
+    const r = EDGE_CORNER_RADIUS
+    // Single bend (target on pivot lane): horizontal run, arc into vertical, ride spine to target.
     const d = paths[0].getAttribute('d')
-    expect(d).toBe(`M ${childX + R} ${childCY} L ${pivotX} ${childCY} L ${pivotX} ${parentCY - R}`)
+    expect(d).toBe(
+      `M ${childX + R} ${childCY} L ${pivotX - r} ${childCY} Q ${pivotX} ${childCY} ${pivotX} ${childCY + r} L ${pivotX} ${parentCY - R}`
+    )
   })
 
   it('uses the from-issue type color for the edge stroke', () => {
@@ -549,5 +556,208 @@ describe('TaskGraphEdges', () => {
     const row1CY = ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT + ROW_HEIGHT / 2
     const d = paths[0].getAttribute('d')
     expect(d).toBe(`M ${cx} ${row0CY + R} L ${cx} ${row1CY - R}`)
+  })
+})
+
+describe('clipCornerRadius', () => {
+  it('returns the default radius when both spans exceed it', () => {
+    expect(clipCornerRadius(40, 24)).toBe(EDGE_CORNER_RADIUS)
+  })
+
+  it('clips to the smaller perpendicular span when below default', () => {
+    expect(clipCornerRadius(40, 4)).toBe(4)
+    expect(clipCornerRadius(3, 24)).toBe(3)
+  })
+
+  it('uses absolute span values so direction does not matter', () => {
+    expect(clipCornerRadius(-10, -8)).toBe(EDGE_CORNER_RADIUS)
+    expect(clipCornerRadius(-3, 10)).toBe(3)
+  })
+
+  it('returns 0 when either span is 0', () => {
+    expect(clipCornerRadius(0, 10)).toBe(0)
+    expect(clipCornerRadius(10, 0)).toBe(0)
+  })
+})
+
+describe('buildEdgePath', () => {
+  const r = EDGE_CORNER_RADIUS
+  const from = (lane: number, row: number) => ({
+    x: getLaneCenterX(lane),
+    y: row * ROW_HEIGHT + ROW_HEIGHT / 2,
+  })
+
+  describe('SeriesSibling', () => {
+    it('emits a plain vertical line when source and target share a lane', () => {
+      const edge: TaskGraphEdge = {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(0, 1))
+      const cx = getLaneCenterX(0)
+      const sy = ROW_HEIGHT / 2 + (NODE_RADIUS + 2)
+      const ey = ROW_HEIGHT + ROW_HEIGHT / 2 - (NODE_RADIUS + 2)
+      expect(d).toBe(`M ${cx} ${sy} L ${cx} ${ey}`)
+    })
+
+    it('emits an arc when source and target are in different lanes', () => {
+      const edge: TaskGraphEdge = {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(1, 1))
+      const sx = getLaneCenterX(0)
+      const ex = getLaneCenterX(1)
+      const sy = ROW_HEIGHT / 2 + (NODE_RADIUS + 2)
+      const ey = ROW_HEIGHT + ROW_HEIGHT / 2 - (NODE_RADIUS + 2)
+      expect(d).toBe(`M ${sx} ${sy} L ${sx} ${ey - r} Q ${sx} ${ey} ${ex} ${ey}`)
+    })
+  })
+
+  describe('SeriesCornerToParent', () => {
+    it('emits vertical-arc-horizontal at default radius', () => {
+      const edge: TaskGraphEdge = {
+        from: 'child',
+        to: 'parent',
+        kind: 'SeriesCornerToParent',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        pivotLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Left',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(1, 1))
+      const sx = getLaneCenterX(0)
+      const ex = getLaneCenterX(1) - (NODE_RADIUS + 2)
+      const sy = ROW_HEIGHT / 2 + (NODE_RADIUS + 2)
+      const ey = ROW_HEIGHT + ROW_HEIGHT / 2
+      expect(d).toBe(
+        `M ${sx} ${sy} L ${sx} ${ey - r} Q ${sx} ${ey} ${sx + r} ${ey} L ${ex} ${ey}`
+      )
+    })
+
+    it('clips corner radius when horizontal span is smaller than default', () => {
+      const edge: TaskGraphEdge = {
+        from: 'child',
+        to: 'parent',
+        kind: 'SeriesCornerToParent',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        pivotLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Left',
+      }
+      // Custom from/to so that horizontal span (ex - sx) is only 4px
+      const fromPt = { x: 100, y: 20 }
+      const toPt = { x: 104 + (NODE_RADIUS + 2), y: 60 } // Left attach pulls back NODE_RADIUS+2
+      const d = buildEdgePath(edge, fromPt, toPt)
+      // Effective ex after Left attach: toPt.x - (NODE_RADIUS+2) = 104 → span = 4
+      // Clipped radius = min(6, |40|, |4|) = 4
+      expect(d).toContain(`Q 100 60 104 60`)
+    })
+
+    it('falls back to plain line when source and target are collinear vertically', () => {
+      const edge: TaskGraphEdge = {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesCornerToParent',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 0,
+        pivotLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(0, 1))
+      const cx = getLaneCenterX(0)
+      const sy = ROW_HEIGHT / 2 + (NODE_RADIUS + 2)
+      const ey = ROW_HEIGHT + ROW_HEIGHT / 2 - (NODE_RADIUS + 2)
+      expect(d).toBe(`M ${cx} ${sy} L ${cx} ${ey}`)
+    })
+  })
+
+  describe('ParallelChildToSpine', () => {
+    it('emits horizontal-arc-vertical when target sits on the pivot lane', () => {
+      const edge: TaskGraphEdge = {
+        from: 'child',
+        to: 'parent',
+        kind: 'ParallelChildToSpine',
+        startRow: 0,
+        startLane: 0,
+        endRow: 2,
+        endLane: 1,
+        pivotLane: 1,
+        sourceAttach: 'Right',
+        targetAttach: 'Top',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(1, 2))
+      const sx = getLaneCenterX(0) + (NODE_RADIUS + 2)
+      const pivotX = getLaneCenterX(1)
+      const sy = ROW_HEIGHT / 2
+      const ey = 2 * ROW_HEIGHT + ROW_HEIGHT / 2 - (NODE_RADIUS + 2)
+      expect(d).toBe(
+        `M ${sx} ${sy} L ${pivotX - r} ${sy} Q ${pivotX} ${sy} ${pivotX} ${sy + r} L ${pivotX} ${ey}`
+      )
+    })
+
+    it('emits two arcs when target is off the pivot lane', () => {
+      const edge: TaskGraphEdge = {
+        from: 'child',
+        to: 'parent',
+        kind: 'ParallelChildToSpine',
+        startRow: 0,
+        startLane: 0,
+        endRow: 2,
+        endLane: 2,
+        pivotLane: 1,
+        sourceAttach: 'Right',
+        targetAttach: 'Left',
+      }
+      const d = buildEdgePath(edge, from(0, 0), from(2, 2))
+      // Two Q commands expected (one per bend).
+      const arcs = d.match(/Q /g) ?? []
+      expect(arcs).toHaveLength(2)
+    })
+
+    it('clips corner radius when row span is smaller than default', () => {
+      const edge: TaskGraphEdge = {
+        from: 'child',
+        to: 'parent',
+        kind: 'ParallelChildToSpine',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        pivotLane: 1,
+        sourceAttach: 'Right',
+        targetAttach: 'Top',
+      }
+      // Force row spacing close to corner radius — child row 0 (cy=20),
+      // parent row at cy=24 → vertical span = 4 - (NODE_RADIUS+2) etc.
+      const fromPt = { x: 20, y: 20 }
+      const toPt = { x: 36, y: 28 } // ey after Top attach: 28 - 8 = 20 → vertical span 0
+      const d = buildEdgePath(edge, fromPt, toPt)
+      // sx = fromPt.x + (NODE_RADIUS+2) = 28; same row hop (sy === ey) → plain horizontal line.
+      expect(d).toBe(`M 28 20 L 36 20`)
+    })
   })
 })

@@ -1,0 +1,292 @@
+{
+  "ok": true,
+  "totalRows": 16,
+  "totalLanes": 3,
+  "nodes": [
+    {
+      "id": "S0c0",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S0c1",
+      "row": 1,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S0c2",
+      "row": 2,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S0c3",
+      "row": 3,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S0",
+      "row": 4,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c0",
+      "row": 5,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c1",
+      "row": 6,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c2",
+      "row": 7,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c3",
+      "row": 8,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1",
+      "row": 9,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2c0",
+      "row": 10,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2c1",
+      "row": 11,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2c2",
+      "row": 12,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2c3",
+      "row": 13,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S2",
+      "row": 14,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "R",
+      "row": 15,
+      "lane": 2,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "S0c0",
+      "toId": "S0c1",
+      "kind": "seriesSibling",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 1,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S0c1",
+      "toId": "S0c2",
+      "kind": "seriesSibling",
+      "startRow": 1,
+      "startLane": 0,
+      "endRow": 2,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S0c2",
+      "toId": "S0c3",
+      "kind": "seriesSibling",
+      "startRow": 2,
+      "startLane": 0,
+      "endRow": 3,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S0c3",
+      "toId": "S0",
+      "kind": "seriesCornerToParent",
+      "startRow": 3,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "S1c0",
+      "toId": "S1c1",
+      "kind": "seriesSibling",
+      "startRow": 5,
+      "startLane": 0,
+      "endRow": 6,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c1",
+      "toId": "S1c2",
+      "kind": "seriesSibling",
+      "startRow": 6,
+      "startLane": 0,
+      "endRow": 7,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c2",
+      "toId": "S1c3",
+      "kind": "seriesSibling",
+      "startRow": 7,
+      "startLane": 0,
+      "endRow": 8,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c3",
+      "toId": "S1",
+      "kind": "seriesCornerToParent",
+      "startRow": 8,
+      "startLane": 0,
+      "endRow": 9,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "S2c0",
+      "toId": "S2c1",
+      "kind": "seriesSibling",
+      "startRow": 10,
+      "startLane": 0,
+      "endRow": 11,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S2c1",
+      "toId": "S2c2",
+      "kind": "seriesSibling",
+      "startRow": 11,
+      "startLane": 0,
+      "endRow": 12,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S2c2",
+      "toId": "S2c3",
+      "kind": "seriesSibling",
+      "startRow": 12,
+      "startLane": 0,
+      "endRow": 13,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S2c3",
+      "toId": "S2",
+      "kind": "seriesCornerToParent",
+      "startRow": 13,
+      "startLane": 0,
+      "endRow": 14,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "S0",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 4,
+      "startLane": 1,
+      "endRow": 15,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 9,
+      "startLane": 1,
+      "endRow": 15,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S2",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 14,
+      "startLane": 1,
+      "endRow": 15,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    }
+  ]
+}

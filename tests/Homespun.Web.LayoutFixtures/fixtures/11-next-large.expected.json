@@ -1,0 +1,108 @@
+{
+  "ok": true,
+  "totalRows": 6,
+  "totalLanes": 3,
+  "nodes": [
+    {
+      "id": "S1c0",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c1",
+      "row": 1,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c2",
+      "row": 2,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1c3",
+      "row": 3,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "S1",
+      "row": 4,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "R",
+      "row": 5,
+      "lane": 2,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "S1c0",
+      "toId": "S1c1",
+      "kind": "seriesSibling",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 1,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c1",
+      "toId": "S1c2",
+      "kind": "seriesSibling",
+      "startRow": 1,
+      "startLane": 0,
+      "endRow": 2,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c2",
+      "toId": "S1c3",
+      "kind": "seriesSibling",
+      "startRow": 2,
+      "startLane": 0,
+      "endRow": 3,
+      "endLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "S1c3",
+      "toId": "S1",
+      "kind": "seriesCornerToParent",
+      "startRow": 3,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "S1",
+      "toId": "R",
+      "kind": "parallelChildToSpine",
+      "startRow": 4,
+      "startLane": 1,
+      "endRow": 5,
+      "endLane": 2,
+      "pivotLane": 2,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    }
+  ]
+}

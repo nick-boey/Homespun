@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homespun.ServiceDefaults", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homespun.AppHost.Tests", "tests\Homespun.AppHost.Tests\Homespun.AppHost.Tests.csproj", "{814ED661-1AA5-4AFA-B24B-E345B97CF505}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homespun.Web.LayoutFixtures", "tests\Homespun.Web.LayoutFixtures\Homespun.Web.LayoutFixtures.csproj", "{77713592-C458-4A4E-BE15-0853AE86AB57}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -115,6 +117,18 @@ Global
 		{814ED661-1AA5-4AFA-B24B-E345B97CF505}.Release|x64.Build.0 = Release|Any CPU
 		{814ED661-1AA5-4AFA-B24B-E345B97CF505}.Release|x86.ActiveCfg = Release|Any CPU
 		{814ED661-1AA5-4AFA-B24B-E345B97CF505}.Release|x86.Build.0 = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|x64.Build.0 = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Debug|x86.Build.0 = Debug|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|x64.ActiveCfg = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|x64.Build.0 = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|x86.ActiveCfg = Release|Any CPU
+		{77713592-C458-4A4E-BE15-0853AE86AB57}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -127,5 +141,6 @@ Global
 		{1A502A9E-9368-4ACB-8B8E-0AF7838EF140} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{27A215C9-76F4-41E4-85DB-3D6A7BE44085} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{814ED661-1AA5-4AFA-B24B-E345B97CF505} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{77713592-C458-4A4E-BE15-0853AE86AB57} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
