@@ -117,14 +117,22 @@ public class IssuesAgentController(
 
         logger.LogInformation("Created Issues Agent clone at {ClonePath}", clonePath);
 
-        // Clone presence drives TaskGraphResponse.OpenSpecStates; a new Issues Agent
-        // clone may unlock the selected issue's entry. Invalidate + broadcast so the
-        // client refetches within ~1s instead of waiting for the refresher tick.
-        await notificationHub.BroadcastIssueTopologyChanged(
-            HttpContext.RequestServices,
-            request.ProjectId,
-            IssueChangeType.Updated,
-            request.SelectedIssueId);
+        // Clone presence drives the openspec-states decoration; a new Issues Agent
+        // clone may unlock the selected issue's entry. The unified IssueChanged
+        // event invalidates the openspec-states query so the client refetches.
+        if (!string.IsNullOrWhiteSpace(request.SelectedIssueId))
+        {
+            var selectedIssue = await fleeceService.GetIssueAsync(project.LocalPath, request.SelectedIssueId);
+            await notificationHub.BroadcastIssueChanged(
+                request.ProjectId,
+                IssueChangeType.Updated,
+                request.SelectedIssueId,
+                selectedIssue?.ToResponse());
+        }
+        else
+        {
+            await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, null, null);
+        }
 
         // Session mode: use explicit mode from request, default to Build
         var sessionMode = request.Mode ?? SessionMode.Build;
@@ -323,8 +331,8 @@ public class IssuesAgentController(
         // Stop the session
         await sessionService.StopSessionAsync(sessionId, HttpContext.RequestAborted);
 
-        // Broadcast issue changes to connected clients
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, session.ProjectId, IssueChangeType.Updated, null);
+        // Bulk event — accept can apply many changes in one shot.
+        await notificationHub.BroadcastIssueChanged(session.ProjectId, IssueChangeType.Updated, null, null);
 
         logger.LogInformation("Accepted {Count} changes from Issues Agent session {SessionId}",
             result.Changes.Count, sessionId);

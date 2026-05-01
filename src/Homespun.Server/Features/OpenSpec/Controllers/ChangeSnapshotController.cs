@@ -1,5 +1,4 @@
 using Homespun.Features.Git;
-using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.OpenSpec;
@@ -21,8 +20,7 @@ public class ChangeSnapshotController(
     IGitCloneService cloneService,
     IDataStore dataStore,
     TimeProvider timeProvider,
-    ILogger<ChangeSnapshotController> logger,
-    IProjectTaskGraphSnapshotStore? snapshotStore = null) : ControllerBase
+    ILogger<ChangeSnapshotController> logger) : ControllerBase
 {
     /// <summary>
     /// Stores a branch snapshot. Called by the worker at session end after scanning
@@ -178,7 +176,6 @@ public class ChangeSnapshotController(
         await sidecarService.WriteSidecarAsync(changeDir, sidecar, ct);
 
         cache.Invalidate(project.Id, branch);
-        snapshotStore?.InvalidateProject(project.Id);
 
         logger.LogInformation(
             "Linked orphan change {Change} on branch {Branch} to fleece issue {Fleece}",
@@ -237,8 +234,6 @@ public class ChangeSnapshotController(
                 cache.Invalidate(project.Id, match.BranchKey);
             }
         }
-
-        snapshotStore?.InvalidateProject(project.Id);
 
         logger.LogInformation(
             "Linked orphan change {Change} to fleece issue {Fleece} across {Count} clone(s)",

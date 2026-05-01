@@ -257,20 +257,6 @@ Wraps the merged/closed PR cache read + response projection inside
 - **Parent:** `graph.taskgraph.build`.
 - **Required attrs:** `project.id`.
 
-### `graph.snapshot.patch`
-
-Wraps `ProjectTaskGraphSnapshotStore.PatchIssueFields`. Emitted once per
-in-place field-patch mutation path (Delta 2 of
-`taskgraph-mutation-invalidation`). Dominates issue-edit volume when the
-whitelist fires; `graph.taskgraph.build` drops correspondingly. Same
-ActivitySource (`Homespun.Gitgraph`).
-
-- **Originator:** server
-- **Kind:** `INTERNAL`
-- **Required attrs:** `project.id`, `issue.id`, `patch.fields`
-  (comma-joined list of patched `IssueFieldPatch` property names; bounded
-  by the Delta-2 whitelist so cardinality stays safe).
-
 ### `openspec.enrich`
 
 Wraps `IssueGraphOpenSpecEnricher.EnrichAsync`. Parent of every

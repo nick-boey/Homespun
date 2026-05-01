@@ -11,7 +11,6 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Observability;
@@ -399,25 +398,6 @@ builder.Services.AddSingleton<IPlansService, PlansService>();
 
 // TimeProvider is required by OpenSpec services and may not be registered under mock mode.
 builder.Services.AddSingleton(TimeProvider.System);
-
-// TaskGraphSnapshot — per-project snapshot store + background refresher.
-// Registered regardless of mock mode so the endpoint + invalidation shape
-// behaves identically. Gated on `TaskGraphSnapshot:Enabled` (default true).
-builder.Services.Configure<TaskGraphSnapshotOptions>(
-    builder.Configuration.GetSection(TaskGraphSnapshotOptions.SectionName));
-builder.Services.Configure<TaskGraphPatchPushOptions>(
-    builder.Configuration.GetSection(TaskGraphPatchPushOptions.SectionName));
-var taskGraphSnapshotOptions = new TaskGraphSnapshotOptions();
-builder.Configuration.GetSection(TaskGraphSnapshotOptions.SectionName).Bind(taskGraphSnapshotOptions);
-if (taskGraphSnapshotOptions.Enabled)
-{
-    builder.Services.AddSingleton<IProjectTaskGraphSnapshotStore, ProjectTaskGraphSnapshotStore>();
-    builder.Services.AddSingleton<TaskGraphSnapshotRefresher>();
-    builder.Services.AddSingleton<ITaskGraphSnapshotRefresher>(
-        sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
-    builder.Services.AddHostedService(
-        sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
-}
 
 // OpenSpec services (read/write .homespun.yaml sidecars linking changes to Fleece issues)
 builder.Services.AddSingleton<ISidecarService, SidecarService>();

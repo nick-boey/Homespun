@@ -49,14 +49,14 @@ describe('registerNotificationHubEvents', () => {
     const handlers: NotificationHubEvents = {
       onNotificationAdded: vi.fn(),
       onNotificationDismissed: vi.fn(),
-      onIssuesChanged: vi.fn(),
+      onIssueChanged: vi.fn(),
     }
 
     registerNotificationHubEvents(mockConnection, handlers)
 
     expect(mockConnection.on).toHaveBeenCalledWith('NotificationAdded', expect.any(Function))
     expect(mockConnection.on).toHaveBeenCalledWith('NotificationDismissed', expect.any(Function))
-    expect(mockConnection.on).toHaveBeenCalledWith('IssuesChanged', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('IssueChanged', expect.any(Function))
   })
 
   it('registers branch ID generation events', () => {
@@ -133,15 +133,15 @@ describe('registerNotificationHubEvents', () => {
     expect(onNotificationAdded).toHaveBeenCalledWith(mockNotification)
   })
 
-  it('calls onIssuesChanged with correct parameters', () => {
-    const onIssuesChanged = vi.fn()
-    const handlers: NotificationHubEvents = { onIssuesChanged }
+  it('calls onIssueChanged with correct parameters', () => {
+    const onIssueChanged = vi.fn()
+    const handlers: NotificationHubEvents = { onIssueChanged }
 
     registerNotificationHubEvents(mockConnection, handlers)
 
-    mockConnection.simulateEvent('IssuesChanged', 'project-1', 'Created', 'issue-1')
+    mockConnection.simulateEvent('IssueChanged', 'project-1', 'created', 'issue-1', null)
 
-    expect(onIssuesChanged).toHaveBeenCalledWith('project-1', 'Created', 'issue-1')
+    expect(onIssueChanged).toHaveBeenCalledWith('project-1', 'created', 'issue-1', null)
   })
 
   it('returns cleanup function that removes handlers', () => {

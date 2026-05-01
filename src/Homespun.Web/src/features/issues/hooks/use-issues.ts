@@ -86,6 +86,12 @@ export function useIssues(projectId: string, options: UseIssuesOptions = {}): Us
     return registerNotificationHubEvents(connection, {
       onIssueChanged: (changedProjectId, kind, issueId, issue) => {
         if (changedProjectId !== projectId) return
+        if (!issueId) {
+          // Bulk event — invalidate the issues query so the next fetch
+          // refreshes the visible-set.
+          queryClient.invalidateQueries({ queryKey })
+          return
+        }
         queryClient.setQueryData<IssueResponse[]>(queryKey, (old) =>
           applyIssueChanged(old, { kind, issueId, issue })
         )

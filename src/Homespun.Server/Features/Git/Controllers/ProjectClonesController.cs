@@ -191,15 +191,15 @@ public class ProjectClonesController(
     }
 
     /// <summary>
-    /// Clone create/remove/prune all change <see cref="Shared.Models.Fleece.TaskGraphResponse.OpenSpecStates"/>
-    /// for any issue whose branch is touched. The manual API doesn't carry an issue
-    /// id, so we invalidate the whole project snapshot — clients refetch and the
-    /// next /taskgraph/data response reflects the new clone topology within ~1s.
+    /// Clone create / remove / prune flips the openspec-states decoration for
+    /// every issue whose branch is touched. The manual API doesn't carry an
+    /// issue id, so emit a bulk <c>IssueChanged</c> with a null id — clients
+    /// invalidate every issue cache for this project.
     /// </summary>
     private Task InvalidateGraphSnapshotAsync(string projectId) =>
-        notificationHub.BroadcastIssueTopologyChanged(
-            HttpContext.RequestServices,
+        notificationHub.BroadcastIssueChanged(
             projectId,
             IssueChangeType.Updated,
-            issueId: null);
+            issueId: null,
+            issue: null);
 }

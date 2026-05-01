@@ -149,7 +149,7 @@ describe('useBranchIdGenerationEvents', () => {
     })
   })
 
-  it('does not invalidate issue query when BranchIdGenerated event received', async () => {
+  it('does not invalidate the per-issue query when BranchIdGenerated event received', async () => {
     let branchIdGeneratedHandler: (
       issueId: string,
       projectId: string,
@@ -168,11 +168,23 @@ describe('useBranchIdGenerationEvents', () => {
     branchIdGeneratedHandler('issue-1', 'project-1', 'feature/my-branch', true)
 
     await waitFor(() => {
-      // Only task graph should be invalidated, not the issue query
-      expect(mockInvalidateQueries).toHaveBeenCalledTimes(1)
+      // The legacy task-graph cache and the new issues cache are both
+      // invalidated (so the visible-set / openspec-tab refresh), but the
+      // per-issue cache (`['issue', issueId, projectId]`) is left alone —
+      // setQueryData already merged the new branch id in place.
       expect(mockInvalidateQueries).toHaveBeenCalledWith({
         queryKey: ['taskGraph', 'project-1'],
       })
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['issues', 'project-1'],
+      })
+      const issueQueryInvalidations = mockInvalidateQueries.mock.calls.filter(
+        (call) =>
+          Array.isArray(call[0]?.queryKey) &&
+          call[0].queryKey[0] === 'issue' &&
+          call[0].queryKey[1] === 'issue-1'
+      )
+      expect(issueQueryInvalidations).toHaveLength(0)
     })
   })
 

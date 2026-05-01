@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useNotificationHub } from '@/providers/signalr-provider'
 import { useNotificationStore } from '../stores/notification-store'
-import type { NotificationDto, IssueChangeType } from '@/types/signalr'
+import type { NotificationDto, IssueChangeKind } from '@/types/signalr'
 
 interface UseNotificationEventsOptions {
   /** Project ID to join notifications group for */
@@ -40,18 +40,23 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     [dismissNotification]
   )
 
-  // Handle IssuesChanged event - create local notification
-  const handleIssuesChanged = useCallback(
-    (issueProjectId: string, changeType: IssueChangeType, issueId: string) => {
+  // Handle IssueChanged event - create local notification.
+  // The unified event carries the issue body, but the notification only
+  // needs the kind + id + projectId.
+  const handleIssueChanged = useCallback(
+    (issueProjectId: string, kind: IssueChangeKind, issueId: string | null) => {
+      // Bulk events (null id) don't surface as per-issue notifications.
+      if (!issueId) return
+
       const notification: NotificationDto = {
-        id: `issue-${issueId}-${changeType}-${Date.now()}`,
+        id: `issue-${issueId}-${kind}-${Date.now()}`,
         type: 'info',
-        title: `Issue ${changeType}`,
-        message: getIssueChangeMessage(changeType, issueId),
+        title: `Issue ${kind}`,
+        message: getIssueChangeMessage(kind, issueId),
         projectId: issueProjectId,
         createdAt: new Date().toISOString(),
         isDismissible: true,
-        deduplicationKey: `issue-${issueId}-${changeType}`,
+        deduplicationKey: `issue-${issueId}-${kind}`,
       }
 
       addNotification(notification)
@@ -115,14 +120,14 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
 
     connection.on('NotificationAdded', handleNotificationAdded)
     connection.on('NotificationDismissed', handleNotificationDismissed)
-    connection.on('IssuesChanged', handleIssuesChanged)
+    connection.on('IssueChanged', handleIssueChanged)
     connection.on('AgentStarting', handleAgentStarting)
     connection.on('AgentStartFailed', handleAgentStartFailed)
 
     return () => {
       connection.off('NotificationAdded', handleNotificationAdded)
       connection.off('NotificationDismissed', handleNotificationDismissed)
-      connection.off('IssuesChanged', handleIssuesChanged)
+      connection.off('IssueChanged', handleIssueChanged)
       connection.off('AgentStarting', handleAgentStarting)
       connection.off('AgentStartFailed', handleAgentStartFailed)
     }
@@ -131,7 +136,7 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     isConnected,
     handleNotificationAdded,
     handleNotificationDismissed,
-    handleIssuesChanged,
+    handleIssueChanged,
     handleAgentStarting,
     handleAgentStartFailed,
   ])
@@ -172,7 +177,7 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
   }
 }
 
-function getIssueChangeMessage(changeType: IssueChangeType, issueId: string): string {
+function getIssueChangeMessage(changeType: IssueChangeKind, issueId: string): string {
   switch (changeType) {
     case 'created':
       return `A new issue has been created (${issueId})`

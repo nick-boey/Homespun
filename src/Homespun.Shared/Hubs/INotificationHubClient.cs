@@ -12,17 +12,13 @@ public interface INotificationHubClient
     Task NotificationDismissed(string notificationId);
 
     /// <summary>
-    /// Notifies clients when issues are changed (created, updated, deleted) in a project.
+    /// Unified per-issue mutation event. Carries the canonical post-mutation
+    /// issue body on create / update; <paramref name="issue"/> is <c>null</c>
+    /// on delete. <paramref name="issueId"/> may be <c>null</c> for bulk
+    /// events (e.g. fleece-sync, clone lifecycle) — clients treat a null id
+    /// as "invalidate every issue cache for this project".
     /// </summary>
-    Task IssuesChanged(string projectId, IssueChangeType changeType, string issueId);
-
-    /// <summary>
-    /// Notifies clients of a structure-preserving field patch on a single issue.
-    /// The client applies <paramref name="patch"/> in place via
-    /// <c>queryClient.setQueryData</c>; no HTTP refetch is required.
-    /// Gated by <c>TaskGraphSnapshot:PatchPush:Enabled</c> on the server.
-    /// </summary>
-    Task IssueFieldsPatched(string projectId, string issueId, IssueFieldPatch patch);
+    Task IssueChanged(string projectId, IssueChangeType kind, string? issueId, IssueResponse? issue);
 
     /// <summary>
     /// Notifies clients when a branch ID has been successfully generated for an issue.

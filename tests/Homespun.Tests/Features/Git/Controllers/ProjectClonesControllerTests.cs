@@ -368,10 +368,10 @@ public class ProjectClonesControllerTests
         // Helper broadcasts to All + Group → exactly two SendCoreAsync invocations
         // for one BroadcastIssueTopologyChanged call.
         _allClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged", It.IsAny<object?[]>(), default),
+            x => x.SendCoreAsync("IssueChanged", It.IsAny<object?[]>(), default),
             Times.Once);
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged", It.IsAny<object?[]>(), default),
+            x => x.SendCoreAsync("IssueChanged", It.IsAny<object?[]>(), default),
             Times.Once);
     }
 
@@ -415,11 +415,11 @@ public class ProjectClonesControllerTests
     private void VerifyIssuesChangedBroadcast()
     {
         _allClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged", It.IsAny<object?[]>(), default),
+            x => x.SendCoreAsync("IssueChanged", It.IsAny<object?[]>(), default),
             Times.Once,
             "expected exactly one IssuesChanged broadcast to Clients.All");
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged", It.IsAny<object?[]>(), default),
+            x => x.SendCoreAsync("IssueChanged", It.IsAny<object?[]>(), default),
             Times.Once,
             "expected exactly one IssuesChanged broadcast to the project group");
     }
@@ -427,7 +427,7 @@ public class ProjectClonesControllerTests
     private void VerifyNoIssuesChangedBroadcast()
     {
         _allClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged", It.IsAny<object?[]>(), default),
+            x => x.SendCoreAsync("IssueChanged", It.IsAny<object?[]>(), default),
             Times.Never,
             "no broadcast expected when the underlying clone op did not change state");
     }
