@@ -33,7 +33,7 @@ public class TaskGraphResponse
     /// <summary>
     /// Linked PR information keyed by issue ID.
     /// </summary>
-    public Dictionary<string, TaskGraphLinkedPr> LinkedPrs { get; set; } = new();
+    public Dictionary<string, LinkedPr> LinkedPrs { get; set; } = new();
 
     /// <summary>
     /// OpenSpec state projection keyed by issue ID. Populated for issues whose branch is
@@ -69,16 +69,6 @@ public class TaskGraphPrResponse
     public bool IsMerged { get; set; }
     public bool HasDescription { get; set; }
     public AgentStatusData? AgentStatus { get; set; }
-}
-
-/// <summary>
-/// Represents a PR linked to an issue.
-/// </summary>
-public class TaskGraphLinkedPr
-{
-    public int Number { get; set; }
-    public string? Url { get; set; }
-    public string Status { get; set; } = "";
 }
 
 /// <summary>

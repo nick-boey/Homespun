@@ -36,11 +36,21 @@ public class IssuesController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IAgentStartBackgroundService agentStartBackgroundService,
     IAgentStartupTracker agentStartupTracker,
+    IIssueAncestorTraversalService ancestorTraversal,
     IModelCatalogService modelCatalog,
     ILogger<IssuesController> logger) : ControllerBase
 {
+    private static readonly IssueStatus[] OpenStatuses =
+    {
+        IssueStatus.Draft, IssueStatus.Open, IssueStatus.Progress, IssueStatus.Review
+    };
+
     /// <summary>
-    /// Get all issues for a project.
+    /// Get the visible issue set for a project: every open issue plus every
+    /// ancestor of an open issue, plus any issues named in <paramref name="include"/>
+    /// (with their ancestors), plus issues linked to open PRs when
+    /// <paramref name="includeOpenPrLinked"/> is true. Pass <c>includeAll=true</c>
+    /// to bypass visibility filtering and return the raw list.
     /// </summary>
     [HttpGet("projects/{projectId}/issues")]
     [ProducesResponseType<List<IssueResponse>>(StatusCodes.Status200OK)]
@@ -49,7 +59,10 @@ public class IssuesController(
         string projectId,
         [FromQuery] IssueStatus? status = null,
         [FromQuery] IssueType? type = null,
-        [FromQuery] int? priority = null)
+        [FromQuery] int? priority = null,
+        [FromQuery] string? include = null,
+        [FromQuery] bool includeOpenPrLinked = false,
+        [FromQuery] bool includeAll = false)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -57,9 +70,55 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
-        var issues = await fleeceService.ListIssuesAsync(project.LocalPath, status, type, priority);
-        var response = issues.ToResponseList();
-        logger.LogDebug("Returning {Count} issues for project {ProjectId}", response.Count, projectId);
+        // Always pull the unfiltered list — visibility and post-filters apply here.
+        var allIssues = await fleeceService.ListIssuesAsync(project.LocalPath, includeAll: true);
+
+        IEnumerable<Issue> filtered;
+        if (includeAll)
+        {
+            filtered = allIssues;
+        }
+        else
+        {
+            var seedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var issue in allIssues)
+            {
+                if (OpenStatuses.Contains(issue.Status))
+                {
+                    seedIds.Add(issue.Id);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(include))
+            {
+                foreach (var id in include.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    seedIds.Add(id);
+                }
+            }
+
+            if (includeOpenPrLinked)
+            {
+                // Every PR in the data store is, by construction, open: merged/closed PRs are
+                // removed via dataStore.RemovePullRequestAsync.
+                foreach (var pr in dataStore.GetPullRequestsByProject(projectId))
+                {
+                    if (!string.IsNullOrEmpty(pr.FleeceIssueId))
+                    {
+                        seedIds.Add(pr.FleeceIssueId);
+                    }
+                }
+            }
+
+            filtered = ancestorTraversal.CollectVisible(allIssues, seedIds);
+        }
+
+        if (status.HasValue) filtered = filtered.Where(i => i.Status == status.Value);
+        if (type.HasValue) filtered = filtered.Where(i => i.Type == type.Value);
+        if (priority.HasValue) filtered = filtered.Where(i => i.Priority == priority.Value);
+
+        var response = filtered.ToList().ToResponseList();
+        logger.LogDebug("Returning {Count} issues for project {ProjectId} (includeAll={IncludeAll})", response.Count, projectId, includeAll);
         return Ok(response);
     }
 

@@ -147,5 +147,18 @@ public class TaskGraphSnapshotEndToEndTests
             counter.Increment();
             return Task.CompletedTask;
         }
+
+        public Task<Dictionary<string, Homespun.Shared.Models.OpenSpec.IssueOpenSpecState>> GetOpenSpecStatesAsync(
+            string projectId,
+            IReadOnlyCollection<string> issueIds,
+            BranchResolutionContext? branchContext = null,
+            CancellationToken ct = default)
+            => Task.FromResult(new Dictionary<string, Homespun.Shared.Models.OpenSpec.IssueOpenSpecState>());
+
+        public Task<List<Homespun.Shared.Models.OpenSpec.SnapshotOrphan>> GetMainOrphanChangesAsync(
+            string projectId,
+            BranchResolutionContext? branchContext = null,
+            CancellationToken ct = default)
+            => Task.FromResult(new List<Homespun.Shared.Models.OpenSpec.SnapshotOrphan>());
     }
 }

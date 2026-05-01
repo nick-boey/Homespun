@@ -433,7 +433,7 @@ public class GraphService(
     /// <summary>
     /// Creates AgentStatusData from a ClaudeSession.
     /// </summary>
-    private static AgentStatusData CreateAgentStatusData(ClaudeSession session)
+    internal static AgentStatusData CreateAgentStatusData(ClaudeSession session)
     {
         return new AgentStatusData
         {
@@ -725,7 +725,7 @@ public class GraphService(
             {
                 if (trackedPr.FleeceIssueId != null && trackedPr.GitHubPRNumber.HasValue)
                 {
-                    response.LinkedPrs[trackedPr.FleeceIssueId] = new TaskGraphLinkedPr
+                    response.LinkedPrs[trackedPr.FleeceIssueId] = new LinkedPr
                     {
                         Number = trackedPr.GitHubPRNumber.Value,
                         Url = $"https://github.com/{project.GitHubOwner}/{project.GitHubRepo}/pull/{trackedPr.GitHubPRNumber.Value}",

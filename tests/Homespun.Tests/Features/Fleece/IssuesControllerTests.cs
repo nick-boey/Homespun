@@ -43,6 +43,7 @@ public class IssuesControllerTests
     private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<IAgentStartBackgroundService> _agentStartBackgroundServiceMock = null!;
     private Mock<IAgentStartupTracker> _agentStartupTrackerMock = null!;
+    private Mock<IIssueAncestorTraversalService> _ancestorTraversalMock = null!;
     private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
@@ -84,6 +85,7 @@ public class IssuesControllerTests
         _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _agentStartBackgroundServiceMock = new Mock<IAgentStartBackgroundService>();
         _agentStartupTrackerMock = new Mock<IAgentStartupTracker>();
+        _ancestorTraversalMock = new Mock<IIssueAncestorTraversalService>();
         _modelCatalogMock = new Mock<IModelCatalogService>();
         _modelCatalogMock
             .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -115,6 +117,7 @@ public class IssuesControllerTests
             _fleeceIssuesSyncServiceMock.Object,
             _agentStartBackgroundServiceMock.Object,
             _agentStartupTrackerMock.Object,
+            _ancestorTraversalMock.Object,
             _modelCatalogMock.Object,
             NullLogger<IssuesController>.Instance);
 
@@ -1269,7 +1272,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
-            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issues);
         _dataStoreMock
             .Setup(x => x.UserEmail)
@@ -1303,7 +1306,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
-            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issues);
         _dataStoreMock
             .Setup(x => x.UserEmail)

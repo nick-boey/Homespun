@@ -10,7 +10,7 @@
 
 import type {
   TaskGraphResponse,
-  TaskGraphLinkedPr,
+  LinkedPr,
   AgentStatusData,
   IssueType as IssueTypeEnum,
   IssueStatus as IssueStatusEnum,
@@ -58,7 +58,7 @@ export interface TaskGraphIssueRenderLine {
   issueType: IssueTypeEnum
   status: IssueStatusEnum
   hasDescription: boolean
-  linkedPr: TaskGraphLinkedPr | null
+  linkedPr: LinkedPr | null
   agentStatus: AgentStatusData | null
   assignedTo: string | null
   executionMode: ExecutionModeEnum
@@ -235,16 +235,16 @@ export function computeLayout(
   }
 
   const edges: TaskGraphEdge[] = (taskGraph.edges ?? []).map((e) => ({
-    from: e.from,
-    to: e.to,
-    kind: e.kind,
+    from: e.from ?? '',
+    to: e.to ?? '',
+    kind: e.kind ?? 'SeriesSibling',
     startRow: e.startRow,
     startLane: e.startLane,
     endRow: e.endRow,
     endLane: e.endLane,
     pivotLane: e.pivotLane,
-    sourceAttach: e.sourceAttach,
-    targetAttach: e.targetAttach,
+    sourceAttach: e.sourceAttach ?? 'Top',
+    targetAttach: e.targetAttach ?? 'Top',
   }))
 
   return { lines, edges }

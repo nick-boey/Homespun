@@ -77,6 +77,65 @@ public class IssueGraphOpenSpecEnricher(
         }
     }
 
+    /// <inheritdoc />
+    public async Task<Dictionary<string, IssueOpenSpecState>> GetOpenSpecStatesAsync(
+        string projectId,
+        IReadOnlyCollection<string> issueIds,
+        BranchResolutionContext? branchContext = null,
+        CancellationToken ct = default)
+    {
+        using var enrichActivity = OpenSpecActivitySource.Instance.StartActivity("openspec.states");
+        enrichActivity?.SetTag("project.id", projectId);
+        enrichActivity?.SetTag("issue.count", issueIds.Count);
+
+        var context = branchContext ?? await BuildFallbackContextAsync(projectId);
+        var result = new Dictionary<string, IssueOpenSpecState>(issueIds.Count, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var issueId in issueIds)
+        {
+            if (string.IsNullOrWhiteSpace(issueId))
+            {
+                continue;
+            }
+
+            try
+            {
+                var state = await ResolveForIssueAsync(projectId, issueId, context, ct);
+                if (state is not null)
+                {
+                    result[issueId] = state;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to resolve OpenSpec state for issue {IssueId}", issueId);
+            }
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<List<SnapshotOrphan>> GetMainOrphanChangesAsync(
+        string projectId,
+        BranchResolutionContext? branchContext = null,
+        CancellationToken ct = default)
+    {
+        // The branch context isn't needed for the main-branch scan — kept on the
+        // signature so callers can pass a single context for the whole request
+        // even though only the per-issue path consumes it.
+        _ = branchContext;
+        try
+        {
+            return await ScanMainOrphansAsync(projectId, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to scan main-branch orphans for project {ProjectId}", projectId);
+            return new List<SnapshotOrphan>();
+        }
+    }
+
     private async Task<BranchResolutionContext> BuildFallbackContextAsync(string projectId)
     {
         var project = dataStore.GetProject(projectId);

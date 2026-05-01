@@ -1,5 +1,6 @@
 using Homespun.Features.Fleece.Services;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.OpenSpec;
 
 namespace Homespun.Features.OpenSpec.Services;
 
@@ -21,6 +22,27 @@ public interface IIssueGraphOpenSpecEnricher
     Task EnrichAsync(
         string projectId,
         TaskGraphResponse response,
+        BranchResolutionContext? branchContext = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the per-issue OpenSpec state map for <paramref name="issueIds"/>.
+    /// Issues whose branch is missing or whose change has no scan result are mapped
+    /// to <c>BranchPresence.None</c>; per-issue scan errors are swallowed and logged.
+    /// </summary>
+    Task<Dictionary<string, IssueOpenSpecState>> GetOpenSpecStatesAsync(
+        string projectId,
+        IReadOnlyCollection<string> issueIds,
+        BranchResolutionContext? branchContext = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns OpenSpec changes that live on the project's main branch with no
+    /// owning issue ("orphan" changes). Each entry is keyed by change name; entries
+    /// duplicated across branches are de-duplicated to a single record.
+    /// </summary>
+    Task<List<SnapshotOrphan>> GetMainOrphanChangesAsync(
+        string projectId,
         BranchResolutionContext? branchContext = null,
         CancellationToken ct = default);
 }

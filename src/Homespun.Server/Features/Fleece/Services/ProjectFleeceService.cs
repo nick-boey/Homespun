@@ -140,7 +140,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     }
 
     public async Task<IReadOnlyList<Issue>> ListIssuesAsync(
-        string projectPath, IssueStatus? status = null, IssueType? type = null, int? priority = null, CancellationToken ct = default)
+        string projectPath, IssueStatus? status = null, IssueType? type = null, int? priority = null, bool includeAll = false, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
         IEnumerable<Issue> issues = cache.Values;
@@ -149,7 +149,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         if (type.HasValue) issues = issues.Where(i => i.Type == type.Value);
         if (priority.HasValue) issues = issues.Where(i => i.Priority == priority.Value);
 
-        if (!status.HasValue && !type.HasValue && !priority.HasValue)
+        if (!includeAll && !status.HasValue && !type.HasValue && !priority.HasValue)
         {
             issues = issues.Where(i => i.Status is not (IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed or IssueStatus.Complete));
         }

@@ -293,6 +293,18 @@ ActivitySource.
 - **Parent:** `openspec.enrich`.
 - **Required attrs:** `issue.id`, `branch.source`.
 
+### `openspec.states`
+
+Wraps `IssueGraphOpenSpecEnricher.GetOpenSpecStatesAsync`. Emitted by the
+per-decoration `GET /api/projects/{projectId}/openspec-states` endpoint
+that replaces the bundled `EnrichAsync` path under
+move-graph-layout-to-client. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** root (per-request).
+- **Required attrs:** `project.id`, `issue.count`.
+
 ### `openspec.state.resolve`
 
 Wraps `BranchStateResolverService.GetOrScanAsync`. Same ActivitySource.
