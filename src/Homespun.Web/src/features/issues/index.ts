@@ -55,6 +55,17 @@ export {
   type CreateIssueParams,
 } from './hooks'
 export { useBranchIdGenerationEvents, type UseBranchIdGenerationEventsOptions } from './hooks'
+export { useIssues, issuesQueryKey, type UseIssuesOptions, type UseIssuesResult } from './hooks'
+export { useLinkedPrs, linkedPrsQueryKey, type UseLinkedPrsResult } from './hooks'
+export { useAgentStatuses, agentStatusesQueryKey, type UseAgentStatusesResult } from './hooks'
+export { useOpenSpecStates, openSpecStatesQueryKey, type UseOpenSpecStatesResult } from './hooks'
+export { useOrphanChanges, orphanChangesQueryKey, type UseOrphanChangesResult } from './hooks'
+export {
+  useMergedPrs,
+  mergedPrsQueryKey,
+  type UseMergedPrsOptions,
+  type UseMergedPrsResult,
+} from './hooks'
 
 // Services
 export {

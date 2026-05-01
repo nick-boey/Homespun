@@ -6,7 +6,7 @@
  * a sibling of the reference issue.
  */
 
-import type { TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
+import type { TaskGraphResponse, TaskGraphNodeResponse, IssueResponse } from '@/api'
 
 /**
  * Result of computing inherited parent info.
@@ -72,4 +72,28 @@ function findNodeByIssueId(
   issueId: string
 ): TaskGraphNodeResponse | undefined {
   return nodes.find((n) => n.issue?.id?.toLowerCase() === issueId.toLowerCase())
+}
+
+/**
+ * Variant that consumes the un-bundled `IssueResponse[]` directly. Use this
+ * from the new client-side layout pipeline (`useIssues`) rather than the
+ * legacy `TaskGraphResponse`-based overload above.
+ */
+export function computeInheritedParentInfoFromIssues(
+  issues: readonly IssueResponse[] | null | undefined,
+  referenceIssueId: string | undefined,
+  isAbove: boolean
+): InheritedParentInfo | null {
+  if (!issues || !referenceIssueId) return null
+  const reference = issues.find((i) => i.id?.toLowerCase() === referenceIssueId.toLowerCase())
+  if (!reference) return null
+  const parentRef = reference.parentIssues?.[0]
+  if (!parentRef?.parentIssue) {
+    return { parentIssueId: null, siblingIssueId: null, insertBefore: false }
+  }
+  return {
+    parentIssueId: parentRef.parentIssue,
+    siblingIssueId: referenceIssueId,
+    insertBefore: isAbove,
+  }
 }

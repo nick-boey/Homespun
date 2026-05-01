@@ -134,6 +134,13 @@ export interface IssueFieldPatch {
   lastUpdate?: string | null
 }
 
+/**
+ * Unified `IssueChanged` SignalR event kind. Replaces the legacy
+ * `IssuesChanged` topology + `IssueFieldsPatched` patch split. Carried on the
+ * `IssueChanged` event with the canonical issue body when not deleted.
+ */
+export type IssueChangeKind = 'created' | 'updated' | 'deleted'
+
 // ============================================================================
 // AG-UI Event Types
 // ============================================================================

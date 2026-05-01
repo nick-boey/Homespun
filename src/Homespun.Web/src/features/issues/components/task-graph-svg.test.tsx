@@ -647,9 +647,7 @@ describe('buildEdgePath', () => {
       const ex = getLaneCenterX(1) - (NODE_RADIUS + 2)
       const sy = ROW_HEIGHT / 2 + (NODE_RADIUS + 2)
       const ey = ROW_HEIGHT + ROW_HEIGHT / 2
-      expect(d).toBe(
-        `M ${sx} ${sy} L ${sx} ${ey - r} Q ${sx} ${ey} ${sx + r} ${ey} L ${ex} ${ey}`
-      )
+      expect(d).toBe(`M ${sx} ${sy} L ${sx} ${ey - r} Q ${sx} ${ey} ${sx + r} ${ey} L ${ex} ${ey}`)
     })
 
     it('clips corner radius when horizontal span is smaller than default', () => {

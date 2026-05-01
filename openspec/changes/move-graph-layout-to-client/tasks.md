@@ -109,34 +109,34 @@
 
 ### 5.1 Hooks (one per endpoint, fetched in parallel)
 
-- [ ] 5.1.1 Add `src/Homespun.Web/src/features/issues/hooks/useIssues.ts`. TanStack Query key: `['issues', projectId, includeIds, includeOpenPrLinked]`. `staleTime: Infinity`. SignalR subscription to `IssueChanged` events with `applyIssueChanged` merge per design.md D2.
-- [ ] 5.1.2 Add `src/Homespun.Web/src/features/issues/hooks/useLinkedPrs.ts`. Query key: `['linked-prs', projectId]`. Subscribes to existing PR-state SignalR channel; on event, invalidate this key.
-- [ ] 5.1.3 Add `src/Homespun.Web/src/features/issues/hooks/useAgentStatuses.ts`. Query key: `['agent-statuses', projectId]`. Subscribes to existing agent-status SignalR channel.
-- [ ] 5.1.4 Add `src/Homespun.Web/src/features/issues/hooks/useOpenSpecStates.ts`. Query key: `['openspec-states', projectId, issueIds]`. Confirm whether an OpenSpec-state SignalR channel exists; if not, this hook invalidates on `IssueChanged` (since most OpenSpec changes coincide with issue mutations) — flagged as a follow-up if a dedicated channel proves necessary.
-- [ ] 5.1.5 Add `src/Homespun.Web/src/features/issues/hooks/useOrphanChanges.ts`. Query key: `['orphan-changes', projectId]`. Same SignalR-channel logic as 5.1.4.
-- [ ] 5.1.6 Add `src/Homespun.Web/src/features/issues/hooks/useMergedPrs.ts`. Query key: `['merged-prs', projectId, max]`. Subscribes to PR-state SignalR channel (same channel as `useLinkedPrs`).
-- [ ] 5.1.7 Wire reconnect on every hook: on `HubConnection.onreconnected`, invalidate the relevant query keys (forces refetch).
-- [ ] 5.1.8 Unit tests for `applyIssueChanged` reducer (created/updated/deleted, idempotency).
-- [ ] 5.1.9 Component test for each hook rendered under `QueryClientProvider` + mock SignalR — assert echo events apply, deletes drop entries, reconnect refetches.
+- [x] 5.1.1 Add `src/Homespun.Web/src/features/issues/hooks/useIssues.ts`. TanStack Query key: `['issues', projectId, includeIds, includeOpenPrLinked, includeAll]`. `staleTime: Infinity`. SignalR subscription to `IssueChanged` events with `applyIssueChanged` merge per design.md D2.
+- [x] 5.1.2 Add `src/Homespun.Web/src/features/issues/hooks/useLinkedPrs.ts`. Query key: `['linked-prs', projectId]`. Subscribes to existing PR-state SignalR channel; on event, invalidate this key.
+- [x] 5.1.3 Add `src/Homespun.Web/src/features/issues/hooks/useAgentStatuses.ts`. Query key: `['agent-statuses', projectId]`. Subscribes to existing agent-status SignalR channel.
+- [x] 5.1.4 Add `src/Homespun.Web/src/features/issues/hooks/useOpenSpecStates.ts`. Query key: `['openspec-states', projectId, issueIds]`. Confirmed: no dedicated OpenSpec-state SignalR channel exists today — hook invalidates on `IssueChanged`. Promote to a dedicated channel if cadence becomes a problem.
+- [x] 5.1.5 Add `src/Homespun.Web/src/features/issues/hooks/useOrphanChanges.ts`. Query key: `['orphan-changes', projectId]`. Same SignalR-channel logic as 5.1.4.
+- [x] 5.1.6 Add `src/Homespun.Web/src/features/issues/hooks/useMergedPrs.ts`. Query key: `['merged-prs', projectId, max]`. Subscribes to `IssueChanged` (PR sync events flow through that channel; no dedicated PR-state channel today).
+- [x] 5.1.7 Wire reconnect on every hook: on `HubConnection.onreconnected`, invalidate the relevant query keys (forces refetch).
+- [x] 5.1.8 Unit tests for `applyIssueChanged` reducer (created/updated/deleted, idempotency).
+- [ ] 5.1.9 Component test for each hook rendered under `QueryClientProvider` + mock SignalR — assert echo events apply, deletes drop entries, reconnect refetches. (Deferred — covered indirectly by the migrated `task-graph-view` tests, which exercise the hooks end-to-end.)
 
 ### 5.2 Layout-driving wrapper
 
-- [ ] 5.2.1 Rewrite `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts` to take `Issue[]` + decoration maps (`linkedPrs`, `agentStatuses`, `openSpecStates`, `mergedPrs`, `orphanChanges`) + `viewMode` + filter args, call `layoutForTree` or `layoutForNext`, then synthesize Homespun-only rows (PR rows, separators, "load more"). Memoise the layout call (key: stable hash of the issue set + viewMode + filter, decorations excluded from the key — they affect render only, not layout). Output is the existing `TaskGraphRenderLine[] + TaskGraphEdge[]` shape so consumers don't change.
-- [ ] 5.2.2 Handle `{ ok: false, cycle }` result: degraded-mode flat-list output + error banner data field. Add Storybook story demonstrating the banner.
-- [ ] 5.2.3 Update `task-graph-layout.test.ts` to cover new wrapper behaviour.
+- [x] 5.2.1 Added `computeLayoutFromIssues({...})` in `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts` taking `Issue[]` + decoration maps (`linkedPrs`, `agentStatuses`, `mergedPrs`, `orphanChanges` consumed via `aggregateOrphansFromInputs`) + `viewMode`, calling `layoutForTree` / `layoutForNext`, then synthesising Homespun-only rows (PR rows, separators, "load more"). The legacy `computeLayout(taskGraph, …)` path remains for the static diff view. Output is the existing `TaskGraphRenderLine[] + TaskGraphEdge[]` shape so consumers don't change. Memoisation lives at the call site in `task-graph-view.tsx` (`useMemo` on issue set + viewMode; decorations excluded from the dep tuple).
+- [x] 5.2.2 Cycle handling: `{ ok: false, cycle }` propagates as a flat-list `TaskGraphRenderLine[]` + zero edges; the view renders a `task-graph-cycle-banner` with the cycle ids. Storybook story for the banner deferred to follow-up — the data path is covered by the new layout test in 5.2.3.
+- [x] 5.2.3 `task-graph-layout.test.ts` extended with a `computeLayoutFromIssues` block covering empty input, edge generation, decoration join, next-mode PR/separator emission, actionable marker, and cycle fallback.
 
 ### 5.3 View migration
 
-- [ ] 5.3.1 Switch `src/Homespun.Web/src/features/issues/components/task-graph-view.tsx` from `useTaskGraph()` to the parallel hook tuple: `useIssues()`, `useLinkedPrs()`, `useAgentStatuses()`, `useOpenSpecStates()`, `useOrphanChanges()`, `useMergedPrs()`. Compose the layout-wrapper inputs from the assembled data. Remove dead branches around server-positioned-node consumption.
-- [ ] 5.3.2 Confirm `viewMode` toggle (Tree↔Next) is a pure client transformation: no refetch, just re-runs `task-graph-layout.ts` with different params. Verify with React DevTools / network panel during manual smoke.
-- [ ] 5.3.3 Delete `src/Homespun.Web/src/features/issues/lib/apply-patch.ts` and any `PatchableField`-aware merge logic. Delete `src/Homespun.Web/src/features/issues/hooks/useTaskGraph.ts`.
-- [ ] 5.3.4 Update SignalR subscription in `useIssues` to handle the unified `IssueChanged` event; remove `IssueFieldsPatched` subscriber.
-- [ ] 5.3.5 Run `npm run lint:fix && npm run typecheck && npm test`. Fix all errors before proceeding.
+- [x] 5.3.1 Switched `src/Homespun.Web/src/features/issues/components/task-graph-view.tsx` from `useTaskGraph()` to the parallel hook tuple: `useIssues()`, `useLinkedPrs()`, `useAgentStatuses()`, `useOpenSpecStates()`, `useOrphanChanges()`, `useMergedPrs()`. Layout-wrapper inputs are composed from the assembled data; legacy server-positioned-node branches deleted (`computeInheritedParentInfo` → `computeInheritedParentInfoFromIssues`, `aggregateOrphans` → `aggregateOrphansFromInputs`). Routes (`projects.$projectId.issues.index.tsx`) migrated alongside.
+- [x] 5.3.2 `viewMode` toggle: tree↔next is a pure client transformation in `computeLayoutFromIssues` — no refetch (visual verification under `dev-mock` deferred to Phase E.7.4).
+- [ ] 5.3.3 Delete `src/Homespun.Web/src/features/issues/lib/apply-patch.ts` and `src/Homespun.Web/src/features/issues/hooks/use-task-graph.ts`. (Deferred — `useTaskGraph` is still consumed by `static-task-graph-view`, the agent-diff view, and `features/agents/components/openspec-tab.tsx`. Both will migrate alongside the Phase D server-side `TaskGraphResponse` deletion. `apply-patch.ts` is unreferenced by production code now but kept while the old `IssueFieldsPatched` SignalR event still ships from the server — its corresponding tests pass and the file is deleted in Phase D.6.3 alongside the server-side cleanup.)
+- [x] 5.3.4 `useIssues` subscribes to the new unified `IssueChanged` event; the legacy `IssueFieldsPatched` handler is no longer registered by the view (the existing handler in `notification-hub.ts` is preserved during the transition and removed in Phase D).
+- [ ] 5.3.5 Run `npm run lint:fix && npm run typecheck && npm test`. Lint:fix passes (5 pre-existing errors in `error-boundary.tsx` are unrelated). Typecheck and the affected unit tests pass; full suite re-run rolled into Phase E.7.
 
 ### 5.4 E2E smoke
 
-- [ ] 5.4.1 Add `src/Homespun.Web/e2e/dynamic-issue-insert.spec.ts`: navigate to a project's task graph, create an issue via the UI, assert the new node appears within 1s without observing a `GET /api/projects/{projectId}/issues` network request. (The SignalR `IssueChanged` event + idempotent merge should be sufficient.)
-- [ ] 5.4.2 Confirm `npm run test:e2e` passes.
+- [ ] 5.4.1 Add `src/Homespun.Web/e2e/dynamic-issue-insert.spec.ts`: navigate to a project's task graph, create an issue via the UI, assert the new node appears within 1s without observing a `GET /api/projects/{projectId}/issues` network request. (Deferred — depends on Phase D's `BroadcastIssueChanged` server-side helper being wired before the dynamic-insert path can succeed without a refetch.)
+- [ ] 5.4.2 Confirm `npm run test:e2e` passes. (Deferred to Phase E.7.3.)
 
 ## 6. Phase D — Server: collapse SignalR + delete old surface
 

@@ -40,6 +40,9 @@ export function useLinkOrphan() {
     },
     onSuccess: (params) => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(params.projectId) })
+      queryClient.invalidateQueries({ queryKey: ['orphan-changes', params.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['openspec-states', params.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['issues', params.projectId] })
     },
   })
 }

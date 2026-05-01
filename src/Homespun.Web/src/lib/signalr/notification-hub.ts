@@ -3,7 +3,13 @@
  */
 
 import type { HubConnection } from '@microsoft/signalr'
-import type { NotificationDto, IssueChangeType, IssueFieldPatch } from '@/types/signalr'
+import type { IssueResponse } from '@/api'
+import type {
+  NotificationDto,
+  IssueChangeType,
+  IssueFieldPatch,
+  IssueChangeKind,
+} from '@/types/signalr'
 
 // ============================================================================
 // Event Handler Types
@@ -14,6 +20,18 @@ export interface NotificationHubEvents {
   onNotificationDismissed?: (notificationId: string) => void
   onIssuesChanged?: (projectId: string, changeType: IssueChangeType, issueId: string) => void
   onIssueFieldsPatched?: (projectId: string, issueId: string, patch: IssueFieldPatch) => void
+  /**
+   * Unified per-issue mutation event. The server emits `IssueChanged` for
+   * every create / update / delete (and topology change). `issue` is the
+   * canonical post-mutation body for `created` / `updated` and `null` for
+   * `deleted`.
+   */
+  onIssueChanged?: (
+    projectId: string,
+    kind: IssueChangeKind,
+    issueId: string,
+    issue: IssueResponse | null
+  ) => void
   onBranchIdGenerated?: (
     issueId: string,
     projectId: string,
@@ -52,6 +70,7 @@ export function registerNotificationHubEvents(
   register('NotificationDismissed', handlers.onNotificationDismissed)
   register('IssuesChanged', handlers.onIssuesChanged)
   register('IssueFieldsPatched', handlers.onIssueFieldsPatched)
+  register('IssueChanged', handlers.onIssueChanged)
   register('BranchIdGenerated', handlers.onBranchIdGenerated)
   register('BranchIdGenerationFailed', handlers.onBranchIdGenerationFailed)
 

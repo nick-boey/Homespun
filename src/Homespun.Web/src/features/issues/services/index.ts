@@ -1,12 +1,15 @@
 // Task graph layout
 export {
   computeLayout,
+  computeLayoutFromIssues,
   TaskGraphMarkerType,
   isIssueRenderLine,
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
   getRenderKey,
+  type ClientLayoutResult,
+  type ComputeLayoutInput,
   type TaskGraphRenderLine,
   type TaskGraphIssueRenderLine,
   type TaskGraphPrRenderLine,
@@ -23,10 +26,19 @@ export { getPriorityColor } from './priority-colors'
 export { generateBranchName } from './branch-name'
 
 // Inherited parent computation
-export { computeInheritedParentInfo, type InheritedParentInfo } from './inherited-parent'
+export {
+  computeInheritedParentInfo,
+  computeInheritedParentInfoFromIssues,
+  type InheritedParentInfo,
+} from './inherited-parent'
 
 // Filter query parser
 export { parseFilterQuery, applyFilter, type ParsedFilter } from './filter-query-parser'
 
 // Orphan change aggregation
-export { aggregateOrphans, type OrphanEntry, type OrphanOccurrence } from './orphan-aggregation'
+export {
+  aggregateOrphans,
+  aggregateOrphansFromInputs,
+  type OrphanEntry,
+  type OrphanOccurrence,
+} from './orphan-aggregation'
