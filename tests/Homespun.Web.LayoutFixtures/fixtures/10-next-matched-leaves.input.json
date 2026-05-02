@@ -1,0 +1,108 @@
+{
+  "mode": "Next",
+  "matchedIds": [
+    "Leaf2"
+  ],
+  "issues": [
+    {
+      "id": "Root",
+      "title": "Root",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Parallel",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": []
+    },
+    {
+      "id": "Mid1",
+      "title": "Mid1",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Root",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "Mid2",
+      "title": "Mid2",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Root",
+          "sortOrder": "b"
+        }
+      ]
+    },
+    {
+      "id": "Mid3",
+      "title": "Mid3",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Root",
+          "sortOrder": "c"
+        }
+      ]
+    },
+    {
+      "id": "Leaf1",
+      "title": "Leaf1",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Mid1",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "Leaf2",
+      "title": "Leaf2",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Mid2",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "Leaf3",
+      "title": "Leaf3",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "Mid3",
+          "sortOrder": "a"
+        }
+      ]
+    }
+  ]
+}

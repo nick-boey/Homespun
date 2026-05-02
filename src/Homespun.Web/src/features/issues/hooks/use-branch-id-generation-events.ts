@@ -45,9 +45,8 @@ export function useBranchIdGenerationEvents(options: UseBranchIdGenerationEvents
           return { ...oldData, workingBranchId: branchId }
         }
       )
-      queryClient.invalidateQueries({
-        queryKey: taskGraphQueryKey(eventProjectId),
-      })
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(eventProjectId) })
+      queryClient.invalidateQueries({ queryKey: ['issues', eventProjectId] })
 
       // Show success toast
       toast.success('Branch ID generated', {

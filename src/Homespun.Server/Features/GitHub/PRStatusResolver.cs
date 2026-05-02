@@ -164,15 +164,19 @@ public class PRStatusResolver(
     /// </summary>
     private async Task InvalidateGraphSnapshotAsync(string projectId, string? fleeceIssueId)
     {
-        if (notificationHub is null || services is null)
+        if (notificationHub is null)
         {
             return;
         }
 
-        await notificationHub.BroadcastIssueTopologyChanged(
-            services,
+        // PR status flips are decoration-only — the linked-pr cache key
+        // invalidation is driven by the IssueChanged event on the related
+        // issue (when known). When the PR isn't linked to a Fleece issue,
+        // emit a bulk event so every issue cache for the project refreshes.
+        await notificationHub.BroadcastIssueChanged(
             projectId,
             IssueChangeType.Updated,
-            string.IsNullOrEmpty(fleeceIssueId) ? null : fleeceIssueId);
+            string.IsNullOrEmpty(fleeceIssueId) ? null : fleeceIssueId,
+            issue: null);
     }
 }

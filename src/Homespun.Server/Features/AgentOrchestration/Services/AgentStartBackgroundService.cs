@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
@@ -152,15 +153,15 @@ public class AgentStartBackgroundService(
                     "Created clone at {ClonePath} for issue {IssueId}",
                     clonePath, request.IssueId);
 
-                // Clone presence drives TaskGraphResponse.OpenSpecStates[issueId]; a
-                // newly-created clone may unlock that entry, so invalidate the snapshot
-                // and broadcast IssuesChanged so the client refetches within ~1s instead
-                // of waiting up to 10s for the refresher tick.
-                await hubContext.BroadcastIssueTopologyChanged(
-                    scope.ServiceProvider,
+                // Clone presence drives the openspec-states decoration for this
+                // issue; a newly-created clone may unlock its entry. The unified
+                // IssueChanged event invalidates the openspec-states query so the
+                // client refetches.
+                await hubContext.BroadcastIssueChanged(
                     request.ProjectId,
                     IssueChangeType.Updated,
-                    request.IssueId);
+                    request.IssueId,
+                    request.Issue?.ToResponse());
             }
             else
             {

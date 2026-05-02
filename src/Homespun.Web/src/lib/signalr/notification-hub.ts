@@ -3,7 +3,8 @@
  */
 
 import type { HubConnection } from '@microsoft/signalr'
-import type { NotificationDto, IssueChangeType, IssueFieldPatch } from '@/types/signalr'
+import type { IssueResponse } from '@/api'
+import type { NotificationDto, IssueChangeKind } from '@/types/signalr'
 
 // ============================================================================
 // Event Handler Types
@@ -12,8 +13,20 @@ import type { NotificationDto, IssueChangeType, IssueFieldPatch } from '@/types/
 export interface NotificationHubEvents {
   onNotificationAdded?: (notification: NotificationDto) => void
   onNotificationDismissed?: (notificationId: string) => void
-  onIssuesChanged?: (projectId: string, changeType: IssueChangeType, issueId: string) => void
-  onIssueFieldsPatched?: (projectId: string, issueId: string, patch: IssueFieldPatch) => void
+  /**
+   * Unified per-issue mutation event. The server emits `IssueChanged` for
+   * every create / update / delete (and topology change). `issue` is the
+   * canonical post-mutation body for `created` / `updated` and `null` for
+   * `deleted`. `issueId` is `null` for bulk events (fleece-sync,
+   * clone lifecycle) — clients treat a null id as "invalidate every issue
+   * cache for this project".
+   */
+  onIssueChanged?: (
+    projectId: string,
+    kind: IssueChangeKind,
+    issueId: string | null,
+    issue: IssueResponse | null
+  ) => void
   onBranchIdGenerated?: (
     issueId: string,
     projectId: string,
@@ -50,8 +63,7 @@ export function registerNotificationHubEvents(
 
   register('NotificationAdded', handlers.onNotificationAdded)
   register('NotificationDismissed', handlers.onNotificationDismissed)
-  register('IssuesChanged', handlers.onIssuesChanged)
-  register('IssueFieldsPatched', handlers.onIssueFieldsPatched)
+  register('IssueChanged', handlers.onIssueChanged)
   register('BranchIdGenerated', handlers.onBranchIdGenerated)
   register('BranchIdGenerationFailed', handlers.onBranchIdGenerationFailed)
 

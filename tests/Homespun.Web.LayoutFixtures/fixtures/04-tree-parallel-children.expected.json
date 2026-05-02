@@ -1,0 +1,92 @@
+{
+  "ok": true,
+  "totalRows": 5,
+  "totalLanes": 2,
+  "nodes": [
+    {
+      "id": "C1",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "C2",
+      "row": 1,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "C3",
+      "row": 2,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "C4",
+      "row": 3,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "P",
+      "row": 4,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "C1",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "C2",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 1,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "C3",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 2,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "C4",
+      "toId": "P",
+      "kind": "parallelChildToSpine",
+      "startRow": 3,
+      "startLane": 0,
+      "endRow": 4,
+      "endLane": 1,
+      "pivotLane": 1,
+      "sourceAttach": "right",
+      "targetAttach": "top"
+    }
+  ]
+}

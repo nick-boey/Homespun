@@ -15,28 +15,33 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { IssueType, IssueStatus, ExecutionMode, type TaskGraphResponse } from '@/api'
-import { useSignalR } from '@/hooks/use-signalr'
-import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
-import { applyPatch } from '../lib/apply-patch'
+import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { ErrorFallback } from '@/components/error-boundary'
 import { IssueRowSkeleton } from './issue-row-skeleton'
 import { IssuesEmptyState } from './issues-empty-state'
 import {
-  computeLayout,
+  computeLayoutFromIssues,
   isIssueRenderLine,
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
   getRenderKey,
-  computeInheritedParentInfo,
+  computeInheritedParentInfoFromIssues,
   applyFilter,
   TaskGraphMarkerType,
   type ParsedFilter,
 } from '../services'
-import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from '../hooks'
+import {
+  useIssues,
+  useLinkedPrs,
+  useAgentStatuses,
+  useOpenSpecStates,
+  useOrphanChanges,
+  useMergedPrs,
+  useCreateIssue,
+  useUpdateIssue,
+} from '../hooks'
 import {
   KeyboardEditMode,
   EditCursorPosition,
@@ -54,7 +59,7 @@ import {
 } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
 import { OrphanedChangesList } from './orphan-changes'
-import { aggregateOrphans } from '../services/orphan-aggregation'
+import { aggregateOrphansFromInputs } from '../services/orphan-aggregation'
 import { ROW_HEIGHT, LANE_WIDTH, getTypeColor, TaskGraphEdges } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
@@ -125,8 +130,21 @@ export const TaskGraphView = memo(
     },
     ref
   ) {
-    const { taskGraph, isLoading, isError, refetch } = useTaskGraph(projectId)
-    const queryClient = useQueryClient()
+    // Per-resource hooks fetched in parallel (HTTP/2 multiplexing makes the
+    // 6-roundtrip cost negligible). Each hook subscribes to the unified
+    // `IssueChanged` SignalR channel and either applies the merge directly
+    // (issues) or invalidates its query key.
+    const issuesHook = useIssues(projectId, { includeOpenPrLinked: true })
+    const issues = issuesHook.issues ?? []
+    const issueIds = useMemo(() => issues.map((i) => i.id ?? '').filter(Boolean), [issues])
+    const linkedPrsHook = useLinkedPrs(projectId)
+    const agentStatusesHook = useAgentStatuses(projectId)
+    const openSpecStatesHook = useOpenSpecStates(projectId, issueIds)
+    const orphanChangesHook = useOrphanChanges(projectId)
+    const mergedPrsHook = useMergedPrs(projectId, { max: 5 })
+    const isLoading = issuesHook.isLoading
+    const isError = issuesHook.isError
+    const refetch = issuesHook.refetch
 
     // Expanded rows state
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -159,23 +177,40 @@ export const TaskGraphView = memo(
       },
     })
 
-    // Compute render lines from task graph
-    const { lines: unfilteredRenderLines, edges } = useMemo(() => {
-      if (!taskGraph) return { lines: [], edges: [] }
-      return computeLayout(taskGraph, depth, viewMode)
-    }, [taskGraph, depth, viewMode])
+    // Compute render lines + edges via the client-side TS layout port.
+    // Memoised on issue set + viewMode + filter — decoration maps affect
+    // render only, not layout, so they are excluded from the dep tuple.
+    const layoutResult = useMemo(() => {
+      return computeLayoutFromIssues({
+        issues,
+        linkedPrs: linkedPrsHook.linkedPrs ?? null,
+        agentStatuses: agentStatusesHook.agentStatuses ?? null,
+        mergedPrs: mergedPrsHook.mergedPrs ?? null,
+        hasMorePastPrs: false,
+        viewMode,
+      })
+    }, [
+      issues,
+      linkedPrsHook.linkedPrs,
+      agentStatusesHook.agentStatuses,
+      mergedPrsHook.mergedPrs,
+      viewMode,
+    ])
+    const unfilteredRenderLines = layoutResult.lines
+    const edges = layoutResult.edges
+    const layoutCycle = layoutResult.ok ? null : layoutResult.cycle
 
-    // Build a lookup of issue IDs to their full issue data for filtering
+    // Build a lookup of issue IDs to their full issue data for filtering.
     const issueDataMap = useMemo(() => {
-      if (!taskGraph?.nodes) return new Map()
-      const map = new Map()
-      for (const node of taskGraph.nodes) {
-        if (node.issue) {
-          map.set(node.issue.id, node.issue)
-        }
+      const map = new Map<string, (typeof issues)[number]>()
+      for (const issue of issues) {
+        if (issue.id) map.set(issue.id, issue)
       }
       return map
-    }, [taskGraph])
+    }, [issues])
+
+    // Suppress unused deps from the legacy server-positioned-node API.
+    void depth
 
     // Apply filter to render lines (keeping separators and PRs for context)
     const renderLines = useMemo(() => {
@@ -239,38 +274,8 @@ export const TaskGraphView = memo(
       return issueRenderLines[selectedIndex] ?? null
     }, [selectedIndex, issueRenderLines])
 
-    // SignalR connection for real-time updates
-    const { connection } = useSignalR({
-      hubUrl: '/hubs/notifications',
-      autoConnect: true,
-    })
-
-    // Register SignalR event handlers
-    useEffect(() => {
-      if (!connection) return
-
-      const cleanup = registerNotificationHubEvents(connection, {
-        onIssuesChanged: (changedProjectId) => {
-          if (changedProjectId === projectId) {
-            // Invalidate task graph query to trigger refetch
-            queryClient.invalidateQueries({
-              queryKey: taskGraphQueryKey(projectId),
-            })
-          }
-        },
-        onIssueFieldsPatched: (changedProjectId, issueId, patch) => {
-          if (changedProjectId !== projectId) return
-          // Apply the patch in place — no refetch. Server guarantees the
-          // snapshot was patched before this event fired, so a racing
-          // refetch from any other source would also return fresh data.
-          queryClient.setQueryData<TaskGraphResponse>(taskGraphQueryKey(projectId), (old) =>
-            applyPatch(old, issueId, patch)
-          )
-        },
-      })
-
-      return cleanup
-    }, [connection, projectId, queryClient])
+    // SignalR subscriptions live on each per-resource hook; no extra wiring
+    // is needed here.
 
     // Toggle expanded state for an issue
     const toggleExpanded = useCallback((issueId: string) => {
@@ -328,8 +333,8 @@ export const TaskGraphView = memo(
       if (!referenceIssue) return
 
       // Compute inherited parent info for sibling creation
-      const inheritedParent = computeInheritedParentInfo(
-        taskGraph,
+      const inheritedParent = computeInheritedParentInfoFromIssues(
+        issues,
         referenceIssue.issueId,
         false // isAbove = false for creating below
       )
@@ -344,7 +349,7 @@ export const TaskGraphView = memo(
         insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines, taskGraph])
+    }, [selectedIndex, issueRenderLines, issues])
 
     const handleCreateAbove = useCallback(() => {
       if (selectedIndex < 0) return
@@ -352,8 +357,8 @@ export const TaskGraphView = memo(
       if (!referenceIssue) return
 
       // Compute inherited parent info for sibling creation
-      const inheritedParent = computeInheritedParentInfo(
-        taskGraph,
+      const inheritedParent = computeInheritedParentInfoFromIssues(
+        issues,
         referenceIssue.issueId,
         true // isAbove = true for creating above
       )
@@ -368,7 +373,7 @@ export const TaskGraphView = memo(
         insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines, taskGraph])
+    }, [selectedIndex, issueRenderLines, issues])
 
     // Handler for creating at top of list (no selection)
     const handleCreateAtTop = useCallback(() => {
@@ -376,7 +381,7 @@ export const TaskGraphView = memo(
 
       // Compute inherited parent info if there's a reference issue
       const inheritedParent = firstIssue
-        ? computeInheritedParentInfo(taskGraph, firstIssue.issueId, true)
+        ? computeInheritedParentInfoFromIssues(issues, firstIssue.issueId, true)
         : null
 
       setPendingNewIssue({
@@ -389,7 +394,7 @@ export const TaskGraphView = memo(
         insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, taskGraph])
+    }, [issueRenderLines, issues])
 
     // Handler for creating at bottom of list (no selection)
     const handleCreateAtBottom = useCallback(() => {
@@ -397,7 +402,7 @@ export const TaskGraphView = memo(
 
       // Compute inherited parent info if there's a reference issue
       const inheritedParent = lastIssue
-        ? computeInheritedParentInfo(taskGraph, lastIssue.issueId, false)
+        ? computeInheritedParentInfoFromIssues(issues, lastIssue.issueId, false)
         : null
 
       setPendingNewIssue({
@@ -410,7 +415,7 @@ export const TaskGraphView = memo(
         insertBefore: inheritedParent?.insertBefore ?? false,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, taskGraph])
+    }, [issueRenderLines, issues])
 
     // Expose imperative methods via ref
     useImperativeHandle(
@@ -1073,7 +1078,7 @@ export const TaskGraphView = memo(
                       onStatusChange={handleStatusChange}
                       onExecutionModeChange={handleExecutionModeChange}
                       onSelectFirstInstance={handleSelectFirstInstance}
-                      openSpecState={taskGraph?.openSpecStates?.[line.issueId] ?? null}
+                      openSpecState={openSpecStatesHook.openSpecStates?.[line.issueId] ?? null}
                       isMoveSource={moveSourceIssueId === line.issueId}
                       isMoveOperationActive={!!moveOperation}
                       aria-rowindex={index + 1}
@@ -1133,13 +1138,27 @@ export const TaskGraphView = memo(
         </div>
 
         {/* Deduped orphan changes across main + every branch. */}
-        {taskGraph && (
-          <OrphanedChangesList
-            projectId={projectId}
-            entries={aggregateOrphans(taskGraph)}
-            issues={issueRenderLines}
-            openSpecStates={taskGraph.openSpecStates ?? undefined}
-          />
+        <OrphanedChangesList
+          projectId={projectId}
+          entries={aggregateOrphansFromInputs({
+            orphanChanges: orphanChangesHook.orphanChanges,
+            openSpecStates: openSpecStatesHook.openSpecStates,
+            issues,
+          })}
+          issues={issueRenderLines}
+          openSpecStates={openSpecStatesHook.openSpecStates}
+        />
+
+        {/* Cycle banner — degraded layout fallback. */}
+        {layoutCycle && (
+          <div
+            role="alert"
+            data-testid="task-graph-cycle-banner"
+            className="border-destructive/40 bg-destructive/10 text-destructive mt-4 rounded border p-3 text-sm"
+          >
+            Issue graph contains a cycle ({layoutCycle.join(' → ')}). Showing a flat list until the
+            cycle is resolved.
+          </div>
         )}
 
         {/* Search match count indicator (hidden, for accessibility) */}

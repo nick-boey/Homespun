@@ -1,0 +1,91 @@
+{
+  "ok": true,
+  "totalRows": 5,
+  "totalLanes": 5,
+  "nodes": [
+    {
+      "id": "X",
+      "row": 0,
+      "lane": 0,
+      "appearanceIndex": 1,
+      "totalAppearances": 2
+    },
+    {
+      "id": "L",
+      "row": 1,
+      "lane": 1,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "X",
+      "row": 2,
+      "lane": 2,
+      "appearanceIndex": 2,
+      "totalAppearances": 2
+    },
+    {
+      "id": "M",
+      "row": 3,
+      "lane": 3,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    },
+    {
+      "id": "R",
+      "row": 4,
+      "lane": 4,
+      "appearanceIndex": 1,
+      "totalAppearances": 1
+    }
+  ],
+  "edges": [
+    {
+      "fromId": "X",
+      "toId": "L",
+      "kind": "seriesCornerToParent",
+      "startRow": 0,
+      "startLane": 0,
+      "endRow": 1,
+      "endLane": 1,
+      "pivotLane": 0,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "X",
+      "toId": "M",
+      "kind": "seriesCornerToParent",
+      "startRow": 2,
+      "startLane": 2,
+      "endRow": 3,
+      "endLane": 3,
+      "pivotLane": 2,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    },
+    {
+      "fromId": "L",
+      "toId": "M",
+      "kind": "seriesSibling",
+      "startRow": 1,
+      "startLane": 1,
+      "endRow": 3,
+      "endLane": 3,
+      "sourceAttach": "bottom",
+      "targetAttach": "top"
+    },
+    {
+      "fromId": "M",
+      "toId": "R",
+      "kind": "seriesCornerToParent",
+      "startRow": 3,
+      "startLane": 3,
+      "endRow": 4,
+      "endLane": 4,
+      "pivotLane": 3,
+      "sourceAttach": "bottom",
+      "targetAttach": "left"
+    }
+  ]
+}

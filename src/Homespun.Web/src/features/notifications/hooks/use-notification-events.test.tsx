@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useNotificationEvents } from './use-notification-events'
 import { useNotificationStore } from '../stores/notification-store'
-import type { NotificationDto, IssueChangeType } from '@/types/signalr'
+import type { NotificationDto, IssueChangeKind } from '@/types/signalr'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -58,7 +58,7 @@ describe('useNotificationEvents', () => {
 
     expect(mockConnection.on).toHaveBeenCalledWith('NotificationAdded', expect.any(Function))
     expect(mockConnection.on).toHaveBeenCalledWith('NotificationDismissed', expect.any(Function))
-    expect(mockConnection.on).toHaveBeenCalledWith('IssuesChanged', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('IssueChanged', expect.any(Function))
   })
 
   it('fetches active notifications on mount when connected', async () => {
@@ -141,16 +141,16 @@ describe('useNotificationEvents', () => {
   it('creates notification for issue changes', async () => {
     let issueChangedHandler: (
       projectId: string,
-      changeType: IssueChangeType,
-      issueId: string
+      kind: IssueChangeKind,
+      issueId: string | null
     ) => void = () => {}
 
     mockConnection.on.mockImplementation((event: string, handler: unknown) => {
-      if (event === 'IssuesChanged') {
+      if (event === 'IssueChanged') {
         issueChangedHandler = handler as (
           projectId: string,
-          changeType: IssueChangeType,
-          issueId: string
+          kind: IssueChangeKind,
+          issueId: string | null
         ) => void
       }
     })

@@ -257,20 +257,6 @@ Wraps the merged/closed PR cache read + response projection inside
 - **Parent:** `graph.taskgraph.build`.
 - **Required attrs:** `project.id`.
 
-### `graph.snapshot.patch`
-
-Wraps `ProjectTaskGraphSnapshotStore.PatchIssueFields`. Emitted once per
-in-place field-patch mutation path (Delta 2 of
-`taskgraph-mutation-invalidation`). Dominates issue-edit volume when the
-whitelist fires; `graph.taskgraph.build` drops correspondingly. Same
-ActivitySource (`Homespun.Gitgraph`).
-
-- **Originator:** server
-- **Kind:** `INTERNAL`
-- **Required attrs:** `project.id`, `issue.id`, `patch.fields`
-  (comma-joined list of patched `IssueFieldPatch` property names; bounded
-  by the Delta-2 whitelist so cardinality stays safe).
-
 ### `openspec.enrich`
 
 Wraps `IssueGraphOpenSpecEnricher.EnrichAsync`. Parent of every
@@ -292,6 +278,18 @@ ActivitySource.
 - **Kind:** `INTERNAL`
 - **Parent:** `openspec.enrich`.
 - **Required attrs:** `issue.id`, `branch.source`.
+
+### `openspec.states`
+
+Wraps `IssueGraphOpenSpecEnricher.GetOpenSpecStatesAsync`. Emitted by the
+per-decoration `GET /api/projects/{projectId}/openspec-states` endpoint
+that replaces the bundled `EnrichAsync` path under
+move-graph-layout-to-client. Same ActivitySource.
+
+- **Originator:** server
+- **Kind:** `INTERNAL`
+- **Parent:** root (per-request).
+- **Required attrs:** `project.id`, `issue.count`.
 
 ### `openspec.state.resolve`
 

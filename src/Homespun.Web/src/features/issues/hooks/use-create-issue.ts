@@ -156,11 +156,19 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
         // duplicate the span without adding context the server doesn't
         // already have.
 
-        // Invalidate task graph to get the correct server state
-        // This replaces our optimistic data with the real data
-        await queryClient.invalidateQueries({
-          queryKey: taskGraphQueryKey(projectId),
-        })
+        // Invalidate every cached query that backs the task graph view —
+        // both the legacy server-laid-out task graph (for the static diff
+        // view) and every per-resource key fed by the new client-side
+        // pipeline (`useIssues`, `useLinkedPrs`, …). Prefix-invalidation
+        // catches all variants of the issues query.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) }),
+          queryClient.invalidateQueries({ queryKey: ['issues', projectId] }),
+          queryClient.invalidateQueries({ queryKey: ['linked-prs', projectId] }),
+          queryClient.invalidateQueries({ queryKey: ['agent-statuses', projectId] }),
+          queryClient.invalidateQueries({ queryKey: ['openspec-states', projectId] }),
+          queryClient.invalidateQueries({ queryKey: ['orphan-changes', projectId] }),
+        ])
 
         onSuccess?.(issue)
         return issue

@@ -1,17 +1,27 @@
 /**
- * Converts a TaskGraphResponse into render lines + edges for TaskGraphView.
+ * Render-line + edge synthesis for TaskGraphView.
  *
- * Server (Fleece v3) supplies the authoritative graph layout: each node carries
- * its row/lane/appearance position, and a separate `edges` collection carries
- * every connector with its kind + attach sides. This module is a thin pass-through:
- * one render line per `PositionedNode`, edges threaded through unchanged, plus
- * Homespun-only synthesis for PR rows / separators / "load more" entries.
+ * Two entry points:
+ *
+ * - `computeLayout(taskGraph, …)` — legacy path that consumes a server-laid-out
+ *   `TaskGraphResponse` (used by the static diff view). Each node already
+ *   carries its row/lane/appearance position; the wrapper threads them through.
+ *
+ * - `computeLayoutFromIssues({ issues, decorations, viewMode, … })` — the
+ *   new client-side path. Runs the TS port of `Fleece.Core`'s
+ *   `IIssueLayoutService` against `IssueResponse[]` plus parallel decoration
+ *   maps fetched per-endpoint, then synthesizes Homespun-only rows
+ *   (PR rows, separators, "load more"). Returns the same shape as the legacy
+ *   path so consumers don't change. Memoise at the call site (issue set +
+ *   viewMode + filter is the layout key; decorations are render-only).
  */
 
 import type {
   TaskGraphResponse,
-  TaskGraphLinkedPr,
+  LinkedPr,
   AgentStatusData,
+  IssueResponse,
+  PullRequestWithTime,
   IssueType as IssueTypeEnum,
   IssueStatus as IssueStatusEnum,
   ExecutionMode as ExecutionModeEnum,
@@ -19,6 +29,15 @@ import type {
 import { ExecutionMode, IssueStatus, IssueType } from '@/api'
 import { generateBranchName } from './branch-name'
 import { ViewMode } from '../types'
+import {
+  InvalidGraphError,
+  layoutForNext,
+  layoutForTree,
+  type GraphLayoutResult,
+  type GraphSortConfig,
+  type LayoutIssue,
+  type PositionedNode,
+} from './layout'
 
 export type TaskGraphEdge = {
   from: string
@@ -58,7 +77,7 @@ export interface TaskGraphIssueRenderLine {
   issueType: IssueTypeEnum
   status: IssueStatusEnum
   hasDescription: boolean
-  linkedPr: TaskGraphLinkedPr | null
+  linkedPr: LinkedPr | null
   agentStatus: AgentStatusData | null
   assignedTo: string | null
   executionMode: ExecutionModeEnum
@@ -235,17 +254,318 @@ export function computeLayout(
   }
 
   const edges: TaskGraphEdge[] = (taskGraph.edges ?? []).map((e) => ({
-    from: e.from,
-    to: e.to,
-    kind: e.kind,
+    from: e.from ?? '',
+    to: e.to ?? '',
+    kind: e.kind ?? 'SeriesSibling',
     startRow: e.startRow,
     startLane: e.startLane,
     endRow: e.endRow,
     endLane: e.endLane,
     pivotLane: e.pivotLane,
-    sourceAttach: e.sourceAttach,
-    targetAttach: e.targetAttach,
+    sourceAttach: e.sourceAttach ?? 'Top',
+    targetAttach: e.targetAttach ?? 'Top',
   }))
 
   return { lines, edges }
+}
+
+// =====================================================================
+// Client-side layout: new path consuming Issue[] + decoration maps.
+// =====================================================================
+
+export interface ComputeLayoutInput {
+  /** Visible-set issues from `useIssues`. */
+  issues: readonly IssueResponse[]
+  /** Decoration: per-issue linked-PR map (`useLinkedPrs`). */
+  linkedPrs?: Record<string, LinkedPr> | null
+  /** Decoration: per-issue agent-status map (`useAgentStatuses`). */
+  agentStatuses?: Record<string, AgentStatusData> | null
+  /** Decoration: merged-PR list for next-mode header (`useMergedPrs`). */
+  mergedPrs?: readonly PullRequestWithTime[] | null
+  /** Whether more past PRs are available for "load more" rendering. */
+  hasMorePastPrs?: boolean
+  /** View mode: tree (issues only) vs next (PR rows + separator + issues). */
+  viewMode?: ViewMode
+  /** Active assignee filter (passed to the layout engine). */
+  assigneeFilter?: string | null
+  /** Sort config (passed to the layout engine). */
+  sortConfig?: GraphSortConfig | null
+  /** Subset of issue ids that should appear (next mode only). */
+  matchedIds?: ReadonlySet<string> | null
+}
+
+export type ClientLayoutResult =
+  | (TaskGraphLayoutResult & { ok: true })
+  | { ok: false; cycle: readonly string[]; lines: TaskGraphRenderLine[]; edges: TaskGraphEdge[] }
+
+const EDGE_ATTACH_MAP: Record<string, TaskGraphEdge['sourceAttach']> = {
+  top: 'Top',
+  bottom: 'Bottom',
+  left: 'Left',
+  right: 'Right',
+}
+
+const EDGE_KIND_MAP: Record<string, TaskGraphEdge['kind']> = {
+  seriesSibling: 'SeriesSibling',
+  seriesCornerToParent: 'SeriesCornerToParent',
+  parallelChildToSpine: 'ParallelChildToSpine',
+}
+
+function lookupDecoration<T>(map: Record<string, T> | null | undefined, issueId: string): T | null {
+  if (!map) return null
+  return map[issueId] ?? map[issueId.toLowerCase()] ?? map[issueId.toUpperCase()] ?? null
+}
+
+function toLayoutIssue(issue: IssueResponse): LayoutIssue {
+  return {
+    id: issue.id ?? '',
+    title: issue.title ?? null,
+    description: issue.description ?? null,
+    status: (issue.status ?? IssueStatus.OPEN) as LayoutIssue['status'],
+    executionMode: issue.executionMode === ExecutionMode.PARALLEL ? 'parallel' : 'series',
+    parentIssues:
+      issue.parentIssues?.map((p) => ({
+        parentIssue: p.parentIssue ?? '',
+        sortOrder: p.sortOrder ?? null,
+        // Server-side `IssueDtoMapper` already filters inactive refs out of
+        // the response; surface every ref as active here.
+        active: true,
+      })) ?? null,
+    priority: issue.priority ?? null,
+    assignedTo: issue.assignedTo ?? null,
+    createdAt: issue.createdAt ?? null,
+  }
+}
+
+function actionableIds(issues: readonly IssueResponse[]): Set<string> {
+  // Seeds for Next view = every non-terminal leaf (no incomplete children).
+  // Walking ancestors from this seed reaches every non-terminal ancestor, so
+  // Next renders the same set of issues as Tree but framed as
+  // "leaves-up to roots" rather than "roots-down to leaves".
+  const isDoneStatus = (s: IssueStatusEnum | undefined) =>
+    s === IssueStatus.COMPLETE || s === IssueStatus.ARCHIVED || s === IssueStatus.CLOSED
+  const isTerminalStatus = (s: IssueStatusEnum | undefined) =>
+    isDoneStatus(s) || s === undefined
+
+  const childrenOf = new Map<string, IssueResponse[]>()
+  for (const issue of issues) {
+    for (const p of issue.parentIssues ?? []) {
+      if (!p.parentIssue) continue
+      const k = p.parentIssue.toLowerCase()
+      let bucket = childrenOf.get(k)
+      if (!bucket) {
+        bucket = []
+        childrenOf.set(k, bucket)
+      }
+      bucket.push(issue)
+    }
+  }
+
+  const hasIncompleteChildren = (issue: IssueResponse): boolean => {
+    if (!issue.id) return false
+    const kids = childrenOf.get(issue.id.toLowerCase())
+    if (!kids || kids.length === 0) return false
+    return kids.some((k) => !isDoneStatus(k.status))
+  }
+
+  const result = new Set<string>()
+  for (const issue of issues) {
+    if (!issue.id) continue
+    if (issue.type === IssueType.IDEA) continue
+    if (isTerminalStatus(issue.status)) continue
+    if (hasIncompleteChildren(issue)) continue
+    result.add(issue.id)
+  }
+  return result
+}
+
+function getMarkerForIssue(issue: IssueResponse, isActionable: boolean): TaskGraphMarkerType {
+  return getMarker(issue.status, isActionable)
+}
+
+function buildIssueRenderLine(
+  positioned: PositionedNode<LayoutIssue>,
+  issue: IssueResponse,
+  decorations: {
+    linkedPrs?: Record<string, LinkedPr> | null
+    agentStatuses?: Record<string, AgentStatusData> | null
+  },
+  isActionable: boolean
+): TaskGraphIssueRenderLine {
+  const parentRefs = issue.parentIssues ?? []
+  return {
+    type: 'issue',
+    issueId: issue.id ?? positioned.node.id,
+    title: issue.title ?? '',
+    description: issue.description ?? null,
+    branchName: generateBranchName(issue),
+    lane: positioned.lane,
+    marker: getMarkerForIssue(issue, isActionable),
+    issueType: issue.type ?? IssueType.TASK,
+    status: issue.status ?? IssueStatus.DRAFT,
+    hasDescription: !!(issue.description && issue.description.trim()),
+    linkedPr: lookupDecoration(decorations.linkedPrs, issue.id ?? ''),
+    agentStatus: lookupDecoration(decorations.agentStatuses, issue.id ?? ''),
+    assignedTo: issue.assignedTo ?? null,
+    executionMode: issue.executionMode ?? ExecutionMode.SERIES,
+    parentIssues: parentRefs.length > 0 ? parentRefs : null,
+    parentIssueId: parentRefs[0]?.parentIssue ?? null,
+    appearanceIndex: positioned.appearanceIndex,
+    totalAppearances: positioned.totalAppearances,
+  }
+}
+
+function emitMergedPrRows(
+  mergedPrs: readonly PullRequestWithTime[],
+  hasMorePastPrs: boolean,
+  hasIssues: boolean,
+  agentStatuses: Record<string, AgentStatusData> | null | undefined
+): TaskGraphRenderLine[] {
+  const lines: TaskGraphRenderLine[] = []
+  if (hasMorePastPrs) lines.push({ type: 'loadMore' })
+  for (let prIdx = 0; prIdx < mergedPrs.length; prIdx++) {
+    const pr = mergedPrs[prIdx]
+    const info = pr.pullRequest
+    const isFirstPr = prIdx === 0
+    const isLastPr = prIdx === mergedPrs.length - 1
+    lines.push({
+      type: 'pr',
+      prNumber: info?.number ?? 0,
+      title: info?.title ?? '',
+      url: info?.htmlUrl ?? null,
+      isMerged: !!info?.mergedAt,
+      hasDescription: !!(info?.body && info.body.trim()),
+      // Merged PRs aren't tied to a per-issue session, so no agent status —
+      // but if the PR's author session is still resolving, surface that.
+      agentStatus: lookupDecoration(agentStatuses, info?.number?.toString() ?? ''),
+      drawTopLine: !isFirstPr,
+      drawBottomLine: !isLastPr || hasIssues,
+    })
+  }
+  if (mergedPrs.length > 0 && hasIssues) {
+    lines.push({ type: 'separator' })
+  }
+  return lines
+}
+
+/**
+ * Client-side layout driver. Runs the TS port against the supplied issues,
+ * then assembles the render-line + edge stream. Returns `{ ok: false }` when
+ * the issue graph contains a cycle so the caller can render a degraded
+ * flat-list view + error banner.
+ */
+export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayoutResult {
+  const {
+    issues,
+    linkedPrs = null,
+    agentStatuses = null,
+    mergedPrs = [],
+    hasMorePastPrs = false,
+    viewMode = ViewMode.Tree,
+    assigneeFilter = null,
+    sortConfig = null,
+    matchedIds = null,
+  } = input
+
+  const isTreeView = viewMode === ViewMode.Tree
+
+  const layoutIssues = issues.map(toLayoutIssue)
+  const actionable = actionableIds(issues)
+  let layout: GraphLayoutResult<LayoutIssue>
+  try {
+    if (isTreeView) {
+      // Top-down: root at lane 0, children descending.
+      layout = layoutForTree(layoutIssues, {
+        assignedTo: assigneeFilter,
+        sort: sortConfig,
+        mode: 'normalTree',
+      })
+    } else {
+      // Next mode: explicit matchedIds wins; otherwise seed from the
+      // non-terminal-leaf actionable set. Empty seed degrades to the full
+      // tree so the view isn't blank when nothing is actionable.
+      const seed = matchedIds && matchedIds.size > 0 ? matchedIds : actionable
+      if (seed.size === 0) {
+        layout = layoutForTree(layoutIssues, {
+          assignedTo: assigneeFilter,
+          sort: sortConfig,
+          mode: 'issueGraph',
+        })
+      } else {
+        layout = layoutForNext(layoutIssues, seed, {
+          assignedTo: assigneeFilter,
+          sort: sortConfig,
+          mode: 'issueGraph',
+        })
+      }
+    }
+  } catch (err) {
+    if (err instanceof InvalidGraphError) {
+      layout = { ok: false, cycle: err.cycle }
+    } else {
+      throw err
+    }
+  }
+
+  // Index issues by id for O(1) decoration / metadata lookup.
+  const issueById = new Map<string, IssueResponse>()
+  for (const i of issues) if (i.id) issueById.set(i.id.toLowerCase(), i)
+
+  // Cycle: degraded fallback — emit a flat list of every issue, no edges.
+  if (!layout.ok) {
+    const flatLines: TaskGraphRenderLine[] = []
+    for (let idx = 0; idx < issues.length; idx++) {
+      const issue = issues[idx]
+      flatLines.push(
+        buildIssueRenderLine(
+          {
+            node: toLayoutIssue(issue),
+            row: idx,
+            lane: 0,
+            appearanceIndex: 1,
+            totalAppearances: 1,
+          },
+          issue,
+          { linkedPrs, agentStatuses },
+          actionable.has(issue.id ?? '')
+        )
+      )
+    }
+    return { ok: false, cycle: layout.cycle, lines: flatLines, edges: [] }
+  }
+
+  const lines: TaskGraphRenderLine[] = []
+  const hasIssues = layout.layout.nodes.length > 0
+
+  if (!isTreeView) {
+    lines.push(...emitMergedPrRows(mergedPrs ?? [], hasMorePastPrs, hasIssues, agentStatuses))
+  }
+
+  for (const positioned of layout.layout.nodes) {
+    const issue = issueById.get(positioned.node.id.toLowerCase())
+    if (!issue) continue
+    lines.push(
+      buildIssueRenderLine(
+        positioned,
+        issue,
+        { linkedPrs, agentStatuses },
+        actionable.has(issue.id ?? '')
+      )
+    )
+  }
+
+  const edges: TaskGraphEdge[] = layout.layout.edges.map((e) => ({
+    from: e.from.id,
+    to: e.to.id,
+    kind: EDGE_KIND_MAP[e.kind] ?? e.kind,
+    startRow: e.startRow,
+    startLane: e.startLane,
+    endRow: e.endRow,
+    endLane: e.endLane,
+    pivotLane: e.pivotLane,
+    sourceAttach: EDGE_ATTACH_MAP[e.sourceAttach] ?? 'Top',
+    targetAttach: EDGE_ATTACH_MAP[e.targetAttach] ?? 'Top',
+  }))
+
+  return { ok: true, lines, edges }
 }

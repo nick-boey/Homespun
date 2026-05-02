@@ -36,11 +36,21 @@ public class IssuesController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IAgentStartBackgroundService agentStartBackgroundService,
     IAgentStartupTracker agentStartupTracker,
+    IIssueAncestorTraversalService ancestorTraversal,
     IModelCatalogService modelCatalog,
     ILogger<IssuesController> logger) : ControllerBase
 {
+    private static readonly IssueStatus[] OpenStatuses =
+    {
+        IssueStatus.Draft, IssueStatus.Open, IssueStatus.Progress, IssueStatus.Review
+    };
+
     /// <summary>
-    /// Get all issues for a project.
+    /// Get the visible issue set for a project: every open issue plus every
+    /// ancestor of an open issue, plus any issues named in <paramref name="include"/>
+    /// (with their ancestors), plus issues linked to open PRs when
+    /// <paramref name="includeOpenPrLinked"/> is true. Pass <c>includeAll=true</c>
+    /// to bypass visibility filtering and return the raw list.
     /// </summary>
     [HttpGet("projects/{projectId}/issues")]
     [ProducesResponseType<List<IssueResponse>>(StatusCodes.Status200OK)]
@@ -49,7 +59,10 @@ public class IssuesController(
         string projectId,
         [FromQuery] IssueStatus? status = null,
         [FromQuery] IssueType? type = null,
-        [FromQuery] int? priority = null)
+        [FromQuery] int? priority = null,
+        [FromQuery] string? include = null,
+        [FromQuery] bool includeOpenPrLinked = false,
+        [FromQuery] bool includeAll = false)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -57,9 +70,55 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
-        var issues = await fleeceService.ListIssuesAsync(project.LocalPath, status, type, priority);
-        var response = issues.ToResponseList();
-        logger.LogDebug("Returning {Count} issues for project {ProjectId}", response.Count, projectId);
+        // Always pull the unfiltered list — visibility and post-filters apply here.
+        var allIssues = await fleeceService.ListIssuesAsync(project.LocalPath, includeAll: true);
+
+        IEnumerable<Issue> filtered;
+        if (includeAll)
+        {
+            filtered = allIssues;
+        }
+        else
+        {
+            var seedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var issue in allIssues)
+            {
+                if (OpenStatuses.Contains(issue.Status))
+                {
+                    seedIds.Add(issue.Id);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(include))
+            {
+                foreach (var id in include.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    seedIds.Add(id);
+                }
+            }
+
+            if (includeOpenPrLinked)
+            {
+                // Every PR in the data store is, by construction, open: merged/closed PRs are
+                // removed via dataStore.RemovePullRequestAsync.
+                foreach (var pr in dataStore.GetPullRequestsByProject(projectId))
+                {
+                    if (!string.IsNullOrEmpty(pr.FleeceIssueId))
+                    {
+                        seedIds.Add(pr.FleeceIssueId);
+                    }
+                }
+            }
+
+            filtered = ancestorTraversal.CollectVisible(allIssues, seedIds);
+        }
+
+        if (status.HasValue) filtered = filtered.Where(i => i.Status == status.Value);
+        if (type.HasValue) filtered = filtered.Where(i => i.Type == type.Value);
+        if (priority.HasValue) filtered = filtered.Where(i => i.Priority == priority.Value);
+
+        var response = filtered.ToList().ToResponseList();
+        logger.LogDebug("Returning {Count} issues for project {ProjectId} (includeAll={IncludeAll})", response.Count, projectId, includeAll);
         return Ok(response);
     }
 
@@ -217,7 +276,7 @@ public class IssuesController(
         }
 
         // Broadcast issue creation to connected clients
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Created, issue.Id);
+        await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Created, issue.Id, issue.ToResponse());
 
         // Trigger background branch ID generation if title is provided and no working branch ID
         if (!string.IsNullOrWhiteSpace(request.Title) && string.IsNullOrWhiteSpace(request.WorkingBranchId))
@@ -278,17 +337,9 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
-        // Route structure-preserving field edits through the in-place patch path; any
-        // topology-affecting field in the same request forces a full invalidation.
-        var patch = TryBuildFieldPatch(request, assignedTo);
-        if (patch is not null)
-        {
-            await notificationHub.BroadcastIssueFieldsPatched(HttpContext.RequestServices, request.ProjectId, issueId, patch);
-        }
-        else
-        {
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
-        }
+        // Single unified update event — the canonical post-mutation issue body
+        // is the source of truth for the client cache.
+        await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, issueId, issue.ToResponse());
 
         // Check if title changed and working branch ID is empty
         if (!string.IsNullOrWhiteSpace(request.Title) &&
@@ -299,29 +350,6 @@ public class IssuesController(
         }
 
         return Ok(issue.ToResponse());
-    }
-
-    /// <summary>
-    /// Returns an <see cref="IssueFieldPatch"/> when every field set on <paramref name="request"/>
-    /// is structure-preserving (<see cref="PatchableFieldAttribute"/>); returns null when any
-    /// topology-affecting field is set so the caller falls through to
-    /// <see cref="NotificationHubExtensions.BroadcastIssueTopologyChanged"/>.
-    /// </summary>
-    private static IssueFieldPatch? TryBuildFieldPatch(UpdateIssueRequest request, string? assignedTo)
-    {
-        if (request.Status.HasValue || request.Type.HasValue || request.WorkingBranchId is not null)
-        {
-            return null;
-        }
-
-        return new IssueFieldPatch
-        {
-            Title = request.Title,
-            Description = request.Description,
-            Priority = request.Priority,
-            ExecutionMode = request.ExecutionMode,
-            AssignedTo = assignedTo,
-        };
     }
 
     /// <summary>
@@ -345,7 +373,7 @@ public class IssuesController(
         }
 
         // Broadcast issue deletion to connected clients
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Deleted, issueId);
+        await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Deleted, issueId, null);
 
         return NoContent();
     }
@@ -382,7 +410,7 @@ public class IssuesController(
                 request.AddToExisting);
 
             // Broadcast issue update to connected clients
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, childId);
+            await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, childId, issue.ToResponse());
 
             return Ok(issue.ToResponse());
         }
@@ -417,7 +445,7 @@ public class IssuesController(
             childId,
             request.ParentIssueId);
 
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, childId);
+        await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, childId, issue.ToResponse());
 
         return Ok(issue.ToResponse());
     }
@@ -446,7 +474,7 @@ public class IssuesController(
             project.LocalPath,
             issueId);
 
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
+        await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, issueId, issue.ToResponse());
 
         return Ok(issue.ToResponse());
     }
@@ -481,7 +509,7 @@ public class IssuesController(
                 request.Direction);
 
             // Broadcast issue update to connected clients
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, issueId);
+            await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, issueId, issue.ToResponse());
 
             return Ok(issue.ToResponse());
         }
@@ -619,8 +647,8 @@ public class IssuesController(
 
         if (!request.DryRun && result.Success)
         {
-            // Broadcast issue changes to connected clients
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, null);
+            // Bulk event — multiple issues touched, no single canonical body.
+            await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, null, null);
         }
 
         return Ok(result);
@@ -652,8 +680,8 @@ public class IssuesController(
 
         if (result.Success)
         {
-            // Broadcast issue changes to connected clients
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, request.ProjectId, IssueChangeType.Updated, null);
+            // Bulk event — conflict resolution may touch multiple issues.
+            await notificationHub.BroadcastIssueChanged(request.ProjectId, IssueChangeType.Updated, null, null);
         }
 
         return Ok(result);
@@ -708,8 +736,8 @@ public class IssuesController(
         // Apply the snapshot to the FleeceService cache and disk
         await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
 
-        // Broadcast issues changed to connected clients
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
+        // Bulk event — undo can change every issue at once.
+        await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
 
         var state = await historyService.GetStateAsync(project.LocalPath);
         return Ok(new IssueHistoryOperationResponse
@@ -746,8 +774,8 @@ public class IssuesController(
         // Apply the snapshot to the FleeceService cache and disk
         await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
 
-        // Broadcast issues changed to connected clients
-        await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
+        // Bulk event — redo can change every issue at once.
+        await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
 
         var state = await historyService.GetStateAsync(project.LocalPath);
         return Ok(new IssueHistoryOperationResponse

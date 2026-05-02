@@ -24,6 +24,7 @@ export type AgentStatusData = {
     isActive?: boolean;
     status: ClaudeSessionStatus;
     sessionId: string | null;
+    projectId?: string | null;
 };
 
 export type ApplyAgentChangesRequest = {
@@ -632,6 +633,12 @@ export type LinkOrphanRequest = {
     fleeceId: string | null;
 };
 
+export type LinkedPr = {
+    number?: number;
+    url?: string | null;
+    status?: string | null;
+};
+
 export type MergedPullRequestDetails = {
     pullRequest: PullRequestInfo;
     linkedIssueId?: string | null;
@@ -1052,10 +1059,17 @@ export type SyncResult = {
     removedPrs?: Array<RemovedPrInfo> | null;
 };
 
-export type TaskGraphLinkedPr = {
-    number?: number;
-    url?: string | null;
-    status?: string | null;
+export type TaskGraphEdgeResponse = {
+    from: string | null;
+    to: string | null;
+    kind: string | null;
+    startRow: number;
+    startLane: number;
+    endRow: number;
+    endLane: number;
+    pivotLane?: number | null;
+    sourceAttach: string | null;
+    targetAttach: string | null;
 };
 
 export type TaskGraphNodeResponse = {
@@ -1076,24 +1090,11 @@ export type TaskGraphPrResponse = {
     agentStatus?: AgentStatusData;
 };
 
-export type TaskGraphEdgeResponse = {
-    from: string;
-    to: string;
-    kind: string;
-    startRow: number;
-    startLane: number;
-    endRow: number;
-    endLane: number;
-    pivotLane?: number | null;
-    sourceAttach: string;
-    targetAttach: string;
-};
-
 export type TaskGraphResponse = {
     nodes?: Array<TaskGraphNodeResponse> | null;
     totalLanes?: number;
-    totalRows?: number;
     edges?: Array<TaskGraphEdgeResponse> | null;
+    totalRows?: number;
     mergedPrs?: Array<TaskGraphPrResponse> | null;
     hasMorePastPrs?: boolean;
     totalPastPrsShown?: number;
@@ -1101,7 +1102,7 @@ export type TaskGraphResponse = {
         [key: string]: AgentStatusData;
     } | null;
     linkedPrs?: {
-        [key: string]: TaskGraphLinkedPr;
+        [key: string]: LinkedPr;
     } | null;
     openSpecStates?: {
         [key: string]: IssueOpenSpecState;
@@ -1253,6 +1254,35 @@ export type PullRequestWithTimeWritable = {
     pullRequest?: PullRequestInfoWritable;
     time?: number;
 };
+
+export type GetApiProjectsByProjectIdAgentStatusesData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agent-statuses';
+};
+
+export type GetApiProjectsByProjectIdAgentStatusesErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetApiProjectsByProjectIdAgentStatusesError = GetApiProjectsByProjectIdAgentStatusesErrors[keyof GetApiProjectsByProjectIdAgentStatusesErrors];
+
+export type GetApiProjectsByProjectIdAgentStatusesResponses = {
+    /**
+     * OK
+     */
+    200: {
+        [key: string]: AgentStatusData;
+    };
+};
+
+export type GetApiProjectsByProjectIdAgentStatusesResponse = GetApiProjectsByProjectIdAgentStatusesResponses[keyof GetApiProjectsByProjectIdAgentStatusesResponses];
 
 export type GetApiOpenspecBranchStateData = {
     body?: never;
@@ -1843,6 +1873,9 @@ export type GetApiProjectsByProjectIdIssuesData = {
         status?: IssueStatus;
         type?: IssueType;
         priority?: number;
+        include?: string;
+        includeOpenPrLinked?: boolean;
+        includeAll?: boolean;
     };
     url: '/api/projects/{projectId}/issues';
 };
@@ -2600,6 +2633,64 @@ export type DeleteApiNotificationsByKeyByKeyResponses = {
 
 export type DeleteApiNotificationsByKeyByKeyResponse = DeleteApiNotificationsByKeyByKeyResponses[keyof DeleteApiNotificationsByKeyByKeyResponses];
 
+export type GetApiProjectsByProjectIdOpenspecStatesData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: {
+        issues?: string;
+    };
+    url: '/api/projects/{projectId}/openspec-states';
+};
+
+export type GetApiProjectsByProjectIdOpenspecStatesErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetApiProjectsByProjectIdOpenspecStatesError = GetApiProjectsByProjectIdOpenspecStatesErrors[keyof GetApiProjectsByProjectIdOpenspecStatesErrors];
+
+export type GetApiProjectsByProjectIdOpenspecStatesResponses = {
+    /**
+     * OK
+     */
+    200: {
+        [key: string]: IssueOpenSpecState;
+    };
+};
+
+export type GetApiProjectsByProjectIdOpenspecStatesResponse = GetApiProjectsByProjectIdOpenspecStatesResponses[keyof GetApiProjectsByProjectIdOpenspecStatesResponses];
+
+export type GetApiProjectsByProjectIdOrphanChangesData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/orphan-changes';
+};
+
+export type GetApiProjectsByProjectIdOrphanChangesErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetApiProjectsByProjectIdOrphanChangesError = GetApiProjectsByProjectIdOrphanChangesErrors[keyof GetApiProjectsByProjectIdOrphanChangesErrors];
+
+export type GetApiProjectsByProjectIdOrphanChangesResponses = {
+    /**
+     * OK
+     */
+    200: Array<SnapshotOrphan>;
+};
+
+export type GetApiProjectsByProjectIdOrphanChangesResponse = GetApiProjectsByProjectIdOrphanChangesResponses[keyof GetApiProjectsByProjectIdOrphanChangesResponses];
+
 export type PostApiOrchestrationGenerateBranchIdData = {
     body?: GenerateBranchIdRequest;
     path?: never;
@@ -3119,6 +3210,35 @@ export type GetApiProjectsByProjectIdPullRequestsResponses = {
 };
 
 export type GetApiProjectsByProjectIdPullRequestsResponse = GetApiProjectsByProjectIdPullRequestsResponses[keyof GetApiProjectsByProjectIdPullRequestsResponses];
+
+export type GetApiProjectsByProjectIdLinkedPrsData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/linked-prs';
+};
+
+export type GetApiProjectsByProjectIdLinkedPrsErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetApiProjectsByProjectIdLinkedPrsError = GetApiProjectsByProjectIdLinkedPrsErrors[keyof GetApiProjectsByProjectIdLinkedPrsErrors];
+
+export type GetApiProjectsByProjectIdLinkedPrsResponses = {
+    /**
+     * OK
+     */
+    200: {
+        [key: string]: LinkedPr;
+    };
+};
+
+export type GetApiProjectsByProjectIdLinkedPrsResponse = GetApiProjectsByProjectIdLinkedPrsResponses[keyof GetApiProjectsByProjectIdLinkedPrsResponses];
 
 export type DeleteApiPullRequestsByIdData = {
     body?: never;

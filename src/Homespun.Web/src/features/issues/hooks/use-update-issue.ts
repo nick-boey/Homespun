@@ -126,17 +126,21 @@ export function useUpdateIssue(options?: UseUpdateIssueOptions) {
           queryKey: issueQueryKey(projectId, data.id),
         })
       }
-      // Invalidate task graph to reflect changes
-      queryClient.invalidateQueries({
-        queryKey: ['taskGraph'],
-      })
+      // Invalidate every cached query the task graph view depends on:
+      // legacy `taskGraph` plus the per-resource keys driving the new
+      // client-side layout pipeline.
+      queryClient.invalidateQueries({ queryKey: ['taskGraph'] })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['linked-prs'] })
+      queryClient.invalidateQueries({ queryKey: ['agent-statuses'] })
+      queryClient.invalidateQueries({ queryKey: ['openspec-states'] })
+      queryClient.invalidateQueries({ queryKey: ['orphan-changes'] })
       onSuccess?.(data as IssueResponse)
     },
     onSettled: () => {
-      // Always refetch after mutation settles
-      queryClient.invalidateQueries({
-        queryKey: ['taskGraph'],
-      })
+      // Always refetch after mutation settles — both pipelines.
+      queryClient.invalidateQueries({ queryKey: ['taskGraph'] })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
     },
   })
 }

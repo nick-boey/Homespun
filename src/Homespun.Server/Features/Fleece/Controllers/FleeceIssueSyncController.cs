@@ -55,7 +55,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
+            await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
         }
 
         return Ok(result);
@@ -81,7 +81,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
+            await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
         }
 
         return Ok(result);
@@ -108,7 +108,7 @@ public class FleeceIssueSyncController(
         if (result.Success)
         {
             await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
-            await notificationHub.BroadcastIssueTopologyChanged(HttpContext.RequestServices, projectId, IssueChangeType.Updated, null);
+            await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
         }
 
         return Ok(result);

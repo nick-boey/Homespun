@@ -23,11 +23,15 @@ public interface IProjectFleeceService
 
     /// <summary>
     /// Lists issues from the specified project matching the filters.
+    /// When no filter and <paramref name="includeAll"/> is false, terminal-status
+    /// issues (Deleted/Archived/Closed/Complete) are excluded.
     /// </summary>
     /// <param name="projectPath">Path to the project.</param>
     /// <param name="status">Optional status filter.</param>
     /// <param name="type">Optional type filter.</param>
     /// <param name="priority">Optional priority filter.</param>
+    /// <param name="includeAll">If true, return every issue regardless of status. Used by the visible-set
+    /// endpoint to fetch the unfiltered list before applying ancestor traversal.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>List of matching issues.</returns>
     Task<IReadOnlyList<Issue>> ListIssuesAsync(
@@ -35,6 +39,7 @@ public interface IProjectFleeceService
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
+        bool includeAll = false,
         CancellationToken ct = default);
 
     /// <summary>

@@ -1,0 +1,75 @@
+{
+  "mode": "Tree",
+  "issues": [
+    {
+      "id": "P",
+      "title": "Parent",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": []
+    },
+    {
+      "id": "C1",
+      "title": "Child1",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "title": "Child2",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "b"
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "title": "Child3",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "c"
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "title": "Child4",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "d"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeLayout,
+  computeLayoutFromIssues,
   getRenderKey,
   TaskGraphMarkerType,
   type TaskGraphIssueRenderLine,
@@ -296,5 +297,208 @@ describe('getRenderKey', () => {
 
   it('disambiguates multi-parent appearances by index', () => {
     expect(getRenderKey(makeIssue({ appearanceIndex: 1, totalAppearances: 2 }))).toBe('a:1')
+  })
+})
+
+describe('computeLayoutFromIssues', () => {
+  it('returns ok=true with empty lines/edges for empty input', () => {
+    const result = computeLayoutFromIssues({ issues: [] })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.lines).toEqual([])
+      expect(result.edges).toEqual([])
+    }
+  })
+
+  it('emits one issue render line per issue in tree mode', () => {
+    const result = computeLayoutFromIssues({
+      issues: [createIssue({ id: 'a' }), createIssue({ id: 'b' })],
+      viewMode: ViewMode.Tree,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const issueLines = result.lines.filter(isIssueRenderLine)
+    expect(issueLines).toHaveLength(2)
+    expect(issueLines.map((l) => l.issueId).sort()).toEqual(['a', 'b'])
+  })
+
+  it('emits an edge between a parent and its child', () => {
+    const child = createIssue({
+      id: 'child',
+      parentIssues: [{ parentIssue: 'parent' }],
+    })
+    const parent = createIssue({ id: 'parent' })
+    const result = computeLayoutFromIssues({
+      issues: [child, parent],
+      viewMode: ViewMode.Tree,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.edges).toHaveLength(1)
+    // Tree view runs normalTree: parent emitted first, edge points down to child.
+    expect(result.edges[0].from).toBe('parent')
+    expect(result.edges[0].to).toBe('child')
+  })
+
+  it('returns ok=false with a degraded flat list when the graph contains a cycle', () => {
+    const a = createIssue({ id: 'a', parentIssues: [{ parentIssue: 'b' }] })
+    const b = createIssue({ id: 'b', parentIssues: [{ parentIssue: 'a' }] })
+    const result = computeLayoutFromIssues({ issues: [a, b], viewMode: ViewMode.Tree })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.cycle.length).toBeGreaterThan(0)
+    // Degraded mode: every issue still appears as a row, no edges.
+    expect(result.lines.filter(isIssueRenderLine)).toHaveLength(2)
+    expect(result.edges).toEqual([])
+  })
+
+  it('joins linked-PR and agent-status decorations onto the issue render lines', () => {
+    const result = computeLayoutFromIssues({
+      issues: [createIssue({ id: 'a' })],
+      linkedPrs: { a: { number: 7, url: 'https://example.com/7', status: 'open' } },
+      agentStatuses: {
+        a: { isActive: true, status: 'running', sessionId: 'sess-1' } as never,
+      },
+      viewMode: ViewMode.Tree,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const line = result.lines.find(isIssueRenderLine)!
+    expect(line.linkedPr?.number).toBe(7)
+    expect(line.agentStatus?.sessionId).toBe('sess-1')
+  })
+
+  it('emits PR rows + separator before issues in next mode', () => {
+    const result = computeLayoutFromIssues({
+      issues: [createIssue({ id: 'a' })],
+      mergedPrs: [
+        {
+          pullRequest: {
+            number: 100,
+            title: 'Past PR',
+            body: 'description body',
+            mergedAt: '2026-01-01T00:00:00Z',
+            htmlUrl: 'https://example.com/pr/100',
+            status: 'merged',
+          },
+          time: 1,
+        } as never,
+      ],
+      hasMorePastPrs: true,
+      viewMode: ViewMode.Next,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.lines[0].type).toBe('loadMore')
+    expect(result.lines[1].type).toBe('pr')
+    expect(result.lines[2].type).toBe('separator')
+    expect(result.lines[3].type).toBe('issue')
+  })
+
+  it('marks an issue with no open parent as actionable', () => {
+    const root = createIssue({ id: 'root', status: IssueStatus.OPEN })
+    const result = computeLayoutFromIssues({ issues: [root] })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const line = result.lines.find(isIssueRenderLine)!
+    expect(line.marker).toBe(TaskGraphMarkerType.Actionable)
+  })
+
+  it('next mode seeds layoutForNext from non-terminal leaves and walks up ancestors', () => {
+    // Terminal-status descendants are excluded from the seed. The active leaves
+    // (`childA` open, `childB` review) reach `parent` via the ancestor walk,
+    // so Next renders the full non-terminal subgraph but framed leaves-up.
+    // `terminalChild` (closed) is hidden from both Tree and Next.
+    const issues = [
+      createIssue({
+        id: 'parent',
+        status: IssueStatus.OPEN,
+        executionMode: ExecutionMode.PARALLEL,
+      }),
+      createIssue({
+        id: 'childA',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'a' }],
+      }),
+      createIssue({
+        id: 'childB',
+        status: IssueStatus.REVIEW,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'b' }],
+      }),
+      createIssue({
+        id: 'terminalChild',
+        status: IssueStatus.CLOSED,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'c' }],
+      }),
+    ]
+
+    const tree = computeLayoutFromIssues({ issues, viewMode: ViewMode.Tree })
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) return
+    const treeIds = tree.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(treeIds).toEqual(['childA', 'childB', 'parent'])
+
+    const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
+    expect(next.ok).toBe(true)
+    if (!next.ok) return
+    const nextIds = next.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(nextIds).toEqual(['childA', 'childB', 'parent'])
+  })
+
+  it('next mode falls back to the full tree when no issues are actionable', () => {
+    // All issues are terminal — no actionables to seed layoutForNext.
+    // Tree fallback keeps the view non-empty (terminal-with-active-descendants
+    // visibility still hides them, but the result must be consistent with
+    // the tree-mode result for the same input).
+    const issues = [
+      createIssue({ id: 'a', status: IssueStatus.COMPLETE }),
+      createIssue({ id: 'b', status: IssueStatus.CLOSED }),
+    ]
+    const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
+    const tree = computeLayoutFromIssues({ issues, viewMode: ViewMode.Tree })
+    expect(next.ok).toBe(true)
+    expect(tree.ok).toBe(true)
+    if (!next.ok || !tree.ok) return
+    const nextIssueIds = next.lines.filter(isIssueRenderLine).map((l) => l.issueId)
+    const treeIssueIds = tree.lines.filter(isIssueRenderLine).map((l) => l.issueId)
+    expect(nextIssueIds).toEqual(treeIssueIds)
+  })
+
+  it('next mode honours an explicit matchedIds override over the actionable default', () => {
+    const issues = [
+      createIssue({ id: 'root', status: IssueStatus.OPEN }),
+      createIssue({
+        id: 'mid',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'root' }],
+      }),
+      createIssue({
+        id: 'leaf',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'mid' }],
+      }),
+      createIssue({ id: 'other', status: IssueStatus.OPEN }),
+    ]
+    // Default Next seeds from non-terminal leaves = {leaf, other}. An explicit
+    // matchedIds override of {leaf} replaces the default seed → walk pulls
+    // leaf + mid + root and excludes `other`.
+    const result = computeLayoutFromIssues({
+      issues,
+      viewMode: ViewMode.Next,
+      matchedIds: new Set(['leaf']),
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const ids = result.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(ids).toEqual(['leaf', 'mid', 'root'])
   })
 })

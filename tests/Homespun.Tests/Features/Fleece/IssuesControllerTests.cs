@@ -43,6 +43,7 @@ public class IssuesControllerTests
     private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<IAgentStartBackgroundService> _agentStartBackgroundServiceMock = null!;
     private Mock<IAgentStartupTracker> _agentStartupTrackerMock = null!;
+    private Mock<IIssueAncestorTraversalService> _ancestorTraversalMock = null!;
     private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
@@ -84,6 +85,7 @@ public class IssuesControllerTests
         _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _agentStartBackgroundServiceMock = new Mock<IAgentStartBackgroundService>();
         _agentStartupTrackerMock = new Mock<IAgentStartupTracker>();
+        _ancestorTraversalMock = new Mock<IIssueAncestorTraversalService>();
         _modelCatalogMock = new Mock<IModelCatalogService>();
         _modelCatalogMock
             .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -115,6 +117,7 @@ public class IssuesControllerTests
             _fleeceIssuesSyncServiceMock.Object,
             _agentStartBackgroundServiceMock.Object,
             _agentStartupTrackerMock.Object,
+            _ancestorTraversalMock.Object,
             _modelCatalogMock.Object,
             NullLogger<IssuesController>.Instance);
 
@@ -134,7 +137,7 @@ public class IssuesControllerTests
     #region Create Tests
 
     [Test]
-    public async Task Create_BroadcastsIssuesChangedEvent_WithCreatedChangeType()
+    public async Task Create_BroadcastsIssueChanged_WithCreatedChangeType()
     {
         // Arrange
         var issue = CreateTestIssue("ABC123", "Test Issue");
@@ -154,13 +157,15 @@ public class IssuesControllerTests
         // Act
         await _controller.Create(request);
 
-        // Assert
+        // Assert — the unified IssueChanged event carries the canonical body.
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged",
+            x => x.SendCoreAsync("IssueChanged",
                 It.Is<object?[]>(args =>
+                    args.Length == 4 &&
                     (string)args[0]! == TestProject.Id &&
                     (IssueChangeType)args[1]! == IssueChangeType.Created &&
-                    (string)args[2]! == issue.Id),
+                    (string)args[2]! == issue.Id &&
+                    args[3] is IssueResponse),
                 default),
             Times.Once);
     }
@@ -293,9 +298,11 @@ public class IssuesControllerTests
     #region Update Tests
 
     [Test]
-    public async Task Update_WithTopologyField_BroadcastsIssuesChangedEvent_WithUpdatedChangeType()
+    public async Task Update_BroadcastsIssueChanged_WithUpdatedChangeType()
     {
-        // Arrange — topology-class field (Status) forces the invalidation broadcast.
+        // Arrange — every Update flows through the unified IssueChanged event,
+        // regardless of whether the field is structure-preserving or topology-
+        // affecting. The legacy patch / topology split was deleted.
         var issueId = "ABC123";
         var issue = CreateTestIssue(issueId, "Updated Issue", IssueType.Bug);
 
@@ -320,20 +327,22 @@ public class IssuesControllerTests
 
         // Assert
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged",
+            x => x.SendCoreAsync("IssueChanged",
                 It.Is<object?[]>(args =>
+                    args.Length == 4 &&
                     (string)args[0]! == TestProject.Id &&
                     (IssueChangeType)args[1]! == IssueChangeType.Updated &&
-                    (string)args[2]! == issueId),
+                    (string)args[2]! == issueId &&
+                    args[3] is IssueResponse),
                 default),
             Times.Once);
     }
 
     [Test]
-    public async Task Update_WithPatchableFieldsOnly_BroadcastsIssueFieldsPatched()
+    public async Task Update_TitleOnly_StillBroadcastsIssueChanged()
     {
-        // Arrange — a title-only edit is structure-preserving and must route through
-        // the in-place patch path, emitting IssueFieldsPatched instead of IssuesChanged.
+        // Arrange — the legacy patch-only branch (IssueFieldsPatched) is gone.
+        // Title-only edits emit the same unified IssueChanged event.
         var issueId = "ABC123";
         var issue = CreateTestIssue(issueId, "Updated Issue", IssueType.Bug);
 
@@ -358,12 +367,15 @@ public class IssuesControllerTests
 
         // Assert
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssueFieldsPatched",
+            x => x.SendCoreAsync("IssueChanged",
                 It.Is<object?[]>(args =>
                     (string)args[0]! == TestProject.Id &&
-                    (string)args[1]! == issueId),
+                    (string)args[2]! == issueId),
                 default),
             Times.Once);
+        _groupClientsMock.Verify(
+            x => x.SendCoreAsync("IssueFieldsPatched", It.IsAny<object?[]>(), default),
+            Times.Never);
     }
 
     [Test]
@@ -397,7 +409,7 @@ public class IssuesControllerTests
     #region Delete Tests
 
     [Test]
-    public async Task Delete_BroadcastsIssuesChangedEvent_WithDeletedChangeType()
+    public async Task Delete_BroadcastsIssueChanged_WithDeletedChangeType()
     {
         // Arrange
         var issueId = "ABC123";
@@ -412,13 +424,15 @@ public class IssuesControllerTests
         // Act
         await _controller.Delete(issueId, TestProject.Id);
 
-        // Assert
+        // Assert — Delete carries a null issue body.
         _groupClientsMock.Verify(
-            x => x.SendCoreAsync("IssuesChanged",
+            x => x.SendCoreAsync("IssueChanged",
                 It.Is<object?[]>(args =>
+                    args.Length == 4 &&
                     (string)args[0]! == TestProject.Id &&
                     (IssueChangeType)args[1]! == IssueChangeType.Deleted &&
-                    (string)args[2]! == issueId),
+                    (string)args[2]! == issueId &&
+                    args[3] == null),
                 default),
             Times.Once);
     }
@@ -1269,7 +1283,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
-            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issues);
         _dataStoreMock
             .Setup(x => x.UserEmail)
@@ -1303,7 +1317,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
-            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issues);
         _dataStoreMock
             .Setup(x => x.UserEmail)

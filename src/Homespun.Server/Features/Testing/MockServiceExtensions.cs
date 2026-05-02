@@ -3,7 +3,6 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.Gitgraph.Snapshots;
 using Homespun.Features.GitHub;
 using Homespun.Features.Observability;
 using Homespun.Features.Projects;
@@ -77,6 +76,7 @@ public static class MockServiceExtensions
 
         // Register real FleeceService (reads/writes to temp .fleece directories)
         services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
+        services.AddSingleton<IIssueAncestorTraversalService, IssueAncestorTraversalService>();
 
         // Core services
         services.AddSingleton<ICommandRunner, CommandRunner>();
@@ -197,23 +197,7 @@ public static class MockServiceExtensions
             new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
         services.AddScoped<IGraphService, GraphService>();
 
-        // TaskGraphSnapshot — same shape as production. Gated on
-        // TaskGraphSnapshot:Enabled; tests can set it to false via configuration.
-        services.Configure<TaskGraphSnapshotOptions>(
-            configuration.GetSection(TaskGraphSnapshotOptions.SectionName));
-        var snapshotOptions = new TaskGraphSnapshotOptions();
-        configuration.GetSection(TaskGraphSnapshotOptions.SectionName).Bind(snapshotOptions);
-        if (snapshotOptions.Enabled)
-        {
-            services.AddSingleton<IProjectTaskGraphSnapshotStore, ProjectTaskGraphSnapshotStore>();
-            services.AddSingleton<TaskGraphSnapshotRefresher>();
-            services.AddSingleton<ITaskGraphSnapshotRefresher>(
-                sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
-            services.AddHostedService(
-                sp => sp.GetRequiredService<TaskGraphSnapshotRefresher>());
-        }
-
-        // TimeProvider needed by snapshot store + refresher.
+        // TimeProvider needed by OpenSpec services.
         services.TryAddSingleton(TimeProvider.System);
 
         // Clone enrichment service

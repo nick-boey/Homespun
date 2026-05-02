@@ -2,6 +2,7 @@ using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.GitHub;
 using Homespun.Shared.Models.PullRequests;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,45 @@ public class PullRequestsController(
 
         var pullRequests = dataStore.GetPullRequestsByProject(projectId).ToList();
         return Ok(pullRequests);
+    }
+
+    /// <summary>
+    /// Get the linked-PR decoration map for a project keyed by Fleece issue id.
+    /// Source: every PR with both <c>FleeceIssueId</c> and <c>GitHubPRNumber</c> set.
+    /// (PRs in the data store are by construction open; merged/closed PRs are removed.)
+    /// </summary>
+    [HttpGet("projects/{projectId}/linked-prs")]
+    [ProducesResponseType<Dictionary<string, LinkedPr>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<Dictionary<string, LinkedPr>> GetLinkedPrs(string projectId)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var map = new Dictionary<string, LinkedPr>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pr in dataStore.GetPullRequestsByProject(projectId))
+        {
+            if (string.IsNullOrEmpty(pr.FleeceIssueId) || !pr.GitHubPRNumber.HasValue)
+            {
+                continue;
+            }
+
+            var url = !string.IsNullOrEmpty(project.GitHubOwner) && !string.IsNullOrEmpty(project.GitHubRepo)
+                ? $"https://github.com/{project.GitHubOwner}/{project.GitHubRepo}/pull/{pr.GitHubPRNumber.Value}"
+                : null;
+
+            map[pr.FleeceIssueId] = new LinkedPr
+            {
+                Number = pr.GitHubPRNumber.Value,
+                Url = url,
+                Status = pr.Status.ToString()
+            };
+        }
+
+        return Ok(map);
     }
 
     /// <summary>

@@ -423,11 +423,19 @@ export function ProjectToolbar({
         onClick={() =>
           onViewModeChange?.(viewMode === ViewMode.Next ? ViewMode.Tree : ViewMode.Next)
         }
-        aria-label={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
-        title={viewMode === ViewMode.Next ? 'Switch to tree view' : 'Switch to next view'}
+        aria-label={
+          viewMode === ViewMode.Tree
+            ? 'Tree view (click to switch to Next view)'
+            : 'Next view (click to switch to Tree view)'
+        }
+        title={
+          viewMode === ViewMode.Tree
+            ? 'Tree view (click to switch to Next view)'
+            : 'Next view (click to switch to Tree view)'
+        }
         data-testid="toolbar-view-mode-toggle"
       >
-        {viewMode === ViewMode.Next ? (
+        {viewMode === ViewMode.Tree ? (
           <ListTree className="h-4 w-4" />
         ) : (
           <Network className="h-4 w-4" />
@@ -448,7 +456,7 @@ export function ProjectToolbar({
         >
           <Minus className="h-4 w-4" />
         </Button>
-        <span className="border-border text-muted-foreground flex min-w-[1.5rem] items-center justify-center border-y bg-transparent text-center text-sm">
+        <span className="border-border text-muted-foreground bg-background flex h-8 min-w-6 items-center justify-center border-y text-center text-sm">
           {depth}
         </span>
         <Button

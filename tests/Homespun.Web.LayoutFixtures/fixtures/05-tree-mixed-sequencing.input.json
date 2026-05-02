@@ -1,0 +1,105 @@
+{
+  "mode": "Tree",
+  "issues": [
+    {
+      "id": "R",
+      "title": "Root",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Parallel",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": []
+    },
+    {
+      "id": "S",
+      "title": "SeriesBranch",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "R",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "S1",
+      "title": "S1",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "S",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "S2",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "S",
+          "sortOrder": "b"
+        }
+      ]
+    },
+    {
+      "id": "P",
+      "title": "ParallelBranch",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Parallel",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "R",
+          "sortOrder": "b"
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "title": "P1",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "a"
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "P2",
+      "status": "Open",
+      "type": "Task",
+      "executionMode": "Series",
+      "lastUpdate": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "parentIssues": [
+        {
+          "parentIssue": "P",
+          "sortOrder": "b"
+        }
+      ]
+    }
+  ]
+}

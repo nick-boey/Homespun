@@ -5,7 +5,7 @@ import {
   TaskGraphView,
   ProjectToolbar,
   useToolbarShortcuts,
-  useTaskGraph,
+  useIssues,
   taskGraphQueryKey,
   useDefaultFilter,
   type TaskGraphViewRef,
@@ -78,39 +78,38 @@ function IssuesList() {
   const [moveOperation, setMoveOperation] = useState<MoveOperationType | null>(null)
   const [moveSourceIssueId, setMoveSourceIssueId] = useState<string | null>(null)
 
-  // Task graph data for computing sibling positions
-  const { taskGraph } = useTaskGraph(projectId)
+  // Visible-set issues — used to compute sibling-position metadata for the
+  // "Move up / down" toolbar affordances.
+  const { issues } = useIssues(projectId, { includeOpenPrLinked: true })
 
   // Compute canMoveUp/canMoveDown based on selected issue's position among siblings
   const { canMoveUp, canMoveDown } = useMemo(() => {
-    if (!selectedIssueId || !taskGraph?.nodes) return { canMoveUp: false, canMoveDown: false }
+    if (!selectedIssueId || !issues) return { canMoveUp: false, canMoveDown: false }
 
-    const selectedNode = taskGraph.nodes.find((n) => n.issue?.id === selectedIssueId)
-    if (!selectedNode?.issue?.parentIssues?.length) return { canMoveUp: false, canMoveDown: false }
-    if (selectedNode.issue.parentIssues.length > 1) return { canMoveUp: false, canMoveDown: false }
+    const selected = issues.find((i) => i.id === selectedIssueId)
+    if (!selected?.parentIssues?.length) return { canMoveUp: false, canMoveDown: false }
+    if (selected.parentIssues.length > 1) return { canMoveUp: false, canMoveDown: false }
 
-    const parentId = selectedNode.issue.parentIssues[0].parentIssue
+    const parentId = selected.parentIssues[0].parentIssue
     if (!parentId) return { canMoveUp: false, canMoveDown: false }
 
-    // Find all siblings under the same parent
-    const siblings = taskGraph.nodes
-      .filter((n) => n.issue?.parentIssues?.some((p) => p.parentIssue === parentId))
+    // Find all siblings under the same parent.
+    const siblings = issues
+      .filter((i) => i.parentIssues?.some((p) => p.parentIssue === parentId))
       .sort((a, b) => {
-        const aOrder =
-          a.issue?.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
-        const bOrder =
-          b.issue?.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
+        const aOrder = a.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
+        const bOrder = b.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
         return aOrder.localeCompare(bOrder)
       })
 
-    const index = siblings.findIndex((s) => s.issue?.id === selectedIssueId)
+    const index = siblings.findIndex((i) => i.id === selectedIssueId)
     if (index < 0) return { canMoveUp: false, canMoveDown: false }
 
     return {
       canMoveUp: index > 0,
       canMoveDown: index < siblings.length - 1,
     }
-  }, [selectedIssueId, taskGraph])
+  }, [selectedIssueId, issues])
 
   // Move sibling mutation
   const moveSiblingMutation = useMutation({
@@ -121,6 +120,7 @@ function IssuesList() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
     },
   })
 
@@ -133,6 +133,7 @@ function IssuesList() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
     },
   })
 
@@ -145,6 +146,7 @@ function IssuesList() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
     },
   })
 
@@ -157,6 +159,7 @@ function IssuesList() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
     },
   })
 
