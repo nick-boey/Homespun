@@ -403,19 +403,33 @@ describe('computeLayoutFromIssues', () => {
     expect(line.marker).toBe(TaskGraphMarkerType.Actionable)
   })
 
-  it('next mode seeds layoutForNext from the actionable set, hiding non-actionable descendants', () => {
-    // `parent` is actionable (open, no open parent). `child` is NOT
-    // actionable (its open parent blocks it). `other` is actionable.
-    // Tree mode shows all three; Next mode walks from {parent, other}
-    // up to ancestors only, so `child` is excluded.
+  it('next mode seeds layoutForNext from the actionable leaves and walks up ancestors', () => {
+    // `parent` is series-mode with three open children A/B/C in sortOrder. Per
+    // Fleece.Core IsActionable: only `childA` is actionable (leaf, all-previous
+    // done). `childB`/`childC` are blocked by series ordering. `parent` has
+    // incomplete children. Tree mode shows everything; Next mode seeds {childA}
+    // and walks ancestors → {childA, parent}, omitting the blocked siblings.
     const issues = [
-      createIssue({ id: 'parent', status: IssueStatus.OPEN }),
       createIssue({
-        id: 'child',
+        id: 'parent',
         status: IssueStatus.OPEN,
-        parentIssues: [{ parentIssue: 'parent' }],
+        executionMode: ExecutionMode.SERIES,
       }),
-      createIssue({ id: 'other', status: IssueStatus.OPEN }),
+      createIssue({
+        id: 'childA',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'a' }],
+      }),
+      createIssue({
+        id: 'childB',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'b' }],
+      }),
+      createIssue({
+        id: 'childC',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'parent', sortOrder: 'c' }],
+      }),
     ]
 
     const tree = computeLayoutFromIssues({ issues, viewMode: ViewMode.Tree })
@@ -425,7 +439,7 @@ describe('computeLayoutFromIssues', () => {
       .filter(isIssueRenderLine)
       .map((l) => l.issueId)
       .sort()
-    expect(treeIds).toEqual(['child', 'other', 'parent'])
+    expect(treeIds).toEqual(['childA', 'childB', 'childC', 'parent'])
 
     const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
     expect(next.ok).toBe(true)
@@ -434,7 +448,7 @@ describe('computeLayoutFromIssues', () => {
       .filter(isIssueRenderLine)
       .map((l) => l.issueId)
       .sort()
-    expect(nextIds).toEqual(['other', 'parent'])
+    expect(nextIds).toEqual(['childA', 'parent'])
   })
 
   it('next mode falls back to the full tree when no issues are actionable', () => {
@@ -471,9 +485,10 @@ describe('computeLayoutFromIssues', () => {
       }),
       createIssue({ id: 'other', status: IssueStatus.OPEN }),
     ]
-    // Default Next would seed {root, other} (the actionable set) and miss
-    // mid + leaf. An explicit override of {leaf} should pull leaf + mid + root
-    // and exclude `other`.
+    // Default Next would seed {leaf, other} (the actionable set under the
+    // Fleece.Core IsActionable definition: open + no incomplete children +
+    // all-previous-done). An explicit matchedIds override of {leaf} pulls
+    // leaf + mid + root and excludes `other`.
     const result = computeLayoutFromIssues({
       issues,
       viewMode: ViewMode.Next,

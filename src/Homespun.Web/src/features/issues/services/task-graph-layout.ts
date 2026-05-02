@@ -338,29 +338,43 @@ function toLayoutIssue(issue: IssueResponse): LayoutIssue {
 }
 
 function actionableIds(issues: readonly IssueResponse[]): Set<string> {
-  // An issue is "actionable" when it is open (not done / archived / draft) and
-  // has no open parent — i.e. it's the next item ready to start in its chain.
-  // The TS layout port doesn't surface an `isActionable` flag directly, so
-  // recompute it from the issue set here.
-  const byId = new Map<string, IssueResponse>()
-  for (const issue of issues) if (issue.id) byId.set(issue.id.toLowerCase(), issue)
+  // Seeds for Next view = every non-terminal leaf (no incomplete children).
+  // Walking ancestors from this seed reaches every non-terminal ancestor, so
+  // Next renders the same set of issues as Tree but framed as
+  // "leaves-up to roots" rather than "roots-down to leaves".
+  const isDoneStatus = (s: IssueStatusEnum | undefined) =>
+    s === IssueStatus.COMPLETE || s === IssueStatus.ARCHIVED || s === IssueStatus.CLOSED
+  const isTerminalStatus = (s: IssueStatusEnum | undefined) =>
+    isDoneStatus(s) || s === undefined
 
-  const isOpen = (s: IssueStatusEnum | undefined) =>
-    s === IssueStatus.DRAFT ||
-    s === IssueStatus.OPEN ||
-    s === IssueStatus.PROGRESS ||
-    s === IssueStatus.REVIEW
+  const childrenOf = new Map<string, IssueResponse[]>()
+  for (const issue of issues) {
+    for (const p of issue.parentIssues ?? []) {
+      if (!p.parentIssue) continue
+      const k = p.parentIssue.toLowerCase()
+      let bucket = childrenOf.get(k)
+      if (!bucket) {
+        bucket = []
+        childrenOf.set(k, bucket)
+      }
+      bucket.push(issue)
+    }
+  }
+
+  const hasIncompleteChildren = (issue: IssueResponse): boolean => {
+    if (!issue.id) return false
+    const kids = childrenOf.get(issue.id.toLowerCase())
+    if (!kids || kids.length === 0) return false
+    return kids.some((k) => !isDoneStatus(k.status))
+  }
 
   const result = new Set<string>()
   for (const issue of issues) {
-    if (!issue.id || !isOpen(issue.status)) continue
-    const parents = issue.parentIssues ?? []
-    const hasOpenParent = parents.some((p) => {
-      if (!p.parentIssue) return false
-      const parent = byId.get(p.parentIssue.toLowerCase())
-      return parent && isOpen(parent.status)
-    })
-    if (!hasOpenParent) result.add(issue.id)
+    if (!issue.id) continue
+    if (issue.type === IssueType.IDEA) continue
+    if (isTerminalStatus(issue.status)) continue
+    if (hasIncompleteChildren(issue)) continue
+    result.add(issue.id)
   }
   return result
 }

@@ -24,6 +24,7 @@ import type {
   GraphSortConfig,
   IGraphNode,
   InactiveVisibility,
+  LayoutMode,
 } from './types'
 import { DefaultGraphSortConfig } from './types'
 
@@ -368,7 +369,8 @@ export class IssueLayoutService {
       filtered.push(...collectTerminalIssuesWithActiveDescendants(filtered, fullLookup))
     }
     const display = collectIssuesToDisplay(filtered, fullLookup)
-    return this.runEngine(display, sort)
+    // Tree view renders top-down: root first, children at increasing lane.
+    return this.runEngine(display, sort, 'normalTree')
   }
 
   layoutForNext(
@@ -394,12 +396,14 @@ export class IssueLayoutService {
       return { ok: true, layout: emptyLayout() }
     }
     const display = collectMatchedAndAncestors(matched, matchedIds, fullLookup)
-    return this.runEngine(display, sort)
+    // Next view renders bottom-up from actionable leaves up to ancestors.
+    return this.runEngine(display, sort, 'issueGraph')
   }
 
   private runEngine(
     display: LayoutIssue[],
-    sort: GraphSortConfig | null
+    sort: GraphSortConfig | null,
+    mode: LayoutMode
   ): GraphLayoutResult<LayoutIssue> {
     const displayLookup = buildIssueLookup(display)
     const childrenOf = buildChildrenLookup(display, displayLookup)
@@ -435,7 +439,7 @@ export class IssueLayoutService {
         const kids = getIncompleteChildrenForLayout(issue, childrenOf)
         return kids.map((k) => nodeMap.get(k.id.toLowerCase())!)
       },
-      mode: 'issueGraph',
+      mode,
     }
 
     const result = this.engine.layout(request)
