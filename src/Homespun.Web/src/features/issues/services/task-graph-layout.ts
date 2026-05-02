@@ -456,18 +456,30 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   const isTreeView = viewMode === ViewMode.Tree
 
   const layoutIssues = issues.map(toLayoutIssue)
+  const actionable = actionableIds(issues)
   let layout: GraphLayoutResult<LayoutIssue>
   try {
-    if (isTreeView || !matchedIds || matchedIds.size === 0) {
+    if (isTreeView) {
       layout = layoutForTree(layoutIssues, {
         assignedTo: assigneeFilter,
         sort: sortConfig,
       })
     } else {
-      layout = layoutForNext(layoutIssues, matchedIds, {
-        assignedTo: assigneeFilter,
-        sort: sortConfig,
-      })
+      // Next mode: explicit matchedIds wins; otherwise seed from the
+      // actionable set (issues with no open parent). Empty seed degrades
+      // to the full tree so the view isn't blank when nothing is actionable.
+      const seed = matchedIds && matchedIds.size > 0 ? matchedIds : actionable
+      if (seed.size === 0) {
+        layout = layoutForTree(layoutIssues, {
+          assignedTo: assigneeFilter,
+          sort: sortConfig,
+        })
+      } else {
+        layout = layoutForNext(layoutIssues, seed, {
+          assignedTo: assigneeFilter,
+          sort: sortConfig,
+        })
+      }
     }
   } catch (err) {
     if (err instanceof InvalidGraphError) {
@@ -480,8 +492,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   // Index issues by id for O(1) decoration / metadata lookup.
   const issueById = new Map<string, IssueResponse>()
   for (const i of issues) if (i.id) issueById.set(i.id.toLowerCase(), i)
-
-  const actionable = actionableIds(issues)
 
   // Cycle: degraded fallback — emit a flat list of every issue, no edges.
   if (!layout.ok) {

@@ -402,4 +402,89 @@ describe('computeLayoutFromIssues', () => {
     const line = result.lines.find(isIssueRenderLine)!
     expect(line.marker).toBe(TaskGraphMarkerType.Actionable)
   })
+
+  it('next mode seeds layoutForNext from the actionable set, hiding non-actionable descendants', () => {
+    // `parent` is actionable (open, no open parent). `child` is NOT
+    // actionable (its open parent blocks it). `other` is actionable.
+    // Tree mode shows all three; Next mode walks from {parent, other}
+    // up to ancestors only, so `child` is excluded.
+    const issues = [
+      createIssue({ id: 'parent', status: IssueStatus.OPEN }),
+      createIssue({
+        id: 'child',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'parent' }],
+      }),
+      createIssue({ id: 'other', status: IssueStatus.OPEN }),
+    ]
+
+    const tree = computeLayoutFromIssues({ issues, viewMode: ViewMode.Tree })
+    expect(tree.ok).toBe(true)
+    if (!tree.ok) return
+    const treeIds = tree.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(treeIds).toEqual(['child', 'other', 'parent'])
+
+    const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
+    expect(next.ok).toBe(true)
+    if (!next.ok) return
+    const nextIds = next.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(nextIds).toEqual(['other', 'parent'])
+  })
+
+  it('next mode falls back to the full tree when no issues are actionable', () => {
+    // All issues are terminal — no actionables to seed layoutForNext.
+    // Tree fallback keeps the view non-empty (terminal-with-active-descendants
+    // visibility still hides them, but the result must be consistent with
+    // the tree-mode result for the same input).
+    const issues = [
+      createIssue({ id: 'a', status: IssueStatus.COMPLETE }),
+      createIssue({ id: 'b', status: IssueStatus.CLOSED }),
+    ]
+    const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
+    const tree = computeLayoutFromIssues({ issues, viewMode: ViewMode.Tree })
+    expect(next.ok).toBe(true)
+    expect(tree.ok).toBe(true)
+    if (!next.ok || !tree.ok) return
+    const nextIssueIds = next.lines.filter(isIssueRenderLine).map((l) => l.issueId)
+    const treeIssueIds = tree.lines.filter(isIssueRenderLine).map((l) => l.issueId)
+    expect(nextIssueIds).toEqual(treeIssueIds)
+  })
+
+  it('next mode honours an explicit matchedIds override over the actionable default', () => {
+    const issues = [
+      createIssue({ id: 'root', status: IssueStatus.OPEN }),
+      createIssue({
+        id: 'mid',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'root' }],
+      }),
+      createIssue({
+        id: 'leaf',
+        status: IssueStatus.OPEN,
+        parentIssues: [{ parentIssue: 'mid' }],
+      }),
+      createIssue({ id: 'other', status: IssueStatus.OPEN }),
+    ]
+    // Default Next would seed {root, other} (the actionable set) and miss
+    // mid + leaf. An explicit override of {leaf} should pull leaf + mid + root
+    // and exclude `other`.
+    const result = computeLayoutFromIssues({
+      issues,
+      viewMode: ViewMode.Next,
+      matchedIds: new Set(['leaf']),
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const ids = result.lines
+      .filter(isIssueRenderLine)
+      .map((l) => l.issueId)
+      .sort()
+    expect(ids).toEqual(['leaf', 'mid', 'root'])
+  })
 })
