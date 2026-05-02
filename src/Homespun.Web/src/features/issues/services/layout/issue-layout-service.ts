@@ -349,7 +349,8 @@ export class IssueLayoutService {
     issues: readonly LayoutIssue[],
     visibility: InactiveVisibility = 'hide',
     assignedTo: string | null = null,
-    sort: GraphSortConfig | null = null
+    sort: GraphSortConfig | null = null,
+    mode: LayoutMode = 'issueGraph'
   ): GraphLayoutResult<LayoutIssue> {
     if (issues.length === 0) {
       return { ok: true, layout: emptyLayout() }
@@ -369,8 +370,7 @@ export class IssueLayoutService {
       filtered.push(...collectTerminalIssuesWithActiveDescendants(filtered, fullLookup))
     }
     const display = collectIssuesToDisplay(filtered, fullLookup)
-    // Tree view renders top-down: root first, children at increasing lane.
-    return this.runEngine(display, sort, 'normalTree')
+    return this.runEngine(display, sort, mode)
   }
 
   layoutForNext(
@@ -378,10 +378,11 @@ export class IssueLayoutService {
     matchedIds: ReadonlySet<string> | null = null,
     visibility: InactiveVisibility = 'hide',
     assignedTo: string | null = null,
-    sort: GraphSortConfig | null = null
+    sort: GraphSortConfig | null = null,
+    mode: LayoutMode = 'issueGraph'
   ): GraphLayoutResult<LayoutIssue> {
     if (matchedIds === null) {
-      return this.layoutForTree(issues, visibility, assignedTo, sort)
+      return this.layoutForTree(issues, visibility, assignedTo, sort, mode)
     }
     if (issues.length === 0 || matchedIds.size === 0) {
       return { ok: true, layout: emptyLayout() }
@@ -396,8 +397,7 @@ export class IssueLayoutService {
       return { ok: true, layout: emptyLayout() }
     }
     const display = collectMatchedAndAncestors(matched, matchedIds, fullLookup)
-    // Next view renders bottom-up from actionable leaves up to ancestors.
-    return this.runEngine(display, sort, 'issueGraph')
+    return this.runEngine(display, sort, mode)
   }
 
   private runEngine(
@@ -486,13 +486,15 @@ export function layoutForTree(
     visibility?: InactiveVisibility
     assignedTo?: string | null
     sort?: GraphSortConfig | null
+    mode?: LayoutMode
   }
 ): GraphLayoutResult<LayoutIssue> {
   return defaultService.layoutForTree(
     issues,
     options?.visibility ?? 'hide',
     options?.assignedTo ?? null,
-    options?.sort ?? null
+    options?.sort ?? null,
+    options?.mode ?? 'issueGraph'
   )
 }
 
@@ -503,6 +505,7 @@ export function layoutForNext(
     visibility?: InactiveVisibility
     assignedTo?: string | null
     sort?: GraphSortConfig | null
+    mode?: LayoutMode
   }
 ): GraphLayoutResult<LayoutIssue> {
   return defaultService.layoutForNext(
@@ -510,6 +513,7 @@ export function layoutForNext(
     matchedIds,
     options?.visibility ?? 'hide',
     options?.assignedTo ?? null,
-    options?.sort ?? null
+    options?.sort ?? null,
+    options?.mode ?? 'issueGraph'
   )
 }

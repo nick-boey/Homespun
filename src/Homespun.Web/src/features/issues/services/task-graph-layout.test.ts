@@ -335,8 +335,9 @@ describe('computeLayoutFromIssues', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.edges).toHaveLength(1)
-    expect(result.edges[0].from).toBe('child')
-    expect(result.edges[0].to).toBe('parent')
+    // Tree view runs normalTree: parent emitted first, edge points down to child.
+    expect(result.edges[0].from).toBe('parent')
+    expect(result.edges[0].to).toBe('child')
   })
 
   it('returns ok=false with a degraded flat list when the graph contains a cycle', () => {
@@ -403,17 +404,16 @@ describe('computeLayoutFromIssues', () => {
     expect(line.marker).toBe(TaskGraphMarkerType.Actionable)
   })
 
-  it('next mode seeds layoutForNext from the actionable leaves and walks up ancestors', () => {
-    // `parent` is series-mode with three open children A/B/C in sortOrder. Per
-    // Fleece.Core IsActionable: only `childA` is actionable (leaf, all-previous
-    // done). `childB`/`childC` are blocked by series ordering. `parent` has
-    // incomplete children. Tree mode shows everything; Next mode seeds {childA}
-    // and walks ancestors → {childA, parent}, omitting the blocked siblings.
+  it('next mode seeds layoutForNext from non-terminal leaves and walks up ancestors', () => {
+    // Terminal-status descendants are excluded from the seed. The active leaves
+    // (`childA` open, `childB` review) reach `parent` via the ancestor walk,
+    // so Next renders the full non-terminal subgraph but framed leaves-up.
+    // `terminalChild` (closed) is hidden from both Tree and Next.
     const issues = [
       createIssue({
         id: 'parent',
         status: IssueStatus.OPEN,
-        executionMode: ExecutionMode.SERIES,
+        executionMode: ExecutionMode.PARALLEL,
       }),
       createIssue({
         id: 'childA',
@@ -422,12 +422,12 @@ describe('computeLayoutFromIssues', () => {
       }),
       createIssue({
         id: 'childB',
-        status: IssueStatus.OPEN,
+        status: IssueStatus.REVIEW,
         parentIssues: [{ parentIssue: 'parent', sortOrder: 'b' }],
       }),
       createIssue({
-        id: 'childC',
-        status: IssueStatus.OPEN,
+        id: 'terminalChild',
+        status: IssueStatus.CLOSED,
         parentIssues: [{ parentIssue: 'parent', sortOrder: 'c' }],
       }),
     ]
@@ -439,7 +439,7 @@ describe('computeLayoutFromIssues', () => {
       .filter(isIssueRenderLine)
       .map((l) => l.issueId)
       .sort()
-    expect(treeIds).toEqual(['childA', 'childB', 'childC', 'parent'])
+    expect(treeIds).toEqual(['childA', 'childB', 'parent'])
 
     const next = computeLayoutFromIssues({ issues, viewMode: ViewMode.Next })
     expect(next.ok).toBe(true)
@@ -448,7 +448,7 @@ describe('computeLayoutFromIssues', () => {
       .filter(isIssueRenderLine)
       .map((l) => l.issueId)
       .sort()
-    expect(nextIds).toEqual(['childA', 'parent'])
+    expect(nextIds).toEqual(['childA', 'childB', 'parent'])
   })
 
   it('next mode falls back to the full tree when no issues are actionable', () => {
@@ -485,9 +485,8 @@ describe('computeLayoutFromIssues', () => {
       }),
       createIssue({ id: 'other', status: IssueStatus.OPEN }),
     ]
-    // Default Next would seed {leaf, other} (the actionable set under the
-    // Fleece.Core IsActionable definition: open + no incomplete children +
-    // all-previous-done). An explicit matchedIds override of {leaf} pulls
+    // Default Next seeds from non-terminal leaves = {leaf, other}. An explicit
+    // matchedIds override of {leaf} replaces the default seed → walk pulls
     // leaf + mid + root and excludes `other`.
     const result = computeLayoutFromIssues({
       issues,

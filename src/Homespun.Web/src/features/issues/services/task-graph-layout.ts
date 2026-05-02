@@ -474,24 +474,28 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   let layout: GraphLayoutResult<LayoutIssue>
   try {
     if (isTreeView) {
+      // Top-down: root at lane 0, children descending.
       layout = layoutForTree(layoutIssues, {
         assignedTo: assigneeFilter,
         sort: sortConfig,
+        mode: 'normalTree',
       })
     } else {
       // Next mode: explicit matchedIds wins; otherwise seed from the
-      // actionable set (issues with no open parent). Empty seed degrades
-      // to the full tree so the view isn't blank when nothing is actionable.
+      // non-terminal-leaf actionable set. Empty seed degrades to the full
+      // tree so the view isn't blank when nothing is actionable.
       const seed = matchedIds && matchedIds.size > 0 ? matchedIds : actionable
       if (seed.size === 0) {
         layout = layoutForTree(layoutIssues, {
           assignedTo: assigneeFilter,
           sort: sortConfig,
+          mode: 'issueGraph',
         })
       } else {
         layout = layoutForNext(layoutIssues, seed, {
           assignedTo: assigneeFilter,
           sort: sortConfig,
+          mode: 'issueGraph',
         })
       }
     }
