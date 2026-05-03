@@ -29,9 +29,15 @@ test.describe('US6 — stop a session', () => {
     await expect(stopButton).toBeVisible({ timeout: 10000 })
     await stopButton.click()
 
-    // After stop, the session detail view is either redirected to /sessions
-    // (default UX) or the Stop button disappears because `showStopButton` flips
-    // off. Assert one of those terminal states.
+    // The header Stop button opens an AlertDialog confirmation; the actual
+    // mutation only fires when the user confirms via the dialog's Stop button.
+    const stopDialog = page.getByRole('alertdialog', { name: 'Stop Session' })
+    await expect(stopDialog).toBeVisible({ timeout: 5000 })
+    await stopDialog.getByRole('button', { name: 'Stop' }).click()
+
+    // After confirming, the session detail view is either redirected to
+    // /sessions (default UX) or the Stop button disappears because
+    // `showStopButton` flips off. Assert one of those terminal states.
     await expect
       .poll(
         async () => {
