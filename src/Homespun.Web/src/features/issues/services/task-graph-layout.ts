@@ -344,8 +344,7 @@ function actionableIds(issues: readonly IssueResponse[]): Set<string> {
   // "leaves-up to roots" rather than "roots-down to leaves".
   const isDoneStatus = (s: IssueStatusEnum | undefined) =>
     s === IssueStatus.COMPLETE || s === IssueStatus.ARCHIVED || s === IssueStatus.CLOSED
-  const isTerminalStatus = (s: IssueStatusEnum | undefined) =>
-    isDoneStatus(s) || s === undefined
+  const isTerminalStatus = (s: IssueStatusEnum | undefined) => isDoneStatus(s) || s === undefined
 
   const childrenOf = new Map<string, IssueResponse[]>()
   for (const issue of issues) {
