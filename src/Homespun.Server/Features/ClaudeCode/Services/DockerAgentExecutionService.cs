@@ -159,6 +159,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? WorkerSessionId,
         CancellationTokenSource Cts,
         DateTime CreatedAt,
+        SessionMode Mode,
+        string Model,
         string? IssueId = null,
         string? ProjectId = null)
     {
@@ -199,6 +201,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? LastMessageSubtype);
 
     private readonly IPerSessionEventStream _perSession;
+    private readonly ISessionMetadataStore? _metadataStore;
 
     /// <summary>
     /// Response parsed from the worker's <c>POST /api/sessions</c> and
@@ -212,12 +215,14 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
-        IPerSessionEventStream perSession)
+        IPerSessionEventStream perSession,
+        ISessionMetadataStore metadataStore)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
         _perSession = perSession;
+        _metadataStore = metadataStore;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
@@ -234,12 +239,14 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         ILogger<DockerAgentExecutionService> logger,
         ISecretsService secretsService,
         IPerSessionEventStream perSession,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        ISessionMetadataStore? metadataStore = null)
     {
         _options = options.Value;
         _logger = logger;
         _secretsService = secretsService;
         _perSession = perSession;
+        _metadataStore = metadataStore;
         _httpClient = httpClient;
     }
 
@@ -253,7 +260,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? workerSessionId,
         string workerUrl,
         string? projectId = null,
-        string? issueId = null)
+        string? issueId = null,
+        SessionMode mode = SessionMode.Build,
+        string model = "sonnet")
     {
         var session = new DockerSession(
             SessionId: homespunSessionId,
@@ -264,6 +273,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             WorkerSessionId: workerSessionId,
             Cts: new CancellationTokenSource(),
             CreatedAt: DateTime.UtcNow,
+            Mode: mode,
+            Model: model,
             IssueId: issueId,
             ProjectId: projectId);
         _sessions[homespunSessionId] = session;
@@ -381,7 +392,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var session = new DockerSession(
                     sessionId, containerId, containerName, workerUrl, request.WorkingDirectory,
-                    null, cts, DateTime.UtcNow, request.IssueId, request.ProjectId);
+                    null, cts, DateTime.UtcNow, request.Mode, request.Model, request.IssueId, request.ProjectId);
 
                 _sessions[sessionId] = session;
 
@@ -1233,8 +1244,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             return Task.FromResult<AgentSessionStatus?>(new AgentSessionStatus(
                 session.SessionId,
                 session.WorkingDirectory,
-                SessionMode.Build, // TODO: Store actual mode
-                "sonnet", // TODO: Store actual model
+                session.Mode,
+                session.Model,
                 session.ConversationId,
                 session.CreatedAt,
                 session.LastActivityAt
@@ -1296,8 +1307,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var statuses = _sessions.Values.Select(session => new AgentSessionStatus(
             session.SessionId,
             session.WorkingDirectory,
-            SessionMode.Build, // TODO: Store actual mode
-            "sonnet", // TODO: Store actual model
+            session.Mode,
+            session.Model,
             session.ConversationId,
             session.CreatedAt,
             session.LastActivityAt
@@ -1431,6 +1442,105 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 container.WorkerUrl,
                 container.CreatedAt);
         }
+    }
+
+    /// <summary>
+    /// Async overload of <see cref="RegisterDiscoveredContainer"/> that, in addition
+    /// to the synchronous container tracking, queries the worker's
+    /// <c>/api/sessions/active</c> endpoint and registers a corresponding
+    /// <see cref="DockerSession"/> entry so that <see cref="ListSessionsAsync"/> /
+    /// <see cref="GetSessionStatusAsync"/> surface the recovered session with its
+    /// persisted <see cref="SessionMode"/> and model. The worker's reported values
+    /// take priority; missing fields are filled in from
+    /// <see cref="ISessionMetadataStore"/> when available; project defaults
+    /// (<c>Build</c> / <c>"sonnet"</c>) are the final fallback.
+    /// </summary>
+    public async Task RegisterDiscoveredContainerAsync(
+        DiscoveredContainer container,
+        CancellationToken cancellationToken = default)
+    {
+        RegisterDiscoveredContainer(container);
+
+        // Query the worker for its currently active session so we can surface
+        // recovered sessions (with their persisted Mode/Model) via
+        // ListSessionsAsync and GetSessionStatusAsync. Failures here are
+        // non-fatal — the container itself is already tracked above.
+        ActiveSessionResponse? activeSession = null;
+        try
+        {
+            using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            probeCts.CancelAfter(TimeSpan.FromSeconds(5));
+            using var response = await _httpClient.GetAsync(
+                $"{container.WorkerUrl}/api/sessions/active", probeCts.Token);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(probeCts.Token);
+                activeSession = JsonSerializer.Deserialize<ActiveSessionResponse>(json, CamelCaseJsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "RegisterDiscoveredContainerAsync: failed to query worker /sessions/active for container {ContainerName}",
+                container.ContainerName);
+            return;
+        }
+
+        if (activeSession?.HasActiveSession != true || string.IsNullOrEmpty(activeSession.SessionId))
+        {
+            return;
+        }
+
+        // Resolve Mode: worker first, then SessionMetadataStore, then default Build.
+        SessionMode? mode = null;
+        if (!string.IsNullOrEmpty(activeSession.Mode))
+        {
+            mode = activeSession.Mode.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                ? SessionMode.Plan
+                : SessionMode.Build;
+        }
+
+        // Resolve Model: worker first, then SessionMetadataStore.
+        var model = !string.IsNullOrEmpty(activeSession.Model) ? activeSession.Model : null;
+
+        if ((mode is null || model is null) && _metadataStore is not null)
+        {
+            try
+            {
+                var metadata = await _metadataStore.GetBySessionIdAsync(
+                    activeSession.SessionId, cancellationToken);
+                if (metadata is not null)
+                {
+                    mode ??= metadata.Mode;
+                    model ??= metadata.Model;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex,
+                    "RegisterDiscoveredContainerAsync: SessionMetadataStore lookup failed for {SessionId}",
+                    activeSession.SessionId);
+            }
+        }
+
+        var session = new DockerSession(
+            SessionId: activeSession.SessionId,
+            ContainerId: container.ContainerId,
+            ContainerName: container.ContainerName,
+            WorkerUrl: container.WorkerUrl,
+            WorkingDirectory: container.WorkingDirectory,
+            WorkerSessionId: activeSession.SessionId,
+            Cts: new CancellationTokenSource(),
+            CreatedAt: container.CreatedAt,
+            Mode: mode ?? SessionMode.Build,
+            Model: model ?? "sonnet",
+            IssueId: container.IssueId,
+            ProjectId: container.ProjectId);
+        _sessions[activeSession.SessionId] = session;
+        _logger.LogInformation(
+            "RegisterDiscoveredContainerAsync: recovered session {SessionId} (mode={Mode}, model={Model}) on container {ContainerName}",
+            activeSession.SessionId, session.Mode, session.Model, container.ContainerName);
     }
 
     /// <summary>

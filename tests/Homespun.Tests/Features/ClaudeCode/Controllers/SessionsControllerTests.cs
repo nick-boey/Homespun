@@ -1,5 +1,6 @@
 using Homespun.Features.ClaudeCode.Controllers;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Projects;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
@@ -40,6 +42,7 @@ public class SessionsControllerTests
             _projectServiceMock.Object,
             _containerServiceMock.Object,
             _modelCatalogMock.Object,
+            Options.Create(new SessionEventsOptions()),
             _loggerMock.Object);
     }
 

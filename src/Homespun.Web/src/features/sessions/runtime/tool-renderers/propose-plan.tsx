@@ -126,7 +126,7 @@ function ProposePlanInteractive({
   }
 
   return (
-    <Card className="bg-card/60">
+    <Card className="bg-card/60" data-testid="propose-plan-card">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <span>Plan awaiting approval</span>
@@ -153,6 +153,7 @@ function ProposePlanInteractive({
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
           className="min-h-[72px] text-sm"
+          data-testid="propose-plan-feedback"
         />
 
         <div className="flex items-center justify-end gap-2">
@@ -162,6 +163,7 @@ function ProposePlanInteractive({
             size="sm"
             onClick={() => commit(false)}
             disabled={!canSubmit || isSubmitting}
+            data-testid="propose-plan-reject"
           >
             Reject
           </Button>
@@ -170,6 +172,7 @@ function ProposePlanInteractive({
             size="sm"
             onClick={() => commit(true)}
             disabled={!canSubmit || isSubmitting}
+            data-testid="propose-plan-approve"
           >
             {isSubmitting ? 'Submitting…' : 'Approve'}
           </Button>

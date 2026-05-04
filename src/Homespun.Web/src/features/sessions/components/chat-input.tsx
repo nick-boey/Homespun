@@ -273,6 +273,7 @@ function ChatInputContent({
               variant="ghost"
               disabled={disabled}
               aria-label="Send message"
+              data-testid="composer-send"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" data-testid="send-loading" />
@@ -300,12 +301,22 @@ function ModeTabs({ mode, onChange, disabled }: ModeTabsProps) {
       onValueChange={(v) => onChange(v as SessionMode)}
       className="!flex-row gap-0"
     >
-      <TabsList variant="line" aria-label="Session mode" className="h-7">
-        <TabsTrigger value="plan" disabled={disabled} className="gap-1 px-2 text-xs">
+      <TabsList variant="line" aria-label="Session mode" className="h-7" data-testid="mode-tabs">
+        <TabsTrigger
+          value="plan"
+          disabled={disabled}
+          className="gap-1 px-2 text-xs"
+          data-testid="mode-tab-plan"
+        >
           <Shield className="h-3.5 w-3.5" />
           Plan
         </TabsTrigger>
-        <TabsTrigger value="build" disabled={disabled} className="gap-1 px-2 text-xs">
+        <TabsTrigger
+          value="build"
+          disabled={disabled}
+          className="gap-1 px-2 text-xs"
+          data-testid="mode-tab-build"
+        >
           <Hammer className="h-3.5 w-3.5" />
           Build
         </TabsTrigger>
@@ -349,6 +360,7 @@ function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
         variant="ghost"
         aria-label="Model selection"
         disabled={disabled || isLoading}
+        data-testid="model-selector-trigger"
       >
         <span className="flex items-center gap-1">
           <Sparkles className="h-3.5 w-3.5" />

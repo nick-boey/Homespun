@@ -260,3 +260,63 @@ describe('emitAndFormatSSE — homespun.a2a.emit span', () => {
     expect(span!.attributes['homespun.content.preview']).toBeUndefined();
   });
 });
+
+// FI-2: control-event paths in sse-writer.streamSessionEvents — the
+// `status_resumed` branch (lines 215-223 in sse-writer.ts) and the canonical
+// `question_pending` / `plan_pending` translator path (lines 225-232).
+describe('streamSessionEvents — control events (FI-2)', () => {
+  it('emits a working status-update for status_resumed control events', async () => {
+    const sm = createMockSessionManager();
+    sm.get.mockReturnValue({ id: 's-resume', conversationId: 's-resume' });
+
+    sm.stream.mockReturnValue(
+      (async function* () {
+        yield { type: 'status_resumed', data: {} };
+      })(),
+    );
+
+    const chunks = await collectAsyncGenerator(streamSessionEvents(sm as any, 's-resume'));
+    const events = parseSSEEvents(chunks.join(''));
+
+    const states = events
+      .filter((e) => e.event === 'status-update')
+      .map((e) => e.data.status.state);
+
+    expect(states).toContain('working');
+    // Two working entries are expected — one from the initial task→working
+    // transition and one from the status_resumed branch — both surface as
+    // non-final status updates.
+    expect(states.filter((s: string) => s === 'working').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('translates question_pending into an input-required status-update', async () => {
+    const sm = createMockSessionManager();
+    sm.get.mockReturnValue({ id: 's-q', conversationId: 's-q' });
+
+    sm.stream.mockReturnValue(
+      (async function* () {
+        yield {
+          type: 'question_pending',
+          data: {
+            questions: [
+              {
+                question: 'Which?',
+                header: 'Pick',
+                options: [{ label: 'a' }, { label: 'b' }],
+                multiSelect: false,
+              },
+            ],
+          },
+        };
+      })(),
+    );
+
+    const chunks = await collectAsyncGenerator(streamSessionEvents(sm as any, 's-q'));
+    const events = parseSSEEvents(chunks.join(''));
+    const inputRequired = events.find(
+      (e) => e.event === 'status-update' && e.data.status.state === 'input-required',
+    );
+    expect(inputRequired).toBeDefined();
+    expect(inputRequired!.data.metadata?.inputType).toBe('question');
+  });
+});

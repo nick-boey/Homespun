@@ -29,7 +29,10 @@ export function usePlanFiles(session: ClaudeSession | undefined) {
   return planListQuery
 }
 
-// Hook to fetch individual plan content
+// Hook to fetch individual plan content. Returns `null` when the file is missing
+// (404 from the API) so callers can render a "plan file no longer available"
+// affordance instead of crashing on missing data — see FI-6 in
+// `openspec/changes/close-out-claude-agent-sessions-migration-gaps`.
 export function usePlanContent(workingDirectory: string | undefined, fileName: string | undefined) {
   return useQuery({
     queryKey: ['plan-content', workingDirectory, fileName],
@@ -45,7 +48,7 @@ export function usePlanContent(workingDirectory: string | undefined, fileName: s
         },
       })
 
-      return response.data
+      return response.data ?? null
     },
     enabled: Boolean(workingDirectory && fileName),
     staleTime: 60 * 1000, // 1 minute

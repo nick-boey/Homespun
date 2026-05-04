@@ -20,6 +20,7 @@ public class SessionLifecycleService : ISessionLifecycleService
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IAGUIEventService _agUIEventService;
     private readonly ISessionStateManager _stateManager;
+    private readonly IPlanArtefactStore _planArtefactStore;
     private readonly Lazy<IMessageProcessingService> _messageProcessing;
 
     public SessionLifecycleService(
@@ -32,6 +33,7 @@ public class SessionLifecycleService : ISessionLifecycleService
         IAgentExecutionService agentExecutionService,
         IAGUIEventService agUIEventService,
         ISessionStateManager stateManager,
+        IPlanArtefactStore planArtefactStore,
         Lazy<IMessageProcessingService> messageProcessing)
     {
         _sessionStore = sessionStore;
@@ -43,6 +45,7 @@ public class SessionLifecycleService : ISessionLifecycleService
         _agentExecutionService = agentExecutionService;
         _agUIEventService = agUIEventService;
         _stateManager = stateManager;
+        _planArtefactStore = planArtefactStore;
         _messageProcessing = messageProcessing;
     }
 
@@ -268,6 +271,21 @@ public class SessionLifecycleService : ISessionLifecycleService
         _stateManager.RemoveSessionToolUses(sessionId);
         _stateManager.RemoveTurnId(sessionId);
 
+        // Reclaim plan-file artefacts written before restart — the new container starts
+        // without the old plan in scope (FI-6).
+        try
+        {
+            await _planArtefactStore.RemoveForSessionAsync(sessionId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error removing plan artefacts on restart for session {SessionId}", sessionId);
+        }
+        session.PlanFilePath = null;
+        session.PlanContent = null;
+        session.HasPendingPlanApproval = false;
+        session.PlanHasBeenApproved = false;
+
         // Update the session with the ConversationId for resumption
         session.ConversationId = restartResult.ConversationId;
         session.Status = ClaudeSessionStatus.WaitingForInput;
@@ -315,6 +333,17 @@ public class SessionLifecycleService : ISessionLifecycleService
         _stateManager.TryRemoveQuestionAnswerSource(sessionId);
         _stateManager.RemoveSessionToolUses(sessionId);
         _stateManager.RemoveTurnId(sessionId);
+
+        // Reclaim any plan-file artefacts written by this session — the file was the
+        // session's, not the agent's, so it is owned by the session lifecycle (FI-6).
+        try
+        {
+            await _planArtefactStore.RemoveForSessionAsync(sessionId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error removing plan artefacts for session {SessionId}", sessionId);
+        }
 
         // Update session status and remove from store
         session.Status = ClaudeSessionStatus.Stopped;

@@ -194,4 +194,27 @@ This plan outlines the steps to implement the authentication feature.
 
     expect(result.current.data).toBe(undefined)
   })
+
+  // FI-6: a 404 from the read endpoint (plan file deleted by session lifecycle) must
+  // surface as `data: null` so callers can render the "no longer available" affordance
+  // without unwrapping an exception.
+  it('returns null when the plan file is missing (404)', async () => {
+    vi.mocked(Plans.getApiPlansContent).mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 404 }),
+      request: new Request('http://test'),
+      error: { status: 404, statusText: 'Not Found', body: 'Plan file not found' },
+    } as unknown as Awaited<ReturnType<typeof Plans.getApiPlansContent>>)
+
+    const { result } = renderHook(() => usePlanContent('/path/to/project', 'deleted-plan.md'), {
+      wrapper,
+    })
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    expect(result.current.isError).toBe(false)
+    expect(result.current.data).toBeNull()
+  })
 })

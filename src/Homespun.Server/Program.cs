@@ -274,7 +274,8 @@ else
             var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
             return new ContainerRecoveryHostedService(
                 discoveryService,
-                container => executionService?.RegisterDiscoveredContainer(container),
+                (container, ct) => executionService?.RegisterDiscoveredContainerAsync(container, ct)
+                    ?? Task.CompletedTask,
                 logger);
         });
     }
@@ -357,6 +358,7 @@ else
 
     // Session state and decomposed services (registered before facade)
     builder.Services.AddSingleton<ISessionStateManager, SessionStateManager>();
+    builder.Services.AddSingleton<IPlanArtefactStore, PlanArtefactStore>();
     builder.Services.AddSingleton<IToolInteractionService, ToolInteractionService>();
     builder.Services.AddSingleton<ISessionLifecycleService, SessionLifecycleService>();
     builder.Services.AddSingleton<IMessageProcessingService, MessageProcessingService>();

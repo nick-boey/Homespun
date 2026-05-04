@@ -18,6 +18,15 @@ public sealed class SessionEventsOptions
     /// (or <c>mode=incremental</c>).
     /// </summary>
     public SessionEventsReplayMode ReplayMode { get; set; } = SessionEventsReplayMode.Incremental;
+
+    /// <summary>
+    /// Bounded timeout (in seconds) for the initial-message dispatch on
+    /// <c>POST /api/sessions</c>. The controller awaits the dispatch up to
+    /// this limit; on timeout the response is <c>202 Accepted</c> with the
+    /// session id so the client can subscribe to the SignalR stream for the
+    /// eventual result. Default 30s.
+    /// </summary>
+    public int DispatchTimeoutSeconds { get; set; } = 30;
 }
 
 /// <summary>

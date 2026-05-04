@@ -527,6 +527,7 @@ function SessionHeader({
             onClick={onNewSession}
             disabled={isNewSessionPending}
             className="h-8"
+            data-testid="session-new"
           >
             <Plus className="mr-2 h-4 w-4" />
             New Session
@@ -539,6 +540,7 @@ function SessionHeader({
             onClick={onStop}
             disabled={isStopPending}
             className="h-8"
+            data-testid="session-stop"
           >
             <StopCircle className="mr-2 h-4 w-4" />
             Stop
