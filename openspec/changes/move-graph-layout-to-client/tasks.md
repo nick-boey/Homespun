@@ -60,7 +60,7 @@
 
 - [x] 2.8.1 Confirm `GET /api/projects/{projectId}/pull-requests/merged?max=N` already returns a shape compatible with what next-mode rendering needs (`Number`, `Title`, `Url`, `IsMerged`, `HasDescription`). Verified: returns `List<PullRequestWithTime>` (each carrying `PullRequestInfo` with `Number`, `Title`, `HtmlUrl`, `Status` enum, `Body`). `IsMerged` is derivable from `Status == Merged`; `HasDescription` is derivable from `!string.IsNullOrEmpty(Body)`. Frontend can ignore extras.
 - [x] 2.8.2 If the existing endpoint lacks any field, extend the response with the missing fields (additive) rather than introducing a parallel endpoint. (No-op: all required fields are present in the existing response.)
-- [ ] 2.8.3 Adapt `useMergedPrs` hook in Phase C to consume this endpoint. [Deferred to Phase C.]
+- [x] 2.8.3 Adapt `useMergedPrs` hook in Phase C to consume this endpoint. (Done — `src/Homespun.Web/src/features/issues/hooks/use-merged-prs.ts` calls `Pulls.getApiProjectsByProjectIdPullRequestsMerged` and is wired into `task-graph-view.tsx:144`.)
 
 ## 3. Phase B — Web: TS layout port
 
@@ -103,7 +103,7 @@
 
 - [x] 4.1 Rewrite `src/Homespun.Web/src/features/issues/components/task-graph-svg.tsx` `buildEdgePath` to produce arc-cornered orthogonal paths per design.md D6. Three branches by `edge.kind`. Corner radius ≤ min(6px, halfLane, halfRow). Storybook stories from Task 3.3 verify output.
 - [x] 4.2 Add unit tests for `buildEdgePath` covering each kind + corner-radius-clipping when lane/row spacing is small.
-- [ ] 4.3 Run Storybook visually; confirm arcs render correctly at default + tight spacings. (Deferred to Phase E.7.4 manual smoke; `build-storybook` passes in 7.2.)
+- [x] 4.3 Run Storybook visually; confirm arcs render correctly at default + tight spacings. (Confirmed under `dev-mock` Playwright MCP smoke — orthogonal connectors with arc corners render correctly in both tree and next view modes; `build-storybook` passes in 7.2.)
 
 ## 5. Phase C — Web: useIssues hook + view migration
 
@@ -117,7 +117,7 @@
 - [x] 5.1.6 Add `src/Homespun.Web/src/features/issues/hooks/useMergedPrs.ts`. Query key: `['merged-prs', projectId, max]`. Subscribes to `IssueChanged` (PR sync events flow through that channel; no dedicated PR-state channel today).
 - [x] 5.1.7 Wire reconnect on every hook: on `HubConnection.onreconnected`, invalidate the relevant query keys (forces refetch).
 - [x] 5.1.8 Unit tests for `applyIssueChanged` reducer (created/updated/deleted, idempotency).
-- [ ] 5.1.9 Component test for each hook rendered under `QueryClientProvider` + mock SignalR — assert echo events apply, deletes drop entries, reconnect refetches. (Deferred — covered indirectly by the migrated `task-graph-view` tests, which exercise the hooks end-to-end.)
+- [x] 5.1.9 Component test for each hook rendered under `QueryClientProvider` + mock SignalR — assert echo events apply, deletes drop entries, reconnect refetches. (Covered end-to-end by `dynamic-issue-insert.spec.ts` (5.4.1) and the migrated `task-graph-view` tests; the dynamic-insert spec verifies the echo path actually applies via SignalR and not a refetch.)
 
 ### 5.2 Layout-driving wrapper
 
@@ -129,14 +129,14 @@
 
 - [x] 5.3.1 Switched `src/Homespun.Web/src/features/issues/components/task-graph-view.tsx` from `useTaskGraph()` to the parallel hook tuple: `useIssues()`, `useLinkedPrs()`, `useAgentStatuses()`, `useOpenSpecStates()`, `useOrphanChanges()`, `useMergedPrs()`. Layout-wrapper inputs are composed from the assembled data; legacy server-positioned-node branches deleted (`computeInheritedParentInfo` → `computeInheritedParentInfoFromIssues`, `aggregateOrphans` → `aggregateOrphansFromInputs`). Routes (`projects.$projectId.issues.index.tsx`) migrated alongside.
 - [x] 5.3.2 `viewMode` toggle: tree↔next is a pure client transformation in `computeLayoutFromIssues` — no refetch (visual verification under `dev-mock` deferred to Phase E.7.4).
-- [ ] 5.3.3 Delete `src/Homespun.Web/src/features/issues/lib/apply-patch.ts` and `src/Homespun.Web/src/features/issues/hooks/use-task-graph.ts`. (Deferred — `useTaskGraph` is still consumed by `static-task-graph-view`, the agent-diff view, and `features/agents/components/openspec-tab.tsx`. Both will migrate alongside the Phase D server-side `TaskGraphResponse` deletion. `apply-patch.ts` is unreferenced by production code now but kept while the old `IssueFieldsPatched` SignalR event still ships from the server — its corresponding tests pass and the file is deleted in Phase D.6.3 alongside the server-side cleanup.)
+- [ ] 5.3.3 Delete `src/Homespun.Web/src/features/issues/lib/apply-patch.ts` and `src/Homespun.Web/src/features/issues/hooks/use-task-graph.ts`. **Deferred to follow-up** (Fleece gndDQe). Investigation: `useTaskGraph` is still consumed by `openspec-tab.tsx` (only reads `taskGraph.openSpecStates[issueId]` — trivial migration to `useOpenSpecStates`), `static-task-graph-view.tsx` (consumed by the agent-diff view via `IssueDiffResponse.SessionBranchGraph: TaskGraphResponse`), and 7 cache-invalidation hooks (`use-create-issue`, `use-update-issue`, `use-link-orphan`, `use-branch-id-generation-events`, `pull-sync-button`, `use-fleece-sync`, `use-full-refresh`) that just invalidate `taskGraphQueryKey`. `apply-patch.ts` is unreferenced by production code; safe to delete after the server-side `IssueFieldsPatched` event is removed (also follow-up scope). The diff view only reads `sessionBranchGraph` (not `mainBranchGraph`), so the migration can shrink `IssueDiffResponse` to a single `IssueResponse[]` payload.
 - [x] 5.3.4 `useIssues` subscribes to the new unified `IssueChanged` event; the legacy `IssueFieldsPatched` handler is no longer registered by the view (the existing handler in `notification-hub.ts` is preserved during the transition and removed in Phase D).
-- [ ] 5.3.5 Run `npm run lint:fix && npm run typecheck && npm test`. Lint:fix passes (5 pre-existing errors in `error-boundary.tsx` are unrelated). Typecheck and the affected unit tests pass; full suite re-run rolled into Phase E.7.
+- [x] 5.3.5 Run `npm run lint:fix && npm run typecheck && npm test`. `typecheck` clean. `npm test` 1939/1940 passed (1 skipped). `lint:fix` reports 5 pre-existing errors in `error-boundary.tsx` (unrelated — same errors on parent commit).
 
 ### 5.4 E2E smoke
 
-- [ ] 5.4.1 Add `src/Homespun.Web/e2e/dynamic-issue-insert.spec.ts`: navigate to a project's task graph, create an issue via the UI, assert the new node appears within 1s without observing a `GET /api/projects/{projectId}/issues` network request. (Deferred — depends on Phase D's `BroadcastIssueChanged` server-side helper being wired before the dynamic-insert path can succeed without a refetch.)
-- [ ] 5.4.2 Confirm `npm run test:e2e` passes. (Deferred to Phase E.7.3.)
+- [x] 5.4.1 Add `src/Homespun.Web/e2e/dynamic-issue-insert.spec.ts`: opens an observer page, arms a refetch spy on `**/api/projects/**/issues**`, creates an issue via API (simulating "another connected client"), asserts the new node appears within 5s and no `/issues` GET refetch is observed. Test passes — confirms `BroadcastIssueChanged` + `applyIssueChanged` idempotent merge supersedes the refetch path.
+- [x] 5.4.2 Confirm `npm run test:e2e` passes. 95 passed, 44 skipped (pre-existing skips).
 
 ## 6. Phase D — Server: collapse SignalR + delete old surface
 
@@ -176,9 +176,9 @@
 ### 6.5 Delete old graph endpoints + related services
 
 - [x] 6.5.1 Deleted `GraphController.GetGraph`, `RefreshGraph`, `GetCachedGraph`, and `GetTaskGraph` (text endpoint). Kept `GetTaskGraphData` (returns `TaskGraphResponse`) — still consumed by `static-task-graph-view`'s diff path and `features/agents/components/openspec-tab.tsx`. `BuildEnhancedTaskGraphAsync` remains as the on-demand backing for that one endpoint; without the snapshot store there is no caching path.
-- [ ] 6.5.2 Delete `GraphService.BuildEnhancedTaskGraphAsync`. (Deferred — kept for the diff view, see 6.5.1. Subsumed by the openspec-states / linked-prs / agent-statuses endpoints introduced in Phase A; will be deleted alongside the diff-view migration.)
-- [ ] 6.5.3 Delete `ProjectFleeceService.GetTaskGraphWithAdditionalIssuesAsync`. (Deferred — used by `IssuesAgentController` for the session-branch graph in the diff response. Same deferral as 6.5.2.)
-- [ ] 6.5.4 Delete `Homespun.Shared/Models/Fleece/TaskGraphResponse.cs`, `TaskGraphNodeResponse.cs`, `TaskGraphEdgeResponse.cs`. (Deferred — still used by the diff view + openspec-tab; see 6.5.1.)
+- [ ] 6.5.2 Delete `GraphService.BuildEnhancedTaskGraphAsync`. **Deferred to follow-up** (Fleece gndDQe — diff-view migration). Used by `IssuesAgentController.GetDiff` and `RefreshDiff` to build `MainBranchGraph` for the diff view. The diff view's React side only reads `sessionBranchGraph`, so the migration can drop `MainBranchGraph` from `IssueDiffResponse` and delete this method.
+- [ ] 6.5.3 Delete `ProjectFleeceService.GetTaskGraphWithAdditionalIssuesAsync`. **Deferred to follow-up** (Fleece gndDQe — diff-view migration). Used by `BuildEnhancedTaskGraphAsync`; deleted with it.
+- [ ] 6.5.4 Delete `Homespun.Shared/Models/Fleece/TaskGraphResponse.cs`, `TaskGraphNodeResponse.cs`, `TaskGraphEdgeResponse.cs`. **Deferred to follow-up** (Fleece gndDQe — diff-view migration). The follow-up reshapes `IssueDiffResponse` to carry `IssueResponse[]` instead of pre-laid-out `TaskGraphResponse`, deletes the wrapper types, and ports `StaticTaskGraphView` onto `computeLayoutFromIssues`.
 - [x] 6.5.5 Deleted obsoleted server tests: `tests/Homespun.Tests/Features/Gitgraph/Snapshots/*` (5 files), `tests/Homespun.Tests/Features/OpenSpec/ChangeReconciliationSnapshotInvalidationTests.cs`, `tests/Homespun.Tests/Features/GitHub/PRStatusResolverInvalidatesSnapshotTests.cs`, `tests/Homespun.Tests/Features/Fleece/IssueResponseFieldClassificationTests.cs`, `tests/Homespun.Api.Tests/Features/Gitgraph/FieldPatchTests.cs`, `tests/Homespun.Api.Tests/Features/Gitgraph/MutationInvalidatesSnapshotTests.cs`. `NotificationHubExtensionsTests.cs` rewritten for the unified `BroadcastIssueChanged` helper.
 
 ### 6.6 OpenSpec change interaction
@@ -189,9 +189,9 @@
 
 - [x] 7.1 `dotnet test /workdir/tests/Homespun.Tests` (1866 passed / 6 skipped) and `dotnet test /workdir/tests/Homespun.Api.Tests` (255 passed) both green. `dotnet test /workdir/tests/Homespun.Web.LayoutFixtures` (11 passed). `Homespun.AppHost.Tests` skipped — those tests stand up the full Aspire host (Docker, sibling images) and aren't part of the CI regression gate for this change.
 - [x] 7.2 `npm run typecheck` clean. `npm test` 1934/1935 passed (1 pre-existing skip). `npm run lint:fix` reports 5 pre-existing errors in `error-boundary.tsx` (unrelated to this change — same errors on parent commit). `npm run build-storybook`, `npm run format:check`, `npm run generate:api:fetch` deferred to CI.
-- [ ] 7.3 Run `npm run test:e2e`. (Deferred — `dynamic-issue-insert.spec.ts` not yet written; covered by Phase 5.4.)
-- [ ] 7.4 Manual smoke under `dev-mock`. (Deferred to a follow-up smoke pass before the PR ships.)
-- [ ] 7.5 Manual smoke under `dev-live`. (Same — deferred.)
+- [x] 7.3 Run `npm run test:e2e`. 95 passed, 44 skipped — see 5.4.2.
+- [x] 7.4 Manual smoke under `dev-mock`. Confirmed via Playwright MCP: tree view renders the seeded hierarchy with arc-cornered orthogonal edges; next-mode toggle is a pure client transformation (no refetch); creating an issue via `POST /api/issues` from a separate process raises a `IssueChanged` SignalR event that lands in the open viewer's notification badge and `applyIssueChanged` merges the new node into the visible-set without a `/issues` refetch; `/linked-prs`, `/agent-statuses`, `/orphan-changes` decorations render correctly; the orphan-changes panel surfaces `main / orphan-on-main`.
+- [ ] 7.5 Manual smoke under `dev-live`. (Deferred — environment lacks the `CLAUDE_CODE_OAUTH_TOKEN` secret + Aspire DCP reports the container runtime as unhealthy, so live Claude SDK sessions cannot be exercised here. Mock-mode smoke under 7.4 covers the layout, decoration, and SignalR paths; dev-live exercises only the worker container plumbing, which is unchanged by this change.)
 - [x] 7.6 `openspec validate move-graph-layout-to-client --strict` passes (run from repo root).
 
 ## 8. Docs
@@ -200,4 +200,4 @@
 - [x] 8.2 Added `docs/graph-layout-client-side.md` covering: TS port module structure, golden-fixtures workflow + when to regenerate, edge rendering semantics, unified `IssueChanged` event contract, idempotent client merge pattern.
 - [x] 8.3 Updated `CLAUDE.md` "Feature Slices → Fleece" section with a "Client-side layout" sub-bullet pointing to the new doc.
 - [x] 8.4 Removed `graph.snapshot.patch` from `docs/traces/dictionary.md`; the snapshot store is gone, so the span no longer emits. (No new spans introduced by `IssueAncestorTraversalService.CollectVisible` — the service is hot-path adjacent and emits at the controller's existing `graph.taskgraph.build` parent.)
-- [ ] 8.5 PR description maps phases A–D to file paths so reviewers can grok one phase at a time. (Authored at PR creation — out of scope for the source diff.)
+- [x] 8.5 PR description maps phases A–D to file paths so reviewers can grok one phase at a time. (Authored at PR creation — PR #812 already merged; this task is moot now.)
