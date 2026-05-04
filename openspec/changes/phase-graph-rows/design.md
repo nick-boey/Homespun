@@ -45,11 +45,18 @@ The `mock-openspec-seeding` change (sister change, must land first) provides rea
 
 **Alternative considered:** Attach a `phases?: PhaseSummary[]` to the issue line and have `TaskGraphIssueRow` render its own `<PhaseSubRow>` children. Rejected — duplicates the render-line model in two places (top-level union + nested), and selection state would need a parallel `(issueId, phaseIndex)` addressing scheme.
 
-### Phase synthesis is a post-processing pass over `computeLayout`'s output (rebased)
+### Phase synthesis is a post-processing pass run by both layout entry points (rebased twice)
 
-**Decision:** Thread `openSpecStates` into `computeLayout(taskGraph, maxDepth, viewMode, openSpecStates)`. After the function has produced `{ lines, edges }` from the server response, run a single splice pass: for each `TaskGraphIssueRenderLine` whose `openSpecStates[issueId]?.phases` is non-empty, walk forward from its index and insert one `TaskGraphPhaseRenderLine` per `PhaseSummary` (preserving document order). For each new phase line, append a synthetic `TaskGraphEdge` to `edges` — `kind: 'SeriesSibling'` between consecutive phases under the same parent, and `kind: 'SeriesCornerToParent'` from the first phase to its parent issue, both with `sourceAttach: 'Bottom'` and `targetAttach: 'Top'`. Phase row IDs follow `${issueId}::phase::${name}`.
+> **Sequencing note (2026-05-03):** PR #812 ("move graph layout to the client") split the layout pipeline into two entry points after `upgrade-fleece-core-v3` landed. The decision below has been updated to cover both; earlier drafts only mentioned the legacy `computeLayout`.
 
-**Why:** Post-Fleece-v3, `computeLayout` no longer iterates the issue tree — it iterates the server-supplied `PositionedNode[]` which already comes pre-positioned. The edge collection is also server-supplied. There is no `renderGroup` / `renderGroupTreeView` loop to splice into anymore; the only sensible insertion point is after the pass-through. The work that earlier drafts wanted to avoid duplicating ("re-derive lane / connector geometry") has moved to the server in `Fleece.Core.IIssueLayoutService` — Homespun no longer derives it at all. Phase synthesis is therefore the only Homespun-side derivation left in the layout pipeline, and a single localised splice is the cleanest place for it.
+**Decision:** Phase synthesis runs as a single splice pass after each layout entry point produces its `{ lines, edges }`:
+
+- `computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayoutResult` — the **live-graph path** (`src/Homespun.Web/src/features/issues/services/task-graph-layout.ts:456`). Add `openSpecStates?: Record<string, IssueOpenSpecState> | null` to `ComputeLayoutInput`. The caller (`task-graph-view.tsx:184`) passes `openSpecStatesHook.openSpecStates ?? null` — the hook already runs at line 142 but its result is only consumed by `issue-row-content.tsx` today.
+- `computeLayout(taskGraph, _maxDepth, viewMode): TaskGraphLayoutResult` — the **legacy/diff path** (`task-graph-layout.ts:164`), used by `static-task-graph-view.tsx:62`. Add a fourth optional parameter `openSpecStates?: Record<string, IssueOpenSpecState> | null` (default `taskGraph?.openSpecStates ?? null` so the diff view picks it up automatically).
+
+After each function has produced `{ lines, edges }`, run the splice pass: for each `TaskGraphIssueRenderLine` whose `openSpecStates?.[issueId]?.phases` is non-empty, walk forward from its index and insert one `TaskGraphPhaseRenderLine` per `PhaseSummary` (preserving document order). For each new phase line, append a synthetic `TaskGraphEdge` to `edges` — `kind: 'SeriesSibling'` between consecutive phases under the same parent, and `kind: 'SeriesCornerToParent'` from the first phase to its parent issue, both with `sourceAttach: 'Bottom'` and `targetAttach: 'Top'`. Phase row IDs follow `${issueId}::phase::${name}`. Extract the splice + edge-synthesis as a single helper (`synthesisePhaseRows(lines, edges, openSpecStates)`) and call it from both entry points so the code is identical.
+
+**Why:** Post-Fleece-v3 the layout no longer iterates the issue tree by hand — `computeLayout` walks the server-supplied `PositionedNode[]` and `computeLayoutFromIssues` runs the TS-port engine over `IssueResponse[]`. Both produce a flat `lines: TaskGraphRenderLine[]` plus a flat `edges: TaskGraphEdge[]`. There is no `renderGroup` / `renderGroupTreeView` loop to splice into anymore; the only sensible insertion point is after the pass-through. The work earlier drafts wanted to avoid duplicating ("re-derive lane / connector geometry") has moved entirely into either the server or the TS-port engine — Homespun no longer derives it at the row-stream level. Phase synthesis is the only Homespun-side derivation left in the layout pipeline, so a single localised splice (called from both entry points) is the cleanest place for it.
 
 **Why phases as Edge entries in the same wire-format-derived collection:** unifies how the SVG renderer consumes connectors. `task-graph-svg.tsx`'s `<TaskGraphEdges>` component (added in `upgrade-fleece-core-v3`) renders every edge with a switch on `(kind, sourceAttach, targetAttach)`. Phase edges are just synthetic entries in that same collection — no parallel rendering path, no special-case "phase connector" code in the SVG layer.
 
@@ -87,7 +94,15 @@ The `mock-openspec-seeding` change (sister change, must land first) provides rea
 
 **Why:** The fixed height was only there because the legacy implementation positioned things based on summed offsets. Rows actually use normal flow now (`style={{ height: ROW_HEIGHT }}`, not absolute positioning) — the `getRowY` math is vestigial scroll-into-view plumbing. DOM measurement gives accurate offsets for variable-height rows for free.
 
-**Risk:** Code that relied on `getRowY` for layout (rather than scroll-into-view) would silently break. Mitigation: grep + read every caller before deletion. Likely scope is just one or two `scrollIntoView` calls.
+**Risk:** Code that relied on `getRowY` for layout (rather than scroll-into-view) would silently break. Mitigation: grep + read every caller before deletion. Today the only callers are inside `task-graph-svg.tsx` (`TaskGraphEdges`'s `nodeMap` + `totalHeight` `useMemo`s, lines ~405-432) plus the `task-graph-svg.test.tsx` unit tests — both consume offsets, not layout.
+
+### `TaskGraphEdges`' `nodeMap` must learn about phase rows
+
+**Decision:** Update the Y-offset accumulator in `TaskGraphEdges`' `nodeMap` and `totalHeight` `useMemo`s (`task-graph-svg.tsx:405-432`) so phase lines (a) emit a `nodeMap` entry under their `phaseId` (so synthetic edges can resolve their endpoints) and (b) contribute their expanded-height when `expandedIds.has(line.phaseId)`. The current pass branches on `line.type === 'issue'` and uses `line.issueId` for both the map key and the expanded check; add a `'phase'` arm that mirrors the `'issue'` arm but keys on `line.phaseId`.
+
+**Why:** Without this, the synthetic phase edges synthesised in the splice pass would resolve `from`/`to` against an empty `nodeMap` entry and `<TaskGraphEdges>` would render `null` paths for every phase edge. Inline phase expansion would also misalign edge endpoints because `totalHeight` and downstream Y-offsets would not account for the expanded phase panel.
+
+**Alternative considered:** Compute phase node entries in a parallel pass before `<TaskGraphEdges>`. Rejected — duplicates the row-iteration loop and forces a second `useMemo` dep tuple. The single-pass switch is trivially extended.
 
 ### Keyboard handler short-circuits action keys when a phase is selected
 

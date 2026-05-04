@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import type React from 'react'
 import { render } from '@testing-library/react'
 import {
   TaskGraphNodeSvg,
@@ -10,15 +11,13 @@ import {
   buildEdgePath,
   clipCornerRadius,
   getTypeColor,
-  getRowY,
   ROW_HEIGHT,
-  EXPANDED_DETAIL_HEIGHT,
   EDGE_CORNER_RADIUS,
   getLaneCenterX,
   NODE_RADIUS,
   LINE_STROKE_WIDTH,
 } from './task-graph-svg'
-import type { TaskGraphIssueRenderLine, TaskGraphEdge } from '../services'
+import type { TaskGraphIssueRenderLine, TaskGraphEdge, TaskGraphPhaseRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
 import { IssueType, IssueStatus, ClaudeSessionStatus, ExecutionMode } from '@/api'
 
@@ -336,40 +335,18 @@ describe('TaskGraphNodeSvg', () => {
   })
 })
 
-describe('getRowY', () => {
-  const issueLines = [{ issueId: 'a' }, { issueId: 'b' }, { issueId: 'c' }, { issueId: 'd' }]
-
-  it('returns 0 for row index 0 with no expanded rows', () => {
-    expect(getRowY(0, new Set(), issueLines)).toBe(0)
-  })
-
-  it('returns rowIndex * ROW_HEIGHT with no expanded rows', () => {
-    expect(getRowY(2, new Set(), issueLines)).toBe(2 * ROW_HEIGHT)
-    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
-  })
-
-  it('adds EXPANDED_DETAIL_HEIGHT for expanded rows above', () => {
-    const expanded = new Set(['a'])
-    // Row 1 should be offset by ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT (row 0 is expanded)
-    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT)
-  })
-
-  it('adds EXPANDED_DETAIL_HEIGHT for each expanded row above', () => {
-    const expanded = new Set(['a', 'b'])
-    // Row 2: (ROW_HEIGHT + EXPANDED) + (ROW_HEIGHT + EXPANDED)
-    expect(getRowY(2, expanded, issueLines)).toBe(2 * ROW_HEIGHT + 2 * EXPANDED_DETAIL_HEIGHT)
-  })
-
-  it('does not add EXPANDED_DETAIL_HEIGHT for expanded row at or after target index', () => {
-    const expanded = new Set(['c']) // row index 2
-    // Row 1 should not be affected by expanded row at index 2
-    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT)
-  })
-
-  it('handles empty expanded set', () => {
-    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
-  })
-})
+function makeRowRefs(
+  entries: Array<{ id: string; offsetTop: number; offsetHeight?: number }>
+): React.RefObject<Map<string, HTMLDivElement>> {
+  const map = new Map<string, HTMLDivElement>()
+  for (const { id, offsetTop, offsetHeight = ROW_HEIGHT } of entries) {
+    const el = document.createElement('div')
+    Object.defineProperty(el, 'offsetTop', { get: () => offsetTop, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { get: () => offsetHeight, configurable: true })
+    map.set(id, el)
+  }
+  return { current: map } as React.RefObject<Map<string, HTMLDivElement>>
+}
 
 describe('TaskGraphEdges', () => {
   const R = NODE_RADIUS + 2
@@ -525,8 +502,13 @@ describe('TaskGraphEdges', () => {
     expect(path).toHaveAttribute('stroke-width', String(LINE_STROKE_WIDTH))
   })
 
-  it('accounts for expanded rows when computing Y positions', () => {
+  it('accounts for expanded rows when computing Y positions via rowRefs', () => {
+    const EXPANDED_HEIGHT = 500
     const lines = [baseLine('a', 0), baseLine('b', 0)]
+    const rowRefs = makeRowRefs([
+      { id: 'a', offsetTop: 0, offsetHeight: ROW_HEIGHT + EXPANDED_HEIGHT },
+      { id: 'b', offsetTop: ROW_HEIGHT + EXPANDED_HEIGHT },
+    ])
     const edge: TaskGraphEdge = {
       from: 'a',
       to: 'b',
@@ -544,6 +526,7 @@ describe('TaskGraphEdges', () => {
         renderLines={lines}
         expandedIds={new Set(['a'])}
         maxLanes={1}
+        rowRefs={rowRefs}
       />
     )
 
@@ -551,11 +534,152 @@ describe('TaskGraphEdges', () => {
     expect(paths).toHaveLength(1)
 
     const cx = getLaneCenterX(0)
+    // row a: offsetTop=0, Y = 0 + ROW_HEIGHT/2
     const row0CY = ROW_HEIGHT / 2
-    // row b starts after ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT
-    const row1CY = ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT + ROW_HEIGHT / 2
+    // row b: offsetTop=ROW_HEIGHT+EXPANDED_HEIGHT, Y = that + ROW_HEIGHT/2
+    const row1CY = ROW_HEIGHT + EXPANDED_HEIGHT + ROW_HEIGHT / 2
     const d = paths[0].getAttribute('d')
     expect(d).toBe(`M ${cx} ${row0CY + R} L ${cx} ${row1CY - R}`)
+  })
+
+  describe('phase line support in nodeMap and totalHeight (task 4.2b)', () => {
+    const phaseLine = (
+      overrides?: Partial<TaskGraphPhaseRenderLine>
+    ): TaskGraphPhaseRenderLine => ({
+      type: 'phase',
+      phaseId: 'issue-1::phase::Design',
+      parentIssueId: 'issue-1',
+      lane: 1,
+      phaseName: 'Design',
+      done: 1,
+      total: 3,
+      tasks: [],
+      ...overrides,
+    })
+
+    it('resolves phase edge from/to via nodeMap — path is rendered', () => {
+      const issue = baseLine('issue-1', 0)
+      const phase = phaseLine()
+      const edge: TaskGraphEdge = {
+        from: 'issue-1',
+        to: 'issue-1::phase::Design',
+        kind: 'SeriesCornerToParent',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        pivotLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Left',
+      }
+      const { container } = render(
+        <TaskGraphEdges
+          edges={[edge]}
+          renderLines={[issue, phase]}
+          expandedIds={new Set()}
+          maxLanes={2}
+        />
+      )
+      // Edge resolves → one path rendered
+      expect(container.querySelectorAll('path')).toHaveLength(1)
+    })
+
+    it('places phase node at the correct Y position (after issue row)', () => {
+      // Use same lane for both to produce a simple straight-line SeriesSibling path
+      const issue = baseLine('issue-1', 0)
+      const phase = phaseLine({ lane: 0 })
+      const edge: TaskGraphEdge = {
+        from: 'issue-1',
+        to: 'issue-1::phase::Design',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const { container } = render(
+        <TaskGraphEdges
+          edges={[edge]}
+          renderLines={[issue, phase]}
+          expandedIds={new Set()}
+          maxLanes={1}
+        />
+      )
+      const path = container.querySelector('path')
+      expect(path).not.toBeNull()
+      // Issue center Y = ROW_HEIGHT/2, phase center Y = ROW_HEIGHT + ROW_HEIGHT/2
+      const cx = getLaneCenterX(0)
+      const issueCY = ROW_HEIGHT / 2
+      const phaseCY = ROW_HEIGHT + ROW_HEIGHT / 2
+      const d = path!.getAttribute('d')
+      expect(d).toBe(`M ${cx} ${issueCY + R} L ${cx} ${phaseCY - R}`)
+    })
+
+    it('totalHeight uses rowRefs offsetTop+offsetHeight for expanded phase row', () => {
+      const EXPANDED_HEIGHT = 600
+      const phaseId = 'issue-1::phase::Design'
+      const issue = baseLine('issue-1', 0)
+      const phase = phaseLine()
+      const rowRefs = makeRowRefs([
+        { id: 'issue-1', offsetTop: 0, offsetHeight: ROW_HEIGHT },
+        { id: phaseId, offsetTop: ROW_HEIGHT, offsetHeight: ROW_HEIGHT + EXPANDED_HEIGHT },
+      ])
+      const edge: TaskGraphEdge = {
+        from: 'issue-1',
+        to: phaseId,
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const { container } = render(
+        <TaskGraphEdges
+          edges={[edge]}
+          renderLines={[issue, phase]}
+          expandedIds={new Set([phaseId])}
+          maxLanes={2}
+          rowRefs={rowRefs}
+        />
+      )
+      const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
+      // max(offsetTop + offsetHeight) = ROW_HEIGHT + (ROW_HEIGHT + EXPANDED_HEIGHT)
+      const expectedHeight = ROW_HEIGHT + ROW_HEIGHT + EXPANDED_HEIGHT
+      expect(svg!.getAttribute('height')).toBe(String(expectedHeight))
+    })
+
+    it('complete phase node uses green color for phase-to-phase edge', () => {
+      // Edge from complete phase to another phase — color comes from `from` node (the phase)
+      const issue = baseLine('issue-1', 0)
+      const phase1 = phaseLine({ phaseId: 'issue-1::phase::Phase1', done: 3, total: 3, lane: 0 })
+      const phase2 = phaseLine({ phaseId: 'issue-1::phase::Phase2', lane: 0 })
+      const edge: TaskGraphEdge = {
+        from: 'issue-1::phase::Phase1',
+        to: 'issue-1::phase::Phase2',
+        kind: 'SeriesSibling',
+        startRow: 1,
+        startLane: 0,
+        endRow: 2,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      }
+      const { container } = render(
+        <TaskGraphEdges
+          edges={[edge]}
+          renderLines={[issue, phase1, phase2]}
+          expandedIds={new Set()}
+          maxLanes={1}
+        />
+      )
+      const path = container.querySelector('path')
+      expect(path).toHaveAttribute('stroke', '#22c55e')
+    })
   })
 })
 

@@ -295,7 +295,7 @@ describe('InlineIssueDetailRow', () => {
       render(<InlineIssueDetailRow {...defaultProps} />)
       const descriptionContainer = screen.getByTestId('issue-description')
       expect(descriptionContainer).toHaveClass('overflow-y-auto')
-      expect(descriptionContainer).toHaveClass('max-h-48')
+      expect(descriptionContainer).toHaveClass('max-h-[400px]')
     })
   })
 

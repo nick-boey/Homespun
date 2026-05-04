@@ -12,7 +12,7 @@ The `openspec-integration` spec at `Requirement: Virtual sub-issue rendering fro
 - Phase rows render no editable pills (no type/status dropdowns), no execution-mode toggle, no `IssueRowActions`, no multi-parent badge.
 - **BREAKING (UI-only):** the existing phase-rollup badges and modal are removed; any tests asserting on `data-testid="phase-rollup-badges"` or `data-testid="phase-badge"` need updating to the new row testids.
 - Drop the `EXPANDED_DETAIL_HEIGHT = 700` fixed-height constant in `task-graph-svg.tsx`. Inline detail content gets `max-h-[400px] overflow-y-auto` on its inner scroll region instead of a fixed outer height. Replace `getRowY` callers (scroll-into-view) with `element.offsetTop` measurement.
-- Synthesise phase render lines as a post-pass over `computeLayout`'s output: take `{ lines, edges }` from the post-Fleece pipeline and splice phase lines (plus their synthetic edges) immediately after each parent issue line whose `openSpecStates[issueId]?.phases` is non-empty.
+- Synthesise phase render lines as a post-pass over the layout pipeline's output: take `{ lines, edges }` and splice phase lines (plus their synthetic edges) immediately after each parent issue line whose `openSpecStates[issueId]?.phases` is non-empty. The pipeline now has **two entry points** (post PR #812 "move graph layout to the client"): `computeLayoutFromIssues(input)` is the live-graph path used by `task-graph-view.tsx`, and `computeLayout(taskGraph, …)` is the legacy path used by `static-task-graph-view.tsx` for diff views. Phase synthesis must run in both.
 
 ## Capabilities
 
@@ -33,9 +33,10 @@ The `openspec-integration` spec at `Requirement: Virtual sub-issue rendering fro
   - `src/Homespun.Web/src/features/issues/components/task-graph-phase-row.tsx` — phase row component
   - `src/Homespun.Web/src/features/issues/components/inline-phase-detail-row.tsx` — inline expanded panel showing task checkboxes
 - **Modified code:**
-  - `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts` — new `TaskGraphPhaseRenderLine` type, `computeLayout` accepts `openSpecStates`, synthesises phase lines
-  - `src/Homespun.Web/src/features/issues/components/task-graph-view.tsx` — third arm in render-line switch, keyboard handler short-circuits action keys when selected line is a phase
-  - `src/Homespun.Web/src/features/issues/components/task-graph-svg.tsx` — drop `EXPANDED_DETAIL_HEIGHT` and rework `getRowY` callers to use DOM measurement
+  - `src/Homespun.Web/src/features/issues/services/task-graph-layout.ts` — new `TaskGraphPhaseRenderLine` type; both `computeLayout` and `computeLayoutFromIssues` accept `openSpecStates` and run the phase-line splice
+  - `src/Homespun.Web/src/features/issues/components/task-graph-view.tsx` — thread `openSpecStatesHook.openSpecStates` into the `computeLayoutFromIssues({…})` call (currently fetched at line 142 but only consumed by `issue-row-content.tsx`); add a third arm in the render-line switch; keyboard handler short-circuits action keys when selected line is a phase
+  - `src/Homespun.Web/src/features/issues/components/static-task-graph-view.tsx` — pass the existing `data.openSpecStates` through to the new `computeLayout(data, depth, viewMode, openSpecStates)` signature so diff views render phases too
+  - `src/Homespun.Web/src/features/issues/components/task-graph-svg.tsx` — drop `EXPANDED_DETAIL_HEIGHT`; update `TaskGraphEdges`' `nodeMap` Y-offset pass to recognise `line.type === 'phase'` (and treat `expandedIds.has(line.phaseId)` the same way it treats expanded issue rows); rework `getRowY` callers to use DOM measurement
   - `src/Homespun.Web/src/features/issues/components/issue-row-content.tsx` — remove `PhaseRollupBadges` import and mount
   - `src/Homespun.Web/src/features/issues/components/inline-issue-detail-row.tsx` — replace fixed-height container with `max-h` + scroll on content
 - **No backend changes.** `IssueOpenSpecState.Phases` already on the wire.

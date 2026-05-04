@@ -2,11 +2,13 @@
 export {
   computeLayout,
   computeLayoutFromIssues,
+  synthesisePhaseRows,
   TaskGraphMarkerType,
   isIssueRenderLine,
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
+  isPhaseRenderLine,
   getRenderKey,
   type ClientLayoutResult,
   type ComputeLayoutInput,
@@ -15,6 +17,7 @@ export {
   type TaskGraphPrRenderLine,
   type TaskGraphSeparatorRenderLine,
   type TaskGraphLoadMoreRenderLine,
+  type TaskGraphPhaseRenderLine,
   type TaskGraphEdge,
   type TaskGraphLayoutResult,
 } from './task-graph-layout'
