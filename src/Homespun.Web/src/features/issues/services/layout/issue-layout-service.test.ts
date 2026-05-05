@@ -7,6 +7,7 @@ import {
   layoutForTree,
 } from './issue-layout-service'
 import type { LayoutIssue } from './issue-layout-service'
+import { isIssueNode, isPhaseNode, phaseNodeId, type LayoutPhase } from './nodes'
 
 const issue = (overrides: Partial<LayoutIssue> & Pick<LayoutIssue, 'id'>): LayoutIssue => ({
   title: overrides.id,
@@ -152,6 +153,117 @@ describe('IssueLayoutService.layoutForNext', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.layout.nodes).toEqual([])
+  })
+})
+
+describe('IssueLayoutService phase nodes', () => {
+  const phase = (name: string, done = 0, total = 1): LayoutPhase => ({
+    name,
+    done,
+    total,
+    tasks: [],
+  })
+
+  it('tree mode: phase nodes are emitted at parent.lane + 1 in a series chain right after the parent', () => {
+    // normalTree mode emits parent first, then each child at parent.lane + 1.
+    // With phases as series-leaf children of an issue with no real children,
+    // the phases land in a single column directly below the parent.
+    const phases = new Map<string, readonly LayoutPhase[]>([
+      ['p1', [phase('Alpha'), phase('Beta'), phase('Gamma')]],
+    ])
+    const r = layoutForTree([issue({ id: 'P1', status: 'open' })], {
+      mode: 'normalTree',
+      phases,
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+
+    const positioned = r.layout.nodes
+    expect(positioned).toHaveLength(4)
+    expect(positioned[0].node.id).toBe('P1')
+    expect(isIssueNode(positioned[0].node)).toBe(true)
+    const issueLane = positioned[0].lane
+
+    const phaseRows = positioned.slice(1)
+    expect(phaseRows.map((p) => isPhaseNode(p.node))).toEqual([true, true, true])
+    expect(phaseRows.map((p) => p.lane)).toEqual([issueLane + 1, issueLane + 1, issueLane + 1])
+    expect(phaseRows.map((p) => p.node.id)).toEqual([
+      phaseNodeId('P1', 'Alpha'),
+      phaseNodeId('P1', 'Beta'),
+      phaseNodeId('P1', 'Gamma'),
+    ])
+  })
+
+  it('next mode: phases are emitted bottom-up before the parent in a single column', () => {
+    // issueGraph mode: leaf siblings of a series parent stack at startLane and
+    // the parent emits at startLane + 1. With no real children, the phases
+    // occupy lane 0 and the issue lands at lane 1.
+    const phases = new Map<string, readonly LayoutPhase[]>([
+      ['p1', [phase('Alpha'), phase('Beta'), phase('Gamma')]],
+    ])
+    const r = layoutForNext([issue({ id: 'P1', status: 'open' })], new Set(['P1']), {
+      mode: 'issueGraph',
+      phases,
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+
+    const positioned = r.layout.nodes
+    expect(positioned).toHaveLength(4)
+    // Phases emitted first (bottom-up DFS), parent last.
+    expect(positioned.slice(0, 3).every((p) => isPhaseNode(p.node))).toBe(true)
+    expect(isIssueNode(positioned[3].node)).toBe(true)
+    expect(positioned[3].node.id).toBe('P1')
+
+    // All phases share a single lane.
+    const phaseLanes = new Set(positioned.slice(0, 3).map((p) => p.lane))
+    expect(phaseLanes.size).toBe(1)
+
+    // Parent sits one lane above the phase column.
+    expect(positioned[3].lane).toBe(positioned[0].lane + 1)
+  })
+
+  it('next mode: phase column never collides with sibling subtree column', () => {
+    // Two sibling issues, both with phases, no parent linking them. The
+    // engine assigns each subtree its own lane range so the second subtree's
+    // column doesn't overlap with the first's phase column.
+    const phases = new Map<string, readonly LayoutPhase[]>([
+      ['a', [phase('a1'), phase('a2')]],
+      ['b', [phase('b1'), phase('b2')]],
+    ])
+    const r = layoutForNext(
+      [issue({ id: 'A', status: 'open' }), issue({ id: 'B', status: 'open' })],
+      new Set(['A', 'B']),
+      { mode: 'issueGraph', phases }
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+
+    // Each (row, lane) cell must be unique — no two emitted nodes share a slot.
+    const cells = new Set<string>()
+    for (const p of r.layout.nodes) {
+      const key = `${p.row}|${p.lane}`
+      expect(cells.has(key)).toBe(false)
+      cells.add(key)
+    }
+  })
+
+  it('next mode: edges from phases to parent use engine-emitted attach geometry', () => {
+    const phases = new Map<string, readonly LayoutPhase[]>([
+      ['p1', [phase('Alpha'), phase('Beta')]],
+    ])
+    const r = layoutForNext([issue({ id: 'P1', status: 'open' })], new Set(['P1']), {
+      mode: 'issueGraph',
+      phases,
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+
+    const cornerEdges = r.layout.edges.filter((e) => e.kind === 'seriesCornerToParent')
+    expect(cornerEdges).toHaveLength(1)
+    expect(cornerEdges[0].to.id).toBe('P1')
+    expect(cornerEdges[0].sourceAttach).toBe('bottom')
+    expect(cornerEdges[0].targetAttach).toBe('left')
   })
 })
 

@@ -2,7 +2,6 @@
 export {
   computeLayout,
   computeLayoutFromIssues,
-  synthesisePhaseRows,
   TaskGraphMarkerType,
   isIssueRenderLine,
   isPrRenderLine,

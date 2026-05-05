@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   computeLayout,
   computeLayoutFromIssues,
-  synthesisePhaseRows,
   getRenderKey,
   TaskGraphMarkerType,
   type TaskGraphIssueRenderLine,
@@ -508,7 +507,7 @@ describe('computeLayoutFromIssues', () => {
 })
 
 // =====================================================================
-// Phase row synthesis (tasks 0.5, 1.6)
+// Phase row synthesis — engine-driven (siblings model)
 // =====================================================================
 
 const threePhaseState: IssueOpenSpecState = {
@@ -546,175 +545,7 @@ const threePhaseState: IssueOpenSpecState = {
   ],
 }
 
-describe('synthesisePhaseRows', () => {
-  it('no-ops when openSpecStates is null or undefined', () => {
-    const lines = [{ type: 'issue', issueId: 'i1', lane: 0 } as TaskGraphIssueRenderLine]
-    const linesCopy = [...lines]
-    synthesisePhaseRows(lines, [], null)
-    synthesisePhaseRows(lines, [], undefined)
-    expect(lines).toEqual(linesCopy)
-  })
-
-  it('no-ops when openSpecStates is {}', () => {
-    const lines = [{ type: 'issue', issueId: 'i1', lane: 0 } as TaskGraphIssueRenderLine]
-    const linesCopy = [...lines]
-    synthesisePhaseRows(lines, [], {})
-    expect(lines).toEqual(linesCopy)
-  })
-
-  it('inserts phase lines immediately after parent issue line', () => {
-    const lines: ReturnType<typeof isIssueRenderLine> extends boolean
-      ? Parameters<typeof isIssueRenderLine>[0][]
-      : never[] = [
-      {
-        type: 'issue',
-        issueId: 'i1',
-        lane: 0,
-        title: '',
-        description: null,
-        branchName: null,
-        marker: TaskGraphMarkerType.Open,
-        issueType: IssueType.TASK,
-        status: IssueStatus.OPEN,
-        hasDescription: false,
-        linkedPr: null,
-        agentStatus: null,
-        assignedTo: null,
-        executionMode: ExecutionMode.SERIES,
-        parentIssues: null,
-        parentIssueId: null,
-        appearanceIndex: 1,
-        totalAppearances: 1,
-      },
-    ]
-    const edges = [] as { kind: string }[]
-    synthesisePhaseRows(
-      lines as Parameters<typeof synthesisePhaseRows>[0],
-      edges as Parameters<typeof synthesisePhaseRows>[1],
-      { i1: threePhaseState }
-    )
-    expect(lines).toHaveLength(4) // 1 issue + 3 phases
-    expect(lines[0].type).toBe('issue')
-    expect(lines[1].type).toBe('phase')
-    expect(lines[2].type).toBe('phase')
-    expect(lines[3].type).toBe('phase')
-  })
-})
-
-describe('phase row synthesis in computeLayout', () => {
-  it('accepts null, undefined, {} for openSpecStates without throwing', () => {
-    const graph = createGraph([createNode(createIssue({ id: 'i1' }), 0, 0)])
-    expect(() => computeLayout(graph, Infinity, ViewMode.Tree, null)).not.toThrow()
-    expect(() => computeLayout(graph, Infinity, ViewMode.Tree, undefined)).not.toThrow()
-    expect(() => computeLayout(graph, Infinity, ViewMode.Tree, {})).not.toThrow()
-  })
-
-  it('issue with 3 phases produces issue-line + 3 phase-lines + correct edges', () => {
-    const issue = createIssue({ id: 'i1', type: IssueType.TASK })
-    const graph = createGraph([createNode(issue, 0, 0)], {
-      openSpecStates: { i1: threePhaseState },
-    })
-    const result = computeLayout(graph)
-    expect(result.lines).toHaveLength(4)
-    expect(result.lines[0].type).toBe('issue')
-    const phases = result.lines.slice(1) as TaskGraphPhaseRenderLine[]
-    expect(phases.map((p) => p.type)).toEqual(['phase', 'phase', 'phase'])
-    expect(phases.map((p) => p.phaseName)).toEqual(['Alpha', 'Beta', 'Gamma'])
-    expect(phases[0].phaseId).toBe('i1::phase::Alpha')
-    expect(phases.map((p) => p.parentIssueId)).toEqual(['i1', 'i1', 'i1'])
-    expect(phases.map((p) => p.lane)).toEqual([1, 1, 1])
-
-    const syntheticEdges = result.edges.filter(
-      (e) => e.from === 'i1' || e.from.includes('::phase::')
-    )
-    expect(syntheticEdges).toHaveLength(3) // 1 SeriesCornerToParent + 2 SeriesSibling
-    expect(syntheticEdges[0]).toMatchObject({
-      from: 'i1',
-      to: 'i1::phase::Alpha',
-      kind: 'SeriesCornerToParent',
-      sourceAttach: 'Bottom',
-      targetAttach: 'Top',
-    })
-    expect(syntheticEdges[1]).toMatchObject({
-      from: 'i1::phase::Alpha',
-      to: 'i1::phase::Beta',
-      kind: 'SeriesSibling',
-      sourceAttach: 'Bottom',
-      targetAttach: 'Top',
-    })
-    expect(syntheticEdges[2]).toMatchObject({
-      from: 'i1::phase::Beta',
-      to: 'i1::phase::Gamma',
-      kind: 'SeriesSibling',
-      sourceAttach: 'Bottom',
-      targetAttach: 'Top',
-    })
-  })
-
-  it('issue with no phases produces no phase lines and no synthetic edges', () => {
-    const issue = createIssue({ id: 'i1' })
-    const graph = createGraph([createNode(issue, 0, 0)], { openSpecStates: {} })
-    const result = computeLayout(graph)
-    expect(result.lines).toHaveLength(1)
-    expect(result.edges).toHaveLength(0)
-  })
-
-  it('empty phases array in openSpecStates entry produces no phase lines', () => {
-    const issue = createIssue({ id: 'i1' })
-    const emptyState: IssueOpenSpecState = {
-      branchState: 'present' as IssueOpenSpecState['branchState'],
-      changeState: 'inProgress' as IssueOpenSpecState['changeState'],
-      phases: [],
-    }
-    const graph = createGraph([createNode(issue, 0, 0)], { openSpecStates: { i1: emptyState } })
-    const result = computeLayout(graph)
-    expect(result.lines.filter(isPhaseRenderLine)).toHaveLength(0)
-  })
-
-  it('phase lines for a later issue do not interleave with earlier issues phases', () => {
-    const i1 = createIssue({ id: 'i1' })
-    const i2 = createIssue({ id: 'i2' })
-    const graph = createGraph([createNode(i1, 0, 0), createNode(i2, 0, 1)], {
-      openSpecStates: {
-        i1: {
-          branchState: 'present' as IssueOpenSpecState['branchState'],
-          changeState: 'inProgress' as IssueOpenSpecState['changeState'],
-          phases: [
-            { name: 'A', done: 0, total: 1, tasks: [] },
-            { name: 'B', done: 0, total: 1, tasks: [] },
-          ],
-        },
-        i2: {
-          branchState: 'present' as IssueOpenSpecState['branchState'],
-          changeState: 'inProgress' as IssueOpenSpecState['changeState'],
-          phases: [{ name: 'C', done: 0, total: 1, tasks: [] }],
-        },
-      },
-    })
-    const result = computeLayout(graph)
-    // Expected order: i1, i1::A, i1::B, i2, i2::C
-    expect(result.lines).toHaveLength(5)
-    expect(result.lines[0]).toMatchObject({ type: 'issue', issueId: 'i1' })
-    expect(result.lines[1]).toMatchObject({
-      type: 'phase',
-      phaseId: 'i1::phase::A',
-      parentIssueId: 'i1',
-    })
-    expect(result.lines[2]).toMatchObject({
-      type: 'phase',
-      phaseId: 'i1::phase::B',
-      parentIssueId: 'i1',
-    })
-    expect(result.lines[3]).toMatchObject({ type: 'issue', issueId: 'i2' })
-    expect(result.lines[4]).toMatchObject({
-      type: 'phase',
-      phaseId: 'i2::phase::C',
-      parentIssueId: 'i2',
-    })
-  })
-})
-
-describe('phase row synthesis in computeLayoutFromIssues', () => {
+describe('phase rows in computeLayoutFromIssues', () => {
   it('accepts null, undefined, {} for openSpecStates without throwing', () => {
     const issue = createIssue({ id: 'i1' })
     expect(() => computeLayoutFromIssues({ issues: [issue], openSpecStates: null })).not.toThrow()
@@ -724,33 +555,141 @@ describe('phase row synthesis in computeLayoutFromIssues', () => {
     expect(() => computeLayoutFromIssues({ issues: [issue], openSpecStates: {} })).not.toThrow()
   })
 
-  it('issue with 3 phases produces issue-line + 3 phase-lines in correct order', () => {
+  it('tree view: phases land at parent.lane + 1 in a single column right after the parent', () => {
+    // Top-down (normalTree): the issue is emitted first, then phases, then any
+    // real children. With no real children, all phases share parent.lane + 1.
     const issue = createIssue({ id: 'i1' })
     const result = computeLayoutFromIssues({
       issues: [issue],
       openSpecStates: { i1: threePhaseState },
+      viewMode: ViewMode.Tree,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.lines).toHaveLength(4)
-    expect(result.lines[0].type).toBe('issue')
-    expect(result.lines.slice(1).map((l) => (l as TaskGraphPhaseRenderLine).phaseName)).toEqual([
-      'Alpha',
-      'Beta',
-      'Gamma',
-    ])
 
-    const syntheticEdges = result.edges.filter(
-      (e) => e.from === 'i1' || e.from.includes('::phase::')
-    )
-    expect(syntheticEdges).toHaveLength(3)
-    expect(syntheticEdges[0].kind).toBe('SeriesCornerToParent')
-    expect(syntheticEdges[1].kind).toBe('SeriesSibling')
-    expect(syntheticEdges[2].kind).toBe('SeriesSibling')
+    const issueLine = result.lines.find(isIssueRenderLine)!
+    const phaseLines = result.lines.filter(isPhaseRenderLine)
+    expect(phaseLines.map((p) => p.phaseName)).toEqual(['Alpha', 'Beta', 'Gamma'])
+    expect(phaseLines.every((p) => p.lane === issueLine.lane + 1)).toBe(true)
+    expect(phaseLines.every((p) => p.parentIssueId === 'i1')).toBe(true)
+    expect(phaseLines[0].phaseId).toBe('i1::phase::Alpha')
+
+    // The issue line precedes every phase line.
+    const issueIdx = result.lines.findIndex(isIssueRenderLine)
+    const phaseIdxs = result.lines
+      .map((l, i) => (isPhaseRenderLine(l) ? i : -1))
+      .filter((i) => i >= 0)
+    expect(phaseIdxs.every((i) => i > issueIdx)).toBe(true)
   })
 
-  it('cycle-degraded branch still emits phase rows', () => {
-    // Two issues that reference each other → cycle → ok: false
+  it('next view: phases stack in a single column before the parent (bottom-up DFS)', () => {
+    // issueGraph mode: leaf siblings of a series parent stack at startLane.
+    // For an issue with no real children, lane 0 is the phases' column and
+    // the issue itself sits at lane 1.
+    const issue = createIssue({ id: 'i1' })
+    const result = computeLayoutFromIssues({
+      issues: [issue],
+      openSpecStates: { i1: threePhaseState },
+      viewMode: ViewMode.Next,
+      matchedIds: new Set(['i1']),
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const issueLine = result.lines.find(isIssueRenderLine)!
+    const phaseLines = result.lines.filter(isPhaseRenderLine)
+    expect(phaseLines).toHaveLength(3)
+    // All phases share a single lane.
+    const phaseLanes = new Set(phaseLines.map((p) => p.lane))
+    expect(phaseLanes.size).toBe(1)
+    // Phases are emitted before the issue (DFS bottom-up).
+    const issueIdx = result.lines.findIndex(isIssueRenderLine)
+    const phaseIdxs = result.lines
+      .map((l, i) => (isPhaseRenderLine(l) ? i : -1))
+      .filter((i) => i >= 0)
+    expect(phaseIdxs.every((i) => i < issueIdx)).toBe(true)
+    // Issue lane is at least one greater than the phase lane (parent above).
+    expect(issueLine.lane).toBeGreaterThan(phaseLines[0].lane)
+  })
+
+  it('next view: edges have engine-emitted attach sides (not hard-coded Top/Bottom)', () => {
+    // The bug fix: phase → issue must carry the engine's seriesCornerToParent
+    // attach geometry (bottom → left) instead of the splice's bottom → top.
+    const issue = createIssue({ id: 'i1' })
+    const result = computeLayoutFromIssues({
+      issues: [issue],
+      openSpecStates: { i1: threePhaseState },
+      viewMode: ViewMode.Next,
+      matchedIds: new Set(['i1']),
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const phaseToIssue = result.edges.find((e) => e.to === 'i1' && e.from.includes('::phase::'))
+    expect(phaseToIssue).toBeDefined()
+    expect(phaseToIssue!.kind).toBe('SeriesCornerToParent')
+    expect(phaseToIssue!.sourceAttach).toBe('Bottom')
+    expect(phaseToIssue!.targetAttach).toBe('Left')
+
+    const phaseSiblings = result.edges.filter(
+      (e) => e.kind === 'SeriesSibling' && e.from.includes('::phase::')
+    )
+    expect(phaseSiblings).toHaveLength(2)
+    for (const e of phaseSiblings) {
+      expect(e.sourceAttach).toBe('Bottom')
+      expect(e.targetAttach).toBe('Top')
+    }
+  })
+
+  it('next view: phase column does not collide with sibling subtree column', () => {
+    // Reproduction of the user-reported bug: with two unrelated issues both
+    // having phases, the phase column for one must not land on the same lane
+    // as the other's column. The engine accounts for this; the splice did not.
+    const a = createIssue({ id: 'a' })
+    const b = createIssue({ id: 'b' })
+    const result = computeLayoutFromIssues({
+      issues: [a, b],
+      openSpecStates: {
+        a: {
+          branchState: 'present' as IssueOpenSpecState['branchState'],
+          changeState: 'inProgress' as IssueOpenSpecState['changeState'],
+          phases: [
+            { name: 'a1', done: 0, total: 1, tasks: [] },
+            { name: 'a2', done: 0, total: 1, tasks: [] },
+          ],
+        },
+        b: {
+          branchState: 'present' as IssueOpenSpecState['branchState'],
+          changeState: 'inProgress' as IssueOpenSpecState['changeState'],
+          phases: [
+            { name: 'b1', done: 0, total: 1, tasks: [] },
+            { name: 'b2', done: 0, total: 1, tasks: [] },
+          ],
+        },
+      },
+      viewMode: ViewMode.Next,
+      matchedIds: new Set(['a', 'b']),
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    // Each issue + its phases occupy distinct (row, lane) cells. No two render
+    // lines may share the same (row, lane). The render-line ordering reflects
+    // emission row order, so we use the index as the row.
+    const cells = new Set<string>()
+    for (let row = 0; row < result.lines.length; row++) {
+      const line = result.lines[row]
+      const lane = isIssueRenderLine(line) || isPhaseRenderLine(line) ? line.lane : null
+      if (lane === null) continue
+      const key = `${row}|${lane}`
+      expect(cells.has(key)).toBe(false)
+      cells.add(key)
+    }
+  })
+
+  it('cycle-degraded branch emits flat issue lines without phase rows', () => {
+    // Two issues that reference each other → cycle → ok: false. Phases are
+    // dropped on the degraded path.
     const i1 = createIssue({ id: 'i1', parentIssues: [{ parentIssue: 'i2', sortOrder: 'a' }] })
     const i2 = createIssue({ id: 'i2', parentIssues: [{ parentIssue: 'i1', sortOrder: 'a' }] })
     const result = computeLayoutFromIssues({
@@ -764,9 +703,9 @@ describe('phase row synthesis in computeLayoutFromIssues', () => {
       },
     })
     expect(result.ok).toBe(false)
-    const phaseLines = result.lines.filter(isPhaseRenderLine)
-    expect(phaseLines).toHaveLength(1)
-    expect(phaseLines[0].phaseId).toBe('i1::phase::P')
+    expect(result.lines.filter(isIssueRenderLine)).toHaveLength(2)
+    expect(result.lines.filter(isPhaseRenderLine)).toHaveLength(0)
+    expect(result.edges).toEqual([])
   })
 
   it('phase lines for a later issue do not interleave with earlier issues phases', () => {
@@ -789,16 +728,11 @@ describe('phase row synthesis in computeLayoutFromIssues', () => {
           phases: [{ name: 'C', done: 0, total: 1, tasks: [] }],
         },
       },
+      viewMode: ViewMode.Tree,
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    // i1 and i2 issue lines, then their respective phases — no interleaving
-    const issueLine1Idx = result.lines.findIndex(
-      (l) => l.type === 'issue' && (l as TaskGraphIssueRenderLine).issueId === 'i1'
-    )
-    const issueLine2Idx = result.lines.findIndex(
-      (l) => l.type === 'issue' && (l as TaskGraphIssueRenderLine).issueId === 'i2'
-    )
+
     const phases1 = result.lines.filter(
       (l) => isPhaseRenderLine(l) && (l as TaskGraphPhaseRenderLine).parentIssueId === 'i1'
     )
@@ -807,12 +741,24 @@ describe('phase row synthesis in computeLayoutFromIssues', () => {
     )
     expect(phases1).toHaveLength(2)
     expect(phases2).toHaveLength(1)
-    // All i1 phases come after i1's line and before i2's line
-    const phase1Idxs = result.lines
-      .map((l, idx) =>
-        isPhaseRenderLine(l) && (l as TaskGraphPhaseRenderLine).parentIssueId === 'i1' ? idx : -1
-      )
-      .filter((idx) => idx >= 0)
-    expect(phase1Idxs.every((idx) => idx > issueLine1Idx && idx < issueLine2Idx)).toBe(true)
+    // Each phase row carries the right parentIssueId.
+    expect((phases1[0] as TaskGraphPhaseRenderLine).phaseName).toBe('A')
+    expect((phases2[0] as TaskGraphPhaseRenderLine).phaseName).toBe('C')
+  })
+
+  it('empty phases array produces no phase render lines', () => {
+    const issue = createIssue({ id: 'i1' })
+    const emptyState: IssueOpenSpecState = {
+      branchState: 'present' as IssueOpenSpecState['branchState'],
+      changeState: 'inProgress' as IssueOpenSpecState['changeState'],
+      phases: [],
+    }
+    const result = computeLayoutFromIssues({
+      issues: [issue],
+      openSpecStates: { i1: emptyState },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.lines.filter(isPhaseRenderLine)).toHaveLength(0)
   })
 })

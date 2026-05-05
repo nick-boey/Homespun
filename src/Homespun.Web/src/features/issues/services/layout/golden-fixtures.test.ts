@@ -21,6 +21,7 @@ import type {
   LayoutIssue,
   ParentIssueRef,
 } from './issue-layout-service'
+import type { LayoutNode } from './nodes'
 import type { Edge, GraphLayout, GraphLayoutResult, InactiveVisibility } from './types'
 
 // __dirname is .../src/Homespun.Web/src/features/issues/services/layout
@@ -122,7 +123,7 @@ const normalizeVisibility = (v: FixtureInput['visibility']): InactiveVisibility 
 }
 
 const toFixtureOutput = (
-  result: GraphLayoutResult<LayoutIssue> | InvalidGraphError
+  result: GraphLayoutResult<LayoutNode> | InvalidGraphError
 ): FixtureOutput => {
   if (result instanceof InvalidGraphError) {
     return { ok: false, cycle: [...result.cycle] }
@@ -130,7 +131,7 @@ const toFixtureOutput = (
   if (!result.ok) {
     return { ok: false, cycle: [...result.cycle] }
   }
-  const layout: GraphLayout<LayoutIssue> = result.layout
+  const layout: GraphLayout<LayoutNode> = result.layout
   return {
     ok: true,
     totalRows: layout.totalRows,
@@ -142,7 +143,7 @@ const toFixtureOutput = (
       appearanceIndex: n.appearanceIndex,
       totalAppearances: n.totalAppearances,
     })),
-    edges: layout.edges.map((e: Edge<LayoutIssue>) => {
+    edges: layout.edges.map((e: Edge<LayoutNode>) => {
       const out: FixtureEdge = {
         fromId: e.from.id,
         toId: e.to.id,

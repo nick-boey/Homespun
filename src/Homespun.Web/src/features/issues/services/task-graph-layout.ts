@@ -33,11 +33,17 @@ import { generateBranchName } from './branch-name'
 import { ViewMode } from '../types'
 import {
   InvalidGraphError,
+  isIssueNode,
+  isPhaseNode,
   layoutForNext,
   layoutForTree,
   type GraphLayoutResult,
   type GraphSortConfig,
+  type IssueLayoutNode,
   type LayoutIssue,
+  type LayoutNode,
+  type LayoutPhase,
+  type PhaseLayoutNode,
   type PositionedNode,
 } from './layout'
 
@@ -173,94 +179,23 @@ function getMarker(
 }
 
 /**
- * Post-pass: splice one `TaskGraphPhaseRenderLine` per phase immediately after
- * its parent issue line, and append synthetic edges connecting them.
- * Mutates both arrays in place.
+ * Computes render lines + edges for a task graph from a server-laid-out
+ * `TaskGraphResponse` (legacy / diff path). The server supplies positions and
+ * edges; this function maps each node to one issue render line and threads
+ * edges through unchanged. PR rows / separator / load-more synthesis is
+ * Homespun-only.
  *
- * Called from both `computeLayout` and `computeLayoutFromIssues` so behaviour
- * is identical for the diff view and the live graph.
- */
-export function synthesisePhaseRows(
-  lines: TaskGraphRenderLine[],
-  edges: TaskGraphEdge[],
-  openSpecStates: Record<string, IssueOpenSpecState> | null | undefined
-): void {
-  if (!openSpecStates) return
-
-  const originalLength = lines.length
-  let insertionOffset = 0
-
-  for (let i = 0; i < originalLength; i++) {
-    const line = lines[i + insertionOffset]
-    if (line.type !== 'issue') continue
-
-    const phases = openSpecStates[line.issueId]?.phases
-    if (!phases || phases.length === 0) continue
-
-    const issueLane = line.lane
-    const phaseLane = issueLane + 1
-
-    const phaseLines: TaskGraphPhaseRenderLine[] = phases.map((phase, phaseIdx) => ({
-      type: 'phase',
-      phaseId: `${line.issueId}::phase::${phase.name ?? phaseIdx}`,
-      parentIssueId: line.issueId,
-      lane: phaseLane,
-      phaseName: phase.name ?? `Phase ${phaseIdx + 1}`,
-      done: phase.done ?? 0,
-      total: phase.total ?? 0,
-      tasks: phase.tasks ?? [],
-    }))
-
-    lines.splice(i + insertionOffset + 1, 0, ...phaseLines)
-
-    // Issue → first phase: L-shaped corner
-    edges.push({
-      from: line.issueId,
-      to: phaseLines[0].phaseId,
-      kind: 'SeriesCornerToParent',
-      startRow: 0,
-      startLane: issueLane,
-      endRow: 0,
-      endLane: phaseLane,
-      pivotLane: issueLane,
-      sourceAttach: 'Bottom',
-      targetAttach: 'Top',
-    })
-
-    // Consecutive phases: straight vertical drop
-    for (let p = 1; p < phaseLines.length; p++) {
-      edges.push({
-        from: phaseLines[p - 1].phaseId,
-        to: phaseLines[p].phaseId,
-        kind: 'SeriesSibling',
-        startRow: 0,
-        startLane: phaseLane,
-        endRow: 0,
-        endLane: phaseLane,
-        pivotLane: null,
-        sourceAttach: 'Bottom',
-        targetAttach: 'Top',
-      })
-    }
-
-    insertionOffset += phaseLines.length
-  }
-}
-
-/**
- * Computes render lines + edges for a task graph. The server supplies positions
- * and edges; this function maps each node to one render line and threads edges
- * through unchanged. PR rows / separator / load-more synthesis is Homespun-only.
+ * Phase rows are *not* emitted on this path — the diff view (the only
+ * consumer) filters render lines down to issues. The live graph emits phases
+ * via `computeLayoutFromIssues` instead.
  *
  * @param taskGraph - response from the server (Fleece v3 layout).
  * @param viewMode - 'tree' hides PR / separator / load-more entries.
- * @param openSpecStates - phase data per issue id; defaults to `taskGraph?.openSpecStates`.
  */
 export function computeLayout(
   taskGraph: TaskGraphResponse | null | undefined,
   _maxDepth: number = Infinity,
-  viewMode: ViewMode = ViewMode.Tree,
-  openSpecStates?: Record<string, IssueOpenSpecState> | null
+  viewMode: ViewMode = ViewMode.Tree
 ): TaskGraphLayoutResult {
   if (!taskGraph) {
     return { lines: [], edges: [] }
@@ -361,9 +296,6 @@ export function computeLayout(
     sourceAttach: e.sourceAttach ?? 'Top',
     targetAttach: e.targetAttach ?? 'Top',
   }))
-
-  const resolvedOpenSpecStates = openSpecStates ?? taskGraph.openSpecStates ?? null
-  synthesisePhaseRows(lines, edges, resolvedOpenSpecStates)
 
   return { lines, edges }
 }
@@ -484,7 +416,7 @@ function getMarkerForIssue(issue: IssueResponse, isActionable: boolean): TaskGra
 }
 
 function buildIssueRenderLine(
-  positioned: PositionedNode<LayoutIssue>,
+  positioned: PositionedNode<IssueLayoutNode | LayoutIssue>,
   issue: IssueResponse,
   decorations: {
     linkedPrs?: Record<string, LinkedPr> | null
@@ -513,6 +445,53 @@ function buildIssueRenderLine(
     appearanceIndex: positioned.appearanceIndex,
     totalAppearances: positioned.totalAppearances,
   }
+}
+
+function buildPhaseRenderLine(
+  positioned: PositionedNode<PhaseLayoutNode>
+): TaskGraphPhaseRenderLine {
+  const node = positioned.node
+  return {
+    type: 'phase',
+    phaseId: node.id,
+    parentIssueId: node.parentIssueId,
+    lane: positioned.lane,
+    phaseName: node.phase.name,
+    done: node.phase.done,
+    total: node.phase.total,
+    tasks: node.phase.tasks.map((t) => ({
+      description: t.description,
+      done: t.done,
+    })),
+  }
+}
+
+/**
+ * Translates the API-level `IssueOpenSpecState` map into a layout-level phases
+ * map keyed by lower-cased issue id. Each phase carries the data the engine
+ * needs to lay it out plus the data the renderer needs to display it (name,
+ * done/total, tasks).
+ */
+function buildPhasesByIssueId(
+  openSpecStates: Record<string, IssueOpenSpecState> | null | undefined
+): ReadonlyMap<string, readonly LayoutPhase[]> | null {
+  if (!openSpecStates) return null
+  const out = new Map<string, readonly LayoutPhase[]>()
+  for (const [issueId, state] of Object.entries(openSpecStates)) {
+    const raw = state?.phases
+    if (!raw || raw.length === 0) continue
+    const phases: LayoutPhase[] = raw.map((phase, phaseIdx) => ({
+      name: phase.name ?? `Phase ${phaseIdx + 1}`,
+      done: phase.done ?? 0,
+      total: phase.total ?? 0,
+      tasks: (phase.tasks ?? []).map((t) => ({
+        description: t.description,
+        done: t.done ?? false,
+      })),
+    }))
+    out.set(issueId.toLowerCase(), phases)
+  }
+  return out.size > 0 ? out : null
 }
 
 function emitMergedPrRows(
@@ -572,7 +551,8 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
 
   const layoutIssues = issues.map(toLayoutIssue)
   const actionable = actionableIds(issues)
-  let layout: GraphLayoutResult<LayoutIssue>
+  const phases = buildPhasesByIssueId(openSpecStates)
+  let layout: GraphLayoutResult<LayoutNode>
   try {
     if (isTreeView) {
       // Top-down: root at lane 0, children descending.
@@ -580,6 +560,7 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
         assignedTo: assigneeFilter,
         sort: sortConfig,
         mode: 'normalTree',
+        phases,
       })
     } else {
       // Next mode: explicit matchedIds wins; otherwise seed from the
@@ -591,12 +572,14 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
           assignedTo: assigneeFilter,
           sort: sortConfig,
           mode: 'issueGraph',
+          phases,
         })
       } else {
         layout = layoutForNext(layoutIssues, seed, {
           assignedTo: assigneeFilter,
           sort: sortConfig,
           mode: 'issueGraph',
+          phases,
         })
       }
     }
@@ -613,6 +596,8 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   for (const i of issues) if (i.id) issueById.set(i.id.toLowerCase(), i)
 
   // Cycle: degraded fallback — emit a flat list of every issue, no edges.
+  // Phases are dropped on this path; the engine couldn't lay them out, and
+  // re-injecting them would just amplify the broken state.
   if (!layout.ok) {
     const flatLines: TaskGraphRenderLine[] = []
     for (let idx = 0; idx < issues.length; idx++) {
@@ -632,29 +617,33 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
         )
       )
     }
-    const flatEdges: TaskGraphEdge[] = []
-    synthesisePhaseRows(flatLines, flatEdges, openSpecStates)
-    return { ok: false, cycle: layout.cycle, lines: flatLines, edges: flatEdges }
+    return { ok: false, cycle: layout.cycle, lines: flatLines, edges: [] }
   }
 
   const lines: TaskGraphRenderLine[] = []
-  const hasIssues = layout.layout.nodes.length > 0
+  const issueNodes = layout.layout.nodes.filter((n) => isIssueNode(n.node))
+  const hasIssues = issueNodes.length > 0
 
   if (!isTreeView) {
     lines.push(...emitMergedPrRows(mergedPrs ?? [], hasMorePastPrs, hasIssues, agentStatuses))
   }
 
   for (const positioned of layout.layout.nodes) {
-    const issue = issueById.get(positioned.node.id.toLowerCase())
-    if (!issue) continue
-    lines.push(
-      buildIssueRenderLine(
-        positioned,
-        issue,
-        { linkedPrs, agentStatuses },
-        actionable.has(issue.id ?? '')
+    const node = positioned.node
+    if (isIssueNode(node)) {
+      const issue = issueById.get(node.id.toLowerCase())
+      if (!issue) continue
+      lines.push(
+        buildIssueRenderLine(
+          positioned as PositionedNode<IssueLayoutNode>,
+          issue,
+          { linkedPrs, agentStatuses },
+          actionable.has(issue.id ?? '')
+        )
       )
-    )
+    } else if (isPhaseNode(node)) {
+      lines.push(buildPhaseRenderLine(positioned as PositionedNode<PhaseLayoutNode>))
+    }
   }
 
   const edges: TaskGraphEdge[] = layout.layout.edges.map((e) => ({
@@ -669,8 +658,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
     sourceAttach: EDGE_ATTACH_MAP[e.sourceAttach] ?? 'Top',
     targetAttach: EDGE_ATTACH_MAP[e.targetAttach] ?? 'Top',
   }))
-
-  synthesisePhaseRows(lines, edges, openSpecStates)
 
   return { ok: true, lines, edges }
 }
