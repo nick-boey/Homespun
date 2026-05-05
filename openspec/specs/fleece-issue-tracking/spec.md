@@ -6,16 +6,16 @@ Homespun's integration with the external Fleece library for local, file-based is
 ## Requirements
 ### Requirement: Issue CRUD API surface
 
-The system SHALL expose issue CRUD over `/api` with endpoints for list, get, create, update, and delete, scoped to projects.
+The system SHALL expose issue CRUD over `/api` with endpoints for list, get, create, update, and delete, scoped to projects. List operations SHALL use `GET /api/projects/{projectId}/issues` returning the visible issue set (per the "Visible issue set endpoint" requirement).
 
 #### Scenario: List issues for a project
 - **WHEN** a client calls `GET /api/projects/{projectId}/issues`
-- **THEN** the response SHALL contain all issues for that project from the in-memory cache
+- **THEN** the response SHALL contain the visible issue set per the "Visible issue set endpoint with ancestor-of-active filter" requirement
 
 #### Scenario: Create issue with hierarchy positioning
 - **WHEN** a client POSTs to `/api/issues` with a valid `CreateIssueRequest`
 - **THEN** the server SHALL persist the issue via `Fleece.Core`
-- **AND** SHALL broadcast `IssuesChanged(projectId, Created, issueId)` on `NotificationHub`
+- **AND** SHALL broadcast `IssueChanged({kind: 'created', issueId, issue})` on `NotificationHub`
 - **AND** SHALL return the issue with timestamps
 
 #### Scenario: Create issue queues branch-id generation
@@ -30,14 +30,15 @@ The system SHALL expose issue CRUD over `/api` with endpoints for list, get, cre
 - **WHEN** `PUT /api/issues/{issueId}` is called and the issue has no assignee
 - **AND** the request doesn't specify one and `dataStore.UserEmail` is configured
 - **THEN** the server SHALL auto-assign the current user's email
+- **AND** SHALL broadcast `IssueChanged({kind: 'updated', issueId, issue})` regardless of whether fields were "patchable" or "topology-affecting" — the split is removed
 
 ### Requirement: Hierarchy management with cycle detection
 
-The system SHALL support set-parent, remove-parent, remove-all-parents, and move-sibling operations with cycle detection.
+The system SHALL support set-parent, remove-parent, remove-all-parents, and move-sibling operations with cycle detection. All hierarchy mutations SHALL emit `IssueChanged({kind: 'updated', ...})` on success.
 
 #### Scenario: Set parent succeeds for valid relationship
 - **WHEN** a client POSTs to `/api/issues/{childId}/set-parent` with a valid parent
-- **THEN** the parent SHALL be set and `IssuesChanged` SHALL be broadcast
+- **THEN** the parent SHALL be set and `IssueChanged({kind: 'updated', issueId: childId, issue})` SHALL be broadcast
 
 #### Scenario: Cycle detection rejects invalid relationship
 - **WHEN** a set-parent would create a cycle
@@ -129,75 +130,259 @@ The filter query parsed by `filter-query-parser.ts` SHALL support structured pre
 - **WHEN** the filter contains plain text without a predicate
 - **THEN** it SHALL match against issue `title` and `description`
 
-### Requirement: Task graph layout via Fleece.Core IIssueLayoutService
+### Requirement: Visible issue set endpoint with ancestor-of-active filter
 
-The server SHALL produce task-graph layouts via `Fleece.Core.Services.Interfaces.IIssueLayoutService.LayoutForTree` and SHALL NOT re-derive node positions, lane assignments, or connector geometry locally. `IIssueLayoutService` and the underlying `IGraphLayoutService` SHALL be registered in the DI container as singletons (both are pure with no I/O or mutable state).
+The system SHALL expose `GET /api/projects/{projectId}/issues` returning `IReadOnlyList<IssueResponse>` — the project's visible issue set. The endpoint SHALL accept the following optional query parameters:
 
-`ProjectFleeceService.GetTaskGraphWithAdditionalIssuesAsync` SHALL pre-filter the issue cache by `IssueStatus ∈ { Draft, Open, Progress, Review }` unioned with caller-supplied `additionalIssueIds`, then SHALL invoke `LayoutForTree(includedIssues, InactiveVisibility.Hide)`. The pre-filter preserves the v2 contract that "issues linked to open PRs render even if their status is terminal" — those ids are passed in `additionalIssueIds` by `GraphService.BuildEnhancedTaskGraphAsync`. The method SHALL NOT call `LayoutForNext` or pass any non-`Hide` visibility unless a future change adds a configuration surface for it.
+- `include` — comma-separated issue ids to include in the response **regardless of status**, plus all of their ancestors (transitively). Empty or omitted means no overrides.
+- `includeOpenPrLinked` — boolean; when `true`, every issue id linked to an open PR (per `IPullRequestStateService.GetOpenPrLinkedIssueIds(projectId)`) SHALL be included in the response, plus all of their ancestors.
+- `includeAll` — boolean; when `true`, the visibility filter SHALL be bypassed entirely and all issues SHALL be returned (preserves the legacy "list all issues" behaviour for internal callers).
+- `status` / `type` / `priority` — preserved as-is. When `includeAll=false` (default), these filters apply *after* visibility filtering. When `includeAll=true`, they apply to the raw list.
 
-If `IIssueLayoutService` throws `InvalidGraphException` (e.g. the issue set contains a parent cycle that escaped upstream cycle detection), the service SHALL log a warning carrying the exception message and SHALL return `null`, mirroring the v2 behaviour for "no graph available."
+The "visible set" SHALL be computed as the transitive parent-closure of the seed set, where seeds = `{ issues with Status ∈ { Draft, Open, Progress, Review } } ∪ explicitInclude ∪ (includeOpenPrLinked ? openPrLinkedIds : ∅)`. The traversal SHALL use a visited set to guarantee O(N) cost and inherent cycle safety.
 
-#### Scenario: Layout uses the injected service, not a local implementation
-- **WHEN** the server builds a task graph for any project
-- **THEN** the layout call SHALL go through `IIssueLayoutService.LayoutForTree`
-- **AND** the call SHALL be made on the engine instance registered in DI (singleton)
-- **AND** no Homespun code SHALL re-implement node positioning, lane advancement, or edge geometry
+The endpoint SHALL return issues only. It SHALL NOT include decoration data (`agentStatuses`, `linkedPrs`, `openSpecStates`, `mergedPrs`, `orphanChanges`). It SHALL NOT compute or return any layout output (no `Lane`, `Row`, `Edges`, `TotalLanes`, `TotalRows`).
 
-#### Scenario: Pre-filter unions active statuses with additional ids
-- **WHEN** `GetTaskGraphWithAdditionalIssuesAsync(projectPath, additionalIssueIds: ["issue-42"])` is called
-- **AND** `issue-42` exists in the cache with `Status = Complete`
-- **THEN** the issue list passed to `LayoutForTree` SHALL include `issue-42`
-- **AND** SHALL also include every issue with `Status ∈ { Draft, Open, Progress, Review }` from the cache
-- **AND** SHALL exclude every other terminal-status issue not in `additionalIssueIds`
+#### Scenario: Open issues are returned without their closed siblings
+- **WHEN** a project has issues `A (Open)` and `B (Closed)` with no parent relationship between them and neither has open descendants
+- **THEN** `GET /api/projects/{projectId}/issues` SHALL return `[A]`
+- **AND** `B` SHALL NOT appear in the response
 
-#### Scenario: Cycle in input set is logged and produces null
-- **WHEN** `LayoutForTree` throws `InvalidGraphException` because the supplied issues contain a parent cycle
-- **THEN** the wrapper SHALL log a warning including the cycle path from the exception
-- **AND** SHALL return `null` without rethrowing
-- **AND** the caller (`GraphService`) SHALL treat `null` as "no graph available" exactly as it does for the empty-input case
+#### Scenario: Closed ancestor of open descendant is included
+- **WHEN** a project has `Root (Closed) → Child (Closed) → Leaf (Open)`
+- **THEN** the response SHALL include all three issues
 
-#### Scenario: Empty issue set returns null without invoking the engine
-- **WHEN** the active-status filter union with additional ids produces zero issues
-- **THEN** the wrapper SHALL log a debug message and return `null`
-- **AND** SHALL NOT invoke `IIssueLayoutService.LayoutForTree` at all
+#### Scenario: Closed leaf is excluded when no descendant is open
+- **WHEN** a project has `Root (Open) → Child (Closed)` with no further descendants
+- **THEN** the response SHALL include `Root` only
 
-### Requirement: TaskGraphResponse exposes semantic edges and dimension counts
+#### Scenario: Multi-parent diamond pulls in all ancestors
+- **WHEN** an open issue `X` has two parents `A (Closed)` and `B (Closed)`, each rooted at the same grandparent `G (Closed)`
+- **THEN** the response SHALL include `X`, `A`, `B`, and `G`
 
-`Homespun.Shared.Models.Fleece.TaskGraphResponse` SHALL carry the layout's semantic edges and grid dimensions in addition to the existing per-node placement information. The wire shape SHALL include:
+#### Scenario: Cycle in parent chain returns visible set without exception
+- **WHEN** a project's parent graph contains a cycle (defensively present despite Fleece's cycle detection on writes)
+- **THEN** the endpoint SHALL return a 200 response with a valid issue set, traversing each ancestor at most once
+- **AND** SHALL NOT throw or return 500
 
-- `Edges: List<TaskGraphEdgeResponse>` — populated from `GraphLayout<Issue>.Edges`. Each entry SHALL carry `From: string` (issue id), `To: string` (issue id), `Kind: string` (one of `"SeriesSibling"`, `"SeriesCornerToParent"`, `"ParallelChildToSpine"`), `StartRow: int`, `StartLane: int`, `EndRow: int`, `EndLane: int`, `PivotLane: int?`, `SourceAttach: string` (one of `"Top"`, `"Bottom"`, `"Left"`, `"Right"`), and `TargetAttach: string` (same enum domain).
-- `TotalRows: int` — populated from `GraphLayout<Issue>.TotalRows`.
+#### Scenario: Explicit include override pulls in closed issue and its ancestors
+- **WHEN** a client sends `GET /api/projects/{projectId}/issues?include=closed-issue-id`
+- **AND** `closed-issue-id` exists with `Status = Complete` and parent `closed-parent-id`
+- **THEN** the response SHALL include both `closed-issue-id` and `closed-parent-id`
 
-The pre-existing fields on `TaskGraphResponse` and `TaskGraphNodeResponse` (`Nodes[].Lane`, `Nodes[].Row`, `Nodes[].IsActionable`, `TotalLanes`, `MergedPrs`, `LinkedPrs`, `OpenSpecStates`, `MainOrphanChanges`, `AgentStatuses`, `HasMorePastPrs`, `TotalPastPrsShown`) SHALL continue to be populated — the wire change is additive only.
+#### Scenario: includeOpenPrLinked pulls in PR-linked issues and their ancestors
+- **WHEN** a client sends `GET /api/projects/{projectId}/issues?includeOpenPrLinked=true`
+- **AND** an open PR is linked to a `Status = Closed` issue whose parent is also closed
+- **THEN** the response SHALL include the PR-linked issue and its closed parent
 
-`Edges[].Kind`, `SourceAttach`, and `TargetAttach` SHALL be serialized as their string names (e.g. `"SeriesSibling"`) rather than as numeric enum ordinals so the wire stays self-describing for the TypeScript client and any third-party consumer.
+#### Scenario: includeAll=true bypasses the visibility filter
+- **WHEN** a client sends `GET /api/projects/{projectId}/issues?includeAll=true`
+- **THEN** the response SHALL include every issue in the project regardless of status
+- **AND** parent-closure traversal SHALL NOT run
 
-The frontend SHALL render parent-child connectors by reading `Edges[]` from the response and SHALL NOT re-derive connector geometry, parent-lane reservations, multi-parent indices, or lane-0 cross-issue lines from `Issue.ParentIssues` walks.
+#### Scenario: status filter applies after visibility filter
+- **WHEN** a client sends `GET /api/projects/{projectId}/issues?status=Progress`
+- **THEN** the response SHALL include only issues with `Status = Progress` from the visible set
+- **AND** SHALL NOT include `Progress` issues that were excluded by visibility (e.g. impossible by definition since `Progress` is in the open seed)
+- **AND** SHALL NOT include closed-ancestor issues even if they would otherwise be in the visible set
 
-#### Scenario: Edge collection is populated for every parent-child relationship in the layout
-- **WHEN** the server returns a `TaskGraphResponse` for a project with a series-mode parent and three series-mode children
-- **THEN** `response.Edges` SHALL contain at least three entries: two `SeriesSibling` edges (child-to-child) and one `SeriesCornerToParent` edge (last-child-to-parent)
-- **AND** every `Edges[i].From` and `Edges[i].To` SHALL refer to issue ids present in `response.Nodes`
+#### Scenario: Endpoint returns issues only, no decorations
+- **WHEN** the endpoint returns a 200 response
+- **THEN** the response body SHALL be a JSON array of `IssueResponse` objects directly (not wrapped in an envelope)
+- **AND** the response body SHALL NOT contain `agentStatuses`, `linkedPrs`, `openSpecStates`, `mergedPrs`, or `orphanChanges` fields
 
-#### Scenario: Existing fields stay populated for backwards compatibility
-- **WHEN** the server returns a `TaskGraphResponse`
-- **THEN** every entry in `response.Nodes` SHALL have `Lane`, `Row`, and `IsActionable` populated as before
-- **AND** `response.TotalLanes` SHALL be populated as before
-- **AND** consumers that ignore `Edges` SHALL still see a usable graph payload (without connector information)
+#### Scenario: Empty project returns empty array
+- **WHEN** a project has no issues
+- **THEN** the response SHALL be `[]`
+- **AND** SHALL return 200 (not 404)
 
-#### Scenario: Frontend renders connectors from the wire edge list
-- **WHEN** the frontend receives a `TaskGraphResponse`
-- **THEN** `task-graph-svg.tsx` SHALL render one connector path per `response.edges[i]`, with geometry chosen by `edge.kind` and end-side by `edge.sourceAttach` / `edge.targetAttach`
-- **AND** the frontend SHALL NOT call any `parentLaneReservations`, `multiParentIndex`, `drawTopLine`, `drawBottomLine`, `seriesConnectorFromLane`, `drawLane0Connector`, or `hasHiddenParent` derivation; those fields SHALL NOT exist on `TaskGraphIssueRenderLine`
+### Requirement: Linked PRs endpoint
 
-#### Scenario: TotalRows reflects the laid-out grid height
-- **WHEN** `GraphLayout<Issue>.TotalRows` is `N` for a given project
-- **THEN** `response.TotalRows` SHALL equal `N`
-- **AND** every `response.Nodes[i].Row` and every `response.Edges[j].StartRow` / `EndRow` SHALL satisfy `0 ≤ row < N`
+The system SHALL expose `GET /api/projects/{projectId}/linked-prs` returning `IReadOnlyDictionary<string, LinkedPr>` keyed by Fleece issue id. Each entry SHALL contain `Number: int`, `Url: string`, `Status: string` (PR status enum string-name).
 
-#### Scenario: Empty layout serializes with empty collections
-- **WHEN** `IIssueLayoutService` returns a layout with zero nodes (no issues match the filter)
-- **THEN** `response.Nodes` SHALL be an empty array
-- **AND** `response.Edges` SHALL be an empty array
-- **AND** `response.TotalRows` and `response.TotalLanes` SHALL both be `0`
+Source data: `IDataStore.GetPullRequestsByProject(projectId)` filtered by entries that have both `FleeceIssueId` (non-empty) and `GitHubPRNumber` (non-null). Entries without both SHALL be excluded.
+
+The endpoint SHALL be independently testable: an integration test for this endpoint SHALL not require seeding agent sessions, OpenSpec changes, or graph layout — only the PR-state data store.
+
+#### Scenario: Returns map keyed by Fleece issue id
+- **WHEN** the project has a tracked PR with `FleeceIssueId = "issue-1"` and `GitHubPRNumber = 42`
+- **THEN** the response SHALL contain key `"issue-1"` mapping to `{Number: 42, Url: "...", Status: "..."}`
+
+#### Scenario: PR without FleeceIssueId is excluded
+- **WHEN** the project has a tracked PR with no `FleeceIssueId`
+- **THEN** the response SHALL NOT contain an entry for that PR
+
+#### Scenario: PR without GitHubPRNumber is excluded
+- **WHEN** the project has a tracked PR with `FleeceIssueId` but no `GitHubPRNumber`
+- **THEN** the response SHALL NOT contain an entry for that PR
+
+#### Scenario: Empty project returns empty map
+- **WHEN** the project has no tracked PRs
+- **THEN** the response SHALL be `{}` and 200
+
+### Requirement: Agent statuses endpoint
+
+The system SHALL expose `GET /api/projects/{projectId}/agent-statuses` returning `IReadOnlyDictionary<string, AgentStatusData>` keyed by Fleece issue id (the `EntityId` of the session).
+
+Source data: `ISessionStore.GetByProjectId(projectId)`. Sessions SHALL be filtered to those with non-empty `EntityId` and grouped by `EntityId`. When multiple sessions share an `EntityId`, the most recent by `LastActivityAt` SHALL be selected.
+
+The endpoint SHALL be independently testable: a test SHALL not require seeding issues, PRs, OpenSpec changes, or graph layout — only the session store.
+
+#### Scenario: Active session returns one entry per issue
+- **WHEN** an active session exists with `EntityId = "issue-1"`
+- **THEN** the response SHALL contain key `"issue-1"` mapping to the session's `AgentStatusData`
+
+#### Scenario: Multiple sessions for one issue: most-recent wins
+- **WHEN** two sessions share `EntityId = "issue-1"` with different `LastActivityAt` timestamps
+- **THEN** the response SHALL contain a single entry derived from the more recent session
+
+#### Scenario: Session without EntityId is excluded
+- **WHEN** a session has empty or null `EntityId`
+- **THEN** the response SHALL NOT contain an entry for it
+
+#### Scenario: Empty project returns empty map
+- **WHEN** the project has no sessions
+- **THEN** the response SHALL be `{}` and 200
+
+### Requirement: Client-side graph layout via TypeScript port of Fleece.Core
+
+The web client SHALL compute task-graph layout (lane assignment, row assignment, edge generation, multi-parent appearance counts) entirely client-side via a TypeScript port of `Fleece.Core.GraphLayoutService<TNode>` and `IssueLayoutService`. The port SHALL live under `src/Homespun.Web/src/features/issues/services/layout/` and SHALL expose:
+
+- `layoutForTree(issues, options): GraphLayoutResult<Issue>` — issue-tree layout, equivalent to `IIssueLayoutService.LayoutForTree(InactiveVisibility.Hide)`.
+- `layoutForNext(issues, matchedIds, options): GraphLayoutResult<Issue>` — next-mode layout, equivalent to `IIssueLayoutService.LayoutForNext`.
+
+`GraphLayoutResult<T>` SHALL be a discriminated union of `{ ok: true; layout: GraphLayout<T> }` and `{ ok: false; cycle: string[] }`. The cycle case carries the cycle path (issue ids in order) as reported by the algorithm.
+
+The port SHALL produce structurally-identical output to Fleece.Core for any input shared between them: same node row/lane assignments, same edge `kind`/`pivotLane`/attach-side values, same multi-parent appearance ordering. Equivalence SHALL be enforced by a cross-stack golden-fixture test (see "Cross-stack golden-fixture parity tests" requirement).
+
+The web client SHALL NOT receive lane/row/edge data from the server. The web client SHALL NOT call any deleted `/api/graph/{projectId}/*` endpoints.
+
+#### Scenario: layoutForTree assigns rows in post-order emission
+- **WHEN** `layoutForTree` is called with a 3-node series chain `A → B → C` (parent → child → grandchild)
+- **THEN** the returned `nodes[]` SHALL have `C` at row 0, `B` at row 1, `A` at row 2 (children emit before parents)
+- **AND** lanes SHALL be `C: 0, B: 1, A: 2` for IssueGraph mode (leaf at lane 0)
+
+#### Scenario: layoutForTree emits SeriesSibling and SeriesCornerToParent edges
+- **WHEN** `layoutForTree` is called with a parent + 3 series children
+- **THEN** `edges[]` SHALL contain 2 `SeriesSibling` edges (child-to-child) and 1 `SeriesCornerToParent` edge (last-child-to-parent)
+
+#### Scenario: layoutForTree emits ParallelChildToSpine for parallel children
+- **WHEN** `layoutForTree` is called with a parent + 3 parallel children
+- **THEN** `edges[]` SHALL contain 3 `ParallelChildToSpine` edges
+- **AND** all 3 children SHALL share the same starting lane
+
+#### Scenario: Multi-parent issue has appearanceIndex and totalAppearances
+- **WHEN** an issue `X` has two parents `A` and `B`, both rendered in the layout
+- **THEN** `nodes[]` SHALL contain two `PositionedNode` entries for `X` with `appearanceIndex` 1 and 2 and `totalAppearances` 2
+
+#### Scenario: Cycle returns failure result
+- **WHEN** `layoutForTree` is called with input containing a parent cycle
+- **THEN** the result SHALL be `{ ok: false, cycle: [...] }` with the cycle path in order
+- **AND** the renderer SHALL surface this as a degraded-mode banner without crashing
+
+#### Scenario: Empty input returns empty layout
+- **WHEN** `layoutForTree` is called with `[]`
+- **THEN** the result SHALL be `{ ok: true, layout: { nodes: [], edges: [], totalRows: 0, totalLanes: 0 } }`
+
+#### Scenario: layoutForNext pulls in ancestors of matched leaves
+- **WHEN** `layoutForNext` is called with issues `A → B → C` and `matchedIds = {C}`
+- **THEN** the layout SHALL include `A`, `B`, and `C`
+
+#### Scenario: ViewMode toggle is a pure client transformation
+- **WHEN** the user toggles between Tree and Next modes
+- **THEN** the web client SHALL re-run the layout port with different parameters against the cached issue set
+- **AND** SHALL NOT issue any network request as part of the toggle
+
+### Requirement: Cross-stack golden-fixture parity tests
+
+The repository SHALL maintain a set of layout fixture inputs and corresponding C#-emitted reference outputs to detect drift between Fleece.Core and the TypeScript port. Fixtures SHALL live under `tests/Homespun.Web.LayoutFixtures/fixtures/` as paired `*.input.json` (issue set) and `*.expected.json` (layout output) files.
+
+The fixture-emitter test (`tests/Homespun.Web.LayoutFixtures/EmitFixturesTests.cs`) SHALL run against the live `IIssueLayoutService` from the Fleece.Core dependency. With `UPDATE_FIXTURES=1` the test SHALL write `*.expected.json` files; without it the test SHALL compare emitted output against the existing files and assert structural equality.
+
+A TypeScript test (`golden-fixtures.test.ts`) SHALL load each `*.input.json`, run the TS port, and structurally diff against the corresponding `*.expected.json`. Mismatches SHALL fail the test.
+
+The fixture set SHALL cover at minimum:
+
+- Simple tree, deep tree, multi-parent diamond, series chain, parallel children, mixed series/parallel siblings, cycle (failure case), empty input, single node, large input, `LayoutForNext` matched-leaves scenario, `LayoutForNext` large input.
+
+When the project upgrades the `Fleece.Core` NuGet package, the workflow SHALL be: run `dotnet test --filter Category=Fixtures /p:UpdateFixtures=true`, review the diff in `*.expected.json`, update the TS port to match if the algorithm changed, and ship the upgrade with both fixtures and port aligned.
+
+#### Scenario: Read-only fixture test catches algorithm drift
+- **WHEN** the fixture-emitter test runs without `UPDATE_FIXTURES=1` after a Fleece.Core upgrade that changed lane assignment
+- **THEN** the test SHALL fail with a structural diff highlighting the changed nodes/edges
+- **AND** the failure message SHALL identify which fixture(s) drifted
+
+#### Scenario: TypeScript golden-fixture test catches port regressions
+- **WHEN** `npm test` runs `golden-fixtures.test.ts` and the TS port produces output that differs from `*.expected.json`
+- **THEN** the test SHALL fail with the structural diff
+- **AND** the test SHALL identify which fixture(s) the port disagrees with
+
+### Requirement: Arc-cornered orthogonal edge rendering
+
+The web client's edge renderer (`task-graph-svg.tsx::buildEdgePath`) SHALL produce orthogonal SVG paths with quarter-circle arcs at every direction change instead of hard right-angle corners. The corner radius SHALL be `min(6px, halfLaneWidth, halfRowHeight)` to ensure arcs never overflow lane or row boundaries.
+
+The renderer SHALL handle three `EdgeKind` values:
+
+- `series-sibling`: vertical line between sibling rows. May render straight (no corners) when source and target attach sides are co-linear; otherwise applies a single corner arc at the bend.
+- `series-corner-to-parent`: vertical-then-horizontal path with one corner arc at the bend.
+- `parallel-child-to-spine`: horizontal-to-pivot-then-vertical-then-horizontal path with two corner arcs (one at each direction change).
+
+The renderer SHALL preserve lane fidelity — every path segment is axis-aligned except at corner arcs. No bezier interpolation is used.
+
+#### Scenario: Right-angle corner renders as quarter-circle arc
+- **WHEN** an edge has kind `series-corner-to-parent` with start `(0, 100)` and end `(50, 200)` and corner at `(0, 200)`
+- **THEN** the SVG path SHALL contain a `Q` (or equivalent arc) command at the corner with radius ≤ 6px
+
+#### Scenario: Corner radius clips to half-lane spacing in tight layouts
+- **WHEN** the lane width is 8px
+- **THEN** the corner radius SHALL clip to 4px to prevent the arc overflowing lane boundaries
+
+#### Scenario: Pure-vertical sibling edge renders without corners
+- **WHEN** a `series-sibling` edge has start `(50, 100)` and end `(50, 200)` (same lane)
+- **THEN** the SVG path SHALL be a straight `M 50 100 L 50 200` with no `Q` commands
+
+### Requirement: Unified IssueChanged SignalR event with idempotent client merge
+
+The server SHALL emit a single SignalR event `IssueChanged` for every issue mutation, replacing the previous split between `IssuesChanged` (topology) and `IssueFieldsPatched` (field patch). The event payload SHALL be:
+
+```
+{
+  projectId: string,
+  kind: 'created' | 'updated' | 'deleted' | 'bulk-changed',
+  issueId: string | null,    // null for 'bulk-changed'
+  issue: IssueResponse | null  // present for 'created' and 'updated'; null for 'deleted' and 'bulk-changed'
+}
+```
+
+The server SHALL emit this event from a single hub-extension method `BroadcastIssueChanged(projectId, kind, issueId, issue)` reused by every mutation site. The method SHALL NOT depend on any task-graph snapshot store (the snapshot infrastructure is removed by this change).
+
+The web client's `useIssues` hook SHALL apply the event to its local issue cache idempotently:
+
+- `created` / `updated`: replace by `issueId` in the cache.
+- `deleted`: remove from the cache by `issueId`.
+- `bulk-changed`: refetch the full issue set from `GET /api/projects/{projectId}/issues`.
+
+Echo handling: when the client triggers a mutation via `POST /api/issues` (or any mutation route), it SHALL apply the response body to the cache; the same cache MAY also receive an `IssueChanged` echo for the same mutation. Both writes SHALL be applied without dedup. Replace-by-id is idempotent and the second write produces no observable state change.
+
+#### Scenario: Created event adds the issue to the cache
+- **WHEN** the client receives `IssueChanged({kind: 'created', issueId: 'abc', issue: {...}})`
+- **THEN** the local cache SHALL contain the new issue keyed by `'abc'`
+
+#### Scenario: Deleted event removes the issue from the cache
+- **WHEN** the client receives `IssueChanged({kind: 'deleted', issueId: 'abc', issue: null})`
+- **THEN** the cache SHALL no longer contain an entry keyed by `'abc'`
+
+#### Scenario: Local mutation applies POST response and SignalR echo
+- **WHEN** the client sends `POST /api/issues` and receives a 200 with the canonical issue
+- **AND** subsequently receives `IssueChanged({kind: 'created', ...})` for the same issue
+- **THEN** both writes SHALL apply to the cache without error
+- **AND** the final cache state SHALL be identical to applying either write alone (idempotency)
+
+#### Scenario: Bulk-changed event triggers refetch
+- **WHEN** the client receives `IssueChanged({kind: 'bulk-changed', issueId: null, issue: null})` (e.g. from `FleeceIssueSyncController.Pull`)
+- **THEN** the client SHALL invalidate the `['issues', projectId, ...]` query and refetch the full issue set
+
+#### Scenario: SignalR reconnect refetches the issue set
+- **WHEN** the SignalR connection drops and reconnects
+- **THEN** `useIssues` SHALL invalidate its cache and refetch from `GET /api/projects/{projectId}/issues`
 

@@ -52,7 +52,9 @@ The system SHALL scan branches for OpenSpec change state and make it available t
 
 ### Requirement: Issue graph change indicators
 
-The system SHALL display branch and change status indicators on each issue row in the graph. The enrichment SHALL be served from a per-project `TaskGraphResponse` snapshot maintained by a background refresher so that `GET /api/graph/{projectId}/taskgraph/data` returns without running the full reconciliation on every request. Branch resolution SHALL reuse a single per-request `BranchResolutionContext` (clones list + PR-to-branch dictionary) and SHALL NOT invoke `IGitCloneService.ListClonesAsync` more than once per request.
+The system SHALL display branch and change status indicators on each issue row in the graph. The enrichment data SHALL be served from independent endpoints rather than bundled into the issue response: per-issue branch/change state via `GET /api/projects/{projectId}/openspec-states`, linked-PR state via `GET /api/projects/{projectId}/linked-prs`, and the per-issue branch fields embedded in the `IssueResponse` DTO from `GET /api/projects/{projectId}/issues`. Each enricher's branch resolution SHALL reuse a single per-request `BranchResolutionContext` (clones list + PR-to-branch dictionary) and SHALL NOT invoke `IGitCloneService.ListClonesAsync` more than once per request.
+
+The web client assembles the indicator data by running parallel queries against each endpoint and joining at render time. Visual placement happens after the TS layout port runs — the *data* informing each indicator comes from the relevant endpoint above.
 
 #### Scenario: Branch indicator colours
 - **WHEN** an issue has no branch → gray branch symbol
@@ -70,22 +72,8 @@ The system SHALL display branch and change status indicators on each issue row i
 - **WHEN** an issue has no linked change → round node (○)
 - **WHEN** an issue has a linked change → square node (□)
 
-#### Scenario: Snapshot served on repeat calls
-- **WHEN** a client calls `GET /api/graph/{projectId}/taskgraph/data` while a fresh snapshot for that `(projectId, maxPastPRs)` exists
-- **THEN** the endpoint SHALL return the snapshot without re-running `IssueGraphOpenSpecEnricher.EnrichAsync`
-- **AND** the server SHALL record `snapshot.hit=true` on the request span
-
-#### Scenario: Cold project switch fills the snapshot synchronously
-- **WHEN** a client calls the endpoint for a project with no tracked snapshot
-- **THEN** the server SHALL compute the response synchronously, store it in the snapshot cache, mark the project as tracked for background refresh, and return
-
-#### Scenario: Refresh endpoint invalidates snapshot
-- **WHEN** `POST /api/graph/{projectId}/refresh` succeeds
-- **THEN** the snapshot for every `(projectId, maxPastPRs)` entry for that project SHALL be invalidated
-- **AND** the next call to `/taskgraph/data` SHALL recompute synchronously
-
 #### Scenario: Per-request branch resolution avoids subprocess fan-out
-- **WHEN** `IssueGraphOpenSpecEnricher.EnrichAsync` is invoked for a project with N visible nodes
+- **WHEN** `IIssueGraphOpenSpecEnricher.GetOpenSpecStatesAsync` or `GetMainOrphanChangesAsync` is invoked
 - **THEN** `IGitCloneService.ListClonesAsync(project.LocalPath)` SHALL be called at most once for that request regardless of N
 - **AND** `IDataStore.GetPullRequestsByProject` SHALL be called at most once for that request
 
@@ -312,58 +300,15 @@ The system SHALL support multiple changes on a single branch, each linked to its
 - **WHEN** `tasks.md` under a cached change directory is modified
 - **THEN** the next `GetArtifactStateAsync` call SHALL re-invoke `openspec status` and produce a fresh `ChangeArtifactState`
 
-### Requirement: Per-project task-graph snapshot store
-
-The server SHALL maintain an in-memory `IProjectTaskGraphSnapshotStore` keyed by `(projectId, maxPastPRs)` whose entries hold the most recent `TaskGraphResponse` and a `lastAccessedAt` timestamp. Snapshots SHALL be evicted after a configurable idle window with default 5 minutes of no read traffic. The store SHALL expose:
-
-- `TryGet`, `Store`, `InvalidateProject`, `GetTrackedKeys`, `EvictIdle` (pre-existing)
-- `PatchIssueFields(string projectId, string issueId, IssueFieldPatch patch)` — mutates the matching node's issue fields in every entry belonging to `projectId`, bumps `LastBuiltAt`, no-op if no entry exists
-
-Patch and invalidate operations SHALL be thread-safe for concurrent invocation: a racing `PatchIssueFields` + `InvalidateProject` pair SHALL produce the same observable outcome as an `InvalidateProject` alone (patch may be wasted but never corrupts state).
-
-#### Scenario: Idle project is evicted
-- **WHEN** no request has read a snapshot entry for longer than the configured idle window
-- **THEN** the snapshot refresher SHALL remove the entry from the store and stop refreshing it
-
-#### Scenario: Access touches the snapshot
-- **WHEN** the endpoint returns a snapshot to a client
-- **THEN** the store SHALL update `lastAccessedAt` to the current time
-
-#### Scenario: Patch updates every tracked key for the project
-- **WHEN** `PatchIssueFields(projectId, issueId, patch)` is called with two tracked entries `(projectId, maxPastPRs=5)` and `(projectId, maxPastPRs=10)`
-- **THEN** both entries SHALL have the matching node's issue fields patched and their `LastBuiltAt` timestamps bumped
-
-#### Scenario: Concurrent patch and invalidate does not corrupt state
-- **WHEN** `PatchIssueFields` and `InvalidateProject` for the same project are invoked from different threads in arbitrary order
-- **THEN** the resulting store state SHALL match one of: both applied in either order (patched then invalidated leaves no entry; invalidated then patched leaves no entry because the patch is a no-op on a missing entry)
-
-### Requirement: Background task-graph snapshot refresher
-
-A hosted service `ITaskGraphSnapshotRefresher` SHALL periodically recompute snapshots for every tracked `(projectId, maxPastPRs)` on a configurable interval with default 10 seconds. Refreshes SHALL be serialised per project by a `SemaphoreSlim` so that concurrent refresh invocations coalesce. The refresher SHALL expose `RefreshOnceAsync(CancellationToken)` for callers that want to trigger an immediate rebuild off the hot path.
-
-#### Scenario: Refresh interval elapses
-- **WHEN** the configured refresh interval elapses for a tracked entry
-- **THEN** the refresher SHALL rebuild the snapshot via `GraphService.BuildEnhancedTaskGraphAsync` and replace the store entry
-
-#### Scenario: Explicit invalidation triggers immediate refresh
-- **WHEN** a sidecar mutation, archive transition, or explicit refresh-endpoint call invalidates a tracked entry
-- **THEN** the refresher SHALL rebuild the snapshot at the next iteration without waiting for the full interval
-
-#### Scenario: Mutation-triggered kick races the client refetch
-- **WHEN** `BroadcastIssueTopologyChanged` fires `RefreshOnceAsync` fire-and-forget after invalidating
-- **THEN** the refresher SHALL start a rebuild on a background thread without blocking the mutation's HTTP response, and SHALL coalesce with any concurrent tick-triggered rebuild via its per-project `SemaphoreSlim`
-
-#### Scenario: Graceful shutdown drains the refresher
-- **WHEN** the host shuts down
-- **THEN** any in-progress refresh SHALL honour the cancellation token and complete before the service stops
-
 ### Requirement: Task-graph spans cover the enrichment path
 
-`GraphService.BuildEnhancedTaskGraphAsync`, `IssueGraphOpenSpecEnricher.EnrichAsync`, `BranchStateResolverService.GetOrScanAsync`, `ChangeReconciliationService.ReconcileAsync`, `ChangeScannerService.ScanBranchAsync`, `ChangeScannerService.GetArtifactStateAsync`, `IssueBranchResolverService.ResolveIssueBranchAsync`, and `CommandRunner.RunAsync` SHALL each emit an `Activity` under a dedicated `ActivitySource` (`Homespun.Gitgraph` for graph-service work, `Homespun.OpenSpec` for OpenSpec enrichment work, `Homespun.Commands` for the command runner). Each span SHALL carry cardinality-safe tags only: `project.id`, `issue.id`, `change.name`, `cache.hit`, `branch.source`, `phase`, `cmd.name`, `cmd.exit_code`, `cmd.duration_ms`. Every new span name SHALL appear in `docs/traces/dictionary.md`.
+`IssueGraphOpenSpecEnricher.EnrichAsync`, `BranchStateResolverService.GetOrScanAsync`, `ChangeReconciliationService.ReconcileAsync`, `ChangeScannerService.ScanBranchAsync`, `ChangeScannerService.GetArtifactStateAsync`, `IssueBranchResolverService.ResolveIssueBranchAsync`, and `CommandRunner.RunAsync` SHALL each emit an `Activity` under a dedicated `ActivitySource` (`Homespun.OpenSpec` for OpenSpec enrichment work, `Homespun.Commands` for the command runner). Each span SHALL carry cardinality-safe tags only: `project.id`, `issue.id`, `change.name`, `cache.hit`, `branch.source`, `phase`, `cmd.name`, `cmd.exit_code`, `cmd.duration_ms`. Every new span name SHALL appear in `docs/traces/dictionary.md`.
 
-#### Scenario: Request span has child spans for enrichment work
-- **WHEN** `GET /api/graph/{projectId}/taskgraph/data` is served with a cache miss
-- **THEN** the emitted trace SHALL include `graph.taskgraph.build`, `openspec.enrich`, and at least one `openspec.scan.branch` child span
+The new `IssuesController.GetVisibleIssues` action and the new `IssueAncestorTraversalService.CollectVisible` SHALL each emit a span on `Homespun.Fleece` (or a dedicated `Homespun.Issues` source) tagged with `project.id`, `issue.count`, and `cache.hit=false` (no snapshot exists). New span names SHALL be added to `docs/traces/dictionary.md` in the same change.
+
+#### Scenario: Visible-issue-set request span has child spans for enrichment work
+- **WHEN** `GET /api/projects/{projectId}/issues` is served
+- **THEN** the emitted trace SHALL include a top-level span for the controller action and child spans for `openspec.enrich`, ancestor traversal (e.g. `issues.collect_visible`), and at least one `openspec.scan.branch` if any visible issue has a clone
 
 #### Scenario: Command runner span wraps every subprocess
 - **WHEN** `CommandRunner.RunAsync` spawns an `openspec` or `git` subprocess
@@ -373,143 +318,54 @@ A hosted service `ITaskGraphSnapshotRefresher` SHALL periodically recompute snap
 - **WHEN** a pull request adds a new span name but does not update `docs/traces/dictionary.md`
 - **THEN** the existing drift-check test in the server suite SHALL fail
 
-### Requirement: Graph endpoint logging is debug-level on the hot path
+### Requirement: OpenSpec states endpoint
 
-`GraphService.BuildEnhancedTaskGraphAsync` SHALL NOT emit `LogInformation` for session counts, entity-id listings, or per-node session matches during normal request processing. All such logs SHALL be emitted at `LogDebug` level and SHALL NOT allocate formatted strings (e.g. `string.Join(...)`) unless the debug log level is enabled.
+The system SHALL expose `GET /api/projects/{projectId}/openspec-states?issues=<id>,<id>` returning `IReadOnlyDictionary<string, IssueOpenSpecState>` keyed by Fleece issue id.
 
-#### Scenario: Production log level suppresses hot-path diagnostics
-- **WHEN** the configured log level for `Homespun.Features.Gitgraph` is `Information` or higher
-- **THEN** no session-summary, entity-id, or session-match log lines SHALL be emitted while handling `GET /api/graph/{projectId}/taskgraph/data`
+The optional `issues=` query param SHALL constrain the per-clone scan to the supplied subset (the frontend supplies the visible-set ids it just fetched). When omitted, the server SHALL scan all visible issues — defined as issues with `Status ∈ { Draft, Open, Progress, Review }` plus their ancestors, mirroring the issue-set endpoint's default filter.
 
-#### Scenario: Debug log level still reveals diagnostics
-- **WHEN** the configured log level for `Homespun.Features.Gitgraph` is `Debug`
-- **THEN** the same diagnostics SHALL be emitted so operators can still inspect session matching locally
+The implementation SHALL refactor the existing `IIssueGraphOpenSpecEnricher` interface so that `GetOpenSpecStatesAsync(projectId, issueIds, BranchResolutionContext)` returns *only* the per-issue state map. The combined `EnrichAsync(response)` shape that previously mutated a `TaskGraphResponse` SHALL be removed; the orphan-changes data is served by a sibling endpoint (see "Orphan changes endpoint" requirement).
 
-### Requirement: Fleece mutations invalidate the task-graph snapshot before broadcasting
+The endpoint SHALL be independently testable: a test SHALL not require seeding agent sessions, linked PRs, or graph layout — only on-disk OpenSpec change directories within project clones.
 
-Every Fleece issue mutation path on the server SHALL invalidate the per-project task-graph snapshot **before** broadcasting the `IssuesChanged` SignalR event. The invalidation and broadcast SHALL be performed by a single hub-extension helper so that mutation endpoints cannot broadcast without also invalidating.
+#### Scenario: Issue with linked change returns its state
+- **WHEN** an issue has a working branch with a clone containing an OpenSpec change linked via sidecar
+- **AND** the client calls `GET /api/projects/{projectId}/openspec-states?issues=<that-issue-id>`
+- **THEN** the response SHALL contain a single entry keyed by that issue id with the change's state populated
 
-The same helper SHALL also be invoked on clone-lifecycle events that change the graph's `OpenSpecStates` output but are not Fleece-mutation paths. These additional triggers are:
+#### Scenario: Issue without a clone returns no entry
+- **WHEN** an issue has no working clone on disk
+- **THEN** the response SHALL NOT contain an entry for that issue (the dictionary's absence-of-key signals "no OpenSpec data")
 
-- **Clone created**: `AgentStartBackgroundService.StartAgentAsync` (after `CreateCloneAsync` succeeds for a new agent session), `IssuesAgentController.CreateSession` (after `CreateCloneAsync` succeeds for an Issues Agent session), and `ProjectClonesController.Create` (after a manual clone is created via the project clones API).
-- **Clone removed**: `ProjectClonesController.Delete`, `ProjectClonesController.BulkDelete`, and `ProjectClonesController.Prune` (each after the underlying removal succeeds).
-- **PR transitioned to Merged or Closed**: `PRStatusResolver.ResolveClosedPRStatusesAsync` (once per resolved PR after the graph cache and any linked Fleece issue have been updated).
+#### Scenario: issues= query param scopes the scan
+- **WHEN** the client requests `?issues=a,b,c` on a project with 100 issues
+- **THEN** the per-clone scan SHALL execute only for clones containing those three issues (or their ancestors if the rule for "scope" includes ancestor clones — implementation detail)
+- **AND** the response SHALL contain at most three entries
 
-Applies to:
+#### Scenario: Empty issues= param returns empty map
+- **WHEN** the client requests `?issues=` (empty value)
+- **THEN** the response SHALL be `{}` and 200
 
-- All mutation endpoints on `IssuesController` (create, update, delete, set-parent, remove-parent, remove-all-parents, move-sibling, apply-agent-changes, resolve-conflicts, undo, redo).
-- `IssuesAgentController.AcceptChangesAsync` after post-merge processing.
-- `IssuesAgentController.CreateSession` after the agent's working clone is created.
-- `AgentStartBackgroundService.StartAgentAsync` after a new agent worktree is created.
-- `ProjectClonesController` create / delete / bulk-delete / prune endpoints.
-- `PRStatusResolver.ResolveClosedPRStatusesAsync` for each Merged or Closed transition.
-- All three endpoints on `FleeceIssueSyncController` (`Sync`, `Pull`, `DiscardNonFleeceAndPull`) after a successful `ReloadFromDiskAsync`.
-- Both side-effects inside `ChangeReconciliationService.ReconcileAsync` (sidecar auto-link, archive auto-transition).
+### Requirement: Orphan changes endpoint
 
-#### Scenario: Client refetch after mutation returns fresh data
-- **WHEN** a client sends `PUT /api/issues/{issueId}` and receives `IssuesChanged` over SignalR
-- **THEN** the client's immediate refetch of `GET /api/graph/{projectId}/taskgraph/data` SHALL return a response that reflects the mutation (not the pre-mutation snapshot)
+The system SHALL expose `GET /api/projects/{projectId}/orphan-changes` returning `IReadOnlyList<SnapshotOrphan>` — the deduplicated list of OpenSpec changes on the project's main branch that have no sidecar linking them to a Fleece issue.
 
-#### Scenario: Invalidation is ordered before broadcast
-- **WHEN** the hub helper is invoked for a topology-class mutation
-- **THEN** `IProjectTaskGraphSnapshotStore.InvalidateProject(projectId)` SHALL be invoked synchronously before any `Clients.*.SendAsync("IssuesChanged", …)` call
+The implementation SHALL be sourced from `IIssueGraphOpenSpecEnricher.GetMainOrphanChangesAsync(projectId, BranchResolutionContext)` (a new method introduced as part of refactoring the combined `EnrichAsync` into two narrower methods).
 
-#### Scenario: FleeceIssueSyncController broadcasts on repo pull
-- **WHEN** `POST /api/fleece-sync/{projectId}/pull` succeeds and calls `ReloadFromDiskAsync`
-- **THEN** the task-graph snapshot for that project SHALL be invalidated and `IssuesChanged` SHALL be broadcast to the project group (with `issueId: null` to indicate a bulk change)
+The endpoint SHALL be independently testable.
 
-#### Scenario: ChangeReconciliationService broadcasts on sidecar auto-link
-- **WHEN** `ChangeReconciliationService.ReconcileAsync` writes a sidecar to auto-link a single orphan change
-- **THEN** the reconciler SHALL invalidate the project snapshot and broadcast `IssuesChanged` so connected clients refetch the graph
+#### Scenario: Single orphan on main returns one entry
+- **WHEN** the project's main branch contains an OpenSpec change with no sidecar
+- **THEN** the response SHALL contain one entry for that change
 
-#### Scenario: Agent session start on an issue with no prior clone
-- **WHEN** an agent session is dispatched for an issue whose branch has no on-disk clone, and `CreateCloneAsync` succeeds
-- **THEN** `BroadcastIssueTopologyChanged(projectId, IssueChangeType.Updated, issueId)` SHALL fire with the dispatch's issue id, and the client's next refetch of `/taskgraph/data` SHALL include the issue's `OpenSpecStates` entry within ~1s rather than waiting up to 10s for the refresher tick
+#### Scenario: Same change on multiple branches deduplicates
+- **WHEN** a change with the same name exists on main and on a feature branch with no sidecar in either location
+- **THEN** the response SHALL contain a single entry with both occurrences listed in `containingIssueIds` / occurrence list per the existing `SnapshotOrphan` shape
 
-#### Scenario: Agent session start that reuses an existing clone
-- **WHEN** an agent session is dispatched for an issue whose branch already has a clone (the existing-clone branch in `StartAgentAsync` is taken)
-- **THEN** the helper SHALL NOT be called, since clone presence — and therefore `OpenSpecStates` — has not changed
+#### Scenario: Branch-scoped orphan (not on main) is excluded
+- **WHEN** an unlinked change exists only on a feature branch and not on main
+- **THEN** the response SHALL NOT include it (branch-scoped orphans are surfaced via the issue graph's branch-state data instead — see "Orphan change handling" requirement; the *main-branch orphan list endpoint* returns only main-branch orphans)
 
-#### Scenario: Manual clone delete via project clones API
-- **WHEN** `DELETE /api/projects/{projectId}/clones?clonePath=…` succeeds
-- **THEN** the helper SHALL fire with `issueId: null` and the project snapshot SHALL be invalidated before the SignalR broadcast
-
-#### Scenario: PR transition to Merged invalidates with linked issue id
-- **WHEN** `PRStatusResolver.ResolveClosedPRStatusesAsync` resolves a PR as `Merged` and the removed PR carries a `FleeceIssueId`
-- **THEN** the helper SHALL fire with `IssueChangeType.Updated` and the linked `FleeceIssueId`
-
-#### Scenario: PR transition to Closed without linked issue invalidates with null id
-- **WHEN** `PRStatusResolver.ResolveClosedPRStatusesAsync` resolves a PR as `Closed` and the removed PR has no `FleeceIssueId`
-- **THEN** the helper SHALL fire with `IssueChangeType.Updated` and `issueId: null` so the client refetches the project's full graph
-
-### Requirement: Hub-helper split enforces invalidation at broadcast time
-
-`NotificationHubExtensions` SHALL expose exactly two extension methods for issue-change broadcasts and SHALL NOT expose a public helper that broadcasts `IssuesChanged` without also invalidating or patching the snapshot:
-
-- `BroadcastIssueTopologyChanged(IHubContext<NotificationHub>, string projectId, IssueChangeType changeType, string? issueId)` — invalidates the project snapshot, fires-and-forgets `ITaskGraphSnapshotRefresher.RefreshOnceAsync`, broadcasts `IssuesChanged`.
-- `BroadcastIssueFieldsPatched(IHubContext<NotificationHub>, string projectId, string issueId, IssueFieldPatch patch)` — applies the patch to the snapshot in place, broadcasts (see "SignalR patch push" requirement for Delta 3 event choice).
-
-The legacy `BroadcastIssuesChanged` helper SHALL be removed.
-
-#### Scenario: Topology helper invalidates and broadcasts in order
-- **WHEN** a controller calls `BroadcastIssueTopologyChanged`
-- **THEN** the helper SHALL call `snapshotStore.InvalidateProject(projectId)` before `Clients.All.SendAsync("IssuesChanged", …)` and `Clients.Group(...).SendAsync(...)`
-
-#### Scenario: Topology helper kicks the refresher without blocking
-- **WHEN** `BroadcastIssueTopologyChanged` runs
-- **THEN** `ITaskGraphSnapshotRefresher.RefreshOnceAsync` SHALL be started fire-and-forget and SHALL NOT be awaited inside the helper so the HTTP response is not delayed
-
-#### Scenario: Snapshot store not registered is tolerated
-- **WHEN** `TaskGraphSnapshot:Enabled=false` so `IProjectTaskGraphSnapshotStore` is not registered
-- **THEN** the hub helpers SHALL still broadcast `IssuesChanged` without throwing, and SHALL omit the invalidate/patch step
-
-### Requirement: In-place field patching for structure-preserving edits
-
-`IProjectTaskGraphSnapshotStore` SHALL expose `PatchIssueFields(string projectId, string issueId, IssueFieldPatch patch)` that, for every matching snapshot entry keyed by `projectId`, replaces the `TaskGraphResponse.Nodes[i].Issue` for the matching `issueId` with a new `IssueResponse` whose non-null fields from `patch` overlay the existing values. `LastBuiltAt` SHALL be bumped to the current time. Entries for other `(projectId, maxPastPRs)` keys belonging to the same project SHALL all be patched.
-
-The patchable fields SHALL be exactly: `Title`, `Description`, `Priority`, `Tags`, `AssignedTo`, `CreatedBy`, `ExecutionMode`, `LastUpdate`. Any other field on `IssueResponse` SHALL route through `BroadcastIssueTopologyChanged` instead.
-
-`IssuesController.UpdateIssueAsync` SHALL inspect the request body against the whitelist and call `BroadcastIssueFieldsPatched` only when every mutated field is whitelisted. If any non-whitelisted field is included in the same request, the handler SHALL fall through to `BroadcastIssueTopologyChanged`.
-
-Undo/redo (`IssuesController.Undo`/`Redo`) SHALL always invalidate — they replace the full issue list.
-
-#### Scenario: Title-only edit patches in place
-- **WHEN** `PUT /api/issues/{id}` is called with only `title` set
-- **THEN** the snapshot entry for the project SHALL have the matching node's `Issue.Title` updated and `LastBuiltAt` bumped, without triggering a full rebuild
-
-#### Scenario: Status change invalidates instead of patching
-- **WHEN** `PUT /api/issues/{id}` is called with `status` set (with or without other fields)
-- **THEN** the handler SHALL call `BroadcastIssueTopologyChanged` and the snapshot entries for the project SHALL be removed
-
-#### Scenario: Multi-field edit with mixed fields invalidates
-- **WHEN** `PUT /api/issues/{id}` is called with `title` AND `status` set
-- **THEN** the handler SHALL call `BroadcastIssueTopologyChanged` (the presence of a non-whitelisted field forces the topology path)
-
-#### Scenario: Patch applied to a snapshot evicted mid-race is a no-op
-- **WHEN** `PatchIssueFields` is invoked between the entry being read and the idle-eviction tick removing it
-- **THEN** the patch call SHALL no-op and SHALL NOT re-create the snapshot entry
-
-#### Scenario: Whitelist drift is caught at compile time
-- **WHEN** a new property is added to `IssueResponse` without being marked either patchable or topology-only
-- **THEN** the server test suite SHALL fail with a clear message identifying the unclassified property
-
-### Requirement: SignalR patch-push delivers field updates without refetch
-
-When `TaskGraphSnapshot:PatchPush:Enabled` is `true` (default), `BroadcastIssueFieldsPatched` SHALL emit a new SignalR event `IssueFieldsPatched(string projectId, string issueId, IssueFieldPatch patch)` on both `Clients.All` and the project group. The event SHALL be typed via `INotificationHubClient`. The patch payload SHALL contain only non-null fields.
-
-Client task-graph views SHALL handle `IssueFieldsPatched` by locating the issue node in the cached `TaskGraphResponse` (`queryKey = ['taskGraph', projectId]`) and applying the patch via `queryClient.setQueryData(...)`. No HTTP refetch SHALL be triggered by this event.
-
-When `TaskGraphSnapshot:PatchPush:Enabled` is `false`, `BroadcastIssueFieldsPatched` SHALL emit `IssuesChanged` (not `IssueFieldsPatched`) so clients fall back to invalidate-and-refetch. The server-side in-place patch SHALL still be applied so the fallback refetch returns fresh data.
-
-#### Scenario: Patch push default delivers instant updates
-- **WHEN** a title edit completes on the server with `PatchPush:Enabled=true`
-- **THEN** the client SHALL receive `IssueFieldsPatched` and apply it via `queryClient.setQueryData` without firing any `GET /api/graph/{projectId}/taskgraph/data` request
-
-#### Scenario: Patch push kill switch falls back cleanly
-- **WHEN** `TaskGraphSnapshot:PatchPush:Enabled` is set to `false`
-- **THEN** field edits SHALL emit `IssuesChanged` and clients SHALL refetch via TanStack invalidation; the server-side snapshot SHALL still be patched so the refetch returns fresh data
-
-#### Scenario: Topology event channel is unaffected by the flag
-- **WHEN** `PatchPush:Enabled` is `false`
-- **THEN** topology-class mutations SHALL continue to emit `IssuesChanged` exactly as they do with the flag `true` (the flag only affects field-patch paths)
-
+#### Scenario: Empty project returns empty list
+- **WHEN** the project has no orphan changes on main
+- **THEN** the response SHALL be `[]` and 200
