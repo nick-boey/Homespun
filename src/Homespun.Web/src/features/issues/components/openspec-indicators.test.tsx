@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { OpenSpecIndicators } from './openspec-indicators'
 import { BranchPresence, ChangePhase } from '@/api'
 
@@ -88,5 +89,38 @@ describe('OpenSpecIndicators', () => {
     const change = screen.getByTestId('openspec-change-symbol')
     expect(change).toHaveTextContent('✓')
     expect(change.className).toMatch(/text-blue-500/)
+  })
+
+  it('clicking the change glyph opens the phase-tree dialog', async () => {
+    const user = userEvent.setup()
+    render(
+      <OpenSpecIndicators
+        state={{
+          branchState: BranchPresence.WITH_CHANGE,
+          changeState: ChangePhase.INCOMPLETE,
+          changeName: 'add-feature-x',
+          phases: [
+            {
+              name: 'Discovery',
+              done: 1,
+              total: 2,
+              tasks: [
+                { description: 'Audit', done: true },
+                { description: 'Plan', done: false },
+              ],
+            },
+          ],
+        }}
+      />
+    )
+    const trigger = screen.getByTestId('openspec-change-symbol')
+    expect(trigger.tagName).toBe('BUTTON')
+    await user.click(trigger)
+    const dialog = await screen.findByTestId('openspec-change-dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('add-feature-x')
+    expect(dialog).toHaveTextContent('Discovery')
+    expect(dialog).toHaveTextContent('Audit')
+    expect(dialog).toHaveTextContent('Plan')
   })
 })

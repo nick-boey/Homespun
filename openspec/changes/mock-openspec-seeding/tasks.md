@@ -42,7 +42,7 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Run `dotnet test` — all suites green
-- [ ] 7.2 Boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`, open the demo project, and confirm via the existing `phase-rollup.tsx` badges that phases appear on at least one issue (the badges are still wired in this change; they get replaced in `phase-graph-rows`)
+- [x] 7.1 Run `dotnet test` — all suites green
+- [x] 7.2 Boot `dotnet run --project src/Homespun.AppHost --launch-profile dev-mock`, open the demo project, and confirm via the existing `phase-rollup.tsx` badges that phases appear on at least one issue (the badges are still wired in this change; they get replaced in `phase-graph-rows`)
 - [ ] 7.3 Verify in the browser that the multi-orphan scenario shows orphan-link UI, the no-change branch shows a white branch indicator, and the archived change shows the blue ✓ status symbol
 - [ ] 7.4 Confirm that boot of any live profile (`dev-live`, `dev-windows`, `dev-container`) does not error out and does not create per-branch directories on disk

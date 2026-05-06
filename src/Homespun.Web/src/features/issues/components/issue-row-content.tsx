@@ -17,7 +17,6 @@ import {
   ISSUE_TYPE_LABELS,
 } from '@/lib/issue-constants'
 import { OpenSpecIndicators } from './openspec-indicators'
-import { PhaseRollupBadges } from './phase-rollup'
 import { TaskGraphMarkerType, type TaskGraphIssueRenderLine } from '../services'
 import { getTypeColor } from './task-graph-svg'
 import { PrStatusIndicator } from './pr-status-indicator'
@@ -181,11 +180,6 @@ export function IssueRowContent({
 
       {/* OpenSpec indicators */}
       {openSpecState ? <OpenSpecIndicators state={openSpecState} /> : null}
-
-      {/* Phase roll-up badges */}
-      {openSpecState?.phases && openSpecState.phases.length > 0 ? (
-        <PhaseRollupBadges changeName={openSpecState.changeName} phases={openSpecState.phases} />
-      ) : null}
 
       {/* Execution mode toggle */}
       <ExecutionModeToggle

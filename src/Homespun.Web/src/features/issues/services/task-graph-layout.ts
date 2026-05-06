@@ -31,11 +31,14 @@ import { generateBranchName } from './branch-name'
 import { ViewMode } from '../types'
 import {
   InvalidGraphError,
+  isIssueNode,
   layoutForNext,
   layoutForTree,
   type GraphLayoutResult,
   type GraphSortConfig,
+  type IssueLayoutNode,
   type LayoutIssue,
+  type LayoutNode,
   type PositionedNode,
 } from './layout'
 
@@ -154,9 +157,15 @@ function getMarker(
 }
 
 /**
- * Computes render lines + edges for a task graph. The server supplies positions
- * and edges; this function maps each node to one render line and threads edges
- * through unchanged. PR rows / separator / load-more synthesis is Homespun-only.
+ * Computes render lines + edges for a task graph from a server-laid-out
+ * `TaskGraphResponse` (legacy / diff path). The server supplies positions and
+ * edges; this function maps each node to one issue render line and threads
+ * edges through unchanged. PR rows / separator / load-more synthesis is
+ * Homespun-only.
+ *
+ * Phase rows are *not* emitted on this path — the diff view (the only
+ * consumer) filters render lines down to issues. The live graph emits phases
+ * via `computeLayoutFromIssues` instead.
  *
  * @param taskGraph - response from the server (Fleece v3 layout).
  * @param viewMode - 'tree' hides PR / separator / load-more entries.
@@ -383,7 +392,7 @@ function getMarkerForIssue(issue: IssueResponse, isActionable: boolean): TaskGra
 }
 
 function buildIssueRenderLine(
-  positioned: PositionedNode<LayoutIssue>,
+  positioned: PositionedNode<IssueLayoutNode | LayoutIssue>,
   issue: IssueResponse,
   decorations: {
     linkedPrs?: Record<string, LinkedPr> | null
@@ -470,7 +479,7 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
 
   const layoutIssues = issues.map(toLayoutIssue)
   const actionable = actionableIds(issues)
-  let layout: GraphLayoutResult<LayoutIssue>
+  let layout: GraphLayoutResult<LayoutNode>
   try {
     if (isTreeView) {
       // Top-down: root at lane 0, children descending.
@@ -534,23 +543,27 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   }
 
   const lines: TaskGraphRenderLine[] = []
-  const hasIssues = layout.layout.nodes.length > 0
+  const issueNodes = layout.layout.nodes.filter((n) => isIssueNode(n.node))
+  const hasIssues = issueNodes.length > 0
 
   if (!isTreeView) {
     lines.push(...emitMergedPrRows(mergedPrs ?? [], hasMorePastPrs, hasIssues, agentStatuses))
   }
 
   for (const positioned of layout.layout.nodes) {
-    const issue = issueById.get(positioned.node.id.toLowerCase())
-    if (!issue) continue
-    lines.push(
-      buildIssueRenderLine(
-        positioned,
-        issue,
-        { linkedPrs, agentStatuses },
-        actionable.has(issue.id ?? '')
+    const node = positioned.node
+    if (isIssueNode(node)) {
+      const issue = issueById.get(node.id.toLowerCase())
+      if (!issue) continue
+      lines.push(
+        buildIssueRenderLine(
+          positioned as PositionedNode<IssueLayoutNode>,
+          issue,
+          { linkedPrs, agentStatuses },
+          actionable.has(issue.id ?? '')
+        )
       )
-    )
+    }
   }
 
   const edges: TaskGraphEdge[] = layout.layout.edges.map((e) => ({

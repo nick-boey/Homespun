@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import type React from 'react'
 import { render } from '@testing-library/react'
 import {
   TaskGraphNodeSvg,
@@ -10,9 +11,7 @@ import {
   buildEdgePath,
   clipCornerRadius,
   getTypeColor,
-  getRowY,
   ROW_HEIGHT,
-  EXPANDED_DETAIL_HEIGHT,
   EDGE_CORNER_RADIUS,
   getLaneCenterX,
   NODE_RADIUS,
@@ -336,40 +335,18 @@ describe('TaskGraphNodeSvg', () => {
   })
 })
 
-describe('getRowY', () => {
-  const issueLines = [{ issueId: 'a' }, { issueId: 'b' }, { issueId: 'c' }, { issueId: 'd' }]
-
-  it('returns 0 for row index 0 with no expanded rows', () => {
-    expect(getRowY(0, new Set(), issueLines)).toBe(0)
-  })
-
-  it('returns rowIndex * ROW_HEIGHT with no expanded rows', () => {
-    expect(getRowY(2, new Set(), issueLines)).toBe(2 * ROW_HEIGHT)
-    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
-  })
-
-  it('adds EXPANDED_DETAIL_HEIGHT for expanded rows above', () => {
-    const expanded = new Set(['a'])
-    // Row 1 should be offset by ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT (row 0 is expanded)
-    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT)
-  })
-
-  it('adds EXPANDED_DETAIL_HEIGHT for each expanded row above', () => {
-    const expanded = new Set(['a', 'b'])
-    // Row 2: (ROW_HEIGHT + EXPANDED) + (ROW_HEIGHT + EXPANDED)
-    expect(getRowY(2, expanded, issueLines)).toBe(2 * ROW_HEIGHT + 2 * EXPANDED_DETAIL_HEIGHT)
-  })
-
-  it('does not add EXPANDED_DETAIL_HEIGHT for expanded row at or after target index', () => {
-    const expanded = new Set(['c']) // row index 2
-    // Row 1 should not be affected by expanded row at index 2
-    expect(getRowY(1, expanded, issueLines)).toBe(ROW_HEIGHT)
-  })
-
-  it('handles empty expanded set', () => {
-    expect(getRowY(3, new Set(), issueLines)).toBe(3 * ROW_HEIGHT)
-  })
-})
+function makeRowRefs(
+  entries: Array<{ id: string; offsetTop: number; offsetHeight?: number }>
+): React.RefObject<Map<string, HTMLDivElement>> {
+  const map = new Map<string, HTMLDivElement>()
+  for (const { id, offsetTop, offsetHeight = ROW_HEIGHT } of entries) {
+    const el = document.createElement('div')
+    Object.defineProperty(el, 'offsetTop', { get: () => offsetTop, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { get: () => offsetHeight, configurable: true })
+    map.set(id, el)
+  }
+  return { current: map } as React.RefObject<Map<string, HTMLDivElement>>
+}
 
 describe('TaskGraphEdges', () => {
   const R = NODE_RADIUS + 2
@@ -525,8 +502,13 @@ describe('TaskGraphEdges', () => {
     expect(path).toHaveAttribute('stroke-width', String(LINE_STROKE_WIDTH))
   })
 
-  it('accounts for expanded rows when computing Y positions', () => {
+  it('accounts for expanded rows when computing Y positions via rowRefs', () => {
+    const EXPANDED_HEIGHT = 500
     const lines = [baseLine('a', 0), baseLine('b', 0)]
+    const rowRefs = makeRowRefs([
+      { id: 'a', offsetTop: 0, offsetHeight: ROW_HEIGHT + EXPANDED_HEIGHT },
+      { id: 'b', offsetTop: ROW_HEIGHT + EXPANDED_HEIGHT },
+    ])
     const edge: TaskGraphEdge = {
       from: 'a',
       to: 'b',
@@ -544,6 +526,7 @@ describe('TaskGraphEdges', () => {
         renderLines={lines}
         expandedIds={new Set(['a'])}
         maxLanes={1}
+        rowRefs={rowRefs}
       />
     )
 
@@ -551,9 +534,10 @@ describe('TaskGraphEdges', () => {
     expect(paths).toHaveLength(1)
 
     const cx = getLaneCenterX(0)
+    // row a: offsetTop=0, Y = 0 + ROW_HEIGHT/2
     const row0CY = ROW_HEIGHT / 2
-    // row b starts after ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT
-    const row1CY = ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT + ROW_HEIGHT / 2
+    // row b: offsetTop=ROW_HEIGHT+EXPANDED_HEIGHT, Y = that + ROW_HEIGHT/2
+    const row1CY = ROW_HEIGHT + EXPANDED_HEIGHT + ROW_HEIGHT / 2
     const d = paths[0].getAttribute('d')
     expect(d).toBe(`M ${cx} ${row0CY + R} L ${cx} ${row1CY - R}`)
   })

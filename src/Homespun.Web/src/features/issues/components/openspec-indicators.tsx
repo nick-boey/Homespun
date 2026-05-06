@@ -5,11 +5,15 @@
  * - Branch symbol: gray (none), white (branch, no change), amber (branch with change).
  * - Change symbol: red ◐ (incomplete), amber ◐ (ready-to-apply), green ● (ready-to-archive),
  *   blue ✓ (archived). Omitted when no change.
+ *
+ * The change symbol is a button — clicking it opens `OpenSpecChangeDialog` with
+ * the phase + task tree for the linked change.
  */
 
 import { BranchPresence, ChangePhase } from '@/api'
 import type { IssueOpenSpecState } from '@/api/generated/types.gen'
 import { cn } from '@/lib/utils'
+import { OpenSpecChangeDialog } from './openspec-change-dialog'
 
 export interface OpenSpecIndicatorsProps {
   state: IssueOpenSpecState | null | undefined
@@ -20,6 +24,22 @@ export function OpenSpecIndicators({ state }: OpenSpecIndicatorsProps) {
   const branchColor = getBranchColor(state.branchState)
   const change = getChangeSymbol(state.changeState)
 
+  const changeGlyph = change ? (
+    <button
+      type="button"
+      aria-label={`change ${state.changeState} — open phase tree`}
+      data-testid="openspec-change-symbol"
+      data-change-state={state.changeState}
+      className={cn(
+        'cursor-pointer text-[12px] leading-none transition-opacity hover:opacity-80',
+        change.color
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {change.glyph}
+    </button>
+  ) : null
+
   return (
     <span className="flex items-center gap-1" data-testid="openspec-indicators">
       <span
@@ -28,16 +48,7 @@ export function OpenSpecIndicators({ state }: OpenSpecIndicatorsProps) {
         data-branch-state={state.branchState}
         className={cn('inline-block h-2 w-2 rounded-full', branchColor)}
       />
-      {change ? (
-        <span
-          aria-label={`change ${state.changeState}`}
-          data-testid="openspec-change-symbol"
-          data-change-state={state.changeState}
-          className={cn('text-[12px] leading-none', change.color)}
-        >
-          {change.glyph}
-        </span>
-      ) : null}
+      {changeGlyph ? <OpenSpecChangeDialog state={state} trigger={changeGlyph} /> : null}
     </span>
   )
 }

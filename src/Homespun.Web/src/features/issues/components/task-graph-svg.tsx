@@ -2,7 +2,8 @@
  * SVG rendering for task graph nodes and connectors.
  */
 
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState, useLayoutEffect } from 'react'
+import type React from 'react'
 import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { IssueType as IssueTypeEnum } from '@/api'
 import type { TaskGraphIssueRenderLine, TaskGraphRenderLine, TaskGraphEdge } from '../services'
@@ -12,26 +13,7 @@ export const LANE_WIDTH = 24
 export const ROW_HEIGHT = 40
 export const NODE_RADIUS = 6
 export const LINE_STROKE_WIDTH = 2
-export const EXPANDED_DETAIL_HEIGHT = 700
 export const EDGE_CORNER_RADIUS = 6
-
-/**
- * Computes the Y offset for a row, accounting for expanded detail panels above it.
- */
-export function getRowY(
-  rowIndex: number,
-  expandedIds: Set<string>,
-  issueLines: { issueId: string }[]
-): number {
-  let y = 0
-  for (let i = 0; i < rowIndex; i++) {
-    y += ROW_HEIGHT
-    if (expandedIds.has(issueLines[i].issueId)) {
-      y += EXPANDED_DETAIL_HEIGHT
-    }
-  }
-  return y
-}
 
 /** Type colors matching the issue acceptance criteria */
 const TYPE_COLORS: Record<string, string> = {
@@ -166,7 +148,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
   )
 })
 
-function LaneGuideLines({ maxLanes }: { maxLanes: number }) {
+export function LaneGuideLines({ maxLanes }: { maxLanes: number }) {
   return (
     <>
       {Array.from({ length: maxLanes }, (_, i) => (
@@ -389,6 +371,12 @@ interface TaskGraphEdgesProps {
   renderLines: TaskGraphRenderLine[]
   expandedIds: Set<string>
   maxLanes: number
+  rowRefs?: React.RefObject<Map<string, HTMLDivElement>>
+}
+
+function getRenderLineId(line: TaskGraphRenderLine): string | null {
+  if (line.type === 'issue') return line.issueId
+  return null
 }
 
 /**
@@ -401,35 +389,50 @@ export const TaskGraphEdges = memo(function TaskGraphEdges({
   renderLines,
   expandedIds,
   maxLanes,
+  rowRefs,
 }: TaskGraphEdgesProps) {
+  // After each expand/collapse, re-render once the DOM has settled so offsetTop
+  // values reflect the new layout. The tick is updated in a layout effect so it
+  // runs synchronously after paint — no visual glitch during the expand animation.
+  const [tick, setTick] = useState(0)
+  useLayoutEffect(() => {
+    setTick((t) => t + 1)
+  }, [expandedIds])
+
   const nodeMap = useMemo(() => {
     const map = new Map<string, { x: number; y: number; color: string }>()
-    let y = 0
+    let fallbackY = 0
     for (const line of renderLines) {
+      const id = getRenderLineId(line)
       if (line.type === 'issue') {
+        const el = id ? rowRefs?.current?.get(id) : null
+        const y = el ? el.offsetTop + ROW_HEIGHT / 2 : fallbackY + ROW_HEIGHT / 2
         map.set(line.issueId, {
           x: getLaneCenterX(line.lane),
-          y: y + ROW_HEIGHT / 2,
+          y,
           color: getTypeColor(line.issueType),
         })
-        y += expandedIds.has(line.issueId) ? ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT : ROW_HEIGHT
+        fallbackY += ROW_HEIGHT
       } else {
-        y += ROW_HEIGHT
+        fallbackY += ROW_HEIGHT
       }
     }
     return map
-  }, [renderLines, expandedIds])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderLines, expandedIds, rowRefs, tick])
 
   const totalHeight = useMemo(() => {
-    let h = 0
-    for (const line of renderLines) {
-      h +=
-        line.type === 'issue' && expandedIds.has(line.issueId)
-          ? ROW_HEIGHT + EXPANDED_DETAIL_HEIGHT
-          : ROW_HEIGHT
+    if (rowRefs?.current && rowRefs.current.size > 0) {
+      let max = 0
+      for (const el of rowRefs.current.values()) {
+        const bottom = el.offsetTop + el.offsetHeight
+        if (bottom > max) max = bottom
+      }
+      return max > 0 ? max : renderLines.length * ROW_HEIGHT
     }
-    return h
-  }, [renderLines, expandedIds])
+    return renderLines.length * ROW_HEIGHT
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderLines, expandedIds, rowRefs, tick])
 
   const width = calculateSvgWidth(maxLanes)
 

@@ -85,7 +85,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         'animate-expand bg-muted/30 border-muted overflow-hidden border-t px-3 py-4',
         'transition-all duration-200 ease-out'
       )}
-      style={{ marginLeft: svgWidth, height: 700 }}
+      style={{ marginLeft: svgWidth }}
     >
       {/* Header with badges and close button */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -229,7 +229,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
       )}
 
       {/* Description */}
-      <div className="mb-4 max-h-48 overflow-y-auto" data-testid="issue-description">
+      <div className="mb-4 max-h-[400px] overflow-y-auto" data-testid="issue-description">
         {line.description ? (
           <Markdown className="text-foreground prose-sm max-w-none">{line.description}</Markdown>
         ) : (

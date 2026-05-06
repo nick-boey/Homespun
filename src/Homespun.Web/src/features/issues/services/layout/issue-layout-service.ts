@@ -22,11 +22,11 @@ import type {
   GraphLayoutRequest,
   GraphLayoutResult,
   GraphSortConfig,
-  IGraphNode,
   InactiveVisibility,
   LayoutMode,
 } from './types'
 import { DefaultGraphSortConfig } from './types'
+import type { IssueLayoutNode, LayoutNode } from './nodes'
 
 export type IssueStatus =
   | 'draft'
@@ -78,16 +78,20 @@ const idEq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 const activeParents = (issue: LayoutIssue): readonly ParentIssueRef[] =>
   (issue.parentIssues ?? []).filter((p) => p.active !== false && p.parentIssue)
 
-interface IssueGraphNode extends IGraphNode {
-  readonly issue: LayoutIssue
-}
-
-function toGraphNode(issue: LayoutIssue): IssueGraphNode {
+function toIssueNode(issue: LayoutIssue): IssueLayoutNode {
   return {
+    kind: 'issue',
     issue,
     id: issue.id,
     childSequencing: issue.executionMode === 'parallel' ? 'parallel' : 'series',
   }
+}
+
+export interface LayoutOptions {
+  readonly visibility?: InactiveVisibility
+  readonly assignedTo?: string | null
+  readonly sort?: GraphSortConfig | null
+  readonly mode?: LayoutMode
 }
 
 function buildIssueLookup(issues: readonly LayoutIssue[]): Map<string, LayoutIssue> {
@@ -334,7 +338,7 @@ function getIncompleteChildrenForLayout(
   return kids.filter(hasActive)
 }
 
-function emptyLayout(): GraphLayout<LayoutIssue> {
+function emptyLayout(): GraphLayout<LayoutNode> {
   return { nodes: [], edges: [], totalRows: 0, totalLanes: 0 }
 }
 
@@ -351,7 +355,7 @@ export class IssueLayoutService {
     assignedTo: string | null = null,
     sort: GraphSortConfig | null = null,
     mode: LayoutMode = 'issueGraph'
-  ): GraphLayoutResult<LayoutIssue> {
+  ): GraphLayoutResult<LayoutNode> {
     if (issues.length === 0) {
       return { ok: true, layout: emptyLayout() }
     }
@@ -380,7 +384,7 @@ export class IssueLayoutService {
     assignedTo: string | null = null,
     sort: GraphSortConfig | null = null,
     mode: LayoutMode = 'issueGraph'
-  ): GraphLayoutResult<LayoutIssue> {
+  ): GraphLayoutResult<LayoutNode> {
     if (matchedIds === null) {
       return this.layoutForTree(issues, visibility, assignedTo, sort, mode)
     }
@@ -404,7 +408,7 @@ export class IssueLayoutService {
     display: LayoutIssue[],
     sort: GraphSortConfig | null,
     mode: LayoutMode
-  ): GraphLayoutResult<LayoutIssue> {
+  ): GraphLayoutResult<LayoutNode> {
     const displayLookup = buildIssueLookup(display)
     const childrenOf = buildChildrenLookup(display, displayLookup)
     const roots = display.filter((i) => {
@@ -424,14 +428,14 @@ export class IssueLayoutService {
       return { ok: true, layout: emptyLayout() }
     }
 
-    const nodeMap = new Map<string, IssueGraphNode>()
+    const nodeMap = new Map<string, LayoutNode>()
     for (const issue of display) {
-      nodeMap.set(issue.id.toLowerCase(), toGraphNode(issue))
+      nodeMap.set(issue.id.toLowerCase(), toIssueNode(issue))
     }
-    const allNodes = display.map((i) => nodeMap.get(i.id.toLowerCase())!)
+    const allNodes: LayoutNode[] = display.map((i) => nodeMap.get(i.id.toLowerCase())!)
     const rootNodes = roots.map((i) => nodeMap.get(i.id.toLowerCase())!)
 
-    const request: GraphLayoutRequest<IssueGraphNode> = {
+    const request: GraphLayoutRequest<LayoutNode> = {
       allNodes,
       rootFinder: () => rootNodes,
       childIterator: (parent) => {
@@ -447,32 +451,13 @@ export class IssueLayoutService {
       throw new InvalidGraphError(result.cycle)
     }
 
-    // Map IssueGraphNode-positioned output back to LayoutIssue-positioned output.
     return {
       ok: true,
       layout: {
         totalRows: result.layout.totalRows,
         totalLanes: result.layout.totalLanes,
-        nodes: result.layout.nodes.map((n) => ({
-          node: n.node.issue,
-          row: n.row,
-          lane: n.lane,
-          appearanceIndex: n.appearanceIndex,
-          totalAppearances: n.totalAppearances,
-        })),
-        edges: result.layout.edges.map((e) => ({
-          id: e.id,
-          from: e.from.issue,
-          to: e.to.issue,
-          kind: e.kind,
-          startRow: e.startRow,
-          startLane: e.startLane,
-          endRow: e.endRow,
-          endLane: e.endLane,
-          pivotLane: e.pivotLane,
-          sourceAttach: e.sourceAttach,
-          targetAttach: e.targetAttach,
-        })),
+        nodes: result.layout.nodes,
+        edges: result.layout.edges,
       },
     }
   }
@@ -482,13 +467,8 @@ const defaultService = new IssueLayoutService()
 
 export function layoutForTree(
   issues: readonly LayoutIssue[],
-  options?: {
-    visibility?: InactiveVisibility
-    assignedTo?: string | null
-    sort?: GraphSortConfig | null
-    mode?: LayoutMode
-  }
-): GraphLayoutResult<LayoutIssue> {
+  options?: LayoutOptions
+): GraphLayoutResult<LayoutNode> {
   return defaultService.layoutForTree(
     issues,
     options?.visibility ?? 'hide',
@@ -501,13 +481,8 @@ export function layoutForTree(
 export function layoutForNext(
   issues: readonly LayoutIssue[],
   matchedIds: ReadonlySet<string> | null,
-  options?: {
-    visibility?: InactiveVisibility
-    assignedTo?: string | null
-    sort?: GraphSortConfig | null
-    mode?: LayoutMode
-  }
-): GraphLayoutResult<LayoutIssue> {
+  options?: LayoutOptions
+): GraphLayoutResult<LayoutNode> {
   return defaultService.layoutForNext(
     issues,
     matchedIds,

@@ -243,15 +243,18 @@ export const TaskGraphView = memo(
       onFilterMatchCountChange(matchCount)
     }, [renderLines, appliedFilter, onFilterMatchCountChange])
 
-    // Compute max lanes for SVG sizing
+    // Compute max lanes for SVG sizing.
     const maxLanes = useMemo(() => {
       return Math.max(1, ...renderLines.filter(isIssueRenderLine).map((line) => line.lane + 1))
     }, [renderLines])
 
-    // Issue render lines only
+    // Issue render lines only (used for create/move/edit operations + nav).
     const issueRenderLines = useMemo(() => {
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
+
+    // Lines navigable by keyboard.
+    const navigableLines = issueRenderLines
 
     // Search match count
     const searchMatchCount = useMemo(() => {
@@ -262,17 +265,15 @@ export const TaskGraphView = memo(
       ).length
     }, [renderLines, searchQuery])
 
-    // Get selected issue index (find first render line matching the selected issue ID)
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
-      return issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
-    }, [selectedIssueId, issueRenderLines])
+      return navigableLines.findIndex((line) => line.issueId === selectedIssueId)
+    }, [selectedIssueId, navigableLines])
 
-    // Get selected render line
     const selectedRenderLine = useMemo(() => {
       if (selectedIndex < 0) return null
-      return issueRenderLines[selectedIndex] ?? null
-    }, [selectedIndex, issueRenderLines])
+      return navigableLines[selectedIndex] ?? null
+    }, [selectedIndex, navigableLines])
 
     // SignalR subscriptions live on each per-resource hook; no extra wiring
     // is needed here.
@@ -612,27 +613,28 @@ export const TaskGraphView = memo(
           return
         }
 
-        // If nothing selected, select first issue on any nav key
-        if (!selectedIssueId && issueRenderLines.length > 0) {
+        // If nothing selected, select first navigable row on any nav key
+        if (!selectedIssueId && navigableLines.length > 0) {
           if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
             event.preventDefault()
-            onSelectIssue?.(issueRenderLines[0].issueId)
+            onSelectIssue?.(navigableLines[0].issueId)
             return
           }
         }
 
         if (!selectedIssueId) return
 
-        const currentIndex = issueRenderLines.findIndex((line) => line.issueId === selectedIssueId)
+        const currentIndex = navigableLines.findIndex((line) => line.issueId === selectedIssueId)
         if (currentIndex === -1) return
 
+        const currentLine = navigableLines[currentIndex]
+
         switch (event.key) {
-          // Navigation
           case 'ArrowDown':
           case 'j': {
             event.preventDefault()
-            const nextIndex = Math.min(currentIndex + 1, issueRenderLines.length - 1)
-            const nextLine = issueRenderLines[nextIndex]
+            const nextIndex = Math.min(currentIndex + 1, navigableLines.length - 1)
+            const nextLine = navigableLines[nextIndex]
             onSelectIssue?.(nextLine.issueId)
             rowRefs.current.get(getRenderKey(nextLine))?.scrollIntoView({ block: 'nearest' })
             break
@@ -642,19 +644,16 @@ export const TaskGraphView = memo(
           case 'k': {
             event.preventDefault()
             const prevIndex = Math.max(currentIndex - 1, 0)
-            const prevLine = issueRenderLines[prevIndex]
+            const prevLine = navigableLines[prevIndex]
             onSelectIssue?.(prevLine.issueId)
             rowRefs.current.get(getRenderKey(prevLine))?.scrollIntoView({ block: 'nearest' })
             break
           }
 
-          // Parent/child navigation
           case 'ArrowLeft':
           case 'h': {
             event.preventDefault()
-            // Navigate to primary parent by issue id
-            const currentLine = issueRenderLines[currentIndex]
-            const parentId = currentLine?.parentIssueId
+            const parentId = currentLine.parentIssueId
             if (parentId) {
               const parentLine = issueRenderLines.find((line) => line.issueId === parentId)
               if (parentLine) {
@@ -668,25 +667,20 @@ export const TaskGraphView = memo(
           case 'ArrowRight':
           case 'l': {
             event.preventDefault()
-            // Navigate to first child whose parentIssueId points at the current issue
-            const currentLine = issueRenderLines[currentIndex]
-            if (currentLine) {
-              const childLine = issueRenderLines.find(
-                (line) => line.parentIssueId === currentLine.issueId
-              )
-              if (childLine) {
-                onSelectIssue?.(childLine.issueId)
-                rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
-              }
+            const childLine = issueRenderLines.find(
+              (line) => line.parentIssueId === currentLine.issueId
+            )
+            if (childLine) {
+              onSelectIssue?.(childLine.issueId)
+              rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
 
-          // Jump to first/last
           case 'g': {
             if (!event.shiftKey) {
               event.preventDefault()
-              const firstLine = issueRenderLines[0]
+              const firstLine = navigableLines[0]
               if (firstLine) {
                 onSelectIssue?.(firstLine.issueId)
                 rowRefs.current.get(getRenderKey(firstLine))?.scrollIntoView({ block: 'nearest' })
@@ -697,7 +691,7 @@ export const TaskGraphView = memo(
 
           case 'G': {
             event.preventDefault()
-            const lastLine = issueRenderLines[issueRenderLines.length - 1]
+            const lastLine = navigableLines[navigableLines.length - 1]
             if (lastLine) {
               onSelectIssue?.(lastLine.issueId)
               rowRefs.current.get(getRenderKey(lastLine))?.scrollIntoView({ block: 'nearest' })
@@ -705,7 +699,6 @@ export const TaskGraphView = memo(
             break
           }
 
-          // Creation
           case 'o': {
             if (!event.shiftKey) {
               event.preventDefault()
@@ -720,7 +713,6 @@ export const TaskGraphView = memo(
             break
           }
 
-          // Editing existing
           case 'i': {
             event.preventDefault()
             handleStartEditAtStart()
@@ -739,14 +731,12 @@ export const TaskGraphView = memo(
             break
           }
 
-          // Expand/collapse
           case ' ': {
             event.preventDefault()
             toggleExpanded(selectedIssueId)
             break
           }
 
-          // Open full edit page
           case 'Enter':
           case 'e': {
             event.preventDefault()
@@ -754,9 +744,7 @@ export const TaskGraphView = memo(
             break
           }
 
-          // Deselect
           case 'Escape': {
-            // Escape to close expanded row or deselect
             event.preventDefault()
             if (expandedIds.has(selectedIssueId)) {
               toggleExpanded(selectedIssueId)
@@ -770,6 +758,7 @@ export const TaskGraphView = memo(
       [
         editMode,
         selectedIssueId,
+        navigableLines,
         issueRenderLines,
         onSelectIssue,
         onEditIssue,
@@ -945,6 +934,7 @@ export const TaskGraphView = memo(
             renderLines={renderLines}
             expandedIds={expandedIds}
             maxLanes={maxLanes}
+            rowRefs={rowRefs}
           />
           {renderLines.map((line, index) => {
             if (isIssueRenderLine(line)) {

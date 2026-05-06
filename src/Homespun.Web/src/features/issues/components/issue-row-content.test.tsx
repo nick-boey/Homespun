@@ -60,7 +60,7 @@ const baseOpenSpecState: IssueOpenSpecState = {
 }
 
 describe('IssueRowContent', () => {
-  it('renders title, type pill, status pill, openspec indicators, phase rollup, exec-mode and assignee', () => {
+  it('renders title, type pill, status pill, openspec indicators, exec-mode and assignee', () => {
     render(
       <IssueRowContent
         line={makeLine({ assignedTo: 'dev@example.com' })}
@@ -75,11 +75,10 @@ describe('IssueRowContent', () => {
     // Type pill — "Task" label
     expect(screen.getByRole('button', { name: /task/i })).toBeInTheDocument()
     // Status pill — "Open" compact label
-    expect(screen.getByRole('button', { name: /open/i })).toBeInTheDocument()
+    expect(screen.getByTestId('issue-row-status-pill')).toHaveTextContent(/open/i)
     // OpenSpec indicators mount
     expect(screen.getByTestId('openspec-indicators')).toBeInTheDocument()
-    // Phase rollup badges present (one per phase)
-    expect(screen.getAllByText(/Phase/i).length).toBeGreaterThan(0)
+    // Phase rollup badges are no longer rendered inline (phases appear as graph rows)
     // Execution-mode toggle present
     expect(
       screen.getByRole('button', { name: /series execution mode|parallel execution mode/i })

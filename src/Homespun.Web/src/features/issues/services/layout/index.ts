@@ -39,3 +39,7 @@ export type {
 export { buildOccupancy, walkEdge } from './edge-router'
 
 export type { EdgeOccupancy, EdgeSegmentKind, OccupancyCell } from './edge-router'
+
+export { isIssueNode } from './nodes'
+
+export type { IssueLayoutNode, LayoutNode } from './nodes'
