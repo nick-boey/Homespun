@@ -21,8 +21,6 @@ import type {
   LinkedPr,
   AgentStatusData,
   IssueResponse,
-  IssueOpenSpecState,
-  PhaseTaskSummary,
   PullRequestWithTime,
   IssueType as IssueTypeEnum,
   IssueStatus as IssueStatusEnum,
@@ -34,7 +32,6 @@ import { ViewMode } from '../types'
 import {
   InvalidGraphError,
   isIssueNode,
-  isPhaseNode,
   layoutForNext,
   layoutForTree,
   type GraphLayoutResult,
@@ -42,8 +39,6 @@ import {
   type IssueLayoutNode,
   type LayoutIssue,
   type LayoutNode,
-  type LayoutPhase,
-  type PhaseLayoutNode,
   type PositionedNode,
 } from './layout'
 
@@ -115,31 +110,14 @@ export interface TaskGraphLoadMoreRenderLine {
   type: 'loadMore'
 }
 
-export interface TaskGraphPhaseRenderLine {
-  type: 'phase'
-  /** Stable id: `${issueId}::phase::${phaseName}`. Never collides with fleece issue ids. */
-  phaseId: string
-  parentIssueId: string
-  lane: number
-  phaseName: string
-  done: number
-  total: number
-  tasks: PhaseTaskSummary[]
-}
-
 export type TaskGraphRenderLine =
   | TaskGraphIssueRenderLine
   | TaskGraphSeparatorRenderLine
   | TaskGraphPrRenderLine
   | TaskGraphLoadMoreRenderLine
-  | TaskGraphPhaseRenderLine
 
 export function isIssueRenderLine(line: TaskGraphRenderLine): line is TaskGraphIssueRenderLine {
   return line.type === 'issue'
-}
-
-export function isPhaseRenderLine(line: TaskGraphRenderLine): line is TaskGraphPhaseRenderLine {
-  return line.type === 'phase'
 }
 
 export function isSeparatorRenderLine(
@@ -323,8 +301,6 @@ export interface ComputeLayoutInput {
   sortConfig?: GraphSortConfig | null
   /** Subset of issue ids that should appear (next mode only). */
   matchedIds?: ReadonlySet<string> | null
-  /** OpenSpec phase data per issue id, from `useOpenSpecStates`. Used to synthesise phase rows. */
-  openSpecStates?: Record<string, IssueOpenSpecState> | null
 }
 
 export type ClientLayoutResult =
@@ -447,53 +423,6 @@ function buildIssueRenderLine(
   }
 }
 
-function buildPhaseRenderLine(
-  positioned: PositionedNode<PhaseLayoutNode>
-): TaskGraphPhaseRenderLine {
-  const node = positioned.node
-  return {
-    type: 'phase',
-    phaseId: node.id,
-    parentIssueId: node.parentIssueId,
-    lane: positioned.lane,
-    phaseName: node.phase.name,
-    done: node.phase.done,
-    total: node.phase.total,
-    tasks: node.phase.tasks.map((t) => ({
-      description: t.description,
-      done: t.done,
-    })),
-  }
-}
-
-/**
- * Translates the API-level `IssueOpenSpecState` map into a layout-level phases
- * map keyed by lower-cased issue id. Each phase carries the data the engine
- * needs to lay it out plus the data the renderer needs to display it (name,
- * done/total, tasks).
- */
-function buildPhasesByIssueId(
-  openSpecStates: Record<string, IssueOpenSpecState> | null | undefined
-): ReadonlyMap<string, readonly LayoutPhase[]> | null {
-  if (!openSpecStates) return null
-  const out = new Map<string, readonly LayoutPhase[]>()
-  for (const [issueId, state] of Object.entries(openSpecStates)) {
-    const raw = state?.phases
-    if (!raw || raw.length === 0) continue
-    const phases: LayoutPhase[] = raw.map((phase, phaseIdx) => ({
-      name: phase.name ?? `Phase ${phaseIdx + 1}`,
-      done: phase.done ?? 0,
-      total: phase.total ?? 0,
-      tasks: (phase.tasks ?? []).map((t) => ({
-        description: t.description,
-        done: t.done ?? false,
-      })),
-    }))
-    out.set(issueId.toLowerCase(), phases)
-  }
-  return out.size > 0 ? out : null
-}
-
 function emitMergedPrRows(
   mergedPrs: readonly PullRequestWithTime[],
   hasMorePastPrs: boolean,
@@ -544,14 +473,12 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
     assigneeFilter = null,
     sortConfig = null,
     matchedIds = null,
-    openSpecStates = null,
   } = input
 
   const isTreeView = viewMode === ViewMode.Tree
 
   const layoutIssues = issues.map(toLayoutIssue)
   const actionable = actionableIds(issues)
-  const phases = buildPhasesByIssueId(openSpecStates)
   let layout: GraphLayoutResult<LayoutNode>
   try {
     if (isTreeView) {
@@ -560,7 +487,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
         assignedTo: assigneeFilter,
         sort: sortConfig,
         mode: 'normalTree',
-        phases,
       })
     } else {
       // Next mode: explicit matchedIds wins; otherwise seed from the
@@ -572,14 +498,12 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
           assignedTo: assigneeFilter,
           sort: sortConfig,
           mode: 'issueGraph',
-          phases,
         })
       } else {
         layout = layoutForNext(layoutIssues, seed, {
           assignedTo: assigneeFilter,
           sort: sortConfig,
           mode: 'issueGraph',
-          phases,
         })
       }
     }
@@ -596,8 +520,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   for (const i of issues) if (i.id) issueById.set(i.id.toLowerCase(), i)
 
   // Cycle: degraded fallback — emit a flat list of every issue, no edges.
-  // Phases are dropped on this path; the engine couldn't lay them out, and
-  // re-injecting them would just amplify the broken state.
   if (!layout.ok) {
     const flatLines: TaskGraphRenderLine[] = []
     for (let idx = 0; idx < issues.length; idx++) {
@@ -641,8 +563,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
           actionable.has(issue.id ?? '')
         )
       )
-    } else if (isPhaseNode(node)) {
-      lines.push(buildPhaseRenderLine(positioned as PositionedNode<PhaseLayoutNode>))
     }
   }
 

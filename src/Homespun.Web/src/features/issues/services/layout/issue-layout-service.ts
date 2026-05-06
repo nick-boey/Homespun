@@ -26,8 +26,7 @@ import type {
   LayoutMode,
 } from './types'
 import { DefaultGraphSortConfig } from './types'
-import type { IssueLayoutNode, LayoutNode, LayoutPhase, PhaseLayoutNode } from './nodes'
-import { phaseNodeId } from './nodes'
+import type { IssueLayoutNode, LayoutNode } from './nodes'
 
 export type IssueStatus =
   | 'draft'
@@ -88,25 +87,11 @@ function toIssueNode(issue: LayoutIssue): IssueLayoutNode {
   }
 }
 
-function toPhaseNode(parentIssueId: string, phase: LayoutPhase): PhaseLayoutNode {
-  return {
-    kind: 'phase',
-    id: phaseNodeId(parentIssueId, phase.name),
-    childSequencing: 'series',
-    parentIssueId,
-    phase,
-  }
-}
-
-/** Optional input keyed by issue id (case-insensitive lookup) → ordered phase chain. */
-export type PhasesByIssueId = ReadonlyMap<string, readonly LayoutPhase[]>
-
 export interface LayoutOptions {
   readonly visibility?: InactiveVisibility
   readonly assignedTo?: string | null
   readonly sort?: GraphSortConfig | null
   readonly mode?: LayoutMode
-  readonly phases?: PhasesByIssueId | null
 }
 
 function buildIssueLookup(issues: readonly LayoutIssue[]): Map<string, LayoutIssue> {
@@ -369,8 +354,7 @@ export class IssueLayoutService {
     visibility: InactiveVisibility = 'hide',
     assignedTo: string | null = null,
     sort: GraphSortConfig | null = null,
-    mode: LayoutMode = 'issueGraph',
-    phases: PhasesByIssueId | null = null
+    mode: LayoutMode = 'issueGraph'
   ): GraphLayoutResult<LayoutNode> {
     if (issues.length === 0) {
       return { ok: true, layout: emptyLayout() }
@@ -390,7 +374,7 @@ export class IssueLayoutService {
       filtered.push(...collectTerminalIssuesWithActiveDescendants(filtered, fullLookup))
     }
     const display = collectIssuesToDisplay(filtered, fullLookup)
-    return this.runEngine(display, sort, mode, phases)
+    return this.runEngine(display, sort, mode)
   }
 
   layoutForNext(
@@ -399,11 +383,10 @@ export class IssueLayoutService {
     visibility: InactiveVisibility = 'hide',
     assignedTo: string | null = null,
     sort: GraphSortConfig | null = null,
-    mode: LayoutMode = 'issueGraph',
-    phases: PhasesByIssueId | null = null
+    mode: LayoutMode = 'issueGraph'
   ): GraphLayoutResult<LayoutNode> {
     if (matchedIds === null) {
-      return this.layoutForTree(issues, visibility, assignedTo, sort, mode, phases)
+      return this.layoutForTree(issues, visibility, assignedTo, sort, mode)
     }
     if (issues.length === 0 || matchedIds.size === 0) {
       return { ok: true, layout: emptyLayout() }
@@ -418,14 +401,13 @@ export class IssueLayoutService {
       return { ok: true, layout: emptyLayout() }
     }
     const display = collectMatchedAndAncestors(matched, matchedIds, fullLookup)
-    return this.runEngine(display, sort, mode, phases)
+    return this.runEngine(display, sort, mode)
   }
 
   private runEngine(
     display: LayoutIssue[],
     sort: GraphSortConfig | null,
-    mode: LayoutMode,
-    phases: PhasesByIssueId | null
+    mode: LayoutMode
   ): GraphLayoutResult<LayoutNode> {
     const displayLookup = buildIssueLookup(display)
     const childrenOf = buildChildrenLookup(display, displayLookup)
@@ -446,56 +428,20 @@ export class IssueLayoutService {
       return { ok: true, layout: emptyLayout() }
     }
 
-    // Synthesise one PhaseLayoutNode per phase per issue with phases. Phase
-    // nodes join the engine's input set as the LAST children (siblings) of
-    // their owning issue, in chain order (phase[0], phase[1], …). All phase
-    // nodes are leaves (childIterator returns nothing). The engine then
-    // assigns rows/lanes/edges using the same rules it uses for real issues:
-    // series-mode parents stack leaf siblings into a single column;
-    // normalTree puts all children at parent.lane + 1.
-    const phaseNodesByIssueId = new Map<string, PhaseLayoutNode[]>()
-    if (phases) {
-      for (const issue of display) {
-        const list = phases.get(issue.id.toLowerCase())
-        if (!list || list.length === 0) continue
-        phaseNodesByIssueId.set(
-          issue.id.toLowerCase(),
-          list.map((p) => toPhaseNode(issue.id, p))
-        )
-      }
-    }
-
     const nodeMap = new Map<string, LayoutNode>()
     for (const issue of display) {
       nodeMap.set(issue.id.toLowerCase(), toIssueNode(issue))
     }
-    for (const chain of phaseNodesByIssueId.values()) {
-      for (const phaseNode of chain) {
-        nodeMap.set(phaseNode.id.toLowerCase(), phaseNode)
-      }
-    }
-    const allNodes: LayoutNode[] = []
-    for (const issue of display) {
-      allNodes.push(nodeMap.get(issue.id.toLowerCase())!)
-      const chain = phaseNodesByIssueId.get(issue.id.toLowerCase())
-      if (chain) allNodes.push(...chain)
-    }
+    const allNodes: LayoutNode[] = display.map((i) => nodeMap.get(i.id.toLowerCase())!)
     const rootNodes = roots.map((i) => nodeMap.get(i.id.toLowerCase())!)
 
     const request: GraphLayoutRequest<LayoutNode> = {
       allNodes,
       rootFinder: () => rootNodes,
       childIterator: (parent) => {
-        if (parent.kind === 'phase') return []
         const issue = parent.issue
         const kids = getIncompleteChildrenForLayout(issue, childrenOf)
-        const childNodes: LayoutNode[] = kids.map((k) => nodeMap.get(k.id.toLowerCase())!)
-        // Phases appended LAST so series-mode parents emit them after real
-        // children. They are leaves, so series-mode leaf-stacking puts them
-        // in a single column at the lane that was last emitted.
-        const chain = phaseNodesByIssueId.get(issue.id.toLowerCase())
-        if (chain && chain.length > 0) childNodes.push(...chain)
-        return childNodes
+        return kids.map((k) => nodeMap.get(k.id.toLowerCase())!)
       },
       mode,
     }
@@ -528,8 +474,7 @@ export function layoutForTree(
     options?.visibility ?? 'hide',
     options?.assignedTo ?? null,
     options?.sort ?? null,
-    options?.mode ?? 'issueGraph',
-    options?.phases ?? null
+    options?.mode ?? 'issueGraph'
   )
 }
 
@@ -544,7 +489,6 @@ export function layoutForNext(
     options?.visibility ?? 'hide',
     options?.assignedTo ?? null,
     options?.sort ?? null,
-    options?.mode ?? 'issueGraph',
-    options?.phases ?? null
+    options?.mode ?? 'issueGraph'
   )
 }

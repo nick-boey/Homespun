@@ -40,12 +40,6 @@ export { buildOccupancy, walkEdge } from './edge-router'
 
 export type { EdgeOccupancy, EdgeSegmentKind, OccupancyCell } from './edge-router'
 
-export { isIssueNode, isPhaseNode, phaseNodeId } from './nodes'
+export { isIssueNode } from './nodes'
 
-export type {
-  IssueLayoutNode,
-  LayoutNode,
-  LayoutPhase,
-  LayoutPhaseTask,
-  PhaseLayoutNode,
-} from './nodes'
+export type { IssueLayoutNode, LayoutNode } from './nodes'

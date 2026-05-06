@@ -6,12 +6,7 @@ import { memo, useMemo, useState, useLayoutEffect } from 'react'
 import type React from 'react'
 import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { IssueType as IssueTypeEnum } from '@/api'
-import type {
-  TaskGraphIssueRenderLine,
-  TaskGraphPhaseRenderLine,
-  TaskGraphRenderLine,
-  TaskGraphEdge,
-} from '../services'
+import type { TaskGraphIssueRenderLine, TaskGraphRenderLine, TaskGraphEdge } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
 export const LANE_WIDTH = 24
@@ -381,7 +376,6 @@ interface TaskGraphEdgesProps {
 
 function getRenderLineId(line: TaskGraphRenderLine): string | null {
   if (line.type === 'issue') return line.issueId
-  if (line.type === 'phase') return (line as TaskGraphPhaseRenderLine).phaseId
   return null
 }
 
@@ -417,17 +411,6 @@ export const TaskGraphEdges = memo(function TaskGraphEdges({
           x: getLaneCenterX(line.lane),
           y,
           color: getTypeColor(line.issueType),
-        })
-        fallbackY += ROW_HEIGHT
-      } else if (line.type === 'phase') {
-        const phaseLine = line as TaskGraphPhaseRenderLine
-        const el = id ? rowRefs?.current?.get(id) : null
-        const y = el ? el.offsetTop + ROW_HEIGHT / 2 : fallbackY + ROW_HEIGHT / 2
-        const isComplete = phaseLine.total > 0 && phaseLine.done >= phaseLine.total
-        map.set(phaseLine.phaseId, {
-          x: getLaneCenterX(phaseLine.lane),
-          y,
-          color: isComplete ? '#22c55e' : '#6b7280',
         })
         fallbackY += ROW_HEIGHT
       } else {

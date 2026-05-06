@@ -75,7 +75,7 @@ describe('IssueRowContent', () => {
     // Type pill — "Task" label
     expect(screen.getByRole('button', { name: /task/i })).toBeInTheDocument()
     // Status pill — "Open" compact label
-    expect(screen.getByRole('button', { name: /open/i })).toBeInTheDocument()
+    expect(screen.getByTestId('issue-row-status-pill')).toHaveTextContent(/open/i)
     // OpenSpec indicators mount
     expect(screen.getByTestId('openspec-indicators')).toBeInTheDocument()
     // Phase rollup badges are no longer rendered inline (phases appear as graph rows)

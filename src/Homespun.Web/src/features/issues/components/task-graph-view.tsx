@@ -23,7 +23,6 @@ import { IssuesEmptyState } from './issues-empty-state'
 import {
   computeLayoutFromIssues,
   isIssueRenderLine,
-  isPhaseRenderLine,
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
@@ -58,18 +57,10 @@ import {
   TaskGraphLoadMoreRow,
   TaskGraphExpandedDetails,
 } from './task-graph-row'
-import { TaskGraphPhaseRow } from './task-graph-phase-row'
-import { InlinePhaseDetailRow } from './inline-phase-detail-row'
 import { InlineIssueEditor } from './inline-issue-editor'
 import { OrphanedChangesList } from './orphan-changes'
 import { aggregateOrphansFromInputs } from '../services/orphan-aggregation'
 import { ROW_HEIGHT, LANE_WIDTH, getTypeColor, TaskGraphEdges } from './task-graph-svg'
-
-function getNavLineId(line: { type: string; issueId?: string; phaseId?: string }): string {
-  if (line.type === 'issue') return line.issueId ?? ''
-  if (line.type === 'phase') return line.phaseId ?? ''
-  return ''
-}
 
 export interface TaskGraphViewProps {
   projectId: string
@@ -197,7 +188,6 @@ export const TaskGraphView = memo(
         mergedPrs: mergedPrsHook.mergedPrs ?? null,
         hasMorePastPrs: false,
         viewMode,
-        openSpecStates: openSpecStatesHook.openSpecStates ?? null,
       })
     }, [
       issues,
@@ -205,7 +195,6 @@ export const TaskGraphView = memo(
       agentStatusesHook.agentStatuses,
       mergedPrsHook.mergedPrs,
       viewMode,
-      openSpecStatesHook.openSpecStates,
     ])
     const unfilteredRenderLines = layoutResult.lines
     const edges = layoutResult.edges
@@ -254,25 +243,18 @@ export const TaskGraphView = memo(
       onFilterMatchCountChange(matchCount)
     }, [renderLines, appliedFilter, onFilterMatchCountChange])
 
-    // Compute max lanes for SVG sizing — include phase lanes (lane + 1 of parent)
+    // Compute max lanes for SVG sizing.
     const maxLanes = useMemo(() => {
-      return Math.max(
-        1,
-        ...renderLines
-          .filter((l) => l.type === 'issue' || l.type === 'phase')
-          .map((line) => line.lane + 1)
-      )
+      return Math.max(1, ...renderLines.filter(isIssueRenderLine).map((line) => line.lane + 1))
     }, [renderLines])
 
-    // Issue render lines only (used for create/move/edit operations)
+    // Issue render lines only (used for create/move/edit operations + nav).
     const issueRenderLines = useMemo(() => {
       return renderLines.filter(isIssueRenderLine)
     }, [renderLines])
 
-    // Lines navigable by keyboard: issues + phases in render order
-    const navigableLines = useMemo(() => {
-      return renderLines.filter((l) => l.type === 'issue' || l.type === 'phase')
-    }, [renderLines])
+    // Lines navigable by keyboard.
+    const navigableLines = issueRenderLines
 
     // Search match count
     const searchMatchCount = useMemo(() => {
@@ -283,13 +265,11 @@ export const TaskGraphView = memo(
       ).length
     }, [renderLines, searchQuery])
 
-    // Get selected index within navigable lines
     const selectedIndex = useMemo(() => {
       if (!selectedIssueId) return -1
-      return navigableLines.findIndex((line) => getNavLineId(line) === selectedIssueId)
+      return navigableLines.findIndex((line) => line.issueId === selectedIssueId)
     }, [selectedIssueId, navigableLines])
 
-    // Get selected render line (may be an issue or phase line)
     const selectedRenderLine = useMemo(() => {
       if (selectedIndex < 0) return null
       return navigableLines[selectedIndex] ?? null
@@ -578,7 +558,7 @@ export const TaskGraphView = memo(
     // ============================================================================
 
     const handleStartEditAtStart = useCallback(() => {
-      if (!selectedRenderLine || !isIssueRenderLine(selectedRenderLine)) return
+      if (!selectedRenderLine) return
       setPendingEdit({
         issueId: selectedRenderLine.issueId,
         title: selectedRenderLine.title,
@@ -589,7 +569,7 @@ export const TaskGraphView = memo(
     }, [selectedRenderLine])
 
     const handleStartEditAtEnd = useCallback(() => {
-      if (!selectedRenderLine || !isIssueRenderLine(selectedRenderLine)) return
+      if (!selectedRenderLine) return
       setPendingEdit({
         issueId: selectedRenderLine.issueId,
         title: selectedRenderLine.title,
@@ -600,7 +580,7 @@ export const TaskGraphView = memo(
     }, [selectedRenderLine])
 
     const handleStartReplace = useCallback(() => {
-      if (!selectedRenderLine || !isIssueRenderLine(selectedRenderLine)) return
+      if (!selectedRenderLine) return
       setPendingEdit({
         issueId: selectedRenderLine.issueId,
         title: '',
@@ -637,32 +617,26 @@ export const TaskGraphView = memo(
         if (!selectedIssueId && navigableLines.length > 0) {
           if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
             event.preventDefault()
-            onSelectIssue?.(getNavLineId(navigableLines[0]))
+            onSelectIssue?.(navigableLines[0].issueId)
             return
           }
         }
 
         if (!selectedIssueId) return
 
-        const currentIndex = navigableLines.findIndex(
-          (line) => getNavLineId(line) === selectedIssueId
-        )
+        const currentIndex = navigableLines.findIndex((line) => line.issueId === selectedIssueId)
         if (currentIndex === -1) return
 
         const currentLine = navigableLines[currentIndex]
-        const isPhaseSelected = currentLine?.type === 'phase'
 
         switch (event.key) {
-          // Navigation — works for issues and phases
           case 'ArrowDown':
           case 'j': {
             event.preventDefault()
             const nextIndex = Math.min(currentIndex + 1, navigableLines.length - 1)
             const nextLine = navigableLines[nextIndex]
-            onSelectIssue?.(getNavLineId(nextLine))
-            rowRefs.current
-              .get(nextLine.type === 'issue' ? getRenderKey(nextLine) : getNavLineId(nextLine))
-              ?.scrollIntoView({ block: 'nearest' })
+            onSelectIssue?.(nextLine.issueId)
+            rowRefs.current.get(getRenderKey(nextLine))?.scrollIntoView({ block: 'nearest' })
             break
           }
 
@@ -671,28 +645,20 @@ export const TaskGraphView = memo(
             event.preventDefault()
             const prevIndex = Math.max(currentIndex - 1, 0)
             const prevLine = navigableLines[prevIndex]
-            onSelectIssue?.(getNavLineId(prevLine))
-            rowRefs.current
-              .get(prevLine.type === 'issue' ? getRenderKey(prevLine) : getNavLineId(prevLine))
-              ?.scrollIntoView({ block: 'nearest' })
+            onSelectIssue?.(prevLine.issueId)
+            rowRefs.current.get(getRenderKey(prevLine))?.scrollIntoView({ block: 'nearest' })
             break
           }
 
-          // Parent/child navigation — only meaningful for issue rows
           case 'ArrowLeft':
           case 'h': {
-            if (isPhaseSelected) break
             event.preventDefault()
-            if (isIssueRenderLine(currentLine)) {
-              const parentId = currentLine.parentIssueId
-              if (parentId) {
-                const parentLine = issueRenderLines.find((line) => line.issueId === parentId)
-                if (parentLine) {
-                  onSelectIssue?.(parentLine.issueId)
-                  rowRefs.current
-                    .get(getRenderKey(parentLine))
-                    ?.scrollIntoView({ block: 'nearest' })
-                }
+            const parentId = currentLine.parentIssueId
+            if (parentId) {
+              const parentLine = issueRenderLines.find((line) => line.issueId === parentId)
+              if (parentLine) {
+                onSelectIssue?.(parentLine.issueId)
+                rowRefs.current.get(getRenderKey(parentLine))?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -700,32 +666,24 @@ export const TaskGraphView = memo(
 
           case 'ArrowRight':
           case 'l': {
-            if (isPhaseSelected) break
             event.preventDefault()
-            if (isIssueRenderLine(currentLine)) {
-              const childLine = issueRenderLines.find(
-                (line) => line.parentIssueId === currentLine.issueId
-              )
-              if (childLine) {
-                onSelectIssue?.(childLine.issueId)
-                rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
-              }
+            const childLine = issueRenderLines.find(
+              (line) => line.parentIssueId === currentLine.issueId
+            )
+            if (childLine) {
+              onSelectIssue?.(childLine.issueId)
+              rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
 
-          // Jump to first/last
           case 'g': {
             if (!event.shiftKey) {
               event.preventDefault()
               const firstLine = navigableLines[0]
               if (firstLine) {
-                onSelectIssue?.(getNavLineId(firstLine))
-                rowRefs.current
-                  .get(
-                    firstLine.type === 'issue' ? getRenderKey(firstLine) : getNavLineId(firstLine)
-                  )
-                  ?.scrollIntoView({ block: 'nearest' })
+                onSelectIssue?.(firstLine.issueId)
+                rowRefs.current.get(getRenderKey(firstLine))?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -735,17 +693,13 @@ export const TaskGraphView = memo(
             event.preventDefault()
             const lastLine = navigableLines[navigableLines.length - 1]
             if (lastLine) {
-              onSelectIssue?.(getNavLineId(lastLine))
-              rowRefs.current
-                .get(lastLine.type === 'issue' ? getRenderKey(lastLine) : getNavLineId(lastLine))
-                ?.scrollIntoView({ block: 'nearest' })
+              onSelectIssue?.(lastLine.issueId)
+              rowRefs.current.get(getRenderKey(lastLine))?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
 
-          // Creation — no-op for phase rows
           case 'o': {
-            if (isPhaseSelected) break
             if (!event.shiftKey) {
               event.preventDefault()
               handleCreateBelow()
@@ -754,51 +708,42 @@ export const TaskGraphView = memo(
           }
 
           case 'O': {
-            if (isPhaseSelected) break
             event.preventDefault()
             handleCreateAbove()
             break
           }
 
-          // Editing existing — no-op for phase rows
           case 'i': {
-            if (isPhaseSelected) break
             event.preventDefault()
             handleStartEditAtStart()
             break
           }
 
           case 'a': {
-            if (isPhaseSelected) break
             event.preventDefault()
             handleStartEditAtEnd()
             break
           }
 
           case 'r': {
-            if (isPhaseSelected) break
             event.preventDefault()
             handleStartReplace()
             break
           }
 
-          // Expand/collapse — works for issues and phases
           case ' ': {
             event.preventDefault()
             toggleExpanded(selectedIssueId)
             break
           }
 
-          // Open full edit page — no-op for phase rows
           case 'Enter':
           case 'e': {
-            if (isPhaseSelected) break
             event.preventDefault()
             onEditIssue?.(selectedIssueId)
             break
           }
 
-          // Deselect / collapse
           case 'Escape': {
             event.preventDefault()
             if (expandedIds.has(selectedIssueId)) {
@@ -1146,32 +1091,6 @@ export const TaskGraphView = memo(
 
                   {/* Insert inline editor BELOW if creating below this issue */}
                   {shouldInsertBelow && renderInlineEditor(line.lane)}
-                </div>
-              )
-            }
-
-            if (isPhaseRenderLine(line)) {
-              const isSelected = selectedIssueId === line.phaseId
-              const isExpanded = expandedIds.has(line.phaseId)
-              return (
-                <div key={line.phaseId}>
-                  <TaskGraphPhaseRow
-                    ref={(el) => {
-                      if (el) {
-                        rowRefs.current.set(line.phaseId, el)
-                      } else {
-                        rowRefs.current.delete(line.phaseId)
-                      }
-                    }}
-                    line={line}
-                    maxLanes={maxLanes}
-                    isSelected={isSelected}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => toggleExpanded(line.phaseId)}
-                    onClick={() => onSelectIssue?.(line.phaseId)}
-                    aria-rowindex={index + 1}
-                  />
-                  {isExpanded && <InlinePhaseDetailRow line={line} maxLanes={maxLanes} />}
                 </div>
               )
             }

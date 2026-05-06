@@ -1,11 +1,12 @@
 /**
  * Fixture-driven stories for the task graph rendering pipeline.
  *
- * These stories run `computeLayoutFromIssues` against synthetic
- * `IssueResponse` + `IssueOpenSpecState` inputs so we can iterate on the
- * graph rendering (rows + edges + phase nodes) live in Storybook without
- * a server. Each scenario is rendered twice — once in tree mode, once in
- * next mode — to catch divergence between the two layout entry points.
+ * Runs `computeLayoutFromIssues` against synthetic `IssueResponse` inputs so
+ * the graph (rows + edges) renders live in Storybook without a server. Each
+ * scenario is rendered in tree and next mode to catch divergence between the
+ * two layout entry points. OpenSpec state attached to scenarios drives the
+ * row's `OpenSpecIndicators` (branch dot + change-state glyph that opens the
+ * phase-tree dialog) — phases no longer appear as graph rows.
  */
 
 import { useMemo, useRef } from 'react'
@@ -24,7 +25,6 @@ import { ViewMode } from '../types'
 import {
   computeLayoutFromIssues,
   isIssueRenderLine,
-  isPhaseRenderLine,
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
@@ -36,7 +36,6 @@ import {
   TaskGraphSeparatorRow,
   TaskGraphLoadMoreRow,
 } from './task-graph-row'
-import { TaskGraphPhaseRow } from './task-graph-phase-row'
 import { TaskGraphEdges } from './task-graph-svg'
 
 // ---------------------------------------------------------------------------
@@ -302,10 +301,9 @@ function FixtureGraphView({ issues, openSpecStates, viewMode }: FixtureGraphView
     () =>
       computeLayoutFromIssues({
         issues,
-        openSpecStates: openSpecStates ?? null,
         viewMode,
       }),
-    [issues, openSpecStates, viewMode]
+    [issues, viewMode]
   )
 
   const renderLines = layout.lines
@@ -313,12 +311,7 @@ function FixtureGraphView({ issues, openSpecStates, viewMode }: FixtureGraphView
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const maxLanes = useMemo(() => {
-    return Math.max(
-      1,
-      ...renderLines
-        .filter((l) => l.type === 'issue' || l.type === 'phase')
-        .map((line) => line.lane + 1)
-    )
+    return Math.max(1, ...renderLines.filter(isIssueRenderLine).map((line) => line.lane + 1))
   }, [renderLines])
 
   const openSpecByIssueId = openSpecStates ?? {}
@@ -351,20 +344,6 @@ function FixtureGraphView({ issues, openSpecStates, viewMode }: FixtureGraphView
                 projectId={PROJECT_ID}
                 openSpecState={openSpecByIssueId[line.issueId] ?? null}
                 showActions={false}
-                aria-rowindex={index + 1}
-              />
-            )
-          }
-          if (isPhaseRenderLine(line)) {
-            return (
-              <TaskGraphPhaseRow
-                key={line.phaseId}
-                ref={(el) => {
-                  if (el) rowRefs.current.set(line.phaseId, el)
-                  else rowRefs.current.delete(line.phaseId)
-                }}
-                line={line}
-                maxLanes={maxLanes}
                 aria-rowindex={index + 1}
               />
             )
