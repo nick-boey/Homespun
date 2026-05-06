@@ -23,9 +23,6 @@ import { IssuesEmptyState } from './issues-empty-state'
 import {
   computeLayoutFromIssues,
   isIssueRenderLine,
-  isPrRenderLine,
-  isSeparatorRenderLine,
-  isLoadMoreRenderLine,
   getRenderKey,
   computeInheritedParentInfoFromIssues,
   applyFilter,
@@ -38,7 +35,6 @@ import {
   useAgentStatuses,
   useOpenSpecStates,
   useOrphanChanges,
-  useMergedPrs,
   useCreateIssue,
   useUpdateIssue,
 } from '../hooks'
@@ -50,13 +46,7 @@ import {
   type PendingNewIssue,
   type InlineEditState,
 } from '../types'
-import {
-  TaskGraphIssueRow,
-  TaskGraphPrRow,
-  TaskGraphSeparatorRow,
-  TaskGraphLoadMoreRow,
-  TaskGraphExpandedDetails,
-} from './task-graph-row'
+import { TaskGraphIssueRow, TaskGraphExpandedDetails } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
 import { OrphanedChangesList } from './orphan-changes'
 import { aggregateOrphansFromInputs } from '../services/orphan-aggregation'
@@ -141,7 +131,6 @@ export const TaskGraphView = memo(
     const agentStatusesHook = useAgentStatuses(projectId)
     const openSpecStatesHook = useOpenSpecStates(projectId, issueIds)
     const orphanChangesHook = useOrphanChanges(projectId)
-    const mergedPrsHook = useMergedPrs(projectId, { max: 5 })
     const isLoading = issuesHook.isLoading
     const isError = issuesHook.isError
     const refetch = issuesHook.refetch
@@ -185,17 +174,9 @@ export const TaskGraphView = memo(
         issues,
         linkedPrs: linkedPrsHook.linkedPrs ?? null,
         agentStatuses: agentStatusesHook.agentStatuses ?? null,
-        mergedPrs: mergedPrsHook.mergedPrs ?? null,
-        hasMorePastPrs: false,
         viewMode,
       })
-    }, [
-      issues,
-      linkedPrsHook.linkedPrs,
-      agentStatusesHook.agentStatuses,
-      mergedPrsHook.mergedPrs,
-      viewMode,
-    ])
+    }, [issues, linkedPrsHook.linkedPrs, agentStatusesHook.agentStatuses, viewMode])
     const unfilteredRenderLines = layoutResult.lines
     const edges = layoutResult.edges
     const layoutCycle = layoutResult.ok ? null : layoutResult.cycle
@@ -1092,34 +1073,6 @@ export const TaskGraphView = memo(
                   {/* Insert inline editor BELOW if creating below this issue */}
                   {shouldInsertBelow && renderInlineEditor(line.lane)}
                 </div>
-              )
-            }
-
-            if (isPrRenderLine(line)) {
-              return (
-                <TaskGraphPrRow
-                  key={`pr-${line.prNumber}`}
-                  line={line}
-                  maxLanes={maxLanes}
-                  aria-rowindex={index + 1}
-                />
-              )
-            }
-
-            if (isSeparatorRenderLine(line)) {
-              return <TaskGraphSeparatorRow key={`separator-${index}`} maxLanes={maxLanes} />
-            }
-
-            if (isLoadMoreRenderLine(line)) {
-              return (
-                <TaskGraphLoadMoreRow
-                  key="load-more"
-                  maxLanes={maxLanes}
-                  onLoadMore={() => {
-                    // TODO: Implement load more PRs
-                    console.log('Load more PRs')
-                  }}
-                />
               )
             }
 

@@ -8,13 +8,7 @@ export {
   type ChangeType,
 } from './components'
 export { InlineIssueEditor, type InlineIssueEditorProps } from './components'
-export {
-  TaskGraphIssueRow,
-  TaskGraphPrRow,
-  TaskGraphSeparatorRow,
-  TaskGraphLoadMoreRow,
-  TaskGraphExpandedDetails,
-} from './components'
+export { TaskGraphIssueRow, TaskGraphExpandedDetails } from './components'
 export { LANE_WIDTH, ROW_HEIGHT, NODE_RADIUS, getTypeColor } from './components'
 
 // Types
@@ -60,25 +54,12 @@ export { useLinkedPrs, linkedPrsQueryKey, type UseLinkedPrsResult } from './hook
 export { useAgentStatuses, agentStatusesQueryKey, type UseAgentStatusesResult } from './hooks'
 export { useOpenSpecStates, openSpecStatesQueryKey, type UseOpenSpecStatesResult } from './hooks'
 export { useOrphanChanges, orphanChangesQueryKey, type UseOrphanChangesResult } from './hooks'
-export {
-  useMergedPrs,
-  mergedPrsQueryKey,
-  type UseMergedPrsOptions,
-  type UseMergedPrsResult,
-} from './hooks'
-
 // Services
 export {
   computeLayout,
   TaskGraphMarkerType,
   isIssueRenderLine,
-  isPrRenderLine,
-  isSeparatorRenderLine,
-  isLoadMoreRenderLine,
   type TaskGraphIssueRenderLine,
-  type TaskGraphPrRenderLine,
-  type TaskGraphSeparatorRenderLine,
-  type TaskGraphLoadMoreRenderLine,
 } from './services'
 export { getPriorityColor } from './services'
 export { generateBranchName } from './services'

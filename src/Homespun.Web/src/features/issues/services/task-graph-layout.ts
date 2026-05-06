@@ -10,10 +10,9 @@
  * - `computeLayoutFromIssues({ issues, decorations, viewMode, … })` — the
  *   new client-side path. Runs the TS port of `Fleece.Core`'s
  *   `IIssueLayoutService` against `IssueResponse[]` plus parallel decoration
- *   maps fetched per-endpoint, then synthesizes Homespun-only rows
- *   (PR rows, separators, "load more"). Returns the same shape as the legacy
- *   path so consumers don't change. Memoise at the call site (issue set +
- *   viewMode + filter is the layout key; decorations are render-only).
+ *   maps fetched per-endpoint. Returns the same shape as the legacy path so
+ *   consumers don't change. Memoise at the call site (issue set + viewMode +
+ *   filter is the layout key; decorations are render-only).
  */
 
 import type {
@@ -21,7 +20,6 @@ import type {
   LinkedPr,
   AgentStatusData,
   IssueResponse,
-  PullRequestWithTime,
   IssueType as IssueTypeEnum,
   IssueStatus as IssueStatusEnum,
   ExecutionMode as ExecutionModeEnum,
@@ -90,50 +88,10 @@ export interface TaskGraphIssueRenderLine {
   totalAppearances: number
 }
 
-export interface TaskGraphSeparatorRenderLine {
-  type: 'separator'
-}
-
-export interface TaskGraphPrRenderLine {
-  type: 'pr'
-  prNumber: number
-  title: string
-  url: string | null
-  isMerged: boolean
-  hasDescription: boolean
-  agentStatus: AgentStatusData | null
-  drawTopLine: boolean
-  drawBottomLine: boolean
-}
-
-export interface TaskGraphLoadMoreRenderLine {
-  type: 'loadMore'
-}
-
-export type TaskGraphRenderLine =
-  | TaskGraphIssueRenderLine
-  | TaskGraphSeparatorRenderLine
-  | TaskGraphPrRenderLine
-  | TaskGraphLoadMoreRenderLine
+export type TaskGraphRenderLine = TaskGraphIssueRenderLine
 
 export function isIssueRenderLine(line: TaskGraphRenderLine): line is TaskGraphIssueRenderLine {
   return line.type === 'issue'
-}
-
-export function isSeparatorRenderLine(
-  line: TaskGraphRenderLine
-): line is TaskGraphSeparatorRenderLine {
-  return line.type === 'separator'
-}
-
-export function isPrRenderLine(line: TaskGraphRenderLine): line is TaskGraphPrRenderLine {
-  return line.type === 'pr'
-}
-
-export function isLoadMoreRenderLine(
-  line: TaskGraphRenderLine
-): line is TaskGraphLoadMoreRenderLine {
-  return line.type === 'loadMore'
 }
 
 /** Unique key that distinguishes multi-parent appearances of the same issue. */
@@ -160,62 +118,26 @@ function getMarker(
  * Computes render lines + edges for a task graph from a server-laid-out
  * `TaskGraphResponse` (legacy / diff path). The server supplies positions and
  * edges; this function maps each node to one issue render line and threads
- * edges through unchanged. PR rows / separator / load-more synthesis is
- * Homespun-only.
- *
- * Phase rows are *not* emitted on this path — the diff view (the only
- * consumer) filters render lines down to issues. The live graph emits phases
- * via `computeLayoutFromIssues` instead.
- *
- * @param taskGraph - response from the server (Fleece v3 layout).
- * @param viewMode - 'tree' hides PR / separator / load-more entries.
+ * edges through unchanged.
  */
 export function computeLayout(
   taskGraph: TaskGraphResponse | null | undefined,
   _maxDepth: number = Infinity,
-  viewMode: ViewMode = ViewMode.Tree
+  _viewMode: ViewMode = ViewMode.Tree
 ): TaskGraphLayoutResult {
   if (!taskGraph) {
     return { lines: [], edges: [] }
   }
 
   const nodes = taskGraph.nodes ?? []
-  const mergedPrs = taskGraph.mergedPrs ?? []
   const agentStatuses = taskGraph.agentStatuses ?? {}
   const linkedPrs = taskGraph.linkedPrs ?? {}
 
-  if (nodes.length === 0 && mergedPrs.length === 0) {
+  if (nodes.length === 0) {
     return { lines: [], edges: [] }
   }
 
   const lines: TaskGraphRenderLine[] = []
-  const isTreeView = viewMode === ViewMode.Tree
-
-  if (!isTreeView) {
-    if (taskGraph.hasMorePastPrs) {
-      lines.push({ type: 'loadMore' })
-    }
-    const hasIssues = nodes.length > 0
-    for (let prIdx = 0; prIdx < mergedPrs.length; prIdx++) {
-      const pr = mergedPrs[prIdx]
-      const isFirstPr = prIdx === 0
-      const isLastPr = prIdx === mergedPrs.length - 1
-      lines.push({
-        type: 'pr',
-        prNumber: pr.number ?? 0,
-        title: pr.title ?? '',
-        url: pr.url ?? null,
-        isMerged: pr.isMerged ?? false,
-        hasDescription: pr.hasDescription ?? false,
-        agentStatus: pr.agentStatus ?? null,
-        drawTopLine: !isFirstPr,
-        drawBottomLine: !isLastPr || hasIssues,
-      })
-    }
-    if (mergedPrs.length > 0 && nodes.length > 0) {
-      lines.push({ type: 'separator' })
-    }
-  }
 
   const sortedNodes = [...nodes].sort((a, b) => (a.row ?? 0) - (b.row ?? 0))
 
@@ -289,11 +211,7 @@ export interface ComputeLayoutInput {
   linkedPrs?: Record<string, LinkedPr> | null
   /** Decoration: per-issue agent-status map (`useAgentStatuses`). */
   agentStatuses?: Record<string, AgentStatusData> | null
-  /** Decoration: merged-PR list for next-mode header (`useMergedPrs`). */
-  mergedPrs?: readonly PullRequestWithTime[] | null
-  /** Whether more past PRs are available for "load more" rendering. */
-  hasMorePastPrs?: boolean
-  /** View mode: tree (issues only) vs next (PR rows + separator + issues). */
+  /** View mode: tree (issues only) vs next (actionable leaves-up). */
   viewMode?: ViewMode
   /** Active assignee filter (passed to the layout engine). */
   assigneeFilter?: string | null
@@ -423,39 +341,6 @@ function buildIssueRenderLine(
   }
 }
 
-function emitMergedPrRows(
-  mergedPrs: readonly PullRequestWithTime[],
-  hasMorePastPrs: boolean,
-  hasIssues: boolean,
-  agentStatuses: Record<string, AgentStatusData> | null | undefined
-): TaskGraphRenderLine[] {
-  const lines: TaskGraphRenderLine[] = []
-  if (hasMorePastPrs) lines.push({ type: 'loadMore' })
-  for (let prIdx = 0; prIdx < mergedPrs.length; prIdx++) {
-    const pr = mergedPrs[prIdx]
-    const info = pr.pullRequest
-    const isFirstPr = prIdx === 0
-    const isLastPr = prIdx === mergedPrs.length - 1
-    lines.push({
-      type: 'pr',
-      prNumber: info?.number ?? 0,
-      title: info?.title ?? '',
-      url: info?.htmlUrl ?? null,
-      isMerged: !!info?.mergedAt,
-      hasDescription: !!(info?.body && info.body.trim()),
-      // Merged PRs aren't tied to a per-issue session, so no agent status —
-      // but if the PR's author session is still resolving, surface that.
-      agentStatus: lookupDecoration(agentStatuses, info?.number?.toString() ?? ''),
-      drawTopLine: !isFirstPr,
-      drawBottomLine: !isLastPr || hasIssues,
-    })
-  }
-  if (mergedPrs.length > 0 && hasIssues) {
-    lines.push({ type: 'separator' })
-  }
-  return lines
-}
-
 /**
  * Client-side layout driver. Runs the TS port against the supplied issues,
  * then assembles the render-line + edge stream. Returns `{ ok: false }` when
@@ -467,8 +352,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
     issues,
     linkedPrs = null,
     agentStatuses = null,
-    mergedPrs = [],
-    hasMorePastPrs = false,
     viewMode = ViewMode.Tree,
     assigneeFilter = null,
     sortConfig = null,
@@ -543,12 +426,6 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
   }
 
   const lines: TaskGraphRenderLine[] = []
-  const issueNodes = layout.layout.nodes.filter((n) => isIssueNode(n.node))
-  const hasIssues = issueNodes.length > 0
-
-  if (!isTreeView) {
-    lines.push(...emitMergedPrRows(mergedPrs ?? [], hasMorePastPrs, hasIssues, agentStatuses))
-  }
 
   for (const positioned of layout.layout.nodes) {
     const node = positioned.node

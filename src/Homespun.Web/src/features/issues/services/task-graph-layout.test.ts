@@ -6,9 +6,6 @@ import {
   TaskGraphMarkerType,
   type TaskGraphIssueRenderLine,
   isIssueRenderLine,
-  isPrRenderLine,
-  isSeparatorRenderLine,
-  isLoadMoreRenderLine,
 } from './task-graph-layout'
 import type {
   TaskGraphResponse,
@@ -182,77 +179,6 @@ describe('computeLayout', () => {
     })
   })
 
-  describe('PR / separator / load-more synthesis (Next view)', () => {
-    it('emits PRs above issues with separator between', () => {
-      const node = createNode(createIssue({ id: 'a' }), 0, 0)
-      const graph = createGraph([node], {
-        mergedPrs: [
-          {
-            number: 1,
-            title: 'PR 1',
-            url: null,
-            isMerged: true,
-            hasDescription: false,
-          },
-          {
-            number: 2,
-            title: 'PR 2',
-            url: null,
-            isMerged: true,
-            hasDescription: false,
-          },
-        ],
-      })
-      const { lines } = computeLayout(graph, Infinity, ViewMode.Next)
-      expect(lines.filter(isPrRenderLine)).toHaveLength(2)
-      expect(lines.filter(isSeparatorRenderLine)).toHaveLength(1)
-      const issueIdx = lines.findIndex(isIssueRenderLine)
-      const sepIdx = lines.findIndex(isSeparatorRenderLine)
-      expect(sepIdx).toBeLessThan(issueIdx)
-    })
-
-    it('emits a load-more entry when hasMorePastPrs is true', () => {
-      const graph = createGraph([], { mergedPrs: [], hasMorePastPrs: true })
-      // Empty result fallback — empty graph with PRs absent returns empty
-      // To reach the loadMore branch we need PRs; simulate one PR.
-      const graph2 = createGraph([], {
-        mergedPrs: [
-          {
-            number: 1,
-            title: 'PR',
-            url: null,
-            isMerged: true,
-            hasDescription: false,
-          },
-        ],
-        hasMorePastPrs: true,
-      })
-      expect(computeLayout(graph, Infinity, ViewMode.Next).lines).toEqual([])
-      const { lines } = computeLayout(graph2, Infinity, ViewMode.Next)
-      expect(lines.filter(isLoadMoreRenderLine)).toHaveLength(1)
-    })
-
-    it('omits PR / separator / load-more entries in tree view', () => {
-      const node = createNode(createIssue({ id: 'a' }), 0, 0)
-      const graph = createGraph([node], {
-        mergedPrs: [
-          {
-            number: 1,
-            title: 'PR',
-            url: null,
-            isMerged: true,
-            hasDescription: false,
-          },
-        ],
-        hasMorePastPrs: true,
-      })
-      const { lines } = computeLayout(graph, Infinity, ViewMode.Tree)
-      expect(lines.some(isPrRenderLine)).toBe(false)
-      expect(lines.some(isSeparatorRenderLine)).toBe(false)
-      expect(lines.some(isLoadMoreRenderLine)).toBe(false)
-    })
-  })
-
   describe('linkedPrs / agentStatuses lookup', () => {
     it('resolves by id, lowercase, or uppercase', () => {
       const node = createNode(createIssue({ id: 'AbC' }), 0, 0)
@@ -366,33 +292,6 @@ describe('computeLayoutFromIssues', () => {
     const line = result.lines.find(isIssueRenderLine)!
     expect(line.linkedPr?.number).toBe(7)
     expect(line.agentStatus?.sessionId).toBe('sess-1')
-  })
-
-  it('emits PR rows + separator before issues in next mode', () => {
-    const result = computeLayoutFromIssues({
-      issues: [createIssue({ id: 'a' })],
-      mergedPrs: [
-        {
-          pullRequest: {
-            number: 100,
-            title: 'Past PR',
-            body: 'description body',
-            mergedAt: '2026-01-01T00:00:00Z',
-            htmlUrl: 'https://example.com/pr/100',
-            status: 'merged',
-          },
-          time: 1,
-        } as never,
-      ],
-      hasMorePastPrs: true,
-      viewMode: ViewMode.Next,
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.lines[0].type).toBe('loadMore')
-    expect(result.lines[1].type).toBe('pr')
-    expect(result.lines[2].type).toBe('separator')
-    expect(result.lines[3].type).toBe('issue')
   })
 
   it('marks an issue with no open parent as actionable', () => {

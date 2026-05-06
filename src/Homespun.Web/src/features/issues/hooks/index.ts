@@ -56,9 +56,3 @@ export {
   orphanChangesQueryKey,
   type UseOrphanChangesResult,
 } from './use-orphan-changes'
-export {
-  useMergedPrs,
-  mergedPrsQueryKey,
-  type UseMergedPrsOptions,
-  type UseMergedPrsResult,
-} from './use-merged-prs'
