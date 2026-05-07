@@ -62,27 +62,20 @@ export interface InlineEditState {
 
 /**
  * Represents a pending new issue that exists only client-side until saved.
+ *
+ * The `mode` field determines how the synthetic node is positioned relative to
+ * the `referenceIssueId` in the layout engine:
+ * - `sibling-below` / `sibling-above`: placed adjacent to the reference issue
+ *   at the same depth.
+ * - `child-of`: placed as a child of the reference issue.
+ * - `parent-of`: placed as a parent of the reference issue, taking over the
+ *   reference's old parent slot.
  */
 export interface PendingNewIssue {
-  /** Position in the render list where this issue should be inserted. */
-  insertAtIndex: number
-  /** The title being entered for the new issue. */
+  mode: 'sibling-below' | 'sibling-above' | 'child-of' | 'parent-of'
+  referenceIssueId: string
   title: string
-  /** Parent ID set when Shift+Tab is pressed to make this a child of the adjacent issue. */
-  pendingParentId?: string
-  /** Child ID set when Tab is pressed to make this a parent of the adjacent issue. */
-  pendingChildId?: string
-  /** Sort order for series parent positioning. */
-  /** True if created with Shift+O (above current), false for o (below current). */
-  isAbove: boolean
-  /** Reference issue ID used to determine placement context. */
-  referenceIssueId?: string
-  /** Inherited parent issue ID from the reference issue's parent (sibling creation). */
-  inheritedParentIssueId?: string
-  /** Sibling issue ID for positioning within the parent's children. */
-  siblingIssueId?: string
-  /** If true, insert before the sibling; if false, insert after. */
-  insertBefore?: boolean
+  viewMode: ViewMode
 }
 
 /**

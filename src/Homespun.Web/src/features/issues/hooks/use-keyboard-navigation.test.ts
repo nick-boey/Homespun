@@ -368,8 +368,7 @@ describe('useKeyboardNavigation', () => {
 
       expect(result.current.editMode).toBe(KeyboardEditMode.CreatingNew)
       expect(result.current.pendingNewIssue).not.toBeNull()
-      expect(result.current.pendingNewIssue?.insertAtIndex).toBe(1) // After index 0
-      expect(result.current.pendingNewIssue?.isAbove).toBe(false)
+      expect(result.current.pendingNewIssue?.mode).toBe('sibling-below')
       expect(result.current.pendingNewIssue?.referenceIssueId).toBe('issue-1')
     })
 
@@ -402,8 +401,7 @@ describe('useKeyboardNavigation', () => {
       })
 
       expect(result.current.editMode).toBe(KeyboardEditMode.CreatingNew)
-      expect(result.current.pendingNewIssue?.insertAtIndex).toBe(1) // At index 1 (current position)
-      expect(result.current.pendingNewIssue?.isAbove).toBe(true)
+      expect(result.current.pendingNewIssue?.mode).toBe('sibling-above')
       expect(result.current.pendingNewIssue?.referenceIssueId).toBe('issue-2')
     })
   })

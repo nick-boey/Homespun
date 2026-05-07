@@ -23,8 +23,8 @@ import { IssuesEmptyState } from './issues-empty-state'
 import {
   computeLayoutFromIssues,
   isIssueRenderLine,
+  isPendingIssueRenderLine,
   getRenderKey,
-  computeInheritedParentInfoFromIssues,
   applyFilter,
   TaskGraphMarkerType,
   type ParsedFilter,
@@ -175,8 +175,22 @@ export const TaskGraphView = memo(
         linkedPrs: linkedPrsHook.linkedPrs ?? null,
         agentStatuses: agentStatusesHook.agentStatuses ?? null,
         viewMode,
+        pendingIssue: pendingNewIssue
+          ? {
+              mode: pendingNewIssue.mode,
+              referenceIssueId: pendingNewIssue.referenceIssueId,
+              title: pendingNewIssue.title,
+              viewMode,
+            }
+          : null,
       })
-    }, [issues, linkedPrsHook.linkedPrs, agentStatusesHook.agentStatuses, viewMode])
+    }, [
+      issues,
+      linkedPrsHook.linkedPrs,
+      agentStatusesHook.agentStatuses,
+      viewMode,
+      pendingNewIssue,
+    ])
     const unfilteredRenderLines = layoutResult.lines
     const edges = layoutResult.edges
     const layoutCycle = layoutResult.ok ? null : layoutResult.cycle
@@ -198,6 +212,9 @@ export const TaskGraphView = memo(
       if (!appliedFilter) return unfilteredRenderLines
 
       return unfilteredRenderLines.filter((line) => {
+        // Always keep pending-issue lines (inline editor must always be visible)
+        if (isPendingIssueRenderLine(line)) return true
+
         // Always keep non-issue lines (PRs, separators, load more)
         if (!isIssueRenderLine(line)) return true
 
@@ -314,90 +331,56 @@ export const TaskGraphView = memo(
       const referenceIssue = issueRenderLines[selectedIndex]
       if (!referenceIssue) return
 
-      // Compute inherited parent info for sibling creation
-      const inheritedParent = computeInheritedParentInfoFromIssues(
-        issues,
-        referenceIssue.issueId,
-        false // isAbove = false for creating below
-      )
-
       setPendingNewIssue({
-        insertAtIndex: selectedIndex + 1,
-        title: '',
-        isAbove: false,
+        mode: 'sibling-below',
         referenceIssueId: referenceIssue.issueId,
-        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
-        insertBefore: inheritedParent?.insertBefore ?? false,
+        title: '',
+        viewMode,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines, issues])
+    }, [selectedIndex, issueRenderLines, viewMode])
 
     const handleCreateAbove = useCallback(() => {
       if (selectedIndex < 0) return
       const referenceIssue = issueRenderLines[selectedIndex]
       if (!referenceIssue) return
 
-      // Compute inherited parent info for sibling creation
-      const inheritedParent = computeInheritedParentInfoFromIssues(
-        issues,
-        referenceIssue.issueId,
-        true // isAbove = true for creating above
-      )
-
       setPendingNewIssue({
-        insertAtIndex: selectedIndex,
-        title: '',
-        isAbove: true,
+        mode: 'sibling-above',
         referenceIssueId: referenceIssue.issueId,
-        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
-        insertBefore: inheritedParent?.insertBefore ?? false,
+        title: '',
+        viewMode,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines, issues])
+    }, [selectedIndex, issueRenderLines, viewMode])
 
     // Handler for creating at top of list (no selection)
     const handleCreateAtTop = useCallback(() => {
       const firstIssue = issueRenderLines[0]
-
-      // Compute inherited parent info if there's a reference issue
-      const inheritedParent = firstIssue
-        ? computeInheritedParentInfoFromIssues(issues, firstIssue.issueId, true)
-        : null
+      if (!firstIssue) return
 
       setPendingNewIssue({
-        insertAtIndex: 0,
+        mode: 'sibling-above',
+        referenceIssueId: firstIssue.issueId,
         title: '',
-        isAbove: true,
-        referenceIssueId: firstIssue?.issueId,
-        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
-        insertBefore: inheritedParent?.insertBefore ?? false,
+        viewMode,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, issues])
+    }, [issueRenderLines, viewMode])
 
     // Handler for creating at bottom of list (no selection)
     const handleCreateAtBottom = useCallback(() => {
       const lastIssue = issueRenderLines[issueRenderLines.length - 1]
-
-      // Compute inherited parent info if there's a reference issue
-      const inheritedParent = lastIssue
-        ? computeInheritedParentInfoFromIssues(issues, lastIssue.issueId, false)
-        : null
+      if (!lastIssue) return
 
       setPendingNewIssue({
-        insertAtIndex: issueRenderLines.length,
+        mode: 'sibling-below',
+        referenceIssueId: lastIssue.issueId,
         title: '',
-        isAbove: false,
-        referenceIssueId: lastIssue?.issueId,
-        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
-        siblingIssueId: inheritedParent?.siblingIssueId ?? undefined,
-        insertBefore: inheritedParent?.insertBefore ?? false,
+        viewMode,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, issues])
+    }, [issueRenderLines, viewMode])
 
     // Expose imperative methods via ref
     useImperativeHandle(
@@ -434,39 +417,78 @@ export const TaskGraphView = memo(
       setPendingEdit((prev) => (prev ? { ...prev, title } : null))
     }, [])
 
-    const handleIndent = useCallback(() => {
-      if (!pendingNewIssue?.referenceIssueId) return
-      // Only allow indent if not already indented/unindented
-      if (pendingNewIssue.pendingChildId || pendingNewIssue.pendingParentId) return
+    type PendingMode = 'sibling-below' | 'sibling-above' | 'child-of' | 'parent-of'
 
-      // Tab = make this new issue a PARENT of the reference (reference becomes child)
-      setPendingNewIssue((prev) =>
-        prev
-          ? {
-              ...prev,
-              pendingChildId: prev.referenceIssueId,
-              pendingParentId: undefined,
+    const stateTransition = useCallback(
+      (currentMode: PendingMode, key: 'Tab' | 'ShiftTab'): PendingMode => {
+        if (viewMode === ViewMode.Tree) {
+          if (currentMode === 'sibling-below' && key === 'Tab') return 'child-of'
+          if (currentMode === 'child-of' && key === 'ShiftTab') return 'sibling-below'
+          if (currentMode === 'sibling-above' && key === 'ShiftTab') return 'parent-of'
+          if (currentMode === 'parent-of' && key === 'Tab') return 'sibling-above'
+        } else {
+          // Next mode: inverted semantics
+          if (currentMode === 'sibling-below' && key === 'Tab') return 'parent-of'
+          if (currentMode === 'parent-of' && key === 'ShiftTab') return 'sibling-below'
+          if (currentMode === 'sibling-above' && key === 'ShiftTab') return 'child-of'
+          if (currentMode === 'child-of' && key === 'Tab') return 'sibling-above'
+        }
+        return currentMode
+      },
+      [viewMode]
+    )
+
+    const handleModeTransition = useCallback(
+      (key: 'Tab' | 'ShiftTab') => () => {
+        setPendingNewIssue((prev) => {
+          if (!prev) return null
+          const nextMode = stateTransition(prev.mode, key)
+          return { ...prev, mode: nextMode }
+        })
+      },
+      [stateTransition]
+    )
+
+    const buildCreateParams = useCallback(
+      (pending: PendingNewIssue) => {
+        const refIssue = issues.find(
+          (i) => i.id?.toLowerCase() === pending.referenceIssueId.toLowerCase()
+        )
+        const refParentId = refIssue?.parentIssues?.[0]?.parentIssue ?? undefined
+
+        switch (pending.mode) {
+          case 'child-of':
+            return {
+              parentIssueId: pending.referenceIssueId,
+              siblingIssueId: undefined as string | undefined,
+              insertBefore: undefined as boolean | undefined,
+              childIssueId: undefined as string | undefined,
             }
-          : null
-      )
-    }, [pendingNewIssue])
-
-    const handleUnindent = useCallback(() => {
-      if (!pendingNewIssue?.referenceIssueId) return
-      // Only allow unindent if not already indented/unindented
-      if (pendingNewIssue.pendingChildId || pendingNewIssue.pendingParentId) return
-
-      // Shift+Tab = make this new issue a CHILD of the reference (reference becomes parent)
-      setPendingNewIssue((prev) =>
-        prev
-          ? {
-              ...prev,
-              pendingParentId: prev.referenceIssueId,
-              pendingChildId: undefined,
+          case 'parent-of':
+            return {
+              parentIssueId: refParentId,
+              siblingIssueId: pending.referenceIssueId,
+              insertBefore: false,
+              childIssueId: pending.referenceIssueId,
             }
-          : null
-      )
-    }, [pendingNewIssue])
+          case 'sibling-below':
+            return {
+              parentIssueId: refParentId,
+              siblingIssueId: pending.referenceIssueId,
+              insertBefore: false,
+              childIssueId: undefined as string | undefined,
+            }
+          case 'sibling-above':
+            return {
+              parentIssueId: refParentId,
+              siblingIssueId: pending.referenceIssueId,
+              insertBefore: true,
+              childIssueId: undefined as string | undefined,
+            }
+        }
+      },
+      [issues]
+    )
 
     const handleSave = useCallback(async () => {
       if (!pendingNewIssue?.title.trim()) {
@@ -475,30 +497,17 @@ export const TaskGraphView = memo(
       }
 
       try {
-        // Determine parent ID and sort order:
-        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
-        // - Otherwise, use inherited parent for sibling creation
-        const hasExplicitHierarchy =
-          pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
-        const parentIssueId = hasExplicitHierarchy
-          ? pendingNewIssue.pendingParentId
-          : pendingNewIssue.inheritedParentIssueId
-        const siblingIssueId = hasExplicitHierarchy ? undefined : pendingNewIssue.siblingIssueId
-        const insertBefore = hasExplicitHierarchy ? undefined : pendingNewIssue.insertBefore
-
+        const params = buildCreateParams(pendingNewIssue)
         await createIssue({
           title: pendingNewIssue.title.trim(),
-          parentIssueId,
-          childIssueId: pendingNewIssue.pendingChildId,
-          siblingIssueId,
-          insertBefore,
+          ...params,
         })
         // Return focus to container after save
         containerRef.current?.focus()
       } catch {
         // Keep edit mode on error so user can retry
       }
-    }, [pendingNewIssue, createIssue, handleCancelEdit])
+    }, [pendingNewIssue, createIssue, handleCancelEdit, buildCreateParams])
 
     const handleSaveAndEdit = useCallback(async () => {
       if (!pendingNewIssue?.title.trim()) {
@@ -507,23 +516,10 @@ export const TaskGraphView = memo(
       }
 
       try {
-        // Determine parent ID and sort order:
-        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
-        // - Otherwise, use inherited parent for sibling creation
-        const hasExplicitHierarchy =
-          pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
-        const parentIssueId = hasExplicitHierarchy
-          ? pendingNewIssue.pendingParentId
-          : pendingNewIssue.inheritedParentIssueId
-        const siblingIssueId = hasExplicitHierarchy ? undefined : pendingNewIssue.siblingIssueId
-        const insertBefore = hasExplicitHierarchy ? undefined : pendingNewIssue.insertBefore
-
+        const params = buildCreateParams(pendingNewIssue)
         const issue = await createIssue({
           title: pendingNewIssue.title.trim(),
-          parentIssueId,
-          childIssueId: pendingNewIssue.pendingChildId,
-          siblingIssueId,
-          insertBefore,
+          ...params,
         })
         // Navigate to edit page for description
         if (issue?.id) {
@@ -532,7 +528,7 @@ export const TaskGraphView = memo(
       } catch {
         // Keep edit mode on error so user can retry
       }
-    }, [pendingNewIssue, createIssue, handleCancelEdit, onEditIssue])
+    }, [pendingNewIssue, createIssue, handleCancelEdit, onEditIssue, buildCreateParams])
 
     // ============================================================================
     // Inline Editing Handlers (for existing issues)
@@ -791,19 +787,20 @@ export const TaskGraphView = memo(
     )
 
     // ============================================================================
-    // Inline Editor Row Rendering
+    // Inline Editor Row Rendering (pending-issue render line)
     // ============================================================================
 
-    const renderInlineEditor = useCallback(
+    const renderPendingIssueRow = useCallback(
       (_lane: number) => {
         if (!pendingNewIssue) return null
 
-        // Compute SVG width for lane offset
         const svgWidth = LANE_WIDTH * maxLanes + 12
 
         return (
           <div
+            key="pending-issue"
             data-testid="task-graph-inline-create-row"
+            data-pending-editor=""
             className={cn(
               'flex items-center gap-2 transition-colors',
               'bg-muted ring-primary/50 ring-2'
@@ -831,13 +828,11 @@ export const TaskGraphView = memo(
               onSave={handleSave}
               onSaveAndEdit={handleSaveAndEdit}
               onCancel={handleCancelEdit}
-              onIndent={handleIndent}
-              onUnindent={handleUnindent}
+              onIndent={handleModeTransition('Tab')}
+              onUnindent={handleModeTransition('ShiftTab')}
               placeholder="Enter new issue title..."
               cursorPosition={EditCursorPosition.Start}
-              showParentIndicator={!!pendingNewIssue.pendingChildId}
-              showChildIndicator={!!pendingNewIssue.pendingParentId}
-              isAbove={pendingNewIssue.isAbove}
+              pendingMode={pendingNewIssue.mode}
             />
           </div>
         )
@@ -849,8 +844,7 @@ export const TaskGraphView = memo(
         handleSave,
         handleSaveAndEdit,
         handleCancelEdit,
-        handleIndent,
-        handleUnindent,
+        handleModeTransition,
       ]
     )
 
@@ -918,6 +912,12 @@ export const TaskGraphView = memo(
             rowRefs={rowRefs}
           />
           {renderLines.map((line, index) => {
+            // Pending-issue synthetic node: render the inline editor at the
+            // engine-assigned position.
+            if (isPendingIssueRenderLine(line)) {
+              return renderPendingIssueRow(line.lane)
+            }
+
             if (isIssueRenderLine(line)) {
               const isSelected = selectedIssueId === line.issueId
               const isExpanded = expandedIds.has(line.issueId)
@@ -925,24 +925,11 @@ export const TaskGraphView = memo(
                 editMode === KeyboardEditMode.EditingExisting &&
                 pendingEdit?.issueId === line.issueId
 
-              // Check if we should insert inline editor ABOVE this issue
-              const shouldInsertAbove =
-                editMode === KeyboardEditMode.CreatingNew &&
-                pendingNewIssue?.isAbove &&
-                pendingNewIssue?.referenceIssueId === line.issueId
-
-              // Check if we should insert inline editor BELOW this issue
-              const shouldInsertBelow =
-                editMode === KeyboardEditMode.CreatingNew &&
-                !pendingNewIssue?.isAbove &&
-                pendingNewIssue?.referenceIssueId === line.issueId
-
               const renderKey = getRenderKey(line)
 
               return (
                 <div key={renderKey}>
-                  {/* Insert inline editor ABOVE if creating above this issue */}
-                  {shouldInsertAbove && renderInlineEditor(line.lane)}
+                  {/* (inline editor is now rendered as a pending-issue render line) */}
 
                   {/* Issue row (or inline edit if editing existing) */}
                   {isEditing && pendingEdit ? (
@@ -1069,9 +1056,6 @@ export const TaskGraphView = memo(
                       onClose={() => toggleExpanded(line.issueId)}
                     />
                   )}
-
-                  {/* Insert inline editor BELOW if creating below this issue */}
-                  {shouldInsertBelow && renderInlineEditor(line.lane)}
                 </div>
               )
             }
