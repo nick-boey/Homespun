@@ -311,11 +311,7 @@ function buildCommonOptions(
     cwd,
     includePartialMessages: false,
     settingSources: ["user" as const, "project" as const],
-    // Opt into the 1M-token context window beta. Only takes effect on
-    // Sonnet 4 / 4.5 per the SDK type's own documentation; ignored for
-    // other models so it is safe to enable unconditionally.
-    // https://code.claude.com/docs/en/agent-sdk/typescript#sdk-beta
-    betas: ["context-1m-2025-08-07" as const],
+    betas: [],
     systemPrompt: systemPromptOption,
     mcpServers: {
       playwright: {
