@@ -9,7 +9,7 @@
  * phase-tree dialog) — phases no longer appear as graph rows.
  */
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -22,9 +22,16 @@ import {
   type IssueResponse,
 } from '@/api'
 import { ViewMode } from '../types'
-import { computeLayoutFromIssues, isIssueRenderLine, getRenderKey } from '../services'
+import {
+  computeLayoutFromIssues,
+  isIssueRenderLine,
+  isPendingIssueRenderLine,
+  getRenderKey,
+  type PendingIssueInput,
+} from '../services'
 import { TaskGraphIssueRow } from './task-graph-row'
 import { TaskGraphEdges } from './task-graph-svg'
+import { InlineIssueEditor } from './inline-issue-editor'
 
 // ---------------------------------------------------------------------------
 // Fixture builders
@@ -457,3 +464,264 @@ export const CombinedWithOpenSpecTree: Story = {
 export const CombinedWithOpenSpecNext: Story = {
   args: { ...combinedWithOpenSpec(), viewMode: ViewMode.Next },
 }
+
+// ---------------------------------------------------------------------------
+// Pending-issue fixture component — shows the inline editor at the
+// engine-assigned position (Tasks 6.2–6.3).
+// ---------------------------------------------------------------------------
+
+interface FixtureGraphViewWithPendingProps extends Scenario {
+  viewMode: ViewMode
+  pendingIssue: PendingIssueInput
+}
+
+const ROW_HEIGHT_PX = 36
+const LANE_WIDTH_PX = 28
+
+function FixtureGraphViewWithPending({
+  issues,
+  openSpecStates,
+  viewMode,
+  pendingIssue,
+}: FixtureGraphViewWithPendingProps) {
+  const [title, setTitle] = useState(pendingIssue.title)
+
+  const layout = useMemo(
+    () =>
+      computeLayoutFromIssues({
+        issues,
+        viewMode,
+        pendingIssue: { ...pendingIssue, title },
+      }),
+    [issues, viewMode, pendingIssue, title]
+  )
+
+  const renderLines = layout.lines
+  const edges = layout.ok ? layout.edges : []
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const maxLanes = useMemo(() => {
+    return Math.max(1, ...renderLines.filter(isIssueRenderLine).map((line) => line.lane + 1))
+  }, [renderLines])
+
+  const openSpecByIssueId = openSpecStates ?? {}
+
+  return (
+    <div
+      data-testid="task-graph-fixture-pending"
+      className="bg-background text-foreground w-[640px] overflow-x-auto p-2"
+    >
+      <div style={{ position: 'relative' }}>
+        <TaskGraphEdges
+          edges={edges}
+          renderLines={renderLines}
+          expandedIds={new Set()}
+          maxLanes={maxLanes}
+          rowRefs={rowRefs}
+        />
+        {renderLines.map((line, index) => {
+          if (isPendingIssueRenderLine(line)) {
+            const svgWidth = LANE_WIDTH_PX * maxLanes + 12
+            return (
+              <div
+                key="pending-issue"
+                data-testid="task-graph-inline-create-row"
+                className="bg-muted ring-primary/50 flex items-center gap-2 ring-2"
+                style={{ height: ROW_HEIGHT_PX }}
+              >
+                {/* SVG placeholder for lane alignment */}
+                <div style={{ width: svgWidth, flexShrink: 0 }} />
+
+                {/* Type badge */}
+                <span className="shrink-0 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                  Task
+                </span>
+
+                {/* Inline editor */}
+                <InlineIssueEditor
+                  title={title}
+                  onTitleChange={setTitle}
+                  onSave={() => {}}
+                  onSaveAndEdit={() => {}}
+                  onCancel={() => {}}
+                  onIndent={() => {}}
+                  onUnindent={() => {}}
+                  placeholder="Enter new issue title..."
+                  pendingMode={line.parentIssues ? pendingIssue.mode : pendingIssue.mode}
+                />
+              </div>
+            )
+          }
+          if (isIssueRenderLine(line)) {
+            const renderKey = getRenderKey(line)
+            return (
+              <TaskGraphIssueRow
+                key={renderKey}
+                ref={(el) => {
+                  if (el) rowRefs.current.set(renderKey, el)
+                  else rowRefs.current.delete(renderKey)
+                }}
+                line={line}
+                maxLanes={maxLanes}
+                projectId={PROJECT_ID}
+                openSpecState={openSpecByIssueId[line.issueId] ?? null}
+                showActions={false}
+                aria-rowindex={index + 1}
+              />
+            )
+          }
+          return null
+        })}
+      </div>
+      {!layout.ok && (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive mt-4 rounded border p-3 text-sm"
+        >
+          Cycle: {layout.cycle.join(' → ')}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Storybook meta for the pending-issue stories — separate component, separate
+// meta so args/controls align with `FixtureGraphViewWithPending`.
+const metaWithPending: Meta<typeof FixtureGraphViewWithPending> = {
+  title: 'features/issues/TaskGraphView/PendingIssue',
+  component: FixtureGraphViewWithPending,
+  parameters: { layout: 'padded' },
+  decorators: [
+    (Story) => (
+      <QueryClientProvider client={makeQueryClient()}>
+        <Story />
+      </QueryClientProvider>
+    ),
+  ],
+}
+
+export { metaWithPending }
+
+type PendingStory = StoryObj<typeof FixtureGraphViewWithPending>
+
+// The parentSeries fixture gives us root + 3 children. We use series-2 as the
+// reference issue for all per-mode default-state stories so there's a sibling
+// above (series-1) and a sibling below (series-3).
+
+const seriesFixture = parentSeries()
+const REFERENCE_ID = 'series-2'
+
+// ---- Task 6.2: Per-mode default-state stories (sibling positioning) -------
+
+export const TreeSiblingBelow: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Tree,
+    pendingIssue: {
+      mode: 'sibling-below',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New issue below series-2',
+      viewMode: ViewMode.Tree,
+    },
+  },
+}
+
+export const TreeSiblingAbove: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Tree,
+    pendingIssue: {
+      mode: 'sibling-above',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New issue above series-2',
+      viewMode: ViewMode.Tree,
+    },
+  },
+}
+
+export const NextSiblingBelow: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Next,
+    pendingIssue: {
+      mode: 'sibling-below',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New issue below series-2 (next)',
+      viewMode: ViewMode.Next,
+    },
+  },
+}
+
+export const NextSiblingAbove: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Next,
+    pendingIssue: {
+      mode: 'sibling-above',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New issue above series-2 (next)',
+      viewMode: ViewMode.Next,
+    },
+  },
+}
+
+// ---- Task 6.3: Per-mode promoted-state stories (hierarchy change) ----------
+
+export const TreeChildOf: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Tree,
+    pendingIssue: {
+      mode: 'child-of',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New child of series-2',
+      viewMode: ViewMode.Tree,
+    },
+  },
+}
+
+export const TreeParentOf: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Tree,
+    pendingIssue: {
+      mode: 'parent-of',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New parent of series-2',
+      viewMode: ViewMode.Tree,
+    },
+  },
+}
+
+export const NextParentOf: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Next,
+    pendingIssue: {
+      mode: 'parent-of',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New parent of series-2 (next)',
+      viewMode: ViewMode.Next,
+    },
+  },
+}
+
+export const NextChildOf: PendingStory = {
+  args: {
+    ...seriesFixture,
+    viewMode: ViewMode.Next,
+    pendingIssue: {
+      mode: 'child-of',
+      referenceIssueId: REFERENCE_ID,
+      title: 'New child of series-2 (next)',
+      viewMode: ViewMode.Next,
+    },
+  },
+}
+
+// ---- Tasks 6.4-6.6: Interactive state-machine stories ---------------------
+// TODO: implement interactive stories with @storybook/test
+// These require the full TaskGraphView with API mocking (TanStack Query + mock
+// server seeding) to demonstrate mode transitions driven by Tab/Shift+Tab.
+// Deferred until the mock-service layer exposes a Storybook-compatible
+// story-level request handler (e.g. msw integration).

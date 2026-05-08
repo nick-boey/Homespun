@@ -163,28 +163,30 @@ describe('InlineIssueEditor', () => {
   })
 
   describe('hierarchy indicator', () => {
-    it('shows "Parent of" indicator when showParentIndicator is true', () => {
-      render(<InlineIssueEditor {...defaultProps} showParentIndicator={true} isAbove={false} />)
+    it('shows "Parent of" indicator when pendingMode is parent-of', () => {
+      render(<InlineIssueEditor {...defaultProps} pendingMode="parent-of" />)
 
-      expect(screen.getByText('Parent of above')).toBeInTheDocument()
+      expect(screen.getByText('Parent of')).toBeInTheDocument()
     })
 
-    it('shows "Parent of below" indicator when showParentIndicator is true and isAbove is true', () => {
-      render(<InlineIssueEditor {...defaultProps} showParentIndicator={true} isAbove={true} />)
+    it('shows "Child of" indicator when pendingMode is child-of', () => {
+      render(<InlineIssueEditor {...defaultProps} pendingMode="child-of" />)
 
-      expect(screen.getByText('Parent of below')).toBeInTheDocument()
+      expect(screen.getByText('Child of')).toBeInTheDocument()
     })
 
-    it('shows "Child of above" indicator when showChildIndicator is true', () => {
-      render(<InlineIssueEditor {...defaultProps} showChildIndicator={true} isAbove={false} />)
+    it('does not show indicator for sibling-below mode', () => {
+      render(<InlineIssueEditor {...defaultProps} pendingMode="sibling-below" />)
 
-      expect(screen.getByText('Child of above')).toBeInTheDocument()
+      expect(screen.queryByText(/Parent of/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Child of/)).not.toBeInTheDocument()
     })
 
-    it('shows "Child of below" indicator when showChildIndicator is true and isAbove is true', () => {
-      render(<InlineIssueEditor {...defaultProps} showChildIndicator={true} isAbove={true} />)
+    it('does not show indicator for sibling-above mode', () => {
+      render(<InlineIssueEditor {...defaultProps} pendingMode="sibling-above" />)
 
-      expect(screen.getByText('Child of below')).toBeInTheDocument()
+      expect(screen.queryByText(/Parent of/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Child of/)).not.toBeInTheDocument()
     })
 
     it('does not show indicator by default', () => {
@@ -192,6 +194,51 @@ describe('InlineIssueEditor', () => {
 
       expect(screen.queryByText(/Parent of/)).not.toBeInTheDocument()
       expect(screen.queryByText(/Child of/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('character input passthrough', () => {
+    it('typing "o" inserts the character into the input', async () => {
+      const user = userEvent.setup()
+      const onTitleChange = vi.fn()
+      const onCancel = vi.fn()
+      render(
+        <InlineIssueEditor
+          title=""
+          onTitleChange={onTitleChange}
+          onSave={vi.fn()}
+          onSaveAndEdit={vi.fn()}
+          onCancel={onCancel}
+          onIndent={vi.fn()}
+          onUnindent={vi.fn()}
+        />
+      )
+      const input = screen.getByTestId('inline-issue-input')
+      await user.type(input, 'o')
+      expect(onTitleChange).toHaveBeenCalledWith('o')
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('arrow keys do not call cancel or save', async () => {
+      const user = userEvent.setup()
+      const onSave = vi.fn()
+      const onCancel = vi.fn()
+      render(
+        <InlineIssueEditor
+          title="hello"
+          onTitleChange={vi.fn()}
+          onSave={onSave}
+          onSaveAndEdit={vi.fn()}
+          onCancel={onCancel}
+          onIndent={vi.fn()}
+          onUnindent={vi.fn()}
+        />
+      )
+      const input = screen.getByTestId('inline-issue-input')
+      await user.click(input)
+      await user.keyboard('{ArrowLeft}{ArrowRight}')
+      expect(onSave).not.toHaveBeenCalled()
+      expect(onCancel).not.toHaveBeenCalled()
     })
   })
 

@@ -21,20 +21,16 @@ export interface InlineIssueEditorProps {
   onSaveAndEdit: () => void
   /** Called when user cancels (Escape or Cancel button) */
   onCancel: () => void
-  /** Called when user indents (Tab - make new issue parent of reference) */
+  /** Called when user indents (Tab) */
   onIndent: () => void
-  /** Called when user unindents (Shift+Tab - make new issue child of reference) */
+  /** Called when user unindents (Shift+Tab) */
   onUnindent: () => void
   /** Placeholder text for empty input */
   placeholder?: string
   /** Where to position the cursor on focus */
   cursorPosition?: EditCursorPosition
-  /** Whether to show "Parent of" indicator */
-  showParentIndicator?: boolean
-  /** Whether to show "Child of" indicator */
-  showChildIndicator?: boolean
-  /** Whether the editor is above the reference issue */
-  isAbove?: boolean
+  /** Current pending mode — controls the hierarchy indicator label. */
+  pendingMode?: 'sibling-below' | 'sibling-above' | 'child-of' | 'parent-of'
   /** Additional CSS classes */
   className?: string
 }
@@ -52,9 +48,7 @@ export const InlineIssueEditor = memo(function InlineIssueEditor({
   onUnindent,
   placeholder = 'Enter issue title...',
   cursorPosition = EditCursorPosition.End,
-  showParentIndicator = false,
-  showChildIndicator = false,
-  isAbove = false,
+  pendingMode,
   className,
 }: InlineIssueEditorProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -110,19 +104,25 @@ export const InlineIssueEditor = memo(function InlineIssueEditor({
     onTitleChange(e.target.value)
   }
 
-  // Determine indicator text
+  // Determine indicator text from pendingMode
   const getIndicatorText = () => {
-    if (showParentIndicator) {
-      return isAbove ? 'Parent of below' : 'Parent of above'
+    switch (pendingMode) {
+      case 'sibling-below':
+        return null // default, no label
+      case 'sibling-above':
+        return null // default, no label
+      case 'child-of':
+        return 'Child of'
+      case 'parent-of':
+        return 'Parent of'
+      default:
+        return null
     }
-    if (showChildIndicator) {
-      return isAbove ? 'Child of below' : 'Child of above'
-    }
-    return null
   }
 
   const indicatorText = getIndicatorText()
-  const indicatorClass = showParentIndicator ? 'parent' : showChildIndicator ? 'child' : ''
+  const indicatorClass =
+    pendingMode === 'parent-of' ? 'parent' : pendingMode === 'child-of' ? 'child' : ''
 
   return (
     <div
@@ -201,8 +201,8 @@ export const InlineIssueEditor = memo(function InlineIssueEditor({
           className={cn(
             'lane-indicator ml-2 shrink-0 rounded px-2 py-0.5 text-xs font-medium',
             indicatorClass,
-            showParentIndicator && 'bg-blue-500/20 text-blue-600 dark:text-blue-400',
-            showChildIndicator && 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+            pendingMode === 'parent-of' && 'bg-blue-500/20 text-blue-600 dark:text-blue-400',
+            pendingMode === 'child-of' && 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
           )}
         >
           {indicatorText}

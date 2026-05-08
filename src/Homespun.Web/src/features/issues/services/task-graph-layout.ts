@@ -30,6 +30,8 @@ import { ViewMode } from '../types'
 import {
   InvalidGraphError,
   isIssueNode,
+  isPendingIssueNode,
+  PENDING_ISSUE_ID,
   layoutForNext,
   layoutForTree,
   type GraphLayoutResult,
@@ -37,8 +39,10 @@ import {
   type IssueLayoutNode,
   type LayoutIssue,
   type LayoutNode,
+  type ParentIssueRef,
   type PositionedNode,
 } from './layout'
+import { midpoint } from './sort-order-midpoint'
 
 export type TaskGraphEdge = {
   from: string
@@ -88,10 +92,23 @@ export interface TaskGraphIssueRenderLine {
   totalAppearances: number
 }
 
-export type TaskGraphRenderLine = TaskGraphIssueRenderLine
+export interface TaskGraphPendingIssueRenderLine {
+  type: 'pending-issue'
+  pendingTitle: string
+  lane: number
+  parentIssues?: readonly { parentIssue?: string | null; sortOrder?: string | null }[] | null
+}
+
+export type TaskGraphRenderLine = TaskGraphIssueRenderLine | TaskGraphPendingIssueRenderLine
 
 export function isIssueRenderLine(line: TaskGraphRenderLine): line is TaskGraphIssueRenderLine {
   return line.type === 'issue'
+}
+
+export function isPendingIssueRenderLine(
+  line: TaskGraphRenderLine
+): line is TaskGraphPendingIssueRenderLine {
+  return line.type === 'pending-issue'
 }
 
 /** Unique key that distinguishes multi-parent appearances of the same issue. */
@@ -204,6 +221,13 @@ export function computeLayout(
 // Client-side layout: new path consuming Issue[] + decoration maps.
 // =====================================================================
 
+export interface PendingIssueInput {
+  mode: 'sibling-below' | 'sibling-above' | 'child-of' | 'parent-of'
+  referenceIssueId: string
+  title: string
+  viewMode: ViewMode
+}
+
 export interface ComputeLayoutInput {
   /** Visible-set issues from `useIssues`. */
   issues: readonly IssueResponse[]
@@ -219,6 +243,8 @@ export interface ComputeLayoutInput {
   sortConfig?: GraphSortConfig | null
   /** Subset of issue ids that should appear (next mode only). */
   matchedIds?: ReadonlySet<string> | null
+  /** Optional pending (synthetic) issue to inject into the layout. */
+  pendingIssue?: PendingIssueInput | null
 }
 
 export type ClientLayoutResult =
@@ -356,12 +382,144 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
     assigneeFilter = null,
     sortConfig = null,
     matchedIds = null,
+    pendingIssue = null,
   } = input
 
   const isTreeView = viewMode === ViewMode.Tree
 
-  const layoutIssues = issues.map(toLayoutIssue)
+  let layoutIssues = issues.map(toLayoutIssue)
   const actionable = actionableIds(issues)
+
+  // Inject the synthetic pending-issue node into the layout if present.
+  if (pendingIssue) {
+    const { mode, referenceIssueId, title } = pendingIssue
+    const refIssue = layoutIssues.find((i) => i.id.toLowerCase() === referenceIssueId.toLowerCase())
+    if (refIssue) {
+      // Build shallow copies so we don't mutate cached data.
+      const issuesCopy: LayoutIssue[] = layoutIssues.map((i) => ({
+        ...i,
+        parentIssues: i.parentIssues ? [...i.parentIssues] : null,
+      }))
+
+      // Find siblings for sortOrder computation.
+      const refParentId = refIssue.parentIssues?.[0]?.parentIssue?.toLowerCase() ?? null
+      const siblings = (
+        refParentId
+          ? layoutIssues.filter((i) =>
+              i.parentIssues?.some((p) => p.parentIssue?.toLowerCase() === refParentId)
+            )
+          : layoutIssues.filter((i) => !i.parentIssues?.length)
+      ).sort((a, b) => {
+        const aS =
+          a.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === (refParentId ?? ''))
+            ?.sortOrder ?? ''
+        const bS =
+          b.parentIssues?.find((p) => p.parentIssue?.toLowerCase() === (refParentId ?? ''))
+            ?.sortOrder ?? ''
+        return aS < bS ? -1 : aS > bS ? 1 : 0
+      })
+      const refSiblingIdx = siblings.findIndex(
+        (i) => i.id.toLowerCase() === referenceIssueId.toLowerCase()
+      )
+
+      let syntheticParentIssues: ParentIssueRef[] | undefined
+
+      switch (mode) {
+        case 'sibling-below': {
+          const nextSibling = siblings[refSiblingIdx + 1]
+          const prevSortOrder = refIssue.parentIssues?.[0]?.sortOrder ?? ''
+          const nextSortOrder =
+            nextSibling?.parentIssues?.find(
+              (p) => p.parentIssue?.toLowerCase() === (refParentId ?? '')
+            )?.sortOrder ?? ''
+          const sortOrder = midpoint(prevSortOrder, nextSortOrder)
+          syntheticParentIssues = refParentId
+            ? [{ parentIssue: refParentId, sortOrder, active: true }]
+            : undefined
+          break
+        }
+        case 'sibling-above': {
+          const prevSibling = siblings[refSiblingIdx - 1]
+          const prevSortOrder =
+            prevSibling?.parentIssues?.find(
+              (p) => p.parentIssue?.toLowerCase() === (refParentId ?? '')
+            )?.sortOrder ?? ''
+          const nextSortOrder = refIssue.parentIssues?.[0]?.sortOrder ?? ''
+          const sortOrder = midpoint(prevSortOrder, nextSortOrder)
+          syntheticParentIssues = refParentId
+            ? [{ parentIssue: refParentId, sortOrder, active: true }]
+            : undefined
+          break
+        }
+        case 'child-of': {
+          // Synthetic is a child of the reference issue.
+          const refChildren = layoutIssues
+            .filter((i) =>
+              i.parentIssues?.some(
+                (p) => p.parentIssue?.toLowerCase() === referenceIssueId.toLowerCase()
+              )
+            )
+            .sort((a, b) => {
+              const aS =
+                a.parentIssues?.find(
+                  (p) => p.parentIssue?.toLowerCase() === referenceIssueId.toLowerCase()
+                )?.sortOrder ?? ''
+              const bS =
+                b.parentIssues?.find(
+                  (p) => p.parentIssue?.toLowerCase() === referenceIssueId.toLowerCase()
+                )?.sortOrder ?? ''
+              return aS < bS ? -1 : aS > bS ? 1 : 0
+            })
+          const lastChild = refChildren[refChildren.length - 1]
+          const lastSortOrder =
+            lastChild?.parentIssues?.find(
+              (p) => p.parentIssue?.toLowerCase() === referenceIssueId.toLowerCase()
+            )?.sortOrder ?? ''
+          const sortOrder = midpoint(lastSortOrder, '')
+          syntheticParentIssues = [{ parentIssue: referenceIssueId, sortOrder, active: true }]
+          break
+        }
+        case 'parent-of': {
+          // Synthetic takes ref's old parent slot; ref becomes a child of synthetic.
+          const oldParentRef = refIssue.parentIssues?.[0]
+          syntheticParentIssues = oldParentRef
+            ? [
+                {
+                  parentIssue: oldParentRef.parentIssue,
+                  sortOrder: oldParentRef.sortOrder ?? null,
+                  active: true,
+                },
+              ]
+            : undefined
+          // Patch ref's parentIssues to point at the synthetic node.
+          const fabricatedSortOrder = midpoint('', refIssue.parentIssues?.[0]?.sortOrder ?? 'a')
+          const refIdx = issuesCopy.findIndex(
+            (i) => i.id.toLowerCase() === referenceIssueId.toLowerCase()
+          )
+          if (refIdx >= 0) {
+            issuesCopy[refIdx] = {
+              ...issuesCopy[refIdx],
+              parentIssues: [
+                { parentIssue: PENDING_ISSUE_ID, sortOrder: fabricatedSortOrder, active: true },
+              ],
+            }
+          }
+          break
+        }
+      }
+
+      const synthetic: LayoutIssue = {
+        id: PENDING_ISSUE_ID,
+        title: title,
+        status: 'open',
+        executionMode: 'series',
+        parentIssues: syntheticParentIssues ?? null,
+      }
+
+      issuesCopy.push(synthetic)
+      layoutIssues = issuesCopy
+    }
+  }
   let layout: GraphLayoutResult<LayoutNode>
   try {
     if (isTreeView) {
@@ -429,7 +587,14 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
 
   for (const positioned of layout.layout.nodes) {
     const node = positioned.node
-    if (isIssueNode(node)) {
+    if (isPendingIssueNode(node)) {
+      lines.push({
+        type: 'pending-issue',
+        pendingTitle: node.pendingTitle,
+        lane: positioned.lane,
+        parentIssues: node.parentIssues ?? null,
+      })
+    } else if (isIssueNode(node)) {
       const issue = issueById.get(node.id.toLowerCase())
       if (!issue) continue
       lines.push(

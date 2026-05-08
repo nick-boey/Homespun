@@ -1,0 +1,127 @@
+[
+  {
+    "prev": "",
+    "next": "b",
+    "expected": "a"
+  },
+  {
+    "prev": "a",
+    "next": "c",
+    "expected": "baa"
+  },
+  {
+    "prev": "a",
+    "next": "b",
+    "expected": "an"
+  },
+  {
+    "prev": "aa",
+    "next": "ac",
+    "expected": "aba"
+  },
+  {
+    "prev": "aa",
+    "next": "ab",
+    "expected": "aan"
+  },
+  {
+    "prev": "aaa",
+    "next": "aac",
+    "expected": "aab"
+  },
+  {
+    "prev": "aab",
+    "next": "aac",
+    "expected": "aabn"
+  },
+  {
+    "prev": "a",
+    "next": "z",
+    "expected": "maa"
+  },
+  {
+    "prev": "abc",
+    "next": "abd",
+    "expected": "abcn"
+  },
+  {
+    "prev": "abc",
+    "next": "abz",
+    "expected": "abn"
+  },
+  {
+    "prev": "aaa",
+    "next": "zzz",
+    "expected": "maa"
+  },
+  {
+    "prev": "aaaa",
+    "next": "aaab",
+    "expected": "aaaan"
+  },
+  {
+    "prev": "!",
+    "next": "~",
+    "expected": "!n"
+  },
+  {
+    "prev": "!!",
+    "next": "!~",
+    "expected": "!!n"
+  },
+  {
+    "prev": "aN",
+    "next": "b",
+    "expected": "aNn"
+  },
+  {
+    "prev": "aab",
+    "next": "aad",
+    "expected": "aac"
+  },
+  {
+    "prev": "aabb",
+    "next": "aabc",
+    "expected": "aabbn"
+  },
+  {
+    "prev": "x",
+    "next": "z",
+    "expected": "yaa"
+  },
+  {
+    "prev": "xa",
+    "next": "xc",
+    "expected": "xba"
+  },
+  {
+    "prev": "aaaaaa",
+    "next": "aaaaab",
+    "expected": "aaaaaan"
+  },
+  {
+    "prev": "aaaaaaa",
+    "next": "aaaaaab",
+    "expected": "aaaaaaan"
+  },
+  {
+    "prev": "m",
+    "next": "n",
+    "expected": "mn"
+  },
+  {
+    "prev": "ma",
+    "next": "mb",
+    "expected": "man"
+  },
+  {
+    "prev": "maa",
+    "next": "mab",
+    "expected": "maan"
+  },
+  {
+    "prev": "maab",
+    "next": "maac",
+    "expected": "maabn"
+  }
+]

@@ -56,6 +56,11 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         return
       }
 
+      // Suppress all shortcuts when the pending issue editor is focused.
+      if (event.target instanceof Element && event.target.closest('[data-pending-editor]')) {
+        return
+      }
+
       const { key, shiftKey, ctrlKey, metaKey } = event
 
       // Move up: Ctrl+Shift+ArrowUp or Cmd+Shift+ArrowUp

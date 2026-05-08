@@ -26,7 +26,8 @@ import type {
   LayoutMode,
 } from './types'
 import { DefaultGraphSortConfig } from './types'
-import type { IssueLayoutNode, LayoutNode } from './nodes'
+import { isIssueNode, PENDING_ISSUE_ID } from './nodes'
+import type { LayoutNode } from './nodes'
 
 export type IssueStatus =
   | 'draft'
@@ -78,7 +79,22 @@ const idEq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 const activeParents = (issue: LayoutIssue): readonly ParentIssueRef[] =>
   (issue.parentIssues ?? []).filter((p) => p.active !== false && p.parentIssue)
 
-function toIssueNode(issue: LayoutIssue): IssueLayoutNode {
+function toIssueNode(issue: LayoutIssue): LayoutNode {
+  if (issue.id === PENDING_ISSUE_ID) {
+    return {
+      kind: 'pending-issue',
+      id: issue.id,
+      childSequencing: 'series',
+      pendingTitle: issue.title ?? '',
+      parentIssues: issue.parentIssues
+        ? issue.parentIssues.map((p) => ({
+            parentIssue: p.parentIssue,
+            sortOrder: p.sortOrder ?? null,
+            active: p.active,
+          }))
+        : undefined,
+    }
+  }
   return {
     kind: 'issue',
     issue,
@@ -439,6 +455,7 @@ export class IssueLayoutService {
       allNodes,
       rootFinder: () => rootNodes,
       childIterator: (parent) => {
+        if (!isIssueNode(parent)) return []
         const issue = parent.issue
         const kids = getIncompleteChildrenForLayout(issue, childrenOf)
         return kids.map((k) => nodeMap.get(k.id.toLowerCase())!)

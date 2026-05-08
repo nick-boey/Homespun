@@ -3,6 +3,7 @@ import { IssueType } from '@/api'
 import {
   KeyboardEditMode,
   EditCursorPosition,
+  ViewMode,
   TYPE_CYCLE_DEBOUNCE_MS,
   type InlineEditState,
   type PendingNewIssue,
@@ -288,16 +289,17 @@ export function useKeyboardNavigation(
     if (editMode !== KeyboardEditMode.Viewing) return
     if (selection.selectedIndex < 0) return
 
-    const referenceIssueId =
+    const referenceIssue =
       selection.selectedIndex < renderLines.length
-        ? renderLines[selection.selectedIndex].issueId
+        ? renderLines[selection.selectedIndex]
         : undefined
+    if (!referenceIssue?.issueId) return
 
     setPendingNewIssue({
-      insertAtIndex: selection.selectedIndex + 1,
+      mode: 'sibling-below',
+      referenceIssueId: referenceIssue.issueId,
       title: '',
-      isAbove: false,
-      referenceIssueId,
+      viewMode: ViewMode.Tree,
     })
     setEditMode(KeyboardEditMode.CreatingNew)
     onStateChanged?.()
@@ -307,16 +309,17 @@ export function useKeyboardNavigation(
     if (editMode !== KeyboardEditMode.Viewing) return
     if (selection.selectedIndex < 0) return
 
-    const referenceIssueId =
+    const referenceIssue =
       selection.selectedIndex < renderLines.length
-        ? renderLines[selection.selectedIndex].issueId
+        ? renderLines[selection.selectedIndex]
         : undefined
+    if (!referenceIssue?.issueId) return
 
     setPendingNewIssue({
-      insertAtIndex: selection.selectedIndex,
+      mode: 'sibling-above',
+      referenceIssueId: referenceIssue.issueId,
       title: '',
-      isAbove: true,
-      referenceIssueId,
+      viewMode: ViewMode.Tree,
     })
     setEditMode(KeyboardEditMode.CreatingNew)
     onStateChanged?.()
@@ -324,33 +327,29 @@ export function useKeyboardNavigation(
 
   const indentAsChild = useCallback(() => {
     if (editMode === KeyboardEditMode.CreatingNew && pendingNewIssue) {
-      if (pendingNewIssue.referenceIssueId) {
-        setPendingNewIssue({
-          ...pendingNewIssue,
-          pendingChildId: pendingNewIssue.referenceIssueId,
-          pendingParentId: undefined,
-          inheritedParentIssueId: undefined,
-          siblingIssueId: undefined,
-          insertBefore: undefined,
-        })
-        onStateChanged?.()
-      }
+      // Tab in tree mode: transition sibling → child-of
+      const nextMode =
+        pendingNewIssue.mode === 'sibling-below'
+          ? 'child-of'
+          : pendingNewIssue.mode === 'sibling-above'
+            ? 'parent-of'
+            : pendingNewIssue.mode
+      setPendingNewIssue({ ...pendingNewIssue, mode: nextMode })
+      onStateChanged?.()
     }
   }, [editMode, pendingNewIssue, onStateChanged])
 
   const unindentAsSibling = useCallback(() => {
     if (editMode === KeyboardEditMode.CreatingNew && pendingNewIssue) {
-      if (pendingNewIssue.referenceIssueId) {
-        setPendingNewIssue({
-          ...pendingNewIssue,
-          pendingParentId: pendingNewIssue.referenceIssueId,
-          pendingChildId: undefined,
-          inheritedParentIssueId: undefined,
-          siblingIssueId: undefined,
-          insertBefore: undefined,
-        })
-        onStateChanged?.()
-      }
+      // Shift+Tab in tree mode: transition child-of → sibling
+      const nextMode =
+        pendingNewIssue.mode === 'child-of'
+          ? 'sibling-below'
+          : pendingNewIssue.mode === 'parent-of'
+            ? 'sibling-above'
+            : pendingNewIssue.mode
+      setPendingNewIssue({ ...pendingNewIssue, mode: nextMode })
+      onStateChanged?.()
     }
   }, [editMode, pendingNewIssue, onStateChanged])
 

@@ -1,20 +1,34 @@
 /**
  * Node kinds that flow through the layout engine.
  *
- * Currently only `issue` exists. The discriminated-union shape is kept so a
- * future kind can be layered on without rewriting consumers.
+ * `issue` is the normal case. `pending-issue` is a synthetic node injected
+ * into the layout engine when the user is creating a new issue inline, so the
+ * engine assigns it a real row/lane/edge position rather than overlaying it at
+ * a fixed DOM position.
  */
 
 import type { IGraphNode } from './types'
-import type { LayoutIssue } from './issue-layout-service'
+import type { LayoutIssue, ParentIssueRef } from './issue-layout-service'
+
+export const PENDING_ISSUE_ID = '__pending-issue__'
 
 export interface IssueLayoutNode extends IGraphNode {
   readonly kind: 'issue'
   readonly issue: LayoutIssue
 }
 
-export type LayoutNode = IssueLayoutNode
+export interface PendingIssueLayoutNode extends IGraphNode {
+  readonly kind: 'pending-issue'
+  readonly pendingTitle: string
+  readonly parentIssues?: readonly ParentIssueRef[]
+}
+
+export type LayoutNode = IssueLayoutNode | PendingIssueLayoutNode
 
 export function isIssueNode(node: LayoutNode): node is IssueLayoutNode {
   return node.kind === 'issue'
+}
+
+export function isPendingIssueNode(node: LayoutNode): node is PendingIssueLayoutNode {
+  return node.kind === 'pending-issue'
 }
