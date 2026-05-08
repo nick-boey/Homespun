@@ -22,20 +22,8 @@ import {
   type IssueResponse,
 } from '@/api'
 import { ViewMode } from '../types'
-import {
-  computeLayoutFromIssues,
-  isIssueRenderLine,
-  isPrRenderLine,
-  isSeparatorRenderLine,
-  isLoadMoreRenderLine,
-  getRenderKey,
-} from '../services'
-import {
-  TaskGraphIssueRow,
-  TaskGraphPrRow,
-  TaskGraphSeparatorRow,
-  TaskGraphLoadMoreRow,
-} from './task-graph-row'
+import { computeLayoutFromIssues, isIssueRenderLine, getRenderKey } from '../services'
+import { TaskGraphIssueRow } from './task-graph-row'
 import { TaskGraphEdges } from './task-graph-svg'
 
 // ---------------------------------------------------------------------------
@@ -347,22 +335,6 @@ function FixtureGraphView({ issues, openSpecStates, viewMode }: FixtureGraphView
                 aria-rowindex={index + 1}
               />
             )
-          }
-          if (isPrRenderLine(line)) {
-            return (
-              <TaskGraphPrRow
-                key={`pr-${line.prNumber}`}
-                line={line}
-                maxLanes={maxLanes}
-                aria-rowindex={index + 1}
-              />
-            )
-          }
-          if (isSeparatorRenderLine(line)) {
-            return <TaskGraphSeparatorRow key={`sep-${index}`} maxLanes={maxLanes} />
-          }
-          if (isLoadMoreRenderLine(line)) {
-            return <TaskGraphLoadMoreRow key="load-more" maxLanes={maxLanes} />
           }
           return null
         })}
