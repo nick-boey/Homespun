@@ -72,9 +72,14 @@ function getRankBetween(before: string, after: string): string {
  *
  * - `prev = ""` is a sentinel for "no lower bound" (maps to getRankBefore)
  * - `next = ""` is a sentinel for "no upper bound" (maps to getRankAfter)
- * - `prev === next` throws
+ * - `prev = "" && next = ""` means fully unconstrained → returns 'n' (midpoint of alphabet)
+ * - `prev === next` (non-empty) throws
  */
 export function midpoint(prev: string, next: string): string {
+  if (prev === '' && next === '') {
+    return 'n'
+  }
+
   if (prev === next) {
     throw new Error(`midpoint: called with equal strings ${JSON.stringify(prev)}`)
   }
