@@ -354,34 +354,6 @@ export const TaskGraphView = memo(
       setEditMode(KeyboardEditMode.CreatingNew)
     }, [selectedIndex, issueRenderLines, viewMode])
 
-    // Handler for creating at top of list (no selection)
-    const handleCreateAtTop = useCallback(() => {
-      const firstIssue = issueRenderLines[0]
-      if (!firstIssue) return
-
-      setPendingNewIssue({
-        mode: 'sibling-above',
-        referenceIssueId: firstIssue.issueId,
-        title: '',
-        viewMode,
-      })
-      setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, viewMode])
-
-    // Handler for creating at bottom of list (no selection)
-    const handleCreateAtBottom = useCallback(() => {
-      const lastIssue = issueRenderLines[issueRenderLines.length - 1]
-      if (!lastIssue) return
-
-      setPendingNewIssue({
-        mode: 'sibling-below',
-        referenceIssueId: lastIssue.issueId,
-        title: '',
-        viewMode,
-      })
-      setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines, viewMode])
-
     // Expose imperative methods via ref
     useImperativeHandle(
       ref,
@@ -389,19 +361,15 @@ export const TaskGraphView = memo(
         createAbove: () => {
           if (selectedIndex >= 0) {
             handleCreateAbove()
-          } else {
-            handleCreateAtTop()
           }
         },
         createBelow: () => {
           if (selectedIndex >= 0) {
             handleCreateBelow()
-          } else {
-            handleCreateAtBottom()
           }
         },
       }),
-      [selectedIndex, handleCreateAbove, handleCreateBelow, handleCreateAtTop, handleCreateAtBottom]
+      [selectedIndex, handleCreateAbove, handleCreateBelow]
     )
 
     const handleCancelEdit = useCallback(() => {
@@ -421,21 +389,25 @@ export const TaskGraphView = memo(
 
     const stateTransition = useCallback(
       (currentMode: PendingMode, key: 'Tab' | 'ShiftTab'): PendingMode => {
-        if (viewMode === ViewMode.Tree) {
-          if (currentMode === 'sibling-below' && key === 'Tab') return 'child-of'
-          if (currentMode === 'child-of' && key === 'ShiftTab') return 'sibling-below'
-          if (currentMode === 'sibling-above' && key === 'ShiftTab') return 'parent-of'
-          if (currentMode === 'parent-of' && key === 'Tab') return 'sibling-above'
-        } else {
-          // Next mode: inverted semantics
-          if (currentMode === 'sibling-below' && key === 'Tab') return 'parent-of'
-          if (currentMode === 'parent-of' && key === 'ShiftTab') return 'sibling-below'
-          if (currentMode === 'sibling-above' && key === 'ShiftTab') return 'child-of'
-          if (currentMode === 'child-of' && key === 'Tab') return 'sibling-above'
+        // Tab from either sibling mode → parent-of (new issue wraps reference as parent)
+        if ((currentMode === 'sibling-below' || currentMode === 'sibling-above') && key === 'Tab') {
+          return 'parent-of'
         }
+        // ShiftTab from either sibling mode → child-of (new issue nests under reference)
+        if (
+          (currentMode === 'sibling-below' || currentMode === 'sibling-above') &&
+          key === 'ShiftTab'
+        ) {
+          return 'child-of'
+        }
+        // Undo: ShiftTab from parent-of → back to sibling-below
+        if (currentMode === 'parent-of' && key === 'ShiftTab') return 'sibling-below'
+        // Undo: Tab from child-of → back to sibling-above
+        if (currentMode === 'child-of' && key === 'Tab') return 'sibling-above'
+        // All other transitions are no-ops (e.g., second Tab from parent-of)
         return currentMode
       },
-      [viewMode]
+      []
     )
 
     const handleModeTransition = useCallback(

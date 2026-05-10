@@ -43,9 +43,14 @@ describe('midpoint', () => {
   })
 
   describe('boundary cases', () => {
-    it('throws on equal inputs', () => {
+    it('throws on equal non-empty inputs', () => {
       expect(() => midpoint('a', 'a')).toThrow()
-      expect(() => midpoint('', '')).toThrow()
+      expect(() => midpoint('z', 'z')).toThrow()
+    })
+
+    it('both empty sentinels returns midpoint of full range', () => {
+      // prev="" && next="" → fully unconstrained → 'n' (middle of the a-z alphabet)
+      expect(midpoint('', '')).toBe('n')
     })
 
     it('empty prev and first alphabet char produces a result between them', () => {

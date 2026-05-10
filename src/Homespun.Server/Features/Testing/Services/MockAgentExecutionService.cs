@@ -85,6 +85,11 @@ public class MockAgentExecutionService : IAgentExecutionService
 
         await EmitMockA2AEventsAsync(mockSession, mockSession.LastUserMessage, cancellationToken);
 
+        foreach (var control in BuildPendingControlMessages(sessionId, mockSession.LastUserMessage))
+        {
+            yield return control;
+        }
+
         yield return new SdkResultMessage(
             SessionId: sessionId,
             Uuid: null,
@@ -109,6 +114,11 @@ public class MockAgentExecutionService : IAgentExecutionService
             session.LastActivityAt = DateTime.UtcNow;
             session.LastUserMessage = request.Message ?? string.Empty;
             await EmitMockA2AEventsAsync(session, session.LastUserMessage, cancellationToken);
+
+            foreach (var control in BuildPendingControlMessages(request.SessionId, session.LastUserMessage))
+            {
+                yield return control;
+            }
         }
 
         yield return new SdkResultMessage(
@@ -121,6 +131,26 @@ public class MockAgentExecutionService : IAgentExecutionService
             NumTurns: 1,
             TotalCostUsd: 0m,
             Result: null);
+    }
+
+    // The plan/question sentinels also need a control-plane SDK message so
+    // MessageProcessingService transitions session state to
+    // WaitingForPlanExecution / WaitingForQuestionAnswer — without that, the
+    // hub's ApprovePlan / AnswerQuestion calls reject the request.
+    private static IEnumerable<SdkMessage> BuildPendingControlMessages(string sessionId, string userMessage)
+    {
+        if (userMessage.Contains("plan", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new SdkPlanPendingMessage(
+                sessionId,
+                """{"plan":"## Mock plan\n\n1. Read mock.txt\n2. Apply mock changes\n3. Verify result"}""");
+        }
+        else if (userMessage.Contains("question", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new SdkQuestionPendingMessage(
+                sessionId,
+                """{"questions":[{"question":"Should I proceed?","header":"Confirm","options":[{"label":"Yes","description":"Proceed with the action"},{"label":"No","description":"Cancel the action"}],"multiSelect":false}]}""");
+        }
     }
 
     private async Task EmitMockA2AEventsAsync(MockSession session, string userMessage, CancellationToken ct)
@@ -153,6 +183,97 @@ public class MockAgentExecutionService : IAgentExecutionService
           "metadata": { "sdkMessageType": "assistant" }
         }
         """, ct);
+
+        var wantsPlan = userMessage.Contains("plan", StringComparison.OrdinalIgnoreCase);
+        var wantsQuestion = userMessage.Contains("question", StringComparison.OrdinalIgnoreCase);
+
+        // Input-required (plan/question) takes priority over the tool sentinel and
+        // suppresses the trailing `completed` status — the session stays in
+        // `input-required` state until the user answers via the UI hub method.
+        if (wantsPlan)
+        {
+            await IngestAsync(projectId, sessionId, HomespunA2AEventKind.StatusUpdate, $$"""
+            {
+              "kind": "status-update",
+              "taskId": "{{taskId}}",
+              "contextId": "{{sessionId}}",
+              "status": {
+                "state": "input-required",
+                "timestamp": "{{DateTime.UtcNow:O}}",
+                "message": {
+                  "kind": "message",
+                  "messageId": "{{Guid.NewGuid()}}",
+                  "role": "agent",
+                  "parts": [
+                    {
+                      "kind": "data",
+                      "data": { "plan": "## Mock plan\n\n1. Read mock.txt\n2. Apply mock changes\n3. Verify result" },
+                      "metadata": { "kind": "plan" }
+                    }
+                  ]
+                }
+              },
+              "final": false,
+              "metadata": { "inputType": "plan-approval", "planFilePath": ".claude/plan.md" }
+            }
+            """, ct);
+            return;
+        }
+
+        if (wantsQuestion)
+        {
+            await IngestAsync(projectId, sessionId, HomespunA2AEventKind.StatusUpdate, $$"""
+            {
+              "kind": "status-update",
+              "taskId": "{{taskId}}",
+              "contextId": "{{sessionId}}",
+              "status": {
+                "state": "input-required",
+                "timestamp": "{{DateTime.UtcNow:O}}",
+                "message": {
+                  "kind": "message",
+                  "messageId": "{{Guid.NewGuid()}}",
+                  "role": "agent",
+                  "parts": [
+                    {
+                      "kind": "data",
+                      "data": {
+                        "questions": [
+                          {
+                            "question": "Should I proceed?",
+                            "header": "Confirm",
+                            "options": [
+                              { "label": "Yes", "description": "Proceed with the action" },
+                              { "label": "No",  "description": "Cancel the action" }
+                            ],
+                            "multiSelect": false
+                          }
+                        ]
+                      },
+                      "metadata": { "kind": "questions" }
+                    }
+                  ]
+                }
+              },
+              "final": false,
+              "metadata": {
+                "inputType": "question",
+                "questions": [
+                  {
+                    "question": "Should I proceed?",
+                    "header": "Confirm",
+                    "options": [
+                      { "label": "Yes", "description": "Proceed with the action" },
+                      { "label": "No",  "description": "Cancel the action" }
+                    ],
+                    "multiSelect": false
+                  }
+                ]
+              }
+            }
+            """, ct);
+            return;
+        }
 
         var wantsTool = userMessage.Contains("tool", StringComparison.OrdinalIgnoreCase)
                         || userMessage.Contains("read", StringComparison.OrdinalIgnoreCase);
