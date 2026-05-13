@@ -432,7 +432,11 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
             nextSibling?.parentIssues?.find(
               (p) => p.parentIssue?.toLowerCase() === (refParentId ?? '')
             )?.sortOrder ?? ''
-          const sortOrder = midpoint(prevSortOrder, nextSortOrder)
+          // Guard against midpoint('', '') when issues lack sortOrder data.
+          const sortOrder =
+            prevSortOrder !== '' || nextSortOrder !== ''
+              ? midpoint(prevSortOrder, nextSortOrder)
+              : 'n'
           syntheticParentIssues = refParentId
             ? [{ parentIssue: refParentId, sortOrder, active: true }]
             : undefined
@@ -445,7 +449,11 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
               (p) => p.parentIssue?.toLowerCase() === (refParentId ?? '')
             )?.sortOrder ?? ''
           const nextSortOrder = refIssue.parentIssues?.[0]?.sortOrder ?? ''
-          const sortOrder = midpoint(prevSortOrder, nextSortOrder)
+          // Guard against midpoint('', '') when issues lack sortOrder data.
+          const sortOrder =
+            prevSortOrder !== '' || nextSortOrder !== ''
+              ? midpoint(prevSortOrder, nextSortOrder)
+              : 'n'
           syntheticParentIssues = refParentId
             ? [{ parentIssue: refParentId, sortOrder, active: true }]
             : undefined
@@ -475,7 +483,8 @@ export function computeLayoutFromIssues(input: ComputeLayoutInput): ClientLayout
             lastChild?.parentIssues?.find(
               (p) => p.parentIssue?.toLowerCase() === referenceIssueId.toLowerCase()
             )?.sortOrder ?? ''
-          const sortOrder = midpoint(lastSortOrder, '')
+          // Guard against midpoint('', '') when no children exist or sortOrder is absent.
+          const sortOrder = lastSortOrder !== '' ? midpoint(lastSortOrder, '') : 'n'
           syntheticParentIssues = [{ parentIssue: referenceIssueId, sortOrder, active: true }]
           break
         }

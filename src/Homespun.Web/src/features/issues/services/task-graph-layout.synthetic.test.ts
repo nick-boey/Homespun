@@ -252,11 +252,6 @@ describe('computeLayoutFromIssues — filter bypass for pending', () => {
 
 describe('computeLayoutFromIssues — next mode empty seed with synthetic', () => {
   it('tree-mode fallback renders synthetic when no actionable issues', () => {
-    // All issues are complete (no actionable), but we have a pending issue.
-    // In next mode with no actionable seed, computeLayoutFromIssues falls back to
-    // layoutForTree. The pending issue is injected as a sibling of the reference.
-    // We need the reference issue to have a non-empty sortOrder so midpoint doesn't
-    // receive two empty strings.
     const completeParent = mkIssue('parent-done', { status: IssueStatus.COMPLETE })
     const completeChild = mkIssue('child-done', {
       status: IssueStatus.COMPLETE,
@@ -279,5 +274,76 @@ describe('computeLayoutFromIssues — next mode empty seed with synthetic', () =
     // layoutForTree filters out terminal issues, so no lines are emitted —
     // including the pending synthetic (it requires the ref to be in the display set).
     // The important thing is the call succeeds without throwing.
+  })
+})
+
+describe('computeLayoutFromIssues — no-sortOrder issues (real-world edge cases)', () => {
+  // Issues without sortOrder values (null/undefined) should not crash the layout engine.
+  // This covers the E2E scenario where demo data issues have no sortOrder.
+  const ROOT_NO_ORDER = mkIssue('root')
+  const CHILD_NO_ORDER = mkIssue('child', {
+    parentIssues: [{ parentIssue: 'root', sortOrder: null as unknown as string }],
+  })
+
+  it('sibling-below succeeds when ref issue has no sortOrder', () => {
+    const result = computeLayoutFromIssues({
+      issues: [ROOT_NO_ORDER, CHILD_NO_ORDER],
+      viewMode: ViewMode.Tree,
+      pendingIssue: {
+        mode: 'sibling-below',
+        referenceIssueId: 'child',
+        title: 'New',
+        viewMode: ViewMode.Tree,
+      },
+    })
+    expect(result.ok).toBe(true)
+    const pendingLine = result.lines.find(isPendingIssueRenderLine)
+    expect(pendingLine).toBeDefined()
+  })
+
+  it('sibling-above succeeds when ref issue has no sortOrder', () => {
+    const result = computeLayoutFromIssues({
+      issues: [ROOT_NO_ORDER, CHILD_NO_ORDER],
+      viewMode: ViewMode.Tree,
+      pendingIssue: {
+        mode: 'sibling-above',
+        referenceIssueId: 'child',
+        title: 'New',
+        viewMode: ViewMode.Tree,
+      },
+    })
+    expect(result.ok).toBe(true)
+    const pendingLine = result.lines.find(isPendingIssueRenderLine)
+    expect(pendingLine).toBeDefined()
+  })
+
+  it('child-of succeeds when ref issue has no children', () => {
+    const result = computeLayoutFromIssues({
+      issues: [ROOT_NO_ORDER],
+      viewMode: ViewMode.Tree,
+      pendingIssue: {
+        mode: 'child-of',
+        referenceIssueId: 'root',
+        title: 'New Child',
+        viewMode: ViewMode.Tree,
+      },
+    })
+    expect(result.ok).toBe(true)
+    const pendingLine = result.lines.find(isPendingIssueRenderLine)
+    expect(pendingLine).toBeDefined()
+  })
+
+  it('sibling-below on root-level issue (no parent) succeeds', () => {
+    const result = computeLayoutFromIssues({
+      issues: [ROOT_NO_ORDER],
+      viewMode: ViewMode.Tree,
+      pendingIssue: {
+        mode: 'sibling-below',
+        referenceIssueId: 'root',
+        title: 'New Root Sibling',
+        viewMode: ViewMode.Tree,
+      },
+    })
+    expect(result.ok).toBe(true)
   })
 })
