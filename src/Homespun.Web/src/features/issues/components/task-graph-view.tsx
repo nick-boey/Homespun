@@ -147,15 +147,11 @@ export const TaskGraphView = memo(
     const containerRef = useRef<HTMLDivElement>(null)
     const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-    // Create issue mutation
-    const { createIssue, isCreating } = useCreateIssue({
-      projectId,
-      onSuccess: () => {
-        // Reset edit mode after successful creation
-        setEditMode(KeyboardEditMode.Viewing)
-        setPendingNewIssue(null)
-      },
-    })
+    // Create issue mutation. The editor is closed synchronously in
+    // handleSave / handleSaveAndEdit before the mutation is awaited, so no
+    // onSuccess close callback is needed here — the hook's optimistic
+    // update keeps the new row visible during the network round-trip.
+    const { createIssue, isCreating } = useCreateIssue({ projectId })
 
     // Update issue mutation
     const { mutateAsync: updateIssue } = useUpdateIssue({
@@ -468,16 +464,20 @@ export const TaskGraphView = memo(
         return
       }
 
+      const title = pendingNewIssue.title.trim()
+      const params = buildCreateParams(pendingNewIssue)
+
+      // Close the editor synchronously so a second click / Enter cannot
+      // re-trigger the mutation. The hook's optimistic update keeps the new
+      // row visible during the network round-trip.
+      setEditMode(KeyboardEditMode.Viewing)
+      setPendingNewIssue(null)
+      containerRef.current?.focus()
+
       try {
-        const params = buildCreateParams(pendingNewIssue)
-        await createIssue({
-          title: pendingNewIssue.title.trim(),
-          ...params,
-        })
-        // Return focus to container after save
-        containerRef.current?.focus()
+        await createIssue({ title, ...params })
       } catch {
-        // Keep edit mode on error so user can retry
+        // Hook rolls back the optimistic insert; nothing to restore here.
       }
     }, [pendingNewIssue, createIssue, handleCancelEdit, buildCreateParams])
 
@@ -487,18 +487,19 @@ export const TaskGraphView = memo(
         return
       }
 
+      const title = pendingNewIssue.title.trim()
+      const params = buildCreateParams(pendingNewIssue)
+
+      setEditMode(KeyboardEditMode.Viewing)
+      setPendingNewIssue(null)
+
       try {
-        const params = buildCreateParams(pendingNewIssue)
-        const issue = await createIssue({
-          title: pendingNewIssue.title.trim(),
-          ...params,
-        })
-        // Navigate to edit page for description
+        const issue = await createIssue({ title, ...params })
         if (issue?.id) {
           onEditIssue?.(issue.id)
         }
       } catch {
-        // Keep edit mode on error so user can retry
+        // Hook rolls back the optimistic insert; nothing to restore here.
       }
     }, [pendingNewIssue, createIssue, handleCancelEdit, onEditIssue, buildCreateParams])
 

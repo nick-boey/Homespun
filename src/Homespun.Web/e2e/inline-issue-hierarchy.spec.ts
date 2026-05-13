@@ -299,5 +299,39 @@ test.describe('Inline Issue Hierarchy', () => {
 
       await expect(page.locator('[data-testid="task-graph-inline-create-row"]')).not.toBeVisible()
     })
+
+    test('clicking save button closes the editor and does not create duplicates on a second click', async ({
+      page,
+    }) => {
+      // Regression: previously the editor stayed open until the create
+      // mutation's onSuccess fired (after POST + 6 query invalidations),
+      // letting a second click on the save button submit the same title
+      // again. The fix closes the editor synchronously before awaiting.
+      await gotoIssues(page)
+      await selectFirstIssue(page)
+
+      const uniqueTitle = `dup-guard-${Date.now()}`
+      await page.keyboard.press('o')
+      await page.locator('[data-testid="inline-issue-input"]').fill(uniqueTitle)
+
+      await page.locator('[data-testid="inline-ok-btn"]').click()
+
+      // Editor must be gone immediately so a follow-up click cannot re-trigger.
+      await expect(page.locator('[data-testid="task-graph-inline-create-row"]')).not.toBeVisible()
+      await expect(page.locator('[data-testid="inline-issue-input"]')).not.toBeVisible()
+
+      // The new issue should appear in the graph.
+      await expect(
+        page
+          .locator('[data-testid="task-graph-issue-row"]')
+          .filter({ hasText: uniqueTitle })
+          .first()
+      ).toBeVisible({ timeout: 5000 })
+
+      // And there should be exactly one row with this title — no duplicate.
+      await expect(
+        page.locator('[data-testid="task-graph-issue-row"]').filter({ hasText: uniqueTitle })
+      ).toHaveCount(1)
+    })
   })
 })
