@@ -124,7 +124,6 @@ vi.mock('@/features/sessions', () => ({
     isPending: false,
     error: null,
   })),
-  useSessionShortcuts: vi.fn(),
 }))
 
 vi.mock('@/hooks/use-breadcrumbs', () => ({
