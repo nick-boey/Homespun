@@ -20,7 +20,6 @@ import {
   useChangeSessionSettings,
   SessionInfoPanel,
   useSessionNavigation,
-  useSessionShortcuts,
 } from '@/features/sessions'
 import { useSessionEvents } from '@/features/sessions/hooks/use-session-events'
 import { useClearContext } from '@/features/sessions/hooks/use-clear-context'
@@ -173,15 +172,6 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const cancelStop = useCallback(() => {
     setShowStopDialog(false)
   }, [])
-
-  // Determine if the session can be stopped
-  const canStop = !!session && session.status !== 'stopped' && session.status !== 'error'
-
-  // Enable CTRL+C shortcut to stop session
-  useSessionShortcuts({
-    onStopSession: handleStop,
-    canStop,
-  })
 
   // Toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
